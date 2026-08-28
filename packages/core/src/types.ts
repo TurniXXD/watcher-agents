@@ -1,0 +1,107 @@
+import { z } from 'zod';
+
+export const watcherKindSchema = z.enum(['STOCKS', 'PUBLICATIONS']);
+export type WatcherKind = z.infer<typeof watcherKindSchema>;
+
+export const watchItemSchema = z.object({
+  id: z.string().min(1),
+  source: z.string().min(1),
+  externalId: z.string().min(1),
+  title: z.string().min(1),
+  url: z.url(),
+  publishedAt: z.date().optional(),
+  content: z.string().min(1),
+  metadata: z.record(z.string(), z.unknown()),
+});
+
+export type WatchItem = z.infer<typeof watchItemSchema>;
+
+export type SourceFailure = {
+  source: string;
+  target: string;
+  message: string;
+};
+
+export type SourceRequest<TConfig = unknown> = {
+  source: Source<TConfig>;
+  target: string;
+  config: TConfig;
+};
+
+export interface Source<TConfig = unknown> {
+  readonly id: string;
+  fetch(config: TConfig, signal?: AbortSignal): Promise<WatchItem[]>;
+}
+
+export const stockAnalysisSchema = z.object({
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  importance: z.number().int().min(1).max(10),
+  sentiment: z.enum(['positive', 'neutral', 'negative']),
+  eventType: z.string().min(1),
+  positives: z.array(z.string()),
+  negatives: z.array(z.string()),
+  risks: z.array(z.string()),
+  catalysts: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+});
+
+export type StockAnalysis = z.infer<typeof stockAnalysisSchema>;
+
+export const publicationAnalysisSchema = z.object({
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  importance: z.number().int().min(1).max(10),
+  relevance: z.number().int().min(1).max(10),
+  keyFindings: z.array(z.string()),
+  methods: z.array(z.string()),
+  limitations: z.array(z.string()),
+  whyInteresting: z.string(),
+  confidence: z.number().min(0).max(1),
+});
+
+export type PublicationAnalysis = z.infer<typeof publicationAnalysisSchema>;
+export type WatchAnalysis = StockAnalysis | PublicationAnalysis;
+
+export type AnalysisOutcome =
+  | { status: 'SUCCESS'; result: WatchAnalysis }
+  | { status: 'FAILED'; error: string };
+
+export interface Analyzer {
+  analyze(
+    kind: WatcherKind,
+    item: WatchItem,
+    signal?: AbortSignal,
+  ): Promise<AnalysisOutcome>;
+}
+
+export type ReservedItem = {
+  recordId: string;
+  item: WatchItem;
+};
+
+export interface PipelineRepository {
+  reserveNewItems(
+    kind: WatcherKind,
+    items: WatchItem[],
+  ): Promise<ReservedItem[]>;
+  saveAnalysis(
+    runId: string,
+    itemId: string,
+    outcome: AnalysisOutcome,
+  ): Promise<void>;
+}
+
+export type AnalyzedItem = {
+  item: WatchItem;
+  outcome: AnalysisOutcome;
+};
+
+export type PipelineResult = {
+  fetchedCount: number;
+  newItemCount: number;
+  analyzedCount: number;
+  failedAnalysisCount: number;
+  analyses: AnalyzedItem[];
+  sourceFailures: SourceFailure[];
+};

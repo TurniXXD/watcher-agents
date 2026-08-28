@@ -1,0 +1,37 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and package-manager state
+node_modules/
+.pnpm-store/
+pnpm-debug.log*
+
+# Build, test, and tool output
+dist/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+**/generated/
+
+# Local database files and generated artifacts
+*.db
+*.db-journal
+
+# Server-managed deployment state
+.release.env
+.release.env.candidate
+.release.env.previous
+backups/
+deploy/runtime/
+
+# Logs
+*.log
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

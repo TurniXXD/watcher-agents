@@ -1,0 +1,89 @@
+name: watcher
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    volumes:
+      - watcher-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    image: ${WATCHER_IMAGE:-watcher:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ['pnpm', 'db:deploy']
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
+  stocks-bot:
+    image: ${WATCHER_IMAGE:-watcher:local}
+    command: ['pnpm', '--filter', '@watcher/stocks-bot', 'start']
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'node', '-e', 'process.kill(1, 0)']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
+  publications-bot:
+    image: ${WATCHER_IMAGE:-watcher:local}
+    command: ['pnpm', '--filter', '@watcher/publications-bot', 'start']
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'node', '-e', 'process.kill(1, 0)']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
+volumes:
+  watcher-postgres:

@@ -1,0 +1,7 @@
+# Non-sensitive values for the GitHub environment named "production".
+# Add these under Settings > Environments > production > Environment variables.
+
+DEPLOY_PATH=/opt/watcher
+DEPLOY_ENV_FILE=/opt/watcher/deploy/runtime/compose.env
+TS_TAG=tag:ci
+

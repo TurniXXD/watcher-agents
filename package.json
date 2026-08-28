@@ -1,0 +1,36 @@
+{
+  "name": "watcher",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.6.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "db:deploy": "pnpm --filter @watcher/database db:deploy",
+    "db:generate": "pnpm --filter @watcher/database db:generate",
+    "db:migrate": "pnpm --filter @watcher/database db:migrate",
+    "db:validate": "pnpm --filter @watcher/database db:validate",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "turbo run build && eslint .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.4.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "10.9.1",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.9.6",
+    "turbo": "2.10.12",
+    "tsx": "4.23.12",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.68.0",
+    "vitest": "4.1.11"
+  }
+}

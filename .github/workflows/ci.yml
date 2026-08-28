@@ -1,0 +1,207 @@
+name: watcher-ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: watcher-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  workspace-state:
+    name: Detect workspace state
+    runs-on: ubuntu-latest
+    outputs:
+      compose-ready: ${{ steps.state.outputs.compose-ready }}
+      docker-ready: ${{ steps.state.outputs.docker-ready }}
+      production-compose-ready: ${{ steps.state.outputs.production-compose-ready }}
+      workspace-ready: ${{ steps.state.outputs.workspace-ready }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - id: state
+        name: Validate bootstrap files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          workspace_ready=false
+          docker_ready=false
+          compose_ready=false
+          production_compose_ready=false
+
+          if [[ -f package.json || -f pnpm-lock.yaml || -f pnpm-workspace.yaml ]]; then
+            test -f package.json
+            test -f pnpm-lock.yaml
+            test -f pnpm-workspace.yaml
+            workspace_ready=true
+          fi
+
+          if [[ -f Dockerfile ]]; then
+            docker_ready=true
+          fi
+
+          if [[ -f docker-compose.yml ]]; then
+            test -f .env.example
+            compose_ready=true
+          fi
+
+          if [[ -f docker-compose.production.yml ]]; then
+            test -f deploy/presets/compose.env.example
+            test -f deploy/presets/postgres.env.example
+            test -f deploy/presets/migrate.env.example
+            test -f deploy/presets/stocks-bot.env.example
+            test -f deploy/presets/publications-bot.env.example
+            production_compose_ready=true
+          fi
+
+          {
+            echo "workspace-ready=$workspace_ready"
+            echo "docker-ready=$docker_ready"
+            echo "compose-ready=$compose_ready"
+            echo "production-compose-ready=$production_compose_ready"
+          } >> "$GITHUB_OUTPUT"
+
+  verify:
+    name: Verify TypeScript workspace
+    needs: workspace-state
+    if: needs.workspace-state.outputs.workspace-ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://watcher:watcher@localhost:5432/watcher
+      TEST_DATABASE_URL: postgresql://watcher:watcher@localhost:5432/watcher
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: watcher
+          POSTGRES_PASSWORD: watcher
+          POSTGRES_USER: watcher
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U watcher -d watcher"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          cache: pnpm
+          node-version: 24
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Validate database schema and migrations
+        run: pnpm db:validate
+
+      - name: Apply test database migrations
+        run: pnpm db:deploy
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  compose-verify:
+    name: Validate Docker Compose
+    needs: workspace-state
+    if: >-
+      ${{
+        needs.workspace-state.outputs.compose-ready == 'true' ||
+        needs.workspace-state.outputs.production-compose-ready == 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate Compose configuration
+        shell: bash
+        env:
+          DEVELOPMENT_COMPOSE_READY: ${{ needs.workspace-state.outputs.compose-ready }}
+          PRODUCTION_COMPOSE_READY: ${{ needs.workspace-state.outputs.production-compose-ready }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$DEVELOPMENT_COMPOSE_READY" == "true" ]]; then
+            docker compose --env-file .env.example config --quiet
+          fi
+
+          if [[ "$PRODUCTION_COMPOSE_READY" == "true" ]]; then
+            install -d -m 700 deploy/runtime
+            cp deploy/presets/compose.env.example deploy/runtime/compose.env
+            cp deploy/presets/postgres.env.example deploy/runtime/postgres.env
+            cp deploy/presets/migrate.env.example deploy/runtime/migrate.env
+            cp deploy/presets/stocks-bot.env.example deploy/runtime/stocks-bot.env
+            cp deploy/presets/publications-bot.env.example deploy/runtime/publications-bot.env
+            chmod 600 deploy/runtime/*.env
+
+            IMAGE_REGISTRY=ghcr.io \
+              IMAGE_NAMESPACE=example \
+              IMAGE_TAG=ci \
+              docker compose \
+                --env-file deploy/runtime/compose.env \
+                -f docker-compose.production.yml \
+                config --quiet
+          fi
+
+  container-build-verify:
+    name: Build production image
+    needs:
+      - workspace-state
+      - verify
+    if: >-
+      ${{
+        always() &&
+        needs.workspace-state.outputs.docker-ready == 'true' &&
+        needs.verify.result == 'success'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          cache-from: type=gha,scope=watcher-ci
+          cache-to: type=gha,mode=max,scope=watcher-ci
+          context: .
+          file: Dockerfile
+          push: false
+          tags: watcher:ci
