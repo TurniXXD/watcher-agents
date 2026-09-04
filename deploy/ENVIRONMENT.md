@@ -52,6 +52,7 @@ These values are consumed by `deploy/render-env.sh`; they do not belong in GitHu
 | `OLLAMA_TIMEOUT_MS`           | No       | Defaults to `120000`; maximum `180000`                  |
 | `SEC_USER_AGENT`              | Yes      | Identifiable application name and administrator contact |
 | `DEFAULT_TIMEZONE`            | No       | Defaults to `Europe/Prague`                             |
+| `LOG_LEVEL`                   | No       | Defaults to `info`; use `debug` for per-item run logs   |
 | `COMPOSE_PROJECT_NAME`        | No       | Defaults to `watcher`                                   |
 
 Example database URL:

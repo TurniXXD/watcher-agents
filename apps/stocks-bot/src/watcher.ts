@@ -3,15 +3,13 @@ import {
   WatcherRunner,
   type Analyzer,
   type PipelineResult,
-  type Source,
   type SourceRequest,
-  type WatchItem,
+  type WatcherLogger,
 } from '@watcher/core';
 import { StockSourceType, type WatcherStore } from '@watcher/database';
 import {
   EarningsWhispersSource,
   FinvizInsiderSource,
-  RssStockSource,
   StooqPriceSource,
   ZacksSource,
 } from '@watcher/stock-sources';
@@ -22,14 +20,6 @@ import {
   sendSplitMessage,
 } from '@watcher/telegram';
 import type { Api } from 'grammy';
-
-const configRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-
-const missingSource = (id: string, reason: string): Source => ({
-  id,
-  fetch: async (): Promise<WatchItem[]> => Promise.reject(new Error(reason)),
-});
 
 const stockDisplayName = (stock: {
   symbol: string;
@@ -45,18 +35,22 @@ export const createStocksRunner = (
   api: Api,
   sec: SecEdgarSource,
   maxItemsPerRun: number,
+  logger?: WatcherLogger,
 ): WatcherRunner => {
   const price = new StooqPriceSource();
   const finviz = new FinvizInsiderSource();
   const zacks = new ZacksSource();
   const earningsWhispers = new EarningsWhispersSource();
-  const ir = new RssStockSource('INVESTOR_RELATIONS');
-  const news = new RssStockSource('NEWS');
   const leasedAnalyzer: Analyzer = {
     analyze: (kind, item, signal) =>
       store.withOllamaLease(() => analyzer.analyze(kind, item, signal)),
   };
-  const pipeline = new WatcherPipeline(store, leasedAnalyzer, maxItemsPerRun);
+  const pipeline = new WatcherPipeline(
+    store,
+    leasedAnalyzer,
+    maxItemsPerRun,
+    logger,
+  );
   const withCompany = async (stock: StockEntry): Promise<StockEntry> => {
     if (stock.companyName && stock.cik) return stock;
     try {
@@ -79,62 +73,54 @@ export const createStocksRunner = (
     return stocks.flatMap((stock) =>
       stock.sources
         .filter((entry) => entry.enabled)
-        .map((entry): SourceRequest => {
-          const config = configRecord(entry.config);
+        .flatMap((entry): SourceRequest[] => {
           const target = stockDisplayName(stock);
           if (entry.source === StockSourceType.SEC) {
-            return {
-              source: sec,
-              target,
-              config: { symbol: stock.symbol, cik: stock.cik ?? undefined },
-            };
+            return [
+              {
+                source: sec,
+                target,
+                config: { symbol: stock.symbol, cik: stock.cik ?? undefined },
+              },
+            ];
           }
           if (entry.source === StockSourceType.PRICE) {
-            return {
-              source: price,
-              target,
-              config: { symbol: stock.symbol },
-            };
+            return [
+              {
+                source: price,
+                target,
+                config: { symbol: stock.symbol },
+              },
+            ];
           }
           if (entry.source === StockSourceType.FINVIZ) {
-            return {
-              source: finviz,
-              target,
-              config: { symbol: stock.symbol },
-            };
+            return [
+              {
+                source: finviz,
+                target,
+                config: { symbol: stock.symbol },
+              },
+            ];
           }
           if (entry.source === StockSourceType.ZACKS) {
-            return {
-              source: zacks,
-              target,
-              config: { symbol: stock.symbol },
-            };
+            return [
+              {
+                source: zacks,
+                target,
+                config: { symbol: stock.symbol },
+              },
+            ];
           }
           if (entry.source === StockSourceType.EARNINGS_WHISPERS) {
-            return {
-              source: earningsWhispers,
-              target,
-              config: { symbol: stock.symbol },
-            };
+            return [
+              {
+                source: earningsWhispers,
+                target,
+                config: { symbol: stock.symbol },
+              },
+            ];
           }
-          const feedUrl =
-            typeof config.feedUrl === 'string' ? config.feedUrl : undefined;
-          const source =
-            entry.source === StockSourceType.INVESTOR_RELATIONS ? ir : news;
-          return feedUrl
-            ? {
-                source,
-                target,
-                config: { symbol: stock.symbol, feedUrl },
-              }
-            : {
-                source: missingSource(
-                  entry.source,
-                  `${entry.source} feed URL is not configured`,
-                ),
-                target,
-                config: {},
-              };
+          return [];
         }),
     );
   };
@@ -154,5 +140,12 @@ export const createStocksRunner = (
     }
     await sendSplitMessage(api, chatId, renderStockDigest(result));
   };
-  return new WatcherRunner('STOCKS', pipeline, store, requestsForChat, notify);
+  return new WatcherRunner(
+    'STOCKS',
+    pipeline,
+    store,
+    requestsForChat,
+    notify,
+    logger,
+  );
 };

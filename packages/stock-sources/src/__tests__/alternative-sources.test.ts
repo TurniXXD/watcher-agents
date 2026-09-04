@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EarningsWhispersSource } from '../earnings-whispers.js';
 import { FinvizInsiderSource } from '../finviz.js';
+import { StooqPriceSource } from '../price.js';
 import { ZacksSource } from '../zacks.js';
 
 const requestUrl = (input: RequestInfo | URL): string =>
@@ -59,6 +60,16 @@ describe('FinvizInsiderSource', () => {
     );
     const headers = new Headers(mockFetch.mock.calls[0]?.[1]?.headers);
     expect(headers.get('accept')).toContain('text/html');
+  });
+});
+
+describe('StooqPriceSource', () => {
+  it('treats missing Stooq coverage as no price item', async () => {
+    const source = new StooqPriceSource(
+      vi.fn(async () => new Response('', { status: 404 })),
+    );
+
+    await expect(source.fetch({ symbol: 'MU' })).resolves.toEqual([]);
   });
 });
 

@@ -122,6 +122,76 @@ export const sendSplitMessage = async (
     });
 };
 
+type SourceListing = {
+  name: string;
+  description: string;
+  url?: string;
+};
+
+const sourceList = (title: string, sources: SourceListing[]): string =>
+  [
+    `<b>${htmlText(title, 100)}</b>`,
+    ...sources.map((source) => {
+      const name = source.url
+        ? `<a href="${escapeHtml(new URL(source.url).toString())}">${htmlText(source.name, 100)}</a>`
+        : htmlText(source.name, 100);
+      return `• ${name} — ${htmlText(source.description, 500)}`;
+    }),
+  ].join('\n');
+
+export const renderStockSourceList = (): string =>
+  sourceList('📈 Available stock sources', [
+    {
+      name: 'SEC EDGAR',
+      description: 'Company filings and filing documents.',
+      url: 'https://www.sec.gov/edgar/searchedgar/companysearch',
+    },
+    {
+      name: 'FINVIZ Insider Trading',
+      description: 'Public insider transaction table with SEC filing links.',
+      url: 'https://finviz.com/insidertrading.ashx',
+    },
+    {
+      name: 'Zacks',
+      description: 'Public quote, rank, and earnings-date snapshot.',
+      url: 'https://www.zacks.com/',
+    },
+    {
+      name: 'Earnings Whispers',
+      description: 'Public earnings calendar, estimates, and surprise data.',
+      url: 'https://www.earningswhispers.com/',
+    },
+    {
+      name: 'Stooq',
+      description: 'Public price snapshots when ticker coverage exists.',
+      url: 'https://stooq.com/',
+    },
+  ]);
+
+export const renderPublicationSourceList = (): string =>
+  sourceList('🧬 Available publication sources', [
+    {
+      name: 'PubMed',
+      description: 'NCBI biomedical publication search and article metadata.',
+      url: 'https://pubmed.ncbi.nlm.nih.gov/',
+    },
+    {
+      name: 'bioRxiv',
+      description: 'Life-sciences preprints from the official bioRxiv API.',
+      url: 'https://www.biorxiv.org/',
+    },
+    {
+      name: 'ClinicalTrials.gov',
+      description: 'Structured clinical study records from the v2 API.',
+      url: 'https://clinicaltrials.gov/',
+    },
+    {
+      name: 'openFDA',
+      description: 'FDA public datasets; currently drug adverse-event search.',
+      url: 'https://open.fda.gov/',
+    },
+  ]);
+
 const failureSection = (result: PipelineResult): string =>
   result.sourceFailures.length === 0
     ? ''

@@ -12,3 +12,8 @@ export const createLogger = (
       censor: '[REDACTED]',
     },
   });
+
+export type WatcherLogger = Pick<
+  ReturnType<typeof createLogger>,
+  'debug' | 'error' | 'info' | 'warn'
+>;

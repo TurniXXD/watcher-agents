@@ -23,6 +23,13 @@ import {
 const DEFAULT_SCHEDULE = '0 8 * * *';
 const DEFAULT_TIMEZONE = 'Europe/Prague';
 const OLLAMA_ADVISORY_LOCK_ID = 8_643_921_771;
+const DEFAULT_STOCK_SOURCE_TYPES = [
+  StockSourceType.SEC,
+  StockSourceType.PRICE,
+  StockSourceType.FINVIZ,
+  StockSourceType.ZACKS,
+  StockSourceType.EARNINGS_WHISPERS,
+];
 const kindValue = (kind: CoreWatcherKind): WatcherKind =>
   kind === 'STOCKS' ? WatcherKind.STOCKS : WatcherKind.PUBLICATIONS;
 const identityKey = (item: { source: string; externalId: string }): string =>
@@ -318,9 +325,9 @@ export class WatcherStore implements PipelineRepository {
           ? {}
           : { companyName: company.companyName, cik: company.cik }),
         sources: {
-          create: Object.values(StockSourceType).map((source) => ({
+          create: DEFAULT_STOCK_SOURCE_TYPES.map((source) => ({
             source,
-            enabled: source === StockSourceType.SEC,
+            enabled: true,
           })),
         },
       },
@@ -334,11 +341,12 @@ export class WatcherStore implements PipelineRepository {
       include: { sources: true },
       orderBy: { symbol: 'asc' },
     });
-    const sourceTypes = Object.values(StockSourceType);
     const missingSources = stocks.flatMap((stock) => {
       const existing = new Set(stock.sources.map(({ source }) => source));
-      return sourceTypes.flatMap((source) =>
-        existing.has(source) ? [] : [{ stockId: stock.id, source }],
+      return DEFAULT_STOCK_SOURCE_TYPES.flatMap((source) =>
+        existing.has(source)
+          ? []
+          : [{ stockId: stock.id, source, enabled: true }],
       );
     });
     if (missingSources.length === 0) return stocks;

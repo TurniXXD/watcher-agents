@@ -117,17 +117,9 @@ integration('WatcherStore with PostgreSQL', () => {
     const [stock] = await store.listStocks(chat.id);
 
     expect(stock?.sources.map(({ source }) => source).sort()).toEqual(
-      [
-        'EARNINGS_WHISPERS',
-        'FINVIZ',
-        'INVESTOR_RELATIONS',
-        'NEWS',
-        'PRICE',
-        'SEC',
-        'ZACKS',
-      ].sort(),
+      ['EARNINGS_WHISPERS', 'FINVIZ', 'PRICE', 'SEC', 'ZACKS'].sort(),
     );
-    expect(stock?.sources.filter(({ enabled }) => enabled)).toHaveLength(0);
+    expect(stock?.sources.every(({ enabled }) => enabled)).toBe(true);
   });
 
   it('bulk-adds publication queries and skips duplicates', async () => {

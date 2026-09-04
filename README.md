@@ -2,7 +2,7 @@
 
 Watcher is a self-hosted, Telegram-only monitoring system for one operator. It runs two independent TypeScript bot processes on one Linux server:
 
-- **Stocks Watcher** monitors SEC filings, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, optional investor-relations/news RSS feeds, and price snapshots.
+- **Stocks Watcher** monitors SEC filings, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, and price snapshots.
 - **Publications Watcher** monitors PubMed and optional bioRxiv, ClinicalTrials.gov, and openFDA results.
 
 Both bots share PostgreSQL, the same idempotent watcher pipeline, and an external Ollama instance. There is no web UI, Redis, host cron, or bundled Ollama service.
@@ -44,6 +44,8 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
    ```
 
 PostgreSQL is not published to the host. Its data lives in the `watcher-postgres` named volume. The one-shot `migrate` service must complete before either bot starts.
+
+The bots emit structured JSON logs. At `LOG_LEVEL=info`, each run records start, prepared source count, per-source fetch outcomes, source failures, notification sends, and completion counters. Set `LOG_LEVEL=debug` to also log individual item analysis and cached-analysis reuse.
 
 To stop the application without deleting data:
 
@@ -110,7 +112,7 @@ Infrastructure secrets cannot be edited through Telegram. Telegram-editable sche
 
 ## Telegram commands
 
-Both bots support `/start`, `/help`, `/status`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. `/help` prints the same initial command list as `/start`.
+Both bots support `/start`, `/help`, `/status`, `/listsources`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. `/help` prints the same initial command list as `/start`. `/listsources` lists each available provider with its website link.
 
 Manual `/run` requests first send one progress message, then update that message with `editMessageText` while sources are fetched, items are prepared, and Ollama analyses run. Run digests use Telegram formatting with clear item separators, labeled summary and detail sections, bullet lists, source links, and total run time. Link previews are disabled to keep multi-item digests compact.
 
@@ -119,8 +121,8 @@ Stocks bot:
 - `/stocks`
 - `/addstock SYMBOL`
 - `/removestock SYMBOL`
-- `/sources` to toggle SEC, FINVIZ, Zacks, Earnings Whispers, price, and feed adapters
-- `/setfeed SYMBOL IR|NEWS URL` to configure and enable a public HTTP(S) RSS/Atom feed
+- `/sources` to toggle SEC, FINVIZ, Zacks, Earnings Whispers, and price
+- `/listsources` to list available stock sources and provider links
 
 Publications bot:
 
@@ -129,14 +131,15 @@ Publications bot:
 - `/addqueries` to import multiple topics from a CSV attachment
 - `/removequery TOPIC`
 - `/sources` to toggle PubMed, bioRxiv, ClinicalTrials.gov, and openFDA
+- `/listsources` to list available publication sources and provider links
 
-New stocks enable SEC by default. New publication queries enable every publication source by default. Stock sources other than SEC are opt-in. Cron expressions use five fields; an optional final IANA timezone may be supplied. Use `/schedule` without arguments to view the current schedule and example syntax, or set one with `/schedule 0 8 * * * Europe/Prague`.
+New stocks and publication queries enable every available source by default. Cron expressions use five fields; an optional final IANA timezone may be supplied. Use `/schedule` without arguments to view the current schedule and example syntax, or set one with `/schedule 0 8 * * * Europe/Prague`.
 
 ### Stocks
 
 The watchlist starts empty. `ELAN`, `CVS`, `NVO`, `PFE`, and `BMY` are examples only; none is seeded or mandatory. Add only the symbols you want with `/addstock`. When a stock is added, Watcher resolves the ticker through SEC EDGAR, stores the company name and CIK, and shows the company name in `/stocks` and stock run digests.
 
-Available per-stock sources are SEC EDGAR, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, Investor Relations, News, and Price. SEC is enabled when a stock is added; the other sources are opt-in. Configure a company-specific IR or news feed with `/setfeed`, then use `/sources` to change any source switch independently for each symbol.
+Available per-stock sources are SEC EDGAR, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, and Price. Every source is enabled when a stock is added. Provider URLs are built into the bot; use `/sources` to change any source switch independently for each symbol.
 
 ### Publications
 
@@ -223,10 +226,10 @@ See `AGENTS.md` for the project constraints and completion contract for future c
 ## Troubleshooting
 
 - **A bot exits immediately:** inspect `docker compose logs <service>`. Missing or malformed environment variables are rejected at startup.
+- **A run returns source errors:** inspect `docker compose logs -f stocks-bot` or `docker compose logs -f publications-bot`. Look for `Watcher source failed` with its `source`, `target`, and error message. Temporarily set `LOG_LEVEL=debug` for per-item analysis logs.
 - **Telegram does not respond:** confirm the correct token is assigned to the correct service, your numeric user ID is allowlisted, and no second process is polling the same bot token.
 - **Ollama connection fails:** from the VPS, verify Ollama is listening beyond loopback when appropriate; from a temporary container, verify `host.docker.internal:11434` is reachable. Keep Ollama behind the host firewall or private network.
 - **SEC fails:** provide an identifiable `SEC_USER_AGENT`, verify outbound HTTPS, and avoid lowering the built-in request spacing.
-- **An RSS feed is rejected:** it must use HTTP(S), resolve only to public addresses, and every redirect must remain public. Private intranet feeds are intentionally unsupported.
 - **Migrations fail:** check `docker compose logs migrate`, verify the URL-encoded database password, and do not start the bots by bypassing the migration service.
 - **A scheduled run did not send:** `/status` shows the persisted next run and last state. Empty scheduled runs are intentionally silent; `/run` reports an empty result.
 - **Production rollout/Tailscale/SSH issues:** use the focused checklist in [deploy/README.md](deploy/README.md#troubleshooting).

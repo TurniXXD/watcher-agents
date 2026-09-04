@@ -1,4 +1,5 @@
 import { deduplicateItems } from './deduplicate.js';
+import type { WatcherLogger } from './logger.js';
 import type {
   Analyzer,
   PipelineRepository,
@@ -24,6 +25,7 @@ export class WatcherPipeline {
     private readonly repository: PipelineRepository,
     private readonly analyzer: Analyzer,
     private readonly maxItemsPerRun = 0,
+    private readonly logger?: WatcherLogger,
   ) {}
 
   public async run(
@@ -33,12 +35,35 @@ export class WatcherPipeline {
     options: PipelineRunOptions = {},
   ): Promise<PipelineResult> {
     await options.onProgress?.({ percent: 20, step: 'Fetching sources' });
+    this.logger?.info(
+      { kind, runId, sourceRequestCount: requests.length },
+      'Fetching watcher sources',
+    );
     const settled = await Promise.allSettled(
-      requests.map(async ({ source, target, config }) => ({
-        items: await source.fetch(config, options.signal),
-        source: source.id,
-        target,
-      })),
+      requests.map(async ({ source, target, config }) => {
+        const sourceStartedAt = Date.now();
+        this.logger?.debug(
+          { kind, runId, source: source.id, target },
+          'Fetching watcher source',
+        );
+        const items = await source.fetch(config, options.signal);
+        this.logger?.info(
+          {
+            kind,
+            runId,
+            source: source.id,
+            target,
+            itemCount: items.length,
+            durationMs: Date.now() - sourceStartedAt,
+          },
+          'Watcher source fetched',
+        );
+        return {
+          items,
+          source: source.id,
+          target,
+        };
+      }),
     );
 
     const fetchedItems: WatchItem[] = [];
@@ -56,6 +81,16 @@ export class WatcherPipeline {
           })),
         );
       } else {
+        this.logger?.warn(
+          {
+            kind,
+            runId,
+            source: request.source.id,
+            target: request.target,
+            err: result.reason,
+          },
+          'Watcher source failed',
+        );
         sourceFailures.push({
           source: request.source.id,
           target: request.target,
@@ -65,11 +100,27 @@ export class WatcherPipeline {
     });
 
     await options.onProgress?.({ percent: 45, step: 'Preparing new items' });
+    const uniqueItems = deduplicateItems(fetchedItems);
+    this.logger?.info(
+      {
+        kind,
+        runId,
+        fetchedCount: fetchedItems.length,
+        uniqueItemCount: uniqueItems.length,
+        sourceFailureCount: sourceFailures.length,
+        maxItemsPerRun: this.maxItemsPerRun,
+      },
+      'Preparing watcher items',
+    );
     const preparedItems = await this.repository.prepareItemsForRun(
       kind,
       runId,
-      deduplicateItems(fetchedItems),
+      uniqueItems,
       this.maxItemsPerRun,
+    );
+    this.logger?.info(
+      { kind, runId, preparedItemCount: preparedItems.length },
+      'Watcher items prepared',
     );
     const analyses: PipelineResult['analyses'] = [];
 
@@ -90,16 +141,73 @@ export class WatcherPipeline {
       let outcome = cachedOutcome;
       if (!outcome) {
         try {
+          this.logger?.debug(
+            {
+              kind,
+              runId,
+              source: item.source,
+              externalId: item.externalId,
+              title: item.title,
+            },
+            'Analyzing watcher item',
+          );
           outcome = await this.analyzer.analyze(kind, item, options.signal);
         } catch (error) {
+          this.logger?.warn(
+            {
+              kind,
+              runId,
+              source: item.source,
+              externalId: item.externalId,
+              err: error,
+            },
+            'Watcher item analysis failed',
+          );
           outcome = { status: 'FAILED' as const, error: errorMessage(error) };
         }
+      } else {
+        this.logger?.debug(
+          {
+            kind,
+            runId,
+            source: item.source,
+            externalId: item.externalId,
+            status: outcome.status,
+          },
+          'Reusing cached watcher item analysis',
+        );
       }
       await this.repository.saveAnalysis(runId, recordId, outcome);
+      this.logger?.debug(
+        {
+          kind,
+          runId,
+          source: item.source,
+          externalId: item.externalId,
+          status: outcome.status,
+        },
+        'Watcher item analysis saved',
+      );
       analyses.push({ item, outcome });
     }
 
     await options.onProgress?.({ percent: 90, step: 'Saving results' });
+    this.logger?.info(
+      {
+        kind,
+        runId,
+        fetchedCount: fetchedItems.length,
+        newItemCount: preparedItems.length,
+        analyzedCount: analyses.filter(
+          ({ outcome }) => outcome.status === 'SUCCESS',
+        ).length,
+        failedAnalysisCount: analyses.filter(
+          ({ outcome }) => outcome.status === 'FAILED',
+        ).length,
+        sourceFailureCount: sourceFailures.length,
+      },
+      'Watcher pipeline completed',
+    );
     return {
       fetchedCount: fetchedItems.length,
       newItemCount: preparedItems.length,

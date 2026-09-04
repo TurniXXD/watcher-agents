@@ -6,6 +6,7 @@ import {
   formatRunDuration,
   parsePublicationQueriesCsv,
   publicationQuerySchema,
+  renderPublicationSourceList,
   renderRunProgress,
 } from '@watcher/telegram';
 import { Bot, InlineKeyboard, type Context } from 'grammy';
@@ -23,6 +24,7 @@ const help = `/help — show this command list
 /addqueries — reply to an attached CSV file to add multiple topics
 /removequery TOPIC — remove a topic
 /sources — configure sources with buttons
+/listsources — list available sources and provider links
 /schedule [CRON] [TIMEZONE] — view or update schedule
   Example: ${scheduleExample}
 /run — run now
@@ -179,6 +181,12 @@ export const createPublicationsBot = (
         reply_markup: keyboard,
       });
     }
+  });
+  bot.command('listsources', async (ctx) => {
+    await ctx.reply(renderPublicationSourceList(), {
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+    });
   });
   bot.callbackQuery(/^ps:([^:]+):(.+)$/, async (ctx) => {
     const [, queryId, source] = ctx.match;

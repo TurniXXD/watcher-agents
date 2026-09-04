@@ -79,7 +79,8 @@ write_env "$RUNTIME_DIR/stocks-bot.env" \
   OLLAMA_THINK "${OLLAMA_THINK:-false}" \
   OLLAMA_TIMEOUT_MS "${OLLAMA_TIMEOUT_MS:-120000}" \
   SEC_USER_AGENT "$SEC_USER_AGENT" \
-  DEFAULT_TIMEZONE "${DEFAULT_TIMEZONE:-Europe/Prague}"
+  DEFAULT_TIMEZONE "${DEFAULT_TIMEZONE:-Europe/Prague}" \
+  LOG_LEVEL "${LOG_LEVEL:-info}"
 
 write_env "$RUNTIME_DIR/publications-bot.env" \
   DATABASE_URL "$WATCHER_DATABASE_URL" \
@@ -94,7 +95,8 @@ write_env "$RUNTIME_DIR/publications-bot.env" \
   OLLAMA_RETRIES "${OLLAMA_RETRIES:-1}" \
   OLLAMA_THINK "${OLLAMA_THINK:-false}" \
   OLLAMA_TIMEOUT_MS "${OLLAMA_TIMEOUT_MS:-120000}" \
-  DEFAULT_TIMEZONE "${DEFAULT_TIMEZONE:-Europe/Prague}"
+  DEFAULT_TIMEZONE "${DEFAULT_TIMEZONE:-Europe/Prague}" \
+  LOG_LEVEL "${LOG_LEVEL:-info}"
 
 chmod 600 "$RUNTIME_DIR"/*.env
 echo "Rendered production environment files in $RUNTIME_DIR"

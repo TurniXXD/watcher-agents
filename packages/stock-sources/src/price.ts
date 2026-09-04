@@ -10,12 +10,19 @@ export class StooqPriceSource implements Source<{ symbol: string }> {
     signal?: AbortSignal,
   ): Promise<WatchItem[]> {
     const symbol = `${config.symbol.toLowerCase()}.us`;
-    const csv = await fetchText(
-      this.fetcher,
-      `https://stooq.com/q/l/?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcv&h&e=csv`,
-      { accept: 'text/csv' },
-      signal,
-    );
+    let csv: string;
+    try {
+      csv = await fetchText(
+        this.fetcher,
+        `https://stooq.com/q/l/?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcv&h&e=csv`,
+        { accept: 'text/csv' },
+        signal,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'HTTP 404 from stooq.com')
+        return [];
+      throw error;
+    }
     const [header, row] = csv.trim().split('\n');
     if (!header || !row || row.includes('N/D')) return [];
     const fields = row.split(',');

@@ -4,8 +4,10 @@ import { parsePublicationQueriesCsv } from '../input.js';
 import {
   formatRunDuration,
   renderPublicationDigest,
+  renderPublicationSourceList,
   renderRunProgress,
   renderStockDigest,
+  renderStockSourceList,
   splitTelegramMessage,
 } from '../messages.js';
 
@@ -54,6 +56,21 @@ describe('Telegram utilities', () => {
       }),
     ).toBe(
       '⏳ Processing request...\n[██████░░░░] 60%\nCurrent step: Analyzing fundamentals',
+    );
+  });
+
+  it('renders source lists with provider links', () => {
+    expect(renderStockSourceList()).toContain(
+      '<a href="https://www.sec.gov/edgar/searchedgar/companysearch">SEC EDGAR</a>',
+    );
+    expect(renderStockSourceList()).toContain(
+      '<a href="https://finviz.com/insidertrading.ashx">FINVIZ Insider Trading</a>',
+    );
+    expect(renderPublicationSourceList()).toContain(
+      '<a href="https://pubmed.ncbi.nlm.nih.gov/">PubMed</a>',
+    );
+    expect(renderPublicationSourceList()).toContain(
+      '<a href="https://clinicaltrials.gov/">ClinicalTrials.gov</a>',
     );
   });
 

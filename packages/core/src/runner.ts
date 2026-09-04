@@ -5,6 +5,7 @@ import type {
   SourceRequest,
   WatcherKind,
 } from './types.js';
+import type { WatcherLogger } from './logger.js';
 import type { WatcherPipeline } from './pipeline.js';
 
 export interface RunStore {
@@ -53,6 +54,7 @@ export class WatcherRunner {
       result: PipelineResult,
       manual: boolean,
     ) => Promise<void>,
+    private readonly logger?: WatcherLogger,
   ) {}
 
   private async reportProgress(
@@ -73,8 +75,18 @@ export class WatcherRunner {
     options: RunExecutionOptions = {},
   ): Promise<RunExecution> {
     const run = await this.store.claimRun(configId, trigger);
-    if (!run) return { status: 'BUSY' };
+    if (!run) {
+      this.logger?.info(
+        { kind: this.kind, configId, trigger },
+        'Watcher run skipped because another run is active',
+      );
+      return { status: 'BUSY' };
+    }
     const startedAt = Date.now();
+    this.logger?.info(
+      { kind: this.kind, configId, runId: run.id, trigger },
+      'Watcher run started',
+    );
     const onProgress = options.onProgress
       ? (progress: RunProgress) =>
           this.reportProgress(options.onProgress, progress)
@@ -86,6 +98,16 @@ export class WatcherRunner {
         step: 'Preparing sources',
       });
       const requests = await this.requestsForChat(chatId);
+      this.logger?.info(
+        {
+          kind: this.kind,
+          configId,
+          runId: run.id,
+          trigger,
+          sourceRequestCount: requests.length,
+        },
+        'Watcher source requests prepared',
+      );
       const pipelineResult = await this.pipeline.run(
         this.kind,
         run.id,
@@ -110,8 +132,9 @@ export class WatcherRunner {
       await this.store.recordSourceFailures(run.id, result.sourceFailures);
       const partial =
         result.sourceFailures.length > 0 || result.failedAnalysisCount > 0;
+      const status = partial ? 'PARTIAL' : 'SUCCESS';
       await this.store.finishRun(configId, run.id, {
-        status: partial ? 'PARTIAL' : 'SUCCESS',
+        status,
         fetchedCount: result.fetchedCount,
         newItemCount: result.newItemCount,
         analyzedCount: result.analyzedCount,
@@ -126,12 +149,49 @@ export class WatcherRunner {
         result.newItemCount > 0 ||
         result.sourceFailures.length > 0
       ) {
+        this.logger?.info(
+          {
+            kind: this.kind,
+            configId,
+            runId: run.id,
+            trigger,
+            manual: trigger === 'MANUAL',
+          },
+          'Sending watcher run notification',
+        );
         await this.notify(chatId, result, trigger === 'MANUAL');
       }
+      this.logger?.info(
+        {
+          kind: this.kind,
+          configId,
+          runId: run.id,
+          trigger,
+          status,
+          fetchedCount: result.fetchedCount,
+          newItemCount: result.newItemCount,
+          analyzedCount: result.analyzedCount,
+          failedAnalysisCount: result.failedAnalysisCount,
+          sourceFailureCount: result.sourceFailures.length,
+          durationMs: result.durationMs,
+        },
+        'Watcher run completed',
+      );
       return { status: 'COMPLETED', result };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const durationMs = Date.now() - startedAt;
+      this.logger?.error(
+        {
+          kind: this.kind,
+          configId,
+          runId: run.id,
+          trigger,
+          durationMs,
+          err: error,
+        },
+        'Watcher run failed',
+      );
       await this.store.finishRun(configId, run.id, {
         status: 'FAILED',
         error: message,

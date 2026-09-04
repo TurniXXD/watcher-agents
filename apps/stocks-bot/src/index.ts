@@ -40,6 +40,7 @@ const runner = createStocksRunner(
   bot.api,
   sec,
   env.OLLAMA_MAX_ITEMS_PER_RUN,
+  logger,
 );
 runtime.runner = runner;
 const scheduler = new PersistentScheduler(

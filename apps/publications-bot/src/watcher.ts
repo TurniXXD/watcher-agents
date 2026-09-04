@@ -4,6 +4,7 @@ import {
   type Analyzer,
   type PipelineResult,
   type SourceRequest,
+  type WatcherLogger,
 } from '@watcher/core';
 import { PublicationSourceType, type WatcherStore } from '@watcher/database';
 import {
@@ -24,6 +25,7 @@ export const createPublicationsRunner = (
   analyzer: Analyzer,
   api: Api,
   maxItemsPerRun: number,
+  logger?: WatcherLogger,
 ): WatcherRunner => {
   const sources = {
     [PublicationSourceType.PUBMED]: new PubMedSource(),
@@ -35,7 +37,12 @@ export const createPublicationsRunner = (
     analyze: (kind, item, signal) =>
       store.withOllamaLease(() => analyzer.analyze(kind, item, signal)),
   };
-  const pipeline = new WatcherPipeline(store, leasedAnalyzer, maxItemsPerRun);
+  const pipeline = new WatcherPipeline(
+    store,
+    leasedAnalyzer,
+    maxItemsPerRun,
+    logger,
+  );
   const requestsForChat = async (chatId: bigint): Promise<SourceRequest[]> => {
     const chat = await store.getChat('PUBLICATIONS', chatId);
     if (!chat) return [];
@@ -71,5 +78,6 @@ export const createPublicationsRunner = (
     store,
     requestsForChat,
     notify,
+    logger,
   );
 };

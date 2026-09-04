@@ -3,6 +3,7 @@ import {
   authorizationMiddleware,
   commandArgument,
   formatRunDuration,
+  renderStockSourceList,
   renderRunProgress,
   stockSymbolSchema,
 } from '@watcher/telegram';
@@ -24,10 +25,10 @@ const scheduleExample = '/schedule 0 8 * * * Europe/Prague';
 const help = `/help — show this command list
 /status — watcher status
 /stocks — list stocks
-/addstock SYMBOL — add a stock (SEC enabled by default)
+/addstock SYMBOL — add a stock (all sources enabled by default)
 /removestock SYMBOL — remove a stock
-/sources — configure SEC, FINVIZ, Zacks, Earnings Whispers, price, and feeds
-/setfeed SYMBOL IR|NEWS URL — configure a company feed
+/sources — configure SEC, FINVIZ, Zacks, Earnings Whispers, and price
+/listsources — list available sources and provider links
 /schedule [CRON] [TIMEZONE] — view or update schedule
   Example: ${scheduleExample}
 /run — run now
@@ -112,7 +113,7 @@ export const createStocksBot = (
       cik: company.cik,
     });
     await ctx.reply(
-      `${company.symbol} — ${company.companyName} added. SEC is enabled.`,
+      `${company.symbol} — ${company.companyName} added. All stock sources are enabled.`,
     );
   });
   bot.command('removestock', async (ctx) => {
@@ -129,16 +130,28 @@ export const createStocksBot = (
     if (!stocks.length) return ctx.reply('Add a stock first.');
     for (const stock of stocks) {
       const keyboard = new InlineKeyboard();
-      stock.sources.forEach((source) =>
-        keyboard
-          .text(
-            `${source.enabled ? '✅' : '❌'} ${source.source}`,
-            `ss:${stock.id}:${source.source}`,
-          )
-          .row(),
-      );
+      stock.sources
+        .filter(
+          (source) =>
+            source.source !== StockSourceType.INVESTOR_RELATIONS &&
+            source.source !== StockSourceType.NEWS,
+        )
+        .forEach((source) =>
+          keyboard
+            .text(
+              `${source.enabled ? '✅' : '❌'} ${source.source}`,
+              `ss:${stock.id}:${source.source}`,
+            )
+            .row(),
+        );
       await ctx.reply(`${stock.symbol} sources`, { reply_markup: keyboard });
     }
+  });
+  bot.command('listsources', async (ctx) => {
+    await ctx.reply(renderStockSourceList(), {
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+    });
   });
   bot.callbackQuery(/^ss:([^:]+):(.+)$/, async (ctx) => {
     const [, stockId, source] = ctx.match;
@@ -149,25 +162,6 @@ export const createStocksBot = (
     );
     await ctx.answerCallbackQuery('Updated');
     await ctx.editMessageReplyMarkup();
-  });
-  bot.command('setfeed', async (ctx) => {
-    const parts = commandArgument(ctx.message?.text).split(/\s+/);
-    const symbol = stockSymbolSchema.parse(parts[0]);
-    const source = z.enum(['IR', 'NEWS']).parse(parts[1]);
-    const url = z.url().parse(parts.slice(2).join(' '));
-    const current = await chat(ctx.chat.id);
-    const stock = (await store.listStocks(current.id)).find(
-      (entry) => entry.symbol === symbol,
-    );
-    if (!stock) return ctx.reply(`${symbol} is not configured.`);
-    await store.setStockSourceConfig(
-      stock.id,
-      source === 'IR'
-        ? StockSourceType.INVESTOR_RELATIONS
-        : StockSourceType.NEWS,
-      { feedUrl: url },
-    );
-    await ctx.reply(`${source} feed configured for ${symbol}.`);
   });
   bot.command('schedule', async (ctx) => {
     const current = await chat(ctx.chat.id);
