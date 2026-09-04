@@ -27,7 +27,7 @@ export interface RunStore {
 export type RunExecution =
   | { status: 'BUSY' }
   | { status: 'COMPLETED'; result: PipelineResult }
-  | { status: 'FAILED'; error: string };
+  | { status: 'FAILED'; error: string; durationMs: number };
 
 export class WatcherRunner {
   public constructor(
@@ -51,10 +51,19 @@ export class WatcherRunner {
   ): Promise<RunExecution> {
     const run = await this.store.claimRun(configId, trigger);
     if (!run) return { status: 'BUSY' };
+    const startedAt = Date.now();
 
     try {
       const requests = await this.requestsForChat(chatId);
-      const result = await this.pipeline.run(this.kind, run.id, requests);
+      const pipelineResult = await this.pipeline.run(
+        this.kind,
+        run.id,
+        requests,
+      );
+      const result = {
+        ...pipelineResult,
+        durationMs: Date.now() - startedAt,
+      };
       await this.store.recordSourceFailures(run.id, result.sourceFailures);
       const partial =
         result.sourceFailures.length > 0 || result.failedAnalysisCount > 0;
@@ -75,11 +84,12 @@ export class WatcherRunner {
       return { status: 'COMPLETED', result };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const durationMs = Date.now() - startedAt;
       await this.store.finishRun(configId, run.id, {
         status: 'FAILED',
         error: message,
       });
-      return { status: 'FAILED', error: message };
+      return { status: 'FAILED', error: message, durationMs };
     }
   }
 }

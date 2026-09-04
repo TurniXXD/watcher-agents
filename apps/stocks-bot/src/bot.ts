@@ -2,28 +2,45 @@ import { StockSourceType, type WatcherStore } from '@watcher/database';
 import {
   authorizationMiddleware,
   commandArgument,
+  formatRunDuration,
   stockSymbolSchema,
 } from '@watcher/telegram';
 import { Bot, InlineKeyboard } from 'grammy';
 import { z } from 'zod';
 import type { RunExecution } from '@watcher/core';
 
+type StockCompany = { symbol: string; companyName: string; cik: string };
+type StockCompanyLookup = (symbol: string) => Promise<StockCompany>;
+type StockListEntry = {
+  id: string;
+  symbol: string;
+  companyName: string | null;
+  cik: string | null;
+};
+
 const help = `/status — watcher status
 /stocks — list stocks
 /addstock SYMBOL — add a stock (SEC enabled by default)
 /removestock SYMBOL — remove a stock
-/sources — configure sources with buttons
+/sources — configure SEC, FINVIZ, Zacks, Earnings Whispers, price, and feeds
 /setfeed SYMBOL IR|NEWS URL — configure a company feed
 /schedule [CRON] [TIMEZONE] — view or update schedule
 /run — run now
 /pause — pause scheduled runs
 /resume — resume scheduled runs`;
 
+const stockDisplayName = (stock: StockListEntry): string =>
+  stock.companyName ? `${stock.symbol} — ${stock.companyName}` : stock.symbol;
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 export const createStocksBot = (
   token: string,
   allowedIds: ReadonlySet<number>,
   store: WatcherStore,
   runNow: (configId: string, chatId: bigint) => Promise<RunExecution>,
+  lookupCompany: StockCompanyLookup,
   timezone: string,
   reportError: (error: unknown) => void,
 ): Bot => {
@@ -32,6 +49,21 @@ export const createStocksBot = (
 
   const chat = async (chatId: number) =>
     store.ensureChat('STOCKS', BigInt(chatId), timezone);
+  const withCompany = async (
+    stock: StockListEntry,
+  ): Promise<StockListEntry> => {
+    if (stock.companyName && stock.cik) return stock;
+    try {
+      const company = await lookupCompany(stock.symbol);
+      const updated = await store.updateStockCompany(stock.id, {
+        companyName: company.companyName,
+        cik: company.cik,
+      });
+      return updated;
+    } catch {
+      return stock;
+    }
+  };
   bot.command(['start', 'help'], async (ctx) => {
     await chat(ctx.chat.id);
     await ctx.reply(`📈 Stocks Watcher\n\n${help}`);
@@ -45,18 +77,34 @@ export const createStocksBot = (
   });
   bot.command('stocks', async (ctx) => {
     const current = await chat(ctx.chat.id);
-    const stocks = await store.listStocks(current.id);
+    const stocks = await Promise.all(
+      (await store.listStocks(current.id)).map(withCompany),
+    );
     await ctx.reply(
       stocks.length
-        ? stocks.map((stock) => stock.symbol).join('\n')
+        ? stocks.map((stock) => stockDisplayName(stock)).join('\n')
         : 'No stocks configured.',
     );
   });
   bot.command('addstock', async (ctx) => {
     const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
     const current = await chat(ctx.chat.id);
-    await store.addStock(current.id, symbol);
-    await ctx.reply(`${symbol} added. SEC is enabled.`);
+    let company: StockCompany;
+    try {
+      company = await lookupCompany(symbol);
+    } catch (error) {
+      await ctx.reply(
+        `Could not resolve ${symbol} through SEC EDGAR: ${errorMessage(error)}`,
+      );
+      return;
+    }
+    await store.addStock(current.id, company.symbol, {
+      companyName: company.companyName,
+      cik: company.cik,
+    });
+    await ctx.reply(
+      `${company.symbol} — ${company.companyName} added. SEC is enabled.`,
+    );
   });
   bot.command('removestock', async (ctx) => {
     const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
@@ -136,7 +184,9 @@ export const createStocksBot = (
     if (result.status === 'BUSY')
       await ctx.reply('A run is already in progress.');
     if (result.status === 'FAILED')
-      await ctx.reply(`Run failed: ${result.error}`);
+      await ctx.reply(
+        `Run failed after ${formatRunDuration(result.durationMs)}: ${result.error}`,
+      );
   });
   bot.command('pause', async (ctx) => {
     const current = await chat(ctx.chat.id);

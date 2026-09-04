@@ -3,8 +3,11 @@ import {
   contentHash,
   type AnalysisOutcome,
   type PipelineRepository,
+  type PreparedItem,
   type WatcherKind as CoreWatcherKind,
   type WatchItem,
+  publicationAnalysisSchema,
+  stockAnalysisSchema,
 } from '@watcher/core';
 import type { DatabaseClient } from './client.js';
 import type { Prisma } from './generated/prisma/client.js';
@@ -22,6 +25,19 @@ const DEFAULT_TIMEZONE = 'Europe/Prague';
 const OLLAMA_ADVISORY_LOCK_ID = 8_643_921_771;
 const kindValue = (kind: CoreWatcherKind): WatcherKind =>
   kind === 'STOCKS' ? WatcherKind.STOCKS : WatcherKind.PUBLICATIONS;
+const identityKey = (item: { source: string; externalId: string }): string =>
+  `${item.source}\u0000${item.externalId}`;
+
+const cachedOutcome = (
+  kind: CoreWatcherKind,
+  result: Prisma.JsonValue,
+): AnalysisOutcome => ({
+  status: 'SUCCESS',
+  result:
+    kind === 'STOCKS'
+      ? stockAnalysisSchema.parse(result)
+      : publicationAnalysisSchema.parse(result),
+});
 
 export class WatcherStore implements PipelineRepository {
   public constructor(private readonly db: DatabaseClient) {}
@@ -173,11 +189,64 @@ export class WatcherStore implements PipelineRepository {
     }
   }
 
-  public async reserveNewItems(kind: CoreWatcherKind, items: WatchItem[]) {
+  public async prepareItemsForRun(
+    kind: CoreWatcherKind,
+    runId: string,
+    items: WatchItem[],
+    maxAnalyses: number,
+  ): Promise<PreparedItem[]> {
     if (items.length === 0) return [];
+    const run = await this.db.watcherRun.findUniqueOrThrow({
+      where: { id: runId },
+      select: { watcherConfigId: true },
+    });
+    const identityFilters = items.map((item) => ({
+      source: item.source,
+      externalId: item.externalId,
+    }));
+    const existing =
+      identityFilters.length === 0
+        ? []
+        : await this.db.processedItem.findMany({
+            where: {
+              watcherKind: kindValue(kind),
+              OR: identityFilters,
+            },
+            include: {
+              analyses: {
+                where: { status: AnalysisStatus.SUCCESS },
+                orderBy: { createdAt: 'desc' },
+                include: {
+                  run: { select: { watcherConfigId: true } },
+                },
+              },
+            },
+          });
+    const existingByIdentity = new Map(
+      existing.map((item) => [identityKey(item), item]),
+    );
+    const selectedForAnalysis = new Set<string>();
+    const selectedNewItems: WatchItem[] = [];
+    let remainingAnalysisSlots = maxAnalyses;
+
+    for (const item of items) {
+      const key = identityKey(item);
+      const processedItem = existingByIdentity.get(key);
+      const deliveredToThisWatcher = processedItem?.analyses.some(
+        (analysis) => analysis.run.watcherConfigId === run.watcherConfigId,
+      );
+      if (deliveredToThisWatcher) continue;
+      const latestSuccess = processedItem?.analyses[0];
+      if (latestSuccess?.result) continue;
+      if (remainingAnalysisSlots <= 0) continue;
+      selectedForAnalysis.add(key);
+      if (!processedItem) selectedNewItems.push(item);
+      remainingAnalysisSlots -= 1;
+    }
+
     const created = await this.db.processedItem.createManyAndReturn({
       skipDuplicates: true,
-      data: items.map((item) => ({
+      data: selectedNewItems.map((item) => ({
         watcherKind: kindValue(kind),
         source: item.source,
         externalId: item.externalId,
@@ -190,12 +259,29 @@ export class WatcherStore implements PipelineRepository {
         metadata: item.metadata as Prisma.InputJsonValue,
       })),
     });
-    const byIdentity = new Map(
-      items.map((item) => [`${item.source}\u0000${item.externalId}`, item]),
+    const createdByIdentity = new Map(
+      created.map((item) => [identityKey(item), item]),
     );
-    return created.flatMap((entry) => {
-      const item = byIdentity.get(`${entry.source}\u0000${entry.externalId}`);
-      return item ? [{ recordId: entry.id, item }] : [];
+    return items.flatMap((item) => {
+      const key = identityKey(item);
+      const processedItem = existingByIdentity.get(key);
+      const deliveredToThisWatcher = processedItem?.analyses.some(
+        (analysis) => analysis.run.watcherConfigId === run.watcherConfigId,
+      );
+      if (deliveredToThisWatcher) return [];
+      const latestSuccess = processedItem?.analyses[0];
+      if (processedItem && latestSuccess?.result)
+        return [
+          {
+            recordId: processedItem.id,
+            item,
+            outcome: cachedOutcome(kind, latestSuccess.result),
+          },
+        ];
+      if (!selectedForAnalysis.has(key)) return [];
+      const createdItem = createdByIdentity.get(key);
+      const recordId = processedItem?.id ?? createdItem?.id;
+      return recordId ? [{ recordId, item }] : [];
     });
   }
 
@@ -219,11 +305,18 @@ export class WatcherStore implements PipelineRepository {
     });
   }
 
-  public async addStock(chatConfigId: string, symbol: string) {
+  public async addStock(
+    chatConfigId: string,
+    symbol: string,
+    company?: { companyName: string; cik: string },
+  ) {
     return this.db.stock.create({
       data: {
         chatConfigId,
         symbol,
+        ...(company === undefined
+          ? {}
+          : { companyName: company.companyName, cik: company.cik }),
         sources: {
           create: Object.values(StockSourceType).map((source) => ({
             source,
@@ -235,11 +328,40 @@ export class WatcherStore implements PipelineRepository {
     });
   }
 
-  public listStocks(chatConfigId: string) {
+  public async listStocks(chatConfigId: string) {
+    const stocks = await this.db.stock.findMany({
+      where: { chatConfigId },
+      include: { sources: true },
+      orderBy: { symbol: 'asc' },
+    });
+    const sourceTypes = Object.values(StockSourceType);
+    const missingSources = stocks.flatMap((stock) => {
+      const existing = new Set(stock.sources.map(({ source }) => source));
+      return sourceTypes.flatMap((source) =>
+        existing.has(source) ? [] : [{ stockId: stock.id, source }],
+      );
+    });
+    if (missingSources.length === 0) return stocks;
+
+    await this.db.stockSourceConfig.createMany({
+      data: missingSources,
+      skipDuplicates: true,
+    });
     return this.db.stock.findMany({
       where: { chatConfigId },
       include: { sources: true },
       orderBy: { symbol: 'asc' },
+    });
+  }
+
+  public updateStockCompany(
+    stockId: string,
+    company: { companyName: string; cik: string },
+  ) {
+    return this.db.stock.update({
+      where: { id: stockId },
+      data: { companyName: company.companyName, cik: company.cik },
+      include: { sources: true },
     });
   }
 

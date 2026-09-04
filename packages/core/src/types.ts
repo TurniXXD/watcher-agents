@@ -75,16 +75,19 @@ export interface Analyzer {
   ): Promise<AnalysisOutcome>;
 }
 
-export type ReservedItem = {
+export type PreparedItem = {
   recordId: string;
   item: WatchItem;
+  outcome?: AnalysisOutcome;
 };
 
 export interface PipelineRepository {
-  reserveNewItems(
+  prepareItemsForRun(
     kind: WatcherKind,
+    runId: string,
     items: WatchItem[],
-  ): Promise<ReservedItem[]>;
+    maxAnalyses: number,
+  ): Promise<PreparedItem[]>;
   saveAnalysis(
     runId: string,
     itemId: string,
@@ -98,6 +101,7 @@ export type AnalyzedItem = {
 };
 
 export type PipelineResult = {
+  durationMs?: number;
   fetchedCount: number;
   newItemCount: number;
   analyzedCount: number;

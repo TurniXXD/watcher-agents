@@ -77,7 +77,7 @@ describe('core watcher behavior', () => {
 
   it('keeps successful sources when another source fails', async () => {
     const repository = {
-      reserveNewItems: vi.fn(async (_kind, items: WatchItem[]) =>
+      prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) =>
         items.map((value, index) => ({ item: value, recordId: String(index) })),
       ),
       saveAnalysis: vi.fn(async () => undefined),
@@ -116,9 +116,10 @@ describe('core watcher behavior', () => {
     let active = 0;
     let maximumActive = 0;
     const repository = {
-      reserveNewItems: vi.fn(async (_kind, items: WatchItem[]) => {
-        reservedCount = items.length;
-        return items.map((value, index) => ({
+      prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) => {
+        const selected = items.slice(0, 2);
+        reservedCount = selected.length;
+        return selected.map((value, index) => ({
           item: value,
           recordId: String(index),
         }));
@@ -153,9 +154,56 @@ describe('core watcher behavior', () => {
     expect(maximumActive).toBe(1);
   });
 
+  it('reuses cached successful analyses without calling the analyzer', async () => {
+    const cached = {
+      status: 'SUCCESS' as const,
+      result: {
+        title: 'Filing',
+        summary: 'Previously analyzed filing.',
+        importance: 4,
+        sentiment: 'neutral' as const,
+        eventType: '8-K',
+        positives: [],
+        negatives: [],
+        risks: [],
+        catalysts: [],
+        confidence: 0.8,
+      },
+    };
+    const repository = {
+      prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) => [
+        { item: items[0]!, recordId: 'record', outcome: cached },
+      ]),
+      saveAnalysis: vi.fn(async () => undefined),
+    };
+    const analyzer = {
+      analyze: vi.fn(async () => ({
+        status: 'FAILED' as const,
+        error: 'should not run',
+      })),
+    };
+    const pipeline = new WatcherPipeline(repository, analyzer);
+
+    const result = await pipeline.run('STOCKS', 'run', [
+      {
+        source: { id: 'SEC', fetch: async () => [item('1')] },
+        target: 'ELAN',
+        config: {},
+      },
+    ]);
+
+    expect(analyzer.analyze).not.toHaveBeenCalled();
+    expect(result.analyses[0]?.outcome).toEqual(cached);
+    expect(repository.saveAnalysis).toHaveBeenCalledWith(
+      'run',
+      'record',
+      cached,
+    );
+  });
+
   it('records a failed analysis when the analyzer throws', async () => {
     const repository = {
-      reserveNewItems: vi.fn(async (_kind, items: WatchItem[]) => [
+      prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) => [
         { item: items[0]!, recordId: 'record' },
       ]),
       saveAnalysis: vi.fn(async () => undefined),

@@ -56,19 +56,22 @@ export class WatcherPipeline {
       }
     });
 
-    const uniqueItems = deduplicateItems(fetchedItems);
-    const reservedItems = await this.repository.reserveNewItems(
+    const preparedItems = await this.repository.prepareItemsForRun(
       kind,
-      uniqueItems.slice(0, this.maxItemsPerRun),
+      runId,
+      deduplicateItems(fetchedItems),
+      this.maxItemsPerRun,
     );
     const analyses: PipelineResult['analyses'] = [];
 
-    for (const { item, recordId } of reservedItems) {
-      let outcome;
-      try {
-        outcome = await this.analyzer.analyze(kind, item, signal);
-      } catch (error) {
-        outcome = { status: 'FAILED' as const, error: errorMessage(error) };
+    for (const { item, recordId, outcome: cachedOutcome } of preparedItems) {
+      let outcome = cachedOutcome;
+      if (!outcome) {
+        try {
+          outcome = await this.analyzer.analyze(kind, item, signal);
+        } catch (error) {
+          outcome = { status: 'FAILED' as const, error: errorMessage(error) };
+        }
       }
       await this.repository.saveAnalysis(runId, recordId, outcome);
       analyses.push({ item, outcome });
@@ -76,7 +79,7 @@ export class WatcherPipeline {
 
     return {
       fetchedCount: fetchedItems.length,
-      newItemCount: reservedItems.length,
+      newItemCount: preparedItems.length,
       analyzedCount: analyses.filter(
         ({ outcome }) => outcome.status === 'SUCCESS',
       ).length,

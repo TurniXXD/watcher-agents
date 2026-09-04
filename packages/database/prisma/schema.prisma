@@ -35,6 +35,9 @@ enum StockSourceType {
   INVESTOR_RELATIONS
   NEWS
   PRICE
+  FINVIZ
+  ZACKS
+  EARNINGS_WHISPERS
 }
 
 enum PublicationSourceType {

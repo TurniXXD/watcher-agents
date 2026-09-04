@@ -1,0 +1,2 @@
+ALTER TYPE "StockSourceType" ADD VALUE 'FINVIZ';
+ALTER TYPE "StockSourceType" ADD VALUE 'ZACKS';

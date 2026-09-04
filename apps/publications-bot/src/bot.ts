@@ -3,6 +3,7 @@ import { PublicationSourceType, type WatcherStore } from '@watcher/database';
 import {
   authorizationMiddleware,
   commandArgument,
+  formatRunDuration,
   publicationQuerySchema,
 } from '@watcher/telegram';
 import { Bot, InlineKeyboard } from 'grammy';
@@ -121,7 +122,9 @@ export const createPublicationsBot = (
     if (result.status === 'BUSY')
       await ctx.reply('A run is already in progress.');
     if (result.status === 'FAILED')
-      await ctx.reply(`Run failed: ${result.error}`);
+      await ctx.reply(
+        `Run failed after ${formatRunDuration(result.durationMs)}: ${result.error}`,
+      );
   });
   bot.command('pause', async (ctx) => {
     const current = await chat(ctx.chat.id);

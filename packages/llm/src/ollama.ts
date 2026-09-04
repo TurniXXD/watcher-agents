@@ -66,12 +66,19 @@ const publicationJsonSchema = {
   },
 } as const;
 
+const stockGuidance = `For stock watcher output:
+- Treat routine Form 3, Form 4, Form 5, and Form 144 ownership filings as low-to-moderate importance unless the source states an unusual transaction size, control change, legal issue, restatement, investigation, bankruptcy, or other material event.
+- Do not infer insider trading, legal violations, regulatory penalties, or market manipulation from ordinary insider sale or proposed-sale filings.
+- Put compliance or insider-trading risks in "risks" only when the source explicitly says there is an investigation, allegation, enforcement action, violation, or unusual undisclosed conflict.
+- Use importance 8-10 only for clearly material company events such as earnings shocks, guidance changes, major financing, M&A, executive leadership changes, clinical/regulatory decisions, material contracts, delisting, litigation, insolvency, or similarly high-impact filings.`;
+
 const promptFor = (
   kind: WatcherKind,
   item: WatchItem,
 ): string => `You analyze source material for a private ${kind.toLowerCase()} watcher.
 Use only facts present in the source. Clearly qualify inference. Never invent missing data.
 Return only JSON matching the supplied schema.
+${kind === 'STOCKS' ? `\n${stockGuidance}` : ''}
 
 Title: ${item.title}
 Source: ${item.source}

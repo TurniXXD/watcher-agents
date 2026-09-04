@@ -2,7 +2,7 @@
 
 Watcher is a self-hosted, Telegram-only monitoring system for one operator. It runs two independent TypeScript bot processes on one Linux server:
 
-- **Stocks Watcher** monitors SEC filings and optional investor-relations/news RSS feeds and price snapshots.
+- **Stocks Watcher** monitors SEC filings, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, optional investor-relations/news RSS feeds, and price snapshots.
 - **Publications Watcher** monitors PubMed and optional bioRxiv, ClinicalTrials.gov, and openFDA results.
 
 Both bots share PostgreSQL, the same idempotent watcher pipeline, and an external Ollama instance. There is no web UI, Redis, host cron, or bundled Ollama service.
@@ -112,12 +112,14 @@ Infrastructure secrets cannot be edited through Telegram. Telegram-editable sche
 
 Both bots support `/start`, `/help`, `/status`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`.
 
+Run digests use Telegram formatting with clear item separators, labeled summary and detail sections, bullet lists, source links, and total run time. Link previews are disabled to keep multi-item digests compact.
+
 Stocks bot:
 
 - `/stocks`
 - `/addstock SYMBOL`
 - `/removestock SYMBOL`
-- `/sources` to toggle SEC, price, and feed adapters
+- `/sources` to toggle SEC, FINVIZ, Zacks, Earnings Whispers, price, and feed adapters
 - `/setfeed SYMBOL IR|NEWS URL` to configure and enable a public HTTP(S) RSS/Atom feed
 
 Publications bot:
@@ -131,9 +133,9 @@ New stocks enable SEC by default. New publication queries enable PubMed by defau
 
 ### Stocks
 
-The watchlist starts empty. `ELAN`, `CVS`, `NVO`, `PFE`, and `BMY` are examples only; none is seeded or mandatory. Add only the symbols you want with `/addstock`.
+The watchlist starts empty. `ELAN`, `CVS`, `NVO`, `PFE`, and `BMY` are examples only; none is seeded or mandatory. Add only the symbols you want with `/addstock`. When a stock is added, Watcher resolves the ticker through SEC EDGAR, stores the company name and CIK, and shows the company name in `/stocks` and stock run digests.
 
-Available per-stock sources are SEC EDGAR, Investor Relations, News, and Price. SEC is enabled when a stock is added. Configure a company-specific IR or news feed with `/setfeed`, then use `/sources` to change any source switch independently for each symbol.
+Available per-stock sources are SEC EDGAR, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, Investor Relations, News, and Price. SEC is enabled when a stock is added; the other sources are opt-in. Configure a company-specific IR or news feed with `/setfeed`, then use `/sources` to change any source switch independently for each symbol.
 
 ### Publications
 
@@ -142,6 +144,9 @@ The query list also starts empty. Add a topic such as `/addquery mycorrhizal fun
 ## Source support and limitations
 
 - **SEC EDGAR:** fetches the company ticker directory, recent submissions, and filing documents. `SEC_USER_AGENT` is mandatory and requests are paced. The MVP checks recent filings only.
+- **FINVIZ:** reads the public ticker quote page's insider-trading table and normalizes up to five recent rows. It links each result to the underlying SEC filing. FINVIZ HTML may change or throttle automated requests.
+- **Zacks:** reads the public JSON quote feed used by the ticker page and emits a new snapshot when its visible Zacks Rank or quote facts change. The snapshot includes rank, price/change, forward P/E, and confirmed earnings date when provided. It does not access subscriber-only reports.
+- **Earnings Whispers:** establishes the anonymous session used by the public ticker page, then reads its public earnings endpoints. It combines the next earnings date and estimates with the latest reported EPS/revenue surprise into one snapshot. It does not access subscriber-only data; the public endpoints may change or throttle automated requests.
 - **PubMed:** uses NCBI E-utilities search and XML fetch endpoints.
 - **Investor relations/news:** consumes a user-configured RSS or Atom URL. Literal loopback, private, link-local, and local-network hostnames are rejected. Only use feeds you trust and are authorized to access.
 - **Price:** uses Stooq's public CSV endpoint and creates a new item based on the returned trading date.

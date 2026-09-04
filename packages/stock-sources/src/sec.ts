@@ -20,6 +20,7 @@ const submissionsSchema = z.object({
 });
 
 export type SecConfig = { symbol: string; cik?: string; maxItems?: number };
+export type SecCompany = { symbol: string; companyName: string; cik: string };
 
 export class SecEdgarSource implements Source<SecConfig> {
   public readonly id = 'SEC';
@@ -32,7 +33,7 @@ export class SecEdgarSource implements Source<SecConfig> {
     if (!userAgent.trim()) throw new Error('SEC_USER_AGENT is required');
   }
 
-  async #cikFor(symbol: string, signal?: AbortSignal): Promise<string> {
+  async #loadTickerCache(signal?: AbortSignal): Promise<void> {
     if (!this.#tickerCache) {
       const text = await fetchText(
         this.fetcher,
@@ -42,11 +43,29 @@ export class SecEdgarSource implements Source<SecConfig> {
       );
       this.#tickerCache = tickersSchema.parse(JSON.parse(text));
     }
-    const match = Object.values(this.#tickerCache).find(
-      (company) => company.ticker.toUpperCase() === symbol.toUpperCase(),
+  }
+
+  public async lookupCompany(
+    symbol: string,
+    signal?: AbortSignal,
+  ): Promise<SecCompany> {
+    await this.#loadTickerCache(signal);
+    const tickerCache = this.#tickerCache;
+    if (!tickerCache) throw new Error('SEC ticker cache is unavailable');
+    const normalized = symbol.trim().toUpperCase();
+    const match = Object.values(tickerCache).find(
+      (company) => company.ticker.toUpperCase() === normalized,
     );
     if (!match) throw new Error(`No SEC CIK found for ${symbol}`);
-    return String(match.cik_str).padStart(10, '0');
+    return {
+      symbol: match.ticker.toUpperCase(),
+      companyName: match.title,
+      cik: String(match.cik_str).padStart(10, '0'),
+    };
+  }
+
+  async #cikFor(symbol: string, signal?: AbortSignal): Promise<string> {
+    return (await this.lookupCompany(symbol, signal)).cik;
   }
 
   public async fetch(

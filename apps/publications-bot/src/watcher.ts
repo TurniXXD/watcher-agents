@@ -12,7 +12,11 @@ import {
   FdaSource,
   PubMedSource,
 } from '@watcher/publication-sources';
-import { renderPublicationDigest, sendSplitMessage } from '@watcher/telegram';
+import {
+  formatRunDuration,
+  renderPublicationDigest,
+  sendSplitMessage,
+} from '@watcher/telegram';
 import type { Api } from 'grammy';
 
 export const createPublicationsRunner = (
@@ -53,7 +57,10 @@ export const createPublicationsRunner = (
   ): Promise<void> => {
     if (result.newItemCount === 0 && result.sourceFailures.length === 0) {
       if (manual)
-        await api.sendMessage(chatId.toString(), 'Nothing new found.');
+        await api.sendMessage(
+          chatId.toString(),
+          `Nothing new found.\nDuration: ${formatRunDuration(result.durationMs ?? 0)}`,
+        );
       return;
     }
     await sendSplitMessage(api, chatId, renderPublicationDigest(result));
