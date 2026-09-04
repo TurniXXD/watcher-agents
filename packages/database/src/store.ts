@@ -408,9 +408,13 @@ export class WatcherStore implements PipelineRepository {
   }
 
   public async addQueries(chatConfigId: string, queries: string[]) {
-    const uniqueQueries = new Map(
-      queries.map((query) => [query.trim().toLowerCase(), query.trim()]),
-    );
+    const uniqueQueries = new Map<string, string>();
+    for (const query of queries) {
+      const trimmed = query.trim();
+      const normalized = trimmed.toLowerCase();
+      if (!uniqueQueries.has(normalized))
+        uniqueQueries.set(normalized, trimmed);
+    }
     const normalizedQueries = [...uniqueQueries.keys()];
     if (!normalizedQueries.length)
       return { addedCount: 0, skippedCount: 0, totalCount: 0 };
