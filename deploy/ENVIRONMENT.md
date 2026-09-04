@@ -44,7 +44,7 @@ These values are consumed by `deploy/render-env.sh`; they do not belong in GitHu
 | `OLLAMA_URL`                  | Yes      | Usually `http://host.docker.internal:11434`             |
 | `OLLAMA_MODEL`                | Yes      | For example `qwen3:8b`                                  |
 | `OLLAMA_KEEP_ALIVE`           | No       | Defaults to `5m`; use `0` to unload after every request |
-| `OLLAMA_MAX_ITEMS_PER_RUN`    | No       | Defaults to `5`                                         |
+| `OLLAMA_MAX_ITEMS_PER_RUN`    | No       | Defaults to `0`, meaning all new items                  |
 | `OLLAMA_NUM_CTX`              | No       | Defaults to `4096`                                      |
 | `OLLAMA_NUM_PREDICT`          | No       | Defaults to `768`                                       |
 | `OLLAMA_RETRIES`              | No       | Defaults to `1`; maximum `2`                            |

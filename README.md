@@ -9,9 +9,9 @@ Both bots share PostgreSQL, the same idempotent watcher pipeline, and an externa
 
 ## How it works
 
-Each source normalizes provider data into a common `WatchItem`. A run waits for all enabled sources with `Promise.allSettled`, records individual source failures, reserves new items through PostgreSQL uniqueness constraints, analyzes only reserved items with Ollama, and persists the run result. Manual and scheduled runs use this exact same path.
+Each source normalizes provider data into a common `WatchItem`. A run waits for all enabled targets and sources with `Promise.allSettled`, records individual source failures, reserves new items through PostgreSQL uniqueness constraints, analyzes only reserved items with Ollama, and persists the run result. Already processed SEC filings, RSS/news entries, price snapshots, PubMed articles, bioRxiv papers, clinical trials, and FDA reports are skipped for both bots by their stable source identity. Manual and scheduled runs use this exact same path.
 
-Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recoverable after two hours. Scheduled runs send no message when nothing useful is new; `/run` explicitly reports that no new content was found.
+Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recoverable after two hours. Scheduled runs send no message when nothing useful is new; `/run` sends an editable progress message and explicitly reports that no new content was found.
 
 ## Requirements
 
@@ -96,7 +96,7 @@ Every application variable is represented in `.env.example`.
 | `OLLAMA_URL`                                        | both bots             | Ollama base URL                                                                               |
 | `OLLAMA_MODEL`                                      | both bots             | Installed Ollama model name                                                                   |
 | `OLLAMA_KEEP_ALIVE`                                 | both bots             | How long Ollama keeps the model loaded; defaults to `5m`                                      |
-| `OLLAMA_MAX_ITEMS_PER_RUN`                          | both bots             | Maximum new items analyzed in one run; defaults to `5`                                        |
+| `OLLAMA_MAX_ITEMS_PER_RUN`                          | both bots             | Maximum new items analyzed in one run; `0` means all new items and is the default             |
 | `OLLAMA_NUM_CTX`                                    | both bots             | Per-request context size; defaults to `4096`                                                  |
 | `OLLAMA_NUM_PREDICT`                                | both bots             | Maximum generated tokens per analysis; defaults to `768`                                      |
 | `OLLAMA_RETRIES`                                    | both bots             | Retry count after a failed or invalid response; defaults to `1`                               |
@@ -110,9 +110,9 @@ Infrastructure secrets cannot be edited through Telegram. Telegram-editable sche
 
 ## Telegram commands
 
-Both bots support `/start`, `/help`, `/status`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`.
+Both bots support `/start`, `/help`, `/status`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. `/help` prints the same initial command list as `/start`.
 
-Run digests use Telegram formatting with clear item separators, labeled summary and detail sections, bullet lists, source links, and total run time. Link previews are disabled to keep multi-item digests compact.
+Manual `/run` requests first send one progress message, then update that message with `editMessageText` while sources are fetched, items are prepared, and Ollama analyses run. Run digests use Telegram formatting with clear item separators, labeled summary and detail sections, bullet lists, source links, and total run time. Link previews are disabled to keep multi-item digests compact.
 
 Stocks bot:
 
@@ -126,10 +126,11 @@ Publications bot:
 
 - `/queries`
 - `/addquery TOPIC`
+- `/addqueries` to import multiple topics from a CSV attachment
 - `/removequery TOPIC`
 - `/sources` to toggle PubMed, bioRxiv, ClinicalTrials.gov, and openFDA
 
-New stocks enable SEC by default. New publication queries enable PubMed by default. The other sources are opt-in. Cron expressions use five fields; an optional final IANA timezone may be supplied, for example `/schedule 0 8 * * * Europe/Prague`.
+New stocks enable SEC by default. New publication queries enable every publication source by default. Stock sources other than SEC are opt-in. Cron expressions use five fields; an optional final IANA timezone may be supplied. Use `/schedule` without arguments to view the current schedule and example syntax, or set one with `/schedule 0 8 * * * Europe/Prague`.
 
 ### Stocks
 
@@ -139,7 +140,7 @@ Available per-stock sources are SEC EDGAR, FINVIZ insider transactions, Zacks ra
 
 ### Publications
 
-The query list also starts empty. Add a topic such as `/addquery mycorrhizal fungi`; it is stored exactly for display and in normalized form for duplicate protection. PubMed is enabled for a new topic. Use `/sources` to independently enable bioRxiv, ClinicalTrials.gov, or FDA for that topic. Different topics can use different source combinations.
+The query list also starts empty. Add a topic such as `/addquery mycorrhizal fungi`; it is stored exactly for display and in normalized form for duplicate protection. To import many topics, upload a CSV file with a `query` or `topic` column and reply to it with `/addqueries`, or attach the CSV with `/addqueries` as the document caption. If no header is present, the first column is used. PubMed, bioRxiv, ClinicalTrials.gov, and openFDA are enabled for new topics. Use `/sources` to independently disable a noisy source for a topic. Different topics can use different source combinations.
 
 ## Source support and limitations
 
@@ -164,10 +165,10 @@ Watcher intentionally does not use Redis for Ollama coordination. PostgreSQL alr
 
 1. Sources may fetch concurrently, but expensive LLM analyses are sequential inside each run.
 2. The PostgreSQL advisory lock permits only one Ollama analysis across both bots at a time.
-3. At most `OLLAMA_MAX_ITEMS_PER_RUN` new items are reserved and analyzed per run. Remaining fetched items are not marked processed and can be handled by a later run.
+3. `OLLAMA_MAX_ITEMS_PER_RUN` can cap how many new items are reserved and analyzed per run. The default `0` processes every new item found across all configured targets and sources.
 4. Context, output length, timeout, retry count, thinking, and model keep-alive are bounded by environment variables.
 
-The conservative defaults prioritize server stability over digest speed. Raise `OLLAMA_MAX_ITEMS_PER_RUN`, context size, or output size only after observing free RAM/VRAM and run duration. Lower `OLLAMA_KEEP_ALIVE` to `0` when RAM is scarce and slower model reloads are acceptable.
+The default prioritizes complete overnight runs over digest speed. Set `OLLAMA_MAX_ITEMS_PER_RUN` to a positive value if you need a hard safety cap after observing free RAM/VRAM and run duration. Lower `OLLAMA_KEEP_ALIVE` to `0` when RAM is scarce and slower model reloads are acceptable.
 
 Also constrain the external Ollama service itself. For a Linux systemd installation, run `sudo systemctl edit ollama.service` and add:
 
@@ -203,7 +204,7 @@ deploy/                    VPS/Tailscale/GHCR deployment configuration
 
 ## Production deployment
 
-Production uses the shared image in GHCR, a private Compose network, a persistent PostgreSQL volume, pre-deploy backups, migrations, health-gated rollout, and application-image rollback. Ollama stays on the VPS host or another private machine.
+Production uses the shared image in GHCR, a private Compose network, a persistent PostgreSQL volume, pre-deploy backups, migrations, health-gated rollout, and application-image rollback. Ollama stays on the VPS host or another private machine. Runtime containers use read-only filesystems, so migrations run through the Prisma binary already packaged in the image instead of installing dependencies at startup.
 
 The complete Tailscale OAuth, VPS SSH, known-hosts, GHCR, GitHub Environment, server credential-file, first-deploy, operations, backup, and troubleshooting instructions are in [deploy/README.md](deploy/README.md). The exact credential inventory is in [deploy/ENVIRONMENT.md](deploy/ENVIRONMENT.md); safe templates live under `deploy/presets` and in the two `deploy/github-*.example` files.
 

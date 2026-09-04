@@ -3,11 +3,12 @@ import {
   authorizationMiddleware,
   commandArgument,
   formatRunDuration,
+  renderRunProgress,
   stockSymbolSchema,
 } from '@watcher/telegram';
 import { Bot, InlineKeyboard } from 'grammy';
 import { z } from 'zod';
-import type { RunExecution } from '@watcher/core';
+import type { ProgressReporter, RunExecution } from '@watcher/core';
 
 type StockCompany = { symbol: string; companyName: string; cik: string };
 type StockCompanyLookup = (symbol: string) => Promise<StockCompany>;
@@ -18,13 +19,17 @@ type StockListEntry = {
   cik: string | null;
 };
 
-const help = `/status — watcher status
+const scheduleExample = '/schedule 0 8 * * * Europe/Prague';
+
+const help = `/help — show this command list
+/status — watcher status
 /stocks — list stocks
 /addstock SYMBOL — add a stock (SEC enabled by default)
 /removestock SYMBOL — remove a stock
 /sources — configure SEC, FINVIZ, Zacks, Earnings Whispers, price, and feeds
 /setfeed SYMBOL IR|NEWS URL — configure a company feed
 /schedule [CRON] [TIMEZONE] — view or update schedule
+  Example: ${scheduleExample}
 /run — run now
 /pause — pause scheduled runs
 /resume — resume scheduled runs`;
@@ -39,7 +44,11 @@ export const createStocksBot = (
   token: string,
   allowedIds: ReadonlySet<number>,
   store: WatcherStore,
-  runNow: (configId: string, chatId: bigint) => Promise<RunExecution>,
+  runNow: (
+    configId: string,
+    chatId: bigint,
+    options?: { onProgress?: ProgressReporter },
+  ) => Promise<RunExecution>,
   lookupCompany: StockCompanyLookup,
   timezone: string,
   reportError: (error: unknown) => void,
@@ -165,7 +174,7 @@ export const createStocksBot = (
     const argument = commandArgument(ctx.message?.text);
     if (!argument)
       return ctx.reply(
-        `${current.watcherConfig?.schedule} ${current.watcherConfig?.timezone}`,
+        `Current schedule: ${current.watcherConfig?.schedule} ${current.watcherConfig?.timezone}\nExample: ${scheduleExample}`,
       );
     const parts = argument.split(/\s+/);
     const selectedTimezone = parts.at(-1)?.includes('/')
@@ -180,11 +189,37 @@ export const createStocksBot = (
   });
   bot.command('run', async (ctx) => {
     const current = await chat(ctx.chat.id);
-    const result = await runNow(current.watcherConfig!.id, BigInt(ctx.chat.id));
+    const initialProgress = renderRunProgress({
+      percent: 0,
+      step: 'Starting',
+    });
+    const progressMessage = await ctx.reply(initialProgress);
+    let lastProgress = initialProgress;
+    const onProgress: ProgressReporter = async (progress) => {
+      const text = renderRunProgress(progress);
+      if (text === lastProgress) return;
+      lastProgress = text;
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        progressMessage.message_id,
+        text,
+      );
+    };
+    const result = await runNow(
+      current.watcherConfig!.id,
+      BigInt(ctx.chat.id),
+      { onProgress },
+    );
     if (result.status === 'BUSY')
-      await ctx.reply('A run is already in progress.');
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        progressMessage.message_id,
+        'A run is already in progress.',
+      );
     if (result.status === 'FAILED')
-      await ctx.reply(
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        progressMessage.message_id,
         `Run failed after ${formatRunDuration(result.durationMs)}: ${result.error}`,
       );
   });

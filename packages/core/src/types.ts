@@ -28,6 +28,13 @@ export type SourceRequest<TConfig = unknown> = {
   config: TConfig;
 };
 
+export type RunProgress = {
+  percent: number;
+  step: string;
+};
+
+export type ProgressReporter = (progress: RunProgress) => Promise<void> | void;
+
 export interface Source<TConfig = unknown> {
   readonly id: string;
   fetch(config: TConfig, signal?: AbortSignal): Promise<WatchItem[]>;

@@ -6,6 +6,16 @@ import { WatcherStore } from '../store.js';
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
 
+const watchItem = (externalId: string): WatchItem => ({
+  id: `SEC:${externalId}`,
+  source: 'SEC',
+  externalId,
+  title: 'Filing',
+  url: 'https://www.sec.gov/Archives/example',
+  content: 'New filing content',
+  metadata: {},
+});
+
 integration('WatcherStore with PostgreSQL', () => {
   if (!databaseUrl) return;
 
@@ -25,15 +35,7 @@ integration('WatcherStore with PostgreSQL', () => {
     const chat = await store.ensureChat('STOCKS', 123n);
     const firstRun = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
     if (!firstRun) throw new Error('Expected first run');
-    const item: WatchItem = {
-      id: 'SEC:0001',
-      source: 'SEC',
-      externalId: '0001',
-      title: 'Filing',
-      url: 'https://www.sec.gov/Archives/example',
-      content: 'New filing content',
-      metadata: {},
-    };
+    const item = watchItem('0001');
 
     const prepared = await store.prepareItemsForRun(
       'STOCKS',
@@ -83,6 +85,21 @@ integration('WatcherStore with PostgreSQL', () => {
     expect(reused[0]?.outcome?.status).toBe('SUCCESS');
   });
 
+  it('treats zero max analyses as unlimited', async () => {
+    const chat = await store.ensureChat('PUBLICATIONS', 321n);
+    const run = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
+    if (!run) throw new Error('Expected run');
+
+    const prepared = await store.prepareItemsForRun(
+      'PUBLICATIONS',
+      run.id,
+      [watchItem('pubmed-1'), watchItem('pubmed-2'), watchItem('pubmed-3')],
+      0,
+    );
+
+    expect(prepared).toHaveLength(3);
+  });
+
   it('atomically rejects a second overlapping run', async () => {
     const chat = await store.ensureChat('STOCKS', 123n);
     const configId = chat.watcherConfig!.id;
@@ -111,6 +128,45 @@ integration('WatcherStore with PostgreSQL', () => {
       ].sort(),
     );
     expect(stock?.sources.filter(({ enabled }) => enabled)).toHaveLength(0);
+  });
+
+  it('bulk-adds publication queries and skips duplicates', async () => {
+    const chat = await store.ensureChat('PUBLICATIONS', 123n);
+
+    const first = await store.addQueries(chat.id, [
+      'mycorrhizal fungi',
+      'plant microbiome',
+      'MYCORRHIZAL FUNGI',
+    ]);
+    const second = await store.addQueries(chat.id, [
+      'mycorrhizal fungi',
+      'soil carbon',
+    ]);
+    const queries = await store.listQueries(chat.id);
+
+    expect(first).toEqual({ addedCount: 2, skippedCount: 0, totalCount: 2 });
+    expect(second).toEqual({ addedCount: 1, skippedCount: 1, totalCount: 2 });
+    expect(queries.map((entry) => entry.query).sort()).toEqual([
+      'mycorrhizal fungi',
+      'plant microbiome',
+      'soil carbon',
+    ]);
+    expect(
+      queries.every(
+        (entry) =>
+          entry.sources.length === 4 &&
+          entry.sources.every(({ enabled }) => enabled),
+      ),
+    ).toBe(true);
+  });
+
+  it('enables every publication source for a new single query', async () => {
+    const chat = await store.ensureChat('PUBLICATIONS', 124n);
+
+    const query = await store.addQuery(chat.id, 'soil microbiome');
+
+    expect(query.sources).toHaveLength(4);
+    expect(query.sources.every(({ enabled }) => enabled)).toBe(true);
   });
 
   it('serializes Ollama leases across database sessions', async () => {

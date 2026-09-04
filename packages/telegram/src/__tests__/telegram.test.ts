@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { isAuthorized, parseAllowedUserIds } from '../authorization.js';
+import { parsePublicationQueriesCsv } from '../input.js';
 import {
   formatRunDuration,
   renderPublicationDigest,
+  renderRunProgress,
   renderStockDigest,
   splitTelegramMessage,
 } from '../messages.js';
@@ -21,6 +23,14 @@ describe('Telegram utilities', () => {
     );
   });
 
+  it('parses publication queries from CSV content', () => {
+    expect(
+      parsePublicationQueriesCsv(
+        'query,notes\nmycorrhizal fungi,soil\n"plant, microbe",quoted\nMYCORRHIZAL FUNGI,duplicate',
+      ),
+    ).toEqual(['mycorrhizal fungi', 'plant, microbe']);
+  });
+
   it('splits messages without exceeding Telegram limits', () => {
     const parts = splitTelegramMessage(
       `${'a'.repeat(60)}\n\n${'b'.repeat(60)}`,
@@ -34,6 +44,17 @@ describe('Telegram utilities', () => {
     expect(formatRunDuration(499)).toBe('0s');
     expect(formatRunDuration(61_000)).toBe('1m 1s');
     expect(formatRunDuration(3_661_000)).toBe('1h 1m 1s');
+  });
+
+  it('renders manual run progress with a fixed width bar', () => {
+    expect(
+      renderRunProgress({
+        percent: 60,
+        step: 'Analyzing fundamentals',
+      }),
+    ).toBe(
+      '⏳ Processing request...\n[██████░░░░] 60%\nCurrent step: Analyzing fundamentals',
+    );
   });
 
   it('renders stock digest entries with isolated URLs', () => {

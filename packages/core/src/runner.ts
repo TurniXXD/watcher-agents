@@ -1,4 +1,10 @@
-import type { PipelineResult, SourceRequest, WatcherKind } from './types.js';
+import type {
+  PipelineResult,
+  ProgressReporter,
+  RunProgress,
+  SourceRequest,
+  WatcherKind,
+} from './types.js';
 import type { WatcherPipeline } from './pipeline.js';
 
 export interface RunStore {
@@ -29,6 +35,11 @@ export type RunExecution =
   | { status: 'COMPLETED'; result: PipelineResult }
   | { status: 'FAILED'; error: string; durationMs: number };
 
+export type RunExecutionOptions = {
+  onProgress?: ProgressReporter;
+  signal?: AbortSignal;
+};
+
 export class WatcherRunner {
   public constructor(
     private readonly kind: WatcherKind,
@@ -44,26 +55,58 @@ export class WatcherRunner {
     ) => Promise<void>,
   ) {}
 
+  private async reportProgress(
+    reporter: ProgressReporter | undefined,
+    progress: RunProgress,
+  ): Promise<void> {
+    try {
+      await reporter?.(progress);
+    } catch {
+      // Progress feedback is best-effort and must never fail the watcher run.
+    }
+  }
+
   public async execute(
     configId: string,
     chatId: bigint,
     trigger: 'MANUAL' | 'SCHEDULED',
+    options: RunExecutionOptions = {},
   ): Promise<RunExecution> {
     const run = await this.store.claimRun(configId, trigger);
     if (!run) return { status: 'BUSY' };
     const startedAt = Date.now();
+    const onProgress = options.onProgress
+      ? (progress: RunProgress) =>
+          this.reportProgress(options.onProgress, progress)
+      : undefined;
 
     try {
+      await this.reportProgress(onProgress, {
+        percent: 5,
+        step: 'Preparing sources',
+      });
       const requests = await this.requestsForChat(chatId);
       const pipelineResult = await this.pipeline.run(
         this.kind,
         run.id,
         requests,
+        {
+          analysisStep:
+            this.kind === 'STOCKS'
+              ? 'Analyzing fundamentals'
+              : 'Analyzing publications',
+          ...(onProgress ? { onProgress } : {}),
+          ...(options.signal ? { signal: options.signal } : {}),
+        },
       );
       const result = {
         ...pipelineResult,
         durationMs: Date.now() - startedAt,
       };
+      await this.reportProgress(onProgress, {
+        percent: 95,
+        step: 'Recording run result',
+      });
       await this.store.recordSourceFailures(run.id, result.sourceFailures);
       const partial =
         result.sourceFailures.length > 0 || result.failedAnalysisCount > 0;
@@ -73,6 +116,10 @@ export class WatcherRunner {
         newItemCount: result.newItemCount,
         analyzedCount: result.analyzedCount,
         failedAnalysisCount: result.failedAnalysisCount,
+      });
+      await this.reportProgress(onProgress, {
+        percent: 100,
+        step: 'Complete',
       });
       if (
         trigger === 'MANUAL' ||

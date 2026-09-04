@@ -30,6 +30,7 @@ write_env() {
 
     escaped="${value//\\/\\\\}"
     escaped="${escaped//\'/\\\'}"
+    escaped="${escaped//\$/\$\$}"
     printf "%s='%s'\n" "$key" "$escaped" >>"$path"
     shift 2
   done
@@ -71,7 +72,7 @@ write_env "$RUNTIME_DIR/stocks-bot.env" \
   OLLAMA_URL "$OLLAMA_URL" \
   OLLAMA_MODEL "$OLLAMA_MODEL" \
   OLLAMA_KEEP_ALIVE "${OLLAMA_KEEP_ALIVE:-5m}" \
-  OLLAMA_MAX_ITEMS_PER_RUN "${OLLAMA_MAX_ITEMS_PER_RUN:-5}" \
+  OLLAMA_MAX_ITEMS_PER_RUN "${OLLAMA_MAX_ITEMS_PER_RUN:-0}" \
   OLLAMA_NUM_CTX "${OLLAMA_NUM_CTX:-4096}" \
   OLLAMA_NUM_PREDICT "${OLLAMA_NUM_PREDICT:-768}" \
   OLLAMA_RETRIES "${OLLAMA_RETRIES:-1}" \
@@ -87,7 +88,7 @@ write_env "$RUNTIME_DIR/publications-bot.env" \
   OLLAMA_URL "$OLLAMA_URL" \
   OLLAMA_MODEL "$OLLAMA_MODEL" \
   OLLAMA_KEEP_ALIVE "${OLLAMA_KEEP_ALIVE:-5m}" \
-  OLLAMA_MAX_ITEMS_PER_RUN "${OLLAMA_MAX_ITEMS_PER_RUN:-5}" \
+  OLLAMA_MAX_ITEMS_PER_RUN "${OLLAMA_MAX_ITEMS_PER_RUN:-0}" \
   OLLAMA_NUM_CTX "${OLLAMA_NUM_CTX:-4096}" \
   OLLAMA_NUM_PREDICT "${OLLAMA_NUM_PREDICT:-768}" \
   OLLAMA_RETRIES "${OLLAMA_RETRIES:-1}" \

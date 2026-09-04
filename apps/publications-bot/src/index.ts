@@ -24,9 +24,9 @@ const bot = createPublicationsBot(
   env.PUBLICATIONS_TELEGRAM_TOKEN,
   parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS),
   store,
-  (configId, chatId) => {
+  (configId, chatId, options) => {
     if (!runtime.runner) throw new Error('Publications runner is not ready');
-    return runtime.runner.execute(configId, chatId, 'MANUAL');
+    return runtime.runner.execute(configId, chatId, 'MANUAL', options);
   },
   env.DEFAULT_TIMEZONE,
   (error) => logger.error({ err: error }, 'Telegram update failed'),

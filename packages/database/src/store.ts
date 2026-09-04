@@ -227,7 +227,7 @@ export class WatcherStore implements PipelineRepository {
     );
     const selectedForAnalysis = new Set<string>();
     const selectedNewItems: WatchItem[] = [];
-    let remainingAnalysisSlots = maxAnalyses;
+    let remainingAnalysisSlots = maxAnalyses === 0 ? Infinity : maxAnalyses;
 
     for (const item of items) {
       const key = identityKey(item);
@@ -399,11 +399,51 @@ export class WatcherStore implements PipelineRepository {
         sources: {
           create: Object.values(PublicationSourceType).map((source) => ({
             source,
-            enabled: source === PublicationSourceType.PUBMED,
+            enabled: true,
           })),
         },
       },
       include: { sources: true },
+    });
+  }
+
+  public async addQueries(chatConfigId: string, queries: string[]) {
+    const uniqueQueries = new Map(
+      queries.map((query) => [query.trim().toLowerCase(), query.trim()]),
+    );
+    const normalizedQueries = [...uniqueQueries.keys()];
+    if (!normalizedQueries.length)
+      return { addedCount: 0, skippedCount: 0, totalCount: 0 };
+
+    return this.db.$transaction(async (tx) => {
+      const created = await tx.publicationQuery.createMany({
+        data: [...uniqueQueries].map(([normalizedQuery, query]) => ({
+          chatConfigId,
+          query,
+          normalizedQuery,
+        })),
+        skipDuplicates: true,
+      });
+      const savedQueries = await tx.publicationQuery.findMany({
+        where: { chatConfigId, normalizedQuery: { in: normalizedQueries } },
+        select: { id: true },
+      });
+      await tx.publicationSourceConfig.createMany({
+        data: savedQueries.flatMap((query) =>
+          Object.values(PublicationSourceType).map((source) => ({
+            queryId: query.id,
+            source,
+            enabled: true,
+          })),
+        ),
+        skipDuplicates: true,
+      });
+
+      return {
+        addedCount: created.count,
+        skippedCount: normalizedQueries.length - created.count,
+        totalCount: normalizedQueries.length,
+      };
     });
   }
 

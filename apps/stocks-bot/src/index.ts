@@ -26,9 +26,9 @@ const bot = createStocksBot(
   env.STOCKS_TELEGRAM_TOKEN,
   parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS),
   store,
-  (configId, chatId) => {
+  (configId, chatId, options) => {
     if (!runtime.runner) throw new Error('Stocks runner is not ready');
-    return runtime.runner.execute(configId, chatId, 'MANUAL');
+    return runtime.runner.execute(configId, chatId, 'MANUAL', options);
   },
   (symbol) => sec.lookupCompany(symbol),
   env.DEFAULT_TIMEZONE,

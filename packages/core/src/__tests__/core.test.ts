@@ -3,7 +3,7 @@ import { deduplicateItems } from '../deduplicate.js';
 import { WatcherPipeline } from '../pipeline.js';
 import { assertPublicHttpUrl } from '../network.js';
 import { computeNextRun, PersistentScheduler, RunGuard } from '../scheduler.js';
-import { watchItemSchema, type WatchItem } from '../types.js';
+import { watchItemSchema, type RunProgress, type WatchItem } from '../types.js';
 
 const item = (externalId: string): WatchItem => ({
   id: `SEC:${externalId}`,
@@ -111,6 +111,48 @@ describe('core watcher behavior', () => {
     ]);
   });
 
+  it('reports pipeline progress while fetching and analyzing items', async () => {
+    const progress: RunProgress[] = [];
+    const repository = {
+      prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) =>
+        items.map((value, index) => ({ item: value, recordId: String(index) })),
+      ),
+      saveAnalysis: vi.fn(async () => undefined),
+    };
+    const analyzer = {
+      analyze: vi.fn(async () => ({
+        status: 'FAILED' as const,
+        error: 'no model',
+      })),
+    };
+    const pipeline = new WatcherPipeline(repository, analyzer);
+
+    await pipeline.run(
+      'STOCKS',
+      'run',
+      [
+        {
+          source: { id: 'SEC', fetch: async () => [item('1')] },
+          target: 'ELAN',
+          config: {},
+        },
+      ],
+      {
+        analysisStep: 'Analyzing fundamentals',
+        onProgress: (entry) => {
+          progress.push(entry);
+        },
+      },
+    );
+
+    expect(progress.map((entry) => entry.step)).toEqual([
+      'Fetching sources',
+      'Preparing new items',
+      'Analyzing fundamentals',
+      'Saving results',
+    ]);
+  });
+
   it('caps and serializes expensive analysis work', async () => {
     let reservedCount = 0;
     let active = 0;
@@ -152,6 +194,40 @@ describe('core watcher behavior', () => {
     expect(result.newItemCount).toBe(2);
     expect(reservedCount).toBe(2);
     expect(maximumActive).toBe(1);
+  });
+
+  it('uses unlimited item processing by default', async () => {
+    const repository = {
+      prepareItemsForRun: vi.fn(async () => []),
+      saveAnalysis: vi.fn(async () => undefined),
+    };
+    const pipeline = new WatcherPipeline(repository, {
+      analyze: vi.fn(async () => ({
+        status: 'FAILED' as const,
+        error: 'test',
+      })),
+    });
+
+    await pipeline.run('STOCKS', 'run', [
+      {
+        source: {
+          id: 'SEC',
+          fetch: async () => [item('1'), item('2')],
+        },
+        target: 'ELAN',
+        config: {},
+      },
+    ]);
+
+    expect(repository.prepareItemsForRun).toHaveBeenCalledWith(
+      'STOCKS',
+      'run',
+      [
+        { ...item('1'), metadata: { target: 'ELAN' } },
+        { ...item('2'), metadata: { target: 'ELAN' } },
+      ],
+      0,
+    );
   });
 
   it('reuses cached successful analyses without calling the analyzer', async () => {

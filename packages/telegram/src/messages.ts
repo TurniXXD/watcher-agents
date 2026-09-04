@@ -1,6 +1,7 @@
 import type {
   PipelineResult,
   PublicationAnalysis,
+  RunProgress,
   StockAnalysis,
 } from '@watcher/core';
 import type { Api } from 'grammy';
@@ -67,6 +68,18 @@ const runDurationLine = (result: PipelineResult): string =>
   result.durationMs === undefined
     ? ''
     : `⏱ <b>Run time:</b> ${formatRunDuration(result.durationMs)}`;
+
+export const renderRunProgress = (progress: RunProgress): string => {
+  const percent = Math.min(100, Math.max(0, Math.round(progress.percent)));
+  const filled = Math.round(percent / 10);
+  const empty = 10 - filled;
+
+  return [
+    '⏳ Processing request...',
+    `[${'█'.repeat(filled)}${'░'.repeat(empty)}] ${percent}%`,
+    `Current step: ${progress.step}`,
+  ].join('\n');
+};
 
 export const splitTelegramMessage = (text: string, limit = LIMIT): string[] => {
   if (text.length <= limit) return [text];

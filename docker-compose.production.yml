@@ -24,7 +24,14 @@ services:
 
   migrate:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
-    command: ['pnpm', 'db:deploy']
+    command:
+      [
+        './packages/database/node_modules/.bin/prisma',
+        'migrate',
+        'deploy',
+        '--config',
+        'packages/database/prisma.config.ts',
+      ]
     env_file:
       - ./deploy/runtime/migrate.env
     depends_on:
