@@ -61,4 +61,4 @@ COPY --from=build --chown=node:node /app/packages/telegram/dist ./packages/teleg
 
 USER node
 
-CMD ["pnpm", "--filter", "@watcher/stocks-bot", "start"]
+CMD ["node", "apps/stocks-bot/dist/index.js"]

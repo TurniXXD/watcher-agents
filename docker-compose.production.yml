@@ -51,7 +51,7 @@ services:
 
   stocks-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
-    command: ['pnpm', '--filter', '@watcher/stocks-bot', 'start']
+    command: ['node', 'apps/stocks-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/stocks-bot.env
     environment:
@@ -83,7 +83,7 @@ services:
 
   publications-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
-    command: ['pnpm', '--filter', '@watcher/publications-bot', 'start']
+    command: ['node', 'apps/publications-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/publications-bot.env
     environment:

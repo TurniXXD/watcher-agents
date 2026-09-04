@@ -44,7 +44,7 @@ services:
 
   stocks-bot:
     image: ${WATCHER_IMAGE:-watcher:local}
-    command: ['pnpm', '--filter', '@watcher/stocks-bot', 'start']
+    command: ['node', 'apps/stocks-bot/dist/index.js']
     env_file:
       - ${WATCHER_ENV_FILE:-.env.example}
     extra_hosts:
@@ -69,7 +69,7 @@ services:
 
   publications-bot:
     image: ${WATCHER_IMAGE:-watcher:local}
-    command: ['pnpm', '--filter', '@watcher/publications-bot', 'start']
+    command: ['node', 'apps/publications-bot/dist/index.js']
     env_file:
       - ${WATCHER_ENV_FILE:-.env.example}
     extra_hosts:
