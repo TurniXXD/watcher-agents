@@ -22,13 +22,16 @@ This file contains project-specific instructions for coding agents working on Wa
 
 ## Architecture And Ownership
 
-- Keep apps thin: process lifecycle, dependency wiring, bot-specific commands/callbacks, scheduling, and watcher orchestration belong in the app.
-- Put reusable domain logic in packages. Expected ownership:
-  - `packages/core`: normalized watcher types, pipeline, deduplication, scheduling primitives, and run results.
+- Keep top-level app entry points thin: process lifecycle, dependency wiring, bot-specific commands/callbacks, scheduling, and watcher orchestration belong in the owning app.
+- Keep code under `packages/` only when it has concrete consumers in both bots or it is required by a runtime package boundary such as database persistence. Bot-specific core/domain logic and source adapters belong under that bot's `src/` tree and must not declare nested package manifests. Do not promote code to a shared package for a hypothetical future consumer.
+- Expected ownership:
+  - `packages/core`: normalized watcher types, pipeline, deduplication, scheduling primitives, run results, and other behavior used by both bots.
+  - `apps/stocks-bot/src/core`: stock-only LLM analysis, decision policy, and monitoring behavior that is used only by the stocks bot.
+  - `apps/stocks-bot/src/sources`: injectable stock source adapters and normalization.
+  - `apps/publications-bot/src/sources`: injectable publication source adapters and normalization.
   - `packages/telegram`: authorization, common commands, keyboards, digest rendering, and message splitting.
-  - `packages/database`: Prisma schema/client and repository-style persistence helpers.
+  - `packages/database`: Prisma schema/client, focused repository-style persistence helpers, and stock-domain helpers shared by persistence and the stocks app. Do not duplicate these helpers back into the app.
   - `packages/llm`: provider contract, Ollama implementation, prompts, parsing, and validation.
-  - `packages/stock-sources` and `packages/publication-sources`: injectable source adapters and normalization.
 - Keep database access in the database package or clearly isolated repositories. Do not query Prisma directly from Telegram handlers or source clients.
 - Keep external HTTP clients injectable and mockable.
 - Barrel files may contain simple re-exports only. Avoid duplicate exports and deep relative imports when a workspace package export exists.

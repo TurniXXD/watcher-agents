@@ -1,7 +1,9 @@
 import {
+  errorMessage,
   publicationAnalysisSchema,
   stockAnalysisSchema,
   type AnalysisOutcome,
+  type AnalysisMetrics,
   type Analyzer,
   type WatcherKind,
   type WatchItem,
@@ -10,6 +12,9 @@ import { z } from 'zod';
 
 const responseSchema = z.object({
   message: z.object({ content: z.string() }),
+  prompt_eval_count: z.number().int().nonnegative().optional(),
+  eval_count: z.number().int().nonnegative().optional(),
+  total_duration: z.number().nonnegative().optional(),
 });
 
 const stockJsonSchema = {
@@ -99,6 +104,12 @@ export type OllamaOptions = {
   fetch?: typeof fetch;
 };
 
+export type StructuredJsonSchema = Readonly<Record<string, unknown>>;
+export type StructuredGeneration<T> = {
+  result: T;
+  metrics: AnalysisMetrics;
+};
+
 export class OllamaProvider implements Analyzer {
   readonly #fetch: typeof fetch;
   readonly #retries: number;
@@ -115,6 +126,64 @@ export class OllamaProvider implements Analyzer {
     item: WatchItem,
     signal?: AbortSignal,
   ): Promise<AnalysisOutcome> {
+    try {
+      if (kind === 'STOCKS') {
+        const generated = await this.generateStructuredWithMetrics(
+          promptFor(kind, item),
+          stockJsonSchema,
+          stockAnalysisSchema,
+          signal,
+        );
+        return {
+          status: 'SUCCESS',
+          result: generated.result,
+          metrics: generated.metrics,
+        };
+      }
+      const generated = await this.generateStructuredWithMetrics(
+        promptFor(kind, item),
+        publicationJsonSchema,
+        publicationAnalysisSchema,
+        signal,
+      );
+      return {
+        status: 'SUCCESS',
+        result: generated.result,
+        metrics: generated.metrics,
+      };
+    } catch (error) {
+      return {
+        status: 'FAILED',
+        error: errorMessage(error),
+      };
+    }
+  }
+
+  public async generateStructured<T>(
+    prompt: string,
+    format: StructuredJsonSchema,
+    schema: z.ZodType<T>,
+    signal?: AbortSignal,
+    generation: { numPredict?: number } = {},
+  ): Promise<T> {
+    return (
+      await this.generateStructuredWithMetrics(
+        prompt,
+        format,
+        schema,
+        signal,
+        generation,
+      )
+    ).result;
+  }
+
+  public async generateStructuredWithMetrics<T>(
+    prompt: string,
+    format: StructuredJsonSchema,
+    schema: z.ZodType<T>,
+    signal?: AbortSignal,
+    generation: { numPredict?: number } = {},
+  ): Promise<StructuredGeneration<T>> {
     let lastError = 'Unknown Ollama error';
 
     for (let attempt = 0; attempt <= this.#retries; attempt += 1) {
@@ -129,13 +198,13 @@ export class OllamaProvider implements Analyzer {
               stream: false,
               keep_alive: this.options.keepAlive ?? '5m',
               think: this.options.think ?? false,
-              format:
-                kind === 'STOCKS' ? stockJsonSchema : publicationJsonSchema,
-              messages: [{ role: 'user', content: promptFor(kind, item) }],
+              format,
+              messages: [{ role: 'user', content: prompt }],
               options: {
                 temperature: 0.1,
                 num_ctx: this.options.numCtx ?? 4096,
-                num_predict: this.options.numPredict ?? 768,
+                num_predict:
+                  generation.numPredict ?? this.options.numPredict ?? 768,
               },
             }),
             signal: signal
@@ -148,16 +217,29 @@ export class OllamaProvider implements Analyzer {
           throw new Error(`Ollama returned HTTP ${response.status}`);
         const payload = responseSchema.parse(await response.json());
         const json: unknown = JSON.parse(payload.message.content);
-        const result =
-          kind === 'STOCKS'
-            ? stockAnalysisSchema.parse(json)
-            : publicationAnalysisSchema.parse(json);
-        return { status: 'SUCCESS', result };
+        return {
+          result: schema.parse(json),
+          metrics: {
+            ...(payload.total_duration === undefined
+              ? {}
+              : {
+                  durationMs: Math.round(payload.total_duration / 1_000_000),
+                }),
+            llmCallCount: 1,
+            ...(payload.prompt_eval_count === undefined
+              ? {}
+              : { promptTokens: payload.prompt_eval_count }),
+            ...(payload.eval_count === undefined
+              ? {}
+              : { completionTokens: payload.eval_count }),
+            estimatedCostUsd: 0,
+          },
+        };
       } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
+        lastError = errorMessage(error);
       }
     }
 
-    return { status: 'FAILED', error: lastError };
+    throw new Error(lastError);
   }
 }

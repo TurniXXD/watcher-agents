@@ -8,7 +8,18 @@ export const createLogger = (
     base: { service: name },
     level,
     redact: {
-      paths: ['token', '*.token', 'password', '*.password', 'DATABASE_URL'],
+      paths: [
+        'token',
+        '*.token',
+        'apiToken',
+        '*.apiToken',
+        'authorization',
+        '*.authorization',
+        'password',
+        '*.password',
+        'DATABASE_URL',
+        'QUIVER_API_TOKEN',
+      ],
       censor: '[REDACTED]',
     },
   });

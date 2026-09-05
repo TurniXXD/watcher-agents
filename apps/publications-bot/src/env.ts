@@ -23,5 +23,17 @@ const schema = z.object({
     .default(120_000),
   DEFAULT_TIMEZONE: z.string().default('Europe/Prague'),
   LOG_LEVEL: z.string().default('info'),
+  SOURCE_BACKOFF_BASE_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(3600)
+    .default(60),
+  SOURCE_BACKOFF_MAX_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_080)
+    .default(360),
 });
 export const env = schema.parse(process.env);

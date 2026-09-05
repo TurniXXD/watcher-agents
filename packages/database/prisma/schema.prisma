@@ -30,14 +30,32 @@ enum AnalysisStatus {
   FAILED
 }
 
+enum ValidationTargetType {
+  THESIS
+  ALERT
+  SIGNAL
+}
+
 enum StockSourceType {
   SEC
   INVESTOR_RELATIONS
   NEWS
+  TRADINGVIEW_NEWS
   PRICE
   FINVIZ
   ZACKS
   EARNINGS_WHISPERS
+  QUIVER_INSIDERS
+  QUIVER_CONTRACTS
+  QUIVER_PATENTS
+  QUIVER_CONGRESS
+  QUIVER_OFF_EXCHANGE
+  QUIVER_LOBBYING
+  ALPHA_VANTAGE_OPTIONS
+  ALPHA_VANTAGE_INSTITUTIONAL
+  FINRA_SHORT_INTEREST
+  CLINICAL_TRIALS
+  FDA
 }
 
 enum PublicationSourceType {
@@ -47,122 +65,817 @@ enum PublicationSourceType {
   FDA
 }
 
+enum MonitoringTier {
+  CORE
+  WATCH
+  DISCOVERY
+  INVESTIGATE
+}
+
+enum MonitoringMode {
+  LOW_RESOLUTION
+  NORMAL
+  HIGH_RESOLUTION
+  EVENT_MODE
+}
+
+enum CanonicalEventType {
+  EARNINGS
+  GUIDANCE
+  INSIDER_TRANSACTION
+  CLINICAL_TRIAL
+  FDA_DECISION
+  PRODUCT_LAUNCH
+  GOVERNMENT_CONTRACT
+  CONTRACT
+  PATENT
+  ACQUISITION
+  DIVESTITURE
+  CAPITAL_RAISE
+  BUYBACK
+  DIVIDEND
+  MANAGEMENT_CHANGE
+  ANALYST_REVISION
+  LEGAL
+  REGULATORY
+  CONGRESSIONAL_TRANSACTION
+  INSTITUTIONAL_POSITIONING
+  OFF_EXCHANGE_ANOMALY
+  COMPETITOR_EVENT
+  MACRO_EVENT
+  PRICE_ANOMALY
+  VOLUME_ANOMALY
+  OPTIONS_ANOMALY
+  SHORT_INTEREST_CHANGE
+  OTHER
+}
+
+enum EventDirection {
+  POSITIVE
+  NEGATIVE
+  MIXED
+  NEUTRAL
+  UNKNOWN
+}
+
+enum EventSurprise {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+  UNKNOWN
+}
+
+enum Materiality {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+  EXTREME
+}
+
+enum EventAction {
+  STORE
+  STATE_UPDATE
+  TARGETED_ANALYSIS
+  FULL_ANALYSIS
+  IMMEDIATE_ANALYSIS
+}
+
+enum EvidenceRole {
+  PRIMARY
+  CONFIRMATION
+  REACTION
+  INTERPRETATION
+}
+
+enum EventDecision {
+  ANALYZE
+  STORED
+  DUPLICATE
+  COOLDOWN
+}
+
+enum SourceHealthStatus {
+  HEALTHY
+  DEGRADED
+  RATE_LIMITED
+  UNAVAILABLE
+}
+
+enum DiscoverySignalStatus {
+  OBSERVED
+  INVESTIGATING
+  PROMOTED
+  EXPIRED
+}
+
+enum DiscoveryScanMode {
+  DAILY
+  INTRADAY
+}
+
+enum DiscoveryTrigger {
+  PRICE_MOVE
+  MOST_ACTIVE
+}
+
+enum InsiderTransactionType {
+  OPEN_MARKET_BUY
+  OPEN_MARKET_SELL
+  TEN_B5_1_SALE
+  TAX_SELL_TO_COVER
+  OPTION_EXERCISE
+  RSU_VESTING
+  GIFT
+  OTHER
+}
+
+enum CatalystType {
+  EARNINGS
+  CLINICAL_RESULTS
+  FDA_DECISION
+  PRODUCT_LAUNCH
+  COURT_DECISION
+  INVESTOR_DAY
+  CONTRACT
+  GUIDANCE
+  PATENT_EXPIRATION
+  REGULATORY_DECISION
+}
+
+enum CatalystProximity {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+  IMMINENT
+}
+
+enum CatalystDirection {
+  POSITIVE
+  NEGATIVE
+  BINARY
+  UNKNOWN
+}
+
+enum CatalystStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum StockAlertType {
+  HIGH_PRIORITY
+  THESIS_CHANGE
+  VERDICT_CHANGE
+  EXTREME_CATALYST
+  INSIDER_CLUSTER
+  UNEXPLAINED_ACTIVITY
+  ASYMMETRY_CHANGE
+}
+
+enum AlertSeverity {
+  INFO
+  MEDIUM
+  HIGH
+  EXTREME
+}
+
 model TelegramChat {
-  id             String          @id @default(uuid())
-  kind           WatcherKind
-  chatId         BigInt
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  watcherConfig  WatcherConfig?
-  stocks         Stock[]
-  queries        PublicationQuery[]
+  id            String             @id @default(uuid())
+  kind          WatcherKind
+  chatId        BigInt
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  watcherConfig WatcherConfig?
+  stocks        Stock[]
+  queries       PublicationQuery[]
 
   @@unique([kind, chatId])
 }
 
 model WatcherConfig {
-  id               String       @id @default(uuid())
-  chatConfigId     String       @unique
-  enabled          Boolean      @default(true)
-  schedule         String       @default("0 8 * * *")
-  timezone         String       @default("Europe/Prague")
-  lastRunAt        DateTime?
-  nextRunAt        DateTime?
-  lastRunStatus    RunStatus?
-  runInProgress    Boolean      @default(false)
-  runStartedAt     DateTime?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  chatConfig       TelegramChat @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
-  runs             WatcherRun[]
+  id                       String            @id @default(uuid())
+  chatConfigId             String            @unique
+  enabled                  Boolean           @default(true)
+  schedule                 String            @default("0 8 * * *")
+  timezone                 String            @default("Europe/Prague")
+  lastRunAt                DateTime?
+  nextRunAt                DateTime?
+  lastRunStatus            RunStatus?
+  runInProgress            Boolean           @default(false)
+  runStartedAt             DateTime?
+  discoveryScanInProgress  Boolean           @default(false)
+  discoveryScanStartedAt   DateTime?
+  lastDiscoveryScanAt      DateTime?
+  nextDiscoveryScanAt      DateTime?         @default(now())
+  reconciliationInProgress Boolean           @default(false)
+  reconciliationStartedAt  DateTime?
+  lastReconciliationAt     DateTime?
+  nextReconciliationAt     DateTime?         @default(now())
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  chatConfig               TelegramChat      @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
+  runs                     WatcherRun[]
+  sourceHealth             SourceHealth[]
+  discoveryScans           DiscoveryScan[]
+  discoverySignals         DiscoverySignal[]
+  alerts                   StockAlert[]
+  validationRuns           ValidationRun[]
+  backtestOutcomes         BacktestOutcome[]
 
   @@index([enabled, nextRunAt])
+  @@index([enabled, nextDiscoveryScanAt])
+  @@index([enabled, nextReconciliationAt])
 }
 
 model WatcherRun {
-  id                String          @id @default(uuid())
-  watcherConfigId   String
-  trigger           RunTrigger
-  status            RunStatus       @default(RUNNING)
-  startedAt         DateTime        @default(now())
-  finishedAt        DateTime?
-  fetchedCount      Int             @default(0)
-  newItemCount      Int             @default(0)
-  analyzedCount     Int             @default(0)
-  failedAnalysisCount Int           @default(0)
-  error             String?
-  watcherConfig     WatcherConfig   @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
-  sourceFailures    SourceFailure[]
-  analyses          Analysis[]
+  id                  String             @id @default(uuid())
+  watcherConfigId     String
+  trigger             RunTrigger
+  status              RunStatus          @default(RUNNING)
+  startedAt           DateTime           @default(now())
+  finishedAt          DateTime?
+  fetchedCount        Int                @default(0)
+  newItemCount        Int                @default(0)
+  analyzedCount       Int                @default(0)
+  failedAnalysisCount Int                @default(0)
+  error               String?
+  watcherConfig       WatcherConfig      @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
+  sourceFailures      SourceFailure[]
+  analyses            Analysis[]
+  eventObservations   EventObservation[]
+  alerts              StockAlert[]
 
   @@index([watcherConfigId, startedAt])
 }
 
 model SourceFailure {
-  id          String     @id @default(uuid())
-  runId       String
-  source      String
-  target      String
-  message     String
-  createdAt   DateTime   @default(now())
-  run         WatcherRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  id        String     @id @default(uuid())
+  runId     String
+  source    String
+  target    String
+  message   String
+  createdAt DateTime   @default(now())
+  run       WatcherRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   @@index([runId])
 }
 
 model ProcessedItem {
-  id          String       @id @default(uuid())
-  watcherKind WatcherKind
-  source      String
-  externalId  String
-  title       String
-  url         String
-  publishedAt DateTime?
-  contentHash String
-  metadata    Json
-  firstSeenAt DateTime     @default(now())
-  analyses    Analysis[]
+  id                String               @id @default(uuid())
+  watcherKind       WatcherKind
+  source            String
+  externalId        String
+  title             String
+  url               String
+  publishedAt       DateTime?
+  ticker            String?
+  sourceType        String               @default("OTHER")
+  sourceUrl         String?
+  primarySource     Boolean              @default(false)
+  discoveredAt      DateTime             @default(now())
+  eventAt           DateTime?
+  category          String               @default("OTHER")
+  headline          String?
+  rawText           String?
+  normalizedFacts   Json                 @default("{}")
+  entities          Json                 @default("[]")
+  reliability       Float                @default(0.5)
+  contentHash       String
+  metadata          Json
+  firstSeenAt       DateTime             @default(now())
+  analyses          Analysis[]
+  eventObservations EventObservation[]
+  primaryForEvents  CanonicalEvent[]     @relation("PrimaryEvidence")
+  insiderSignal     InsiderSignal?
+  marketSnapshot    MarketSnapshot?
+  offExchange       OffExchangeSnapshot?
+  optionsSnapshot   OptionsSnapshot?
+  institutional     InstitutionalSnapshot?
+  shortInterest     ShortInterestSnapshot?
+  thesisRevisions   ThesisRevision[]
 
   @@unique([watcherKind, source, externalId])
   @@index([watcherKind, contentHash])
   @@index([url])
 }
 
-model Analysis {
+model EventChain {
+  id             String           @id @default(uuid())
+  ticker         String
+  primaryEventId String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  events         CanonicalEvent[]
+
+  @@index([ticker, createdAt])
+}
+
+model CanonicalEvent {
+  id                  String             @id @default(uuid())
+  ticker              String
+  eventType           CanonicalEventType
+  title               String
+  fingerprint         String             @unique
+  occurredAt          DateTime?
+  firstPublicAt       DateTime?
+  firstDetectedAt     DateTime
+  direction           EventDirection
+  magnitude           Json               @default("{}")
+  surprise            EventSurprise
+  materiality         Materiality
+  materialityScore    Int
+  materialityReasons  Json               @default("[]")
+  action              EventAction
+  evidencePriority    Int
+  primaryEvidenceId   String
+  primaryDriverId     String?
+  chainId             String
+  analysisClaimedAt   DateTime?
+  analysisCompletedAt DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  primaryEvidence     ProcessedItem      @relation("PrimaryEvidence", fields: [primaryEvidenceId], references: [id], onDelete: Restrict)
+  chain               EventChain         @relation(fields: [chainId], references: [id], onDelete: Restrict)
+  observations        EventObservation[]
+  catalysts           Catalyst[]
+  thesisRevision      ThesisRevision?
+  alerts              StockAlert[]
+
+  @@index([ticker, eventType, occurredAt])
+  @@index([ticker, firstDetectedAt])
+  @@index([chainId])
+}
+
+model EventObservation {
   id              String         @id @default(uuid())
-  runId           String
+  eventId         String
   processedItemId String
-  status          AnalysisStatus
-  result          Json?
-  error           String?
+  runId           String
+  role            EvidenceRole
+  decision        EventDecision
+  createdEvent    Boolean        @default(false)
   createdAt       DateTime       @default(now())
-  run             WatcherRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  event           CanonicalEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   processedItem   ProcessedItem  @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+  run             WatcherRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, processedItemId])
+  @@index([runId])
+  @@index([processedItemId])
+}
+
+model AnalysisCooldown {
+  scopeKey      String   @id
+  cooldownUntil DateTime
+  lastClaimedAt DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model InsiderSignal {
+  id                    String                 @id @default(uuid())
+  processedItemId       String                 @unique
+  ticker                String
+  insider               String
+  role                  String?
+  transactionType       InsiderTransactionType
+  occurredAt            DateTime?
+  shares                Decimal?               @db.Decimal(24, 4)
+  price                 Decimal?               @db.Decimal(24, 8)
+  transactionValue      Decimal?               @db.Decimal(24, 2)
+  holdingsBefore        Decimal?               @db.Decimal(24, 4)
+  holdingsAfter         Decimal?               @db.Decimal(24, 4)
+  holdingsChangePercent Decimal?               @db.Decimal(12, 6)
+  planned               Boolean                @default(false)
+  discretionary         Boolean                @default(false)
+  convictionScore       Int
+  clusterSize           Int                    @default(1)
+  rationale             Json                   @default("[]")
+  createdAt             DateTime               @default(now())
+  processedItem         ProcessedItem          @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+
+  @@index([ticker, transactionType, occurredAt])
+  @@index([ticker, convictionScore])
+}
+
+model MarketSnapshot {
+  id                             String        @id @default(uuid())
+  processedItemId                String        @unique
+  ticker                         String
+  observedAt                     DateTime
+  open                           Decimal       @db.Decimal(24, 8)
+  high                           Decimal       @db.Decimal(24, 8)
+  low                            Decimal       @db.Decimal(24, 8)
+  close                          Decimal       @db.Decimal(24, 8)
+  volume                         BigInt
+  dailyReturnPercent             Decimal?      @db.Decimal(12, 6)
+  weeklyReturnPercent            Decimal?      @db.Decimal(12, 6)
+  monthlyReturnPercent           Decimal?      @db.Decimal(12, 6)
+  ninetyDayReturnPercent         Decimal?      @db.Decimal(12, 6)
+  relativeVolume                 Decimal?      @db.Decimal(12, 6)
+  gapPercent                     Decimal?      @db.Decimal(12, 6)
+  atrPercent                     Decimal?      @db.Decimal(12, 6)
+  realizedVolatilityPercent      Decimal?      @db.Decimal(12, 6)
+  movingAverage20DistancePercent Decimal?      @db.Decimal(12, 6)
+  rsi14                          Decimal?      @db.Decimal(12, 6)
+  preMarketChangePercent         Decimal?      @db.Decimal(12, 6)
+  afterHoursChangePercent        Decimal?      @db.Decimal(12, 6)
+  relativeSectorPercent          Decimal?      @db.Decimal(12, 6)
+  relativeIndexPercent           Decimal?      @db.Decimal(12, 6)
+  priceAnomaly                   Boolean       @default(false)
+  volumeAnomaly                  Boolean       @default(false)
+  gapAnomaly                     Boolean       @default(false)
+  volatilityExpansion            Boolean       @default(false)
+  unexplained                    Boolean       @default(false)
+  primaryDriverId                String?
+  createdAt                      DateTime      @default(now())
+  processedItem                  ProcessedItem @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+
+  @@index([ticker, observedAt])
+  @@index([ticker, unexplained, observedAt])
+}
+
+model OffExchangeSnapshot {
+  id              String        @id @default(uuid())
+  processedItemId String        @unique
+  ticker          String
+  observedAt      DateTime
+  shortVolume     BigInt
+  totalVolume     BigInt
+  dpi             Decimal       @db.Decimal(12, 6)
+  baselineDpi     Decimal?      @db.Decimal(12, 6)
+  relativeDpi     Decimal?      @db.Decimal(12, 6)
+  anomaly         Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  processedItem   ProcessedItem @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+
+  @@index([ticker, observedAt])
+}
+
+model OptionsSnapshot {
+  id                       String        @id @default(uuid())
+  processedItemId          String        @unique
+  ticker                   String
+  observedAt               DateTime
+  callVolume               BigInt
+  putVolume                BigInt
+  callOpenInterest         BigInt
+  putOpenInterest          BigInt
+  putCallVolumeRatio       Decimal?      @db.Decimal(12, 6)
+  putCallOpenInterestRatio Decimal?      @db.Decimal(12, 6)
+  meanImpliedVolatility    Decimal?      @db.Decimal(12, 6)
+  maxVolumeOiRatio         Decimal?      @db.Decimal(12, 6)
+  anomaly                  Boolean       @default(false)
+  reasons                  Json          @default("[]")
+  createdAt                DateTime      @default(now())
+  processedItem            ProcessedItem @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+
+  @@index([ticker, observedAt])
+  @@index([ticker, anomaly, observedAt])
+}
+
+model InstitutionalSnapshot {
+  id                 String        @id @default(uuid())
+  processedItemId    String        @unique
+  ticker             String
+  reportedAt         DateTime
+  totalShares        Decimal?      @db.Decimal(30, 4)
+  totalValueUsd      Decimal?      @db.Decimal(30, 2)
+  netShareChange     Decimal?      @db.Decimal(30, 4)
+  changePercent      Decimal?      @db.Decimal(12, 6)
+  holderCount        Int?
+  topHolders         Json          @default("[]")
+  materialChange     Boolean       @default(false)
+  reasons            Json          @default("[]")
+  createdAt          DateTime      @default(now())
+  processedItem      ProcessedItem @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+
+  @@index([ticker, reportedAt])
+  @@index([ticker, materialChange, reportedAt])
+}
+
+model ShortInterestSnapshot {
+  id                   String        @id @default(uuid())
+  processedItemId      String        @unique
+  ticker               String
+  settlementDate       DateTime
+  currentShortPosition BigInt
+  previousShortPosition BigInt?
+  changeShares         BigInt?
+  changePercent        Decimal?      @db.Decimal(12, 6)
+  averageDailyVolume   BigInt?
+  daysToCover          Decimal?      @db.Decimal(12, 6)
+  materialChange       Boolean       @default(false)
+  reasons              Json          @default("[]")
+  createdAt            DateTime      @default(now())
+  processedItem        ProcessedItem @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+
+  @@index([ticker, settlementDate])
+  @@index([ticker, materialChange, settlementDate])
+}
+
+model Catalyst {
+  id             String            @id @default(uuid())
+  eventId        String
+  ticker         String
+  catalystType   CatalystType
+  description    String
+  expectedStart  DateTime?
+  expectedEnd    DateTime?
+  exactDateKnown Boolean           @default(false)
+  proximity      CatalystProximity
+  impact         Materiality
+  direction      CatalystDirection
+  status         CatalystStatus
+  fingerprint    String            @unique
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  event          CanonicalEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([ticker, status, expectedStart])
+  @@index([proximity, impact])
+}
+
+model SourceHealth {
+  id                  String             @id @default(uuid())
+  watcherConfigId     String
+  source              String
+  target              String
+  status              SourceHealthStatus @default(HEALTHY)
+  consecutiveFailures Int                @default(0)
+  lastAttemptAt       DateTime?
+  lastSuccessAt       DateTime?
+  lastFailureAt       DateTime?
+  backoffUntil        DateTime?
+  lastError           String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  watcherConfig       WatcherConfig      @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([watcherConfigId, source, target])
+  @@index([status, backoffUntil])
+}
+
+model Analysis {
+  id               String          @id @default(uuid())
+  runId            String
+  processedItemId  String
+  status           AnalysisStatus
+  result           Json?
+  error            String?
+  durationMs       Int?
+  llmCallCount     Int             @default(0)
+  promptTokens     Int?
+  completionTokens Int?
+  estimatedCostUsd Decimal         @default(0) @db.Decimal(18, 8)
+  createdAt        DateTime        @default(now())
+  run              WatcherRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  processedItem    ProcessedItem   @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+  thesisRevision   ThesisRevision?
 
   @@unique([runId, processedItemId])
   @@index([processedItemId])
 }
 
+model StockAlert {
+  id                  String         @id @default(uuid())
+  watcherConfigId     String
+  runId               String
+  eventId             String
+  ticker              String
+  type                StockAlertType
+  severity            AlertSeverity
+  title               String
+  reasons             Json
+  snapshot            Json
+  eventDetectedAt     DateTime
+  analysisCompletedAt DateTime
+  deliveryClaimedAt   DateTime?
+  sentAt              DateTime?
+  deliveryAttempts    Int            @default(0)
+  deliveryError       String?
+  createdAt           DateTime       @default(now())
+  watcherConfig       WatcherConfig  @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
+  run                 WatcherRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  event               CanonicalEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([watcherConfigId, eventId])
+  @@index([watcherConfigId, sentAt, createdAt])
+  @@index([runId, sentAt])
+  @@index([severity, createdAt])
+}
+
+model CompanyThesisState {
+  ticker            String   @id
+  thesis            String
+  verdict           String
+  confidence        Float
+  attentionScore    Int
+  bullScore         Float
+  bearScore         Float
+  netSignal         Float
+  signalGroups      Json
+  catalysts         Json
+  insiderConviction Float?
+  pricedIn          String
+  primaryDrivers    Json
+  risks             Json
+  dataCoverage      Float
+  dataQuality       String
+  materialDataGaps  Json
+  decision          Json?
+  lastEventId       String
+  version           Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([attentionScore, updatedAt])
+  @@index([verdict, updatedAt])
+}
+
+model ThesisRevision {
+  id                    String         @id @default(uuid())
+  ticker                String
+  eventId               String         @unique
+  processedItemId       String
+  analysisId            String         @unique
+  thesisChange          String
+  informationChange     String
+  fullAnalysisPerformed Boolean
+  redundancyClass       String
+  redundancyMultiplier  Float
+  reliabilityWeight     Float
+  targetedAnalysis      Json
+  resultingState        Json
+  createdAt             DateTime       @default(now())
+  event                 CanonicalEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  processedItem         ProcessedItem  @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+  analysis              Analysis       @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@index([ticker, createdAt])
+  @@index([processedItemId])
+}
+
+model ValidationRun {
+  id              String        @id @default(uuid())
+  watcherConfigId String
+  status          RunStatus     @default(RUNNING)
+  startedAt       DateTime      @default(now())
+  finishedAt      DateTime?
+  targetCount     Int           @default(0)
+  outcomeCount    Int           @default(0)
+  error           String?
+  watcherConfig   WatcherConfig @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
+
+  @@index([watcherConfigId, startedAt])
+}
+
+model BacktestOutcome {
+  id                            String               @id @default(uuid())
+  watcherConfigId               String
+  targetType                    ValidationTargetType
+  targetId                      String
+  ticker                        String
+  anchorAt                      DateTime
+  anchorPrice                   Decimal?             @db.Decimal(24, 8)
+  nextOpenPrice                 Decimal?             @db.Decimal(24, 8)
+  preDetectionReturnPercent     Decimal?             @db.Decimal(12, 6)
+  returnOneHourPercent          Decimal?             @db.Decimal(12, 6)
+  returnOneDayPercent           Decimal?             @db.Decimal(12, 6)
+  returnSevenDayPercent         Decimal?             @db.Decimal(12, 6)
+  returnThirtyDayPercent        Decimal?             @db.Decimal(12, 6)
+  returnNinetyDayPercent        Decimal?             @db.Decimal(12, 6)
+  returnTwelveMonthPercent      Decimal?             @db.Decimal(12, 6)
+  maximumFavorablePercent       Decimal?             @db.Decimal(12, 6)
+  maximumAdversePercent         Decimal?             @db.Decimal(12, 6)
+  verdict                       String?
+  sector                        String?
+  catalyst                      String?
+  signalType                    String?
+  signalCombination             Json                 @default("[]")
+  confidence                    Float?
+  attention                     Int?
+  marketRegime                  String?
+  predictedThirtyDayProbability Float?
+  completedHorizons             String[]             @default([])
+  createdAt                     DateTime             @default(now())
+  updatedAt                     DateTime             @updatedAt
+  watcherConfig                 WatcherConfig        @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([watcherConfigId, targetType, targetId])
+  @@index([watcherConfigId, targetType, anchorAt])
+  @@index([ticker, anchorAt])
+}
+
 model Stock {
-  id            String              @id @default(uuid())
-  chatConfigId  String
-  symbol        String
-  companyName   String?
-  cik           String?
-  createdAt     DateTime            @default(now())
-  chatConfig    TelegramChat        @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
-  sources       StockSourceConfig[]
+  id                        String              @id @default(uuid())
+  chatConfigId              String
+  symbol                    String
+  companyName               String?
+  cik                       String?
+  exchange                  String?
+  sector                    String?
+  industry                  String?
+  marketCap                 Decimal?            @db.Decimal(24, 2)
+  currency                  String?
+  country                   String?
+  investorRelationsUrl      String?
+  enabled                   Boolean             @default(true)
+  monitoringTier            MonitoringTier      @default(WATCH)
+  monitoringMode            MonitoringMode      @default(NORMAL)
+  priority                  Int                 @default(50)
+  tags                      String[]            @default([])
+  watchReason               String?
+  watchUntil                DateTime?
+  watchStartedAt            DateTime?
+  autoDiscovered            Boolean             @default(false)
+  attentionScore            Int                 @default(0)
+  investigationStartedAt    DateTime?
+  investigateUntil          DateTime?
+  highResolutionUntil       DateTime?
+  lastDiscoverySignalAt     DateTime?
+  nextHighResolutionCheckAt DateTime?
+  lastHighResolutionCheckAt DateTime?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  chatConfig                TelegramChat        @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
+  sources                   StockSourceConfig[]
+  discoverySignals          DiscoverySignal[]
 
   @@unique([chatConfigId, symbol])
+  @@index([monitoringMode, nextHighResolutionCheckAt])
+}
+
+model DiscoveryScan {
+  id              String            @id @default(uuid())
+  watcherConfigId String
+  trigger         RunTrigger
+  mode            DiscoveryScanMode
+  status          RunStatus         @default(RUNNING)
+  observedCount   Int               @default(0)
+  candidateCount  Int               @default(0)
+  activatedCount  Int               @default(0)
+  error           String?
+  startedAt       DateTime          @default(now())
+  finishedAt      DateTime?
+  watcherConfig   WatcherConfig     @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
+  signals         DiscoverySignal[]
+
+  @@index([watcherConfigId, startedAt])
+}
+
+model DiscoverySignal {
+  id              String                @id @default(uuid())
+  watcherConfigId String
+  scanId          String
+  stockId         String
+  fingerprint     String
+  ticker          String
+  source          String
+  trigger         DiscoveryTrigger
+  observedAt      DateTime
+  price           Decimal               @db.Decimal(24, 8)
+  changePercent   Decimal               @db.Decimal(12, 6)
+  volume          BigInt
+  dollarVolume    Decimal               @db.Decimal(24, 2)
+  attentionScore  Int
+  reason          String
+  status          DiscoverySignalStatus @default(INVESTIGATING)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  watcherConfig   WatcherConfig         @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
+  scan            DiscoveryScan         @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  stock           Stock                 @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([watcherConfigId, fingerprint])
+  @@index([watcherConfigId, status, observedAt])
+  @@index([stockId, observedAt])
+}
+
+model DomainEvent {
+  id            String   @id
+  type          String
+  aggregateType String
+  aggregateId   String
+  occurredAt    DateTime
+  payload       Json
+  createdAt     DateTime @default(now())
+
+  @@index([type, occurredAt])
+  @@index([aggregateType, aggregateId, occurredAt])
 }
 
 model StockSourceConfig {
-  id        String          @id @default(uuid())
-  stockId   String
-  source    StockSourceType
-  enabled   Boolean         @default(false)
-  config    Json?
-  stock     Stock           @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  id      String          @id @default(uuid())
+  stockId String
+  source  StockSourceType
+  enabled Boolean         @default(false)
+  config  Json?
+  stock   Stock           @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
   @@unique([stockId, source])
 }
@@ -180,12 +893,12 @@ model PublicationQuery {
 }
 
 model PublicationSourceConfig {
-  id       String                @id @default(uuid())
-  queryId  String
-  source   PublicationSourceType
-  enabled  Boolean               @default(false)
-  config   Json?
-  query    PublicationQuery      @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  id      String                @id @default(uuid())
+  queryId String
+  source  PublicationSourceType
+  enabled Boolean               @default(false)
+  config  Json?
+  query   PublicationQuery      @relation(fields: [queryId], references: [id], onDelete: Cascade)
 
   @@unique([queryId, source])
 }

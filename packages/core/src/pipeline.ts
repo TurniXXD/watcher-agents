@@ -1,18 +1,19 @@
 import { deduplicateItems } from './deduplicate.js';
 import type { WatcherLogger } from './logger.js';
-import type {
-  Analyzer,
-  PipelineRepository,
-  PipelineResult,
-  ProgressReporter,
-  SourceFailure,
-  SourceRequest,
-  WatcherKind,
-  WatchItem,
+import { errorMessage } from './utils.js';
+import {
+  watchItemSchema,
+  type Analyzer,
+  type PipelineRepository,
+  type PipelineResult,
+  type ProgressReporter,
+  type SourceFailure,
+  type SourceRequest,
+  type WatcherKind,
+  type WatchItem,
 } from './types.js';
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+class SourceBackoffError extends Error {}
 
 type PipelineRunOptions = {
   analysisStep?: string;
@@ -42,11 +43,49 @@ export class WatcherPipeline {
     const settled = await Promise.allSettled(
       requests.map(async ({ source, target, config }) => {
         const sourceStartedAt = Date.now();
+        const attemptAt = new Date();
+        const attempt = await this.repository.sourceAttemptDecision?.(
+          kind,
+          runId,
+          source.id,
+          target,
+          attemptAt,
+        );
+        if (attempt && !attempt.allowed) {
+          const retry = attempt.retryAt
+            ? ` until ${attempt.retryAt.toISOString()}`
+            : '';
+          throw new SourceBackoffError(
+            `${attempt.status ?? 'UNAVAILABLE'} backoff active${retry}`,
+          );
+        }
         this.logger?.debug(
           { kind, runId, source: source.id, target },
           'Fetching watcher source',
         );
-        const items = await source.fetch(config, options.signal);
+        let items: WatchItem[];
+        try {
+          items = (await source.fetch(config, options.signal)).map((item) =>
+            watchItemSchema.parse(item),
+          );
+          await this.repository.recordSourceSuccess?.(
+            kind,
+            runId,
+            source.id,
+            target,
+            new Date(),
+          );
+        } catch (error) {
+          await this.repository.recordSourceFailure?.(
+            kind,
+            runId,
+            source.id,
+            target,
+            errorMessage(error),
+            new Date(),
+          );
+          throw error;
+        }
         this.logger?.info(
           {
             kind,
@@ -71,7 +110,9 @@ export class WatcherPipeline {
 
     settled.forEach((result, index) => {
       const request = requests[index];
-      if (!request) return;
+      if (!request) {
+        return;
+      }
 
       if (result.status === 'fulfilled') {
         fetchedItems.push(
@@ -140,6 +181,7 @@ export class WatcherPipeline {
       });
       let outcome = cachedOutcome;
       if (!outcome) {
+        const analysisStartedAt = Date.now();
         try {
           this.logger?.debug(
             {
@@ -151,7 +193,21 @@ export class WatcherPipeline {
             },
             'Analyzing watcher item',
           );
-          outcome = await this.analyzer.analyze(kind, item, options.signal);
+          const analyzed = await this.analyzer.analyze(
+            kind,
+            item,
+            options.signal,
+          );
+          outcome = {
+            ...analyzed,
+            metrics: {
+              ...analyzed.metrics,
+              durationMs:
+                analyzed.metrics?.durationMs ?? Date.now() - analysisStartedAt,
+              llmCallCount: analyzed.metrics?.llmCallCount ?? 1,
+              estimatedCostUsd: analyzed.metrics?.estimatedCostUsd ?? 0,
+            },
+          };
         } catch (error) {
           this.logger?.warn(
             {
@@ -163,7 +219,15 @@ export class WatcherPipeline {
             },
             'Watcher item analysis failed',
           );
-          outcome = { status: 'FAILED' as const, error: errorMessage(error) };
+          outcome = {
+            status: 'FAILED' as const,
+            error: errorMessage(error),
+            metrics: {
+              durationMs: Date.now() - analysisStartedAt,
+              llmCallCount: 1,
+              estimatedCostUsd: 0,
+            },
+          };
         }
       } else {
         this.logger?.debug(
@@ -192,12 +256,27 @@ export class WatcherPipeline {
     }
 
     await options.onProgress?.({ percent: 90, step: 'Saving results' });
+    const intelligence =
+      await this.repository.getRunIntelligenceSummary?.(runId);
+    const newItemCount = intelligence?.newEventCount ?? preparedItems.length;
+    const successfulSources = settled.filter(
+      ({ status }) => status === 'fulfilled',
+    ).length;
+    const dataCoverage = {
+      expectedSources: requests.length,
+      successfulSources,
+      unavailableSources: requests.length - successfulSources,
+      percentage:
+        requests.length === 0
+          ? 100
+          : Math.round((successfulSources / requests.length) * 100),
+    };
     this.logger?.info(
       {
         kind,
         runId,
         fetchedCount: fetchedItems.length,
-        newItemCount: preparedItems.length,
+        newItemCount,
         analyzedCount: analyses.filter(
           ({ outcome }) => outcome.status === 'SUCCESS',
         ).length,
@@ -205,12 +284,14 @@ export class WatcherPipeline {
           ({ outcome }) => outcome.status === 'FAILED',
         ).length,
         sourceFailureCount: sourceFailures.length,
+        intelligence,
+        dataCoverage,
       },
       'Watcher pipeline completed',
     );
     return {
       fetchedCount: fetchedItems.length,
-      newItemCount: preparedItems.length,
+      newItemCount,
       analyzedCount: analyses.filter(
         ({ outcome }) => outcome.status === 'SUCCESS',
       ).length,
@@ -219,6 +300,8 @@ export class WatcherPipeline {
       ).length,
       analyses,
       sourceFailures,
+      dataCoverage,
+      ...(intelligence ? { intelligence } : {}),
     };
   }
 }

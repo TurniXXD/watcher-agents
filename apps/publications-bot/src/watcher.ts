@@ -12,7 +12,7 @@ import {
   ClinicalTrialsSource,
   FdaSource,
   PubMedSource,
-} from '@watcher/publication-sources';
+} from './sources/index.js';
 import {
   formatRunDuration,
   renderPublicationDigest,

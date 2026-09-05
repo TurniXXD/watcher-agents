@@ -1,5 +1,6 @@
 import type { WatchItem } from '@watcher/core';
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { OllamaProvider } from '../ollama.js';
 
 const item: WatchItem = {
@@ -20,6 +21,9 @@ describe('OllamaProvider', () => {
         void init;
         return new Response(
           JSON.stringify({
+            prompt_eval_count: 123,
+            eval_count: 45,
+            total_duration: 1_500_000_000,
             message: {
               content: JSON.stringify({
                 title: 'Paper',
@@ -43,9 +47,16 @@ describe('OllamaProvider', () => {
       model: 'test',
       fetch: mockFetch,
     });
-    expect((await provider.analyze('PUBLICATIONS', item)).status).toBe(
-      'SUCCESS',
-    );
+    expect(await provider.analyze('PUBLICATIONS', item)).toMatchObject({
+      status: 'SUCCESS',
+      metrics: {
+        durationMs: 1500,
+        llmCallCount: 1,
+        promptTokens: 123,
+        completionTokens: 45,
+        estimatedCostUsd: 0,
+      },
+    });
     const requestBody = mockFetch.mock.calls[0]?.[1]?.body;
     expect(typeof requestBody).toBe('string');
     if (typeof requestBody !== 'string') {
@@ -132,5 +143,44 @@ describe('OllamaProvider', () => {
       'FAILED',
     );
     expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows full analysis to request a larger output budget', async () => {
+    const mockFetch = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        void input;
+        void init;
+        return new Response(
+          JSON.stringify({
+            message: { content: JSON.stringify({ ok: true }) },
+          }),
+          { status: 200 },
+        );
+      },
+    );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      numPredict: 768,
+      fetch: mockFetch,
+    });
+
+    await provider.generateStructured(
+      'prompt',
+      { type: 'object' },
+      z.object({ ok: z.boolean() }),
+      undefined,
+      { numPredict: 1536 },
+    );
+
+    const requestBody = mockFetch.mock.calls[0]?.[1]?.body;
+    expect(typeof requestBody).toBe('string');
+    if (typeof requestBody !== 'string') {
+      throw new Error('Expected Ollama request body to be a string');
+    }
+    const body = JSON.parse(requestBody) as {
+      options: { num_predict: number };
+    };
+    expect(body.options.num_predict).toBe(1536);
   });
 });

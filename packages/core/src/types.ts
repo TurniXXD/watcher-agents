@@ -1,4 +1,49 @@
 import { z } from 'zod';
+import { stockIntelligenceResultSchema } from './stock-intelligence.js';
+
+export type SourceCapabilities = {
+  sourceName: string;
+  sourceType:
+    | 'REGULATORY'
+    | 'INVESTOR_RELATIONS'
+    | 'NEWS'
+    | 'MARKET_DATA'
+    | 'ANALYST'
+    | 'PUBLICATION'
+    | 'OTHER';
+  minimumIntervalMs: number;
+  preferredIntervalMs: number;
+  maximumIntervalMs: number;
+  supportsStreaming: boolean;
+  costPerRequestUsd: number;
+  rateLimitPerMinute: number | null;
+  priority: number;
+};
+
+export type RunEventSummary = {
+  eventId: string;
+  ticker: string;
+  eventType: string;
+  title: string;
+  materiality: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
+  action:
+    | 'STORE'
+    | 'STATE_UPDATE'
+    | 'TARGETED_ANALYSIS'
+    | 'FULL_ANALYSIS'
+    | 'IMMEDIATE_ANALYSIS';
+  decision: 'ANALYZE' | 'STORED' | 'DUPLICATE' | 'COOLDOWN';
+  direction?: 'POSITIVE' | 'NEGATIVE' | 'MIXED' | 'NEUTRAL' | 'UNKNOWN';
+  magnitude?: Record<string, unknown>;
+};
+
+export type RunIntelligenceSummary = {
+  events: RunEventSummary[];
+  newEventCount: number;
+  duplicateEventCount: number;
+  storedOnlyCount: number;
+  cooldownCount: number;
+};
 
 export const watcherKindSchema = z.enum(['STOCKS', 'PUBLICATIONS']);
 export type WatcherKind = z.infer<typeof watcherKindSchema>;
@@ -11,6 +56,23 @@ export const watchItemSchema = z.object({
   url: z.url(),
   publishedAt: z.date().optional(),
   content: z.string().min(1),
+  sourceType: z
+    .enum([
+      'REGULATORY',
+      'INVESTOR_RELATIONS',
+      'NEWS',
+      'MARKET_DATA',
+      'ANALYST',
+      'PUBLICATION',
+      'OTHER',
+    ])
+    .optional(),
+  primarySource: z.boolean().optional(),
+  eventAt: z.date().optional(),
+  category: z.string().min(1).optional(),
+  normalizedFacts: z.record(z.string(), z.unknown()).optional(),
+  entities: z.array(z.string()).optional(),
+  reliability: z.number().min(0).max(1).optional(),
   metadata: z.record(z.string(), z.unknown()),
 });
 
@@ -25,6 +87,7 @@ export type SourceFailure = {
 export type SourceRequest<TConfig = unknown> = {
   source: Source<TConfig>;
   target: string;
+  targetKey?: string;
   config: TConfig;
 };
 
@@ -37,6 +100,7 @@ export type ProgressReporter = (progress: RunProgress) => Promise<void> | void;
 
 export interface Source<TConfig = unknown> {
   readonly id: string;
+  readonly capabilities?: SourceCapabilities;
   fetch(config: TConfig, signal?: AbortSignal): Promise<WatchItem[]>;
 }
 
@@ -51,6 +115,7 @@ export const stockAnalysisSchema = z.object({
   risks: z.array(z.string()),
   catalysts: z.array(z.string()),
   confidence: z.number().min(0).max(1),
+  intelligence: stockIntelligenceResultSchema.optional(),
 });
 
 export type StockAnalysis = z.infer<typeof stockAnalysisSchema>;
@@ -70,9 +135,17 @@ export const publicationAnalysisSchema = z.object({
 export type PublicationAnalysis = z.infer<typeof publicationAnalysisSchema>;
 export type WatchAnalysis = StockAnalysis | PublicationAnalysis;
 
+export type AnalysisMetrics = {
+  durationMs?: number;
+  llmCallCount?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  estimatedCostUsd?: number;
+};
+
 export type AnalysisOutcome =
-  | { status: 'SUCCESS'; result: WatchAnalysis }
-  | { status: 'FAILED'; error: string };
+  | { status: 'SUCCESS'; result: WatchAnalysis; metrics?: AnalysisMetrics }
+  | { status: 'FAILED'; error: string; metrics?: AnalysisMetrics };
 
 export interface Analyzer {
   analyze(
@@ -88,6 +161,12 @@ export type PreparedItem = {
   outcome?: AnalysisOutcome;
 };
 
+export type SourceAttemptDecision = {
+  allowed: boolean;
+  retryAt?: Date;
+  status?: 'HEALTHY' | 'DEGRADED' | 'RATE_LIMITED' | 'UNAVAILABLE';
+};
+
 export interface PipelineRepository {
   prepareItemsForRun(
     kind: WatcherKind,
@@ -100,6 +179,31 @@ export interface PipelineRepository {
     itemId: string,
     outcome: AnalysisOutcome,
   ): Promise<void>;
+  sourceAttemptDecision?(
+    kind: WatcherKind,
+    runId: string,
+    source: string,
+    target: string,
+    now: Date,
+  ): Promise<SourceAttemptDecision>;
+  recordSourceSuccess?(
+    kind: WatcherKind,
+    runId: string,
+    source: string,
+    target: string,
+    now: Date,
+  ): Promise<void>;
+  recordSourceFailure?(
+    kind: WatcherKind,
+    runId: string,
+    source: string,
+    target: string,
+    message: string,
+    now: Date,
+  ): Promise<void>;
+  getRunIntelligenceSummary?(
+    runId: string,
+  ): Promise<RunIntelligenceSummary | undefined>;
 }
 
 export type AnalyzedItem = {
@@ -115,4 +219,11 @@ export type PipelineResult = {
   failedAnalysisCount: number;
   analyses: AnalyzedItem[];
   sourceFailures: SourceFailure[];
+  dataCoverage?: {
+    expectedSources: number;
+    successfulSources: number;
+    unavailableSources: number;
+    percentage: number;
+  };
+  intelligence?: RunIntelligenceSummary;
 };

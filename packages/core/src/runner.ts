@@ -7,6 +7,7 @@ import type {
 } from './types.js';
 import type { WatcherLogger } from './logger.js';
 import type { WatcherPipeline } from './pipeline.js';
+import { errorMessage } from './utils.js';
 
 export interface RunStore {
   claimRun(
@@ -39,6 +40,8 @@ export type RunExecution =
 export type RunExecutionOptions = {
   onProgress?: ProgressReporter;
   signal?: AbortSignal;
+  targetKeys?: ReadonlySet<string>;
+  sourceIds?: ReadonlySet<string>;
 };
 
 export class WatcherRunner {
@@ -55,6 +58,11 @@ export class WatcherRunner {
       manual: boolean,
     ) => Promise<void>,
     private readonly logger?: WatcherLogger,
+    private readonly afterRun?: (
+      chatId: bigint,
+      result: PipelineResult,
+      runId: string,
+    ) => Promise<void>,
   ) {}
 
   private async reportProgress(
@@ -97,7 +105,13 @@ export class WatcherRunner {
         percent: 5,
         step: 'Preparing sources',
       });
-      const requests = await this.requestsForChat(chatId);
+      const allRequests = await this.requestsForChat(chatId);
+      const requests = allRequests.filter(
+        ({ source, targetKey }) =>
+          (!options.targetKeys ||
+            (targetKey !== undefined && options.targetKeys.has(targetKey))) &&
+          (!options.sourceIds || options.sourceIds.has(source.id)),
+      );
       this.logger?.info(
         {
           kind: this.kind,
@@ -115,7 +129,7 @@ export class WatcherRunner {
         {
           analysisStep:
             this.kind === 'STOCKS'
-              ? 'Analyzing fundamentals'
+              ? 'Evaluating events and thesis'
               : 'Analyzing publications',
           ...(onProgress ? { onProgress } : {}),
           ...(options.signal ? { signal: options.signal } : {}),
@@ -140,6 +154,14 @@ export class WatcherRunner {
         analyzedCount: result.analyzedCount,
         failedAnalysisCount: result.failedAnalysisCount,
       });
+      try {
+        await this.afterRun?.(chatId, result, run.id);
+      } catch (error) {
+        this.logger?.error(
+          { kind: this.kind, configId, runId: run.id, err: error },
+          'Watcher post-run lifecycle update failed',
+        );
+      }
       await this.reportProgress(onProgress, {
         percent: 100,
         step: 'Complete',
@@ -179,7 +201,7 @@ export class WatcherRunner {
       );
       return { status: 'COMPLETED', result };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       const durationMs = Date.now() - startedAt;
       this.logger?.error(
         {

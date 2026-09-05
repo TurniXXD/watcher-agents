@@ -8,7 +8,10 @@ import { createPublicationsRunner } from './watcher.js';
 
 const logger = createLogger('publications-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
-const store = new WatcherStore(database);
+const store = new WatcherStore(database, {
+  sourceBackoffBaseMs: env.SOURCE_BACKOFF_BASE_SECONDS * 1000,
+  sourceBackoffMaximumMs: env.SOURCE_BACKOFF_MAX_MINUTES * 60_000,
+});
 const analyzer = new OllamaProvider({
   url: env.OLLAMA_URL,
   model: env.OLLAMA_MODEL,

@@ -55,12 +55,12 @@ importers:
       '@watcher/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@watcher/publication-sources':
-        specifier: workspace:*
-        version: link:../../packages/publication-sources
       '@watcher/telegram':
         specifier: workspace:*
         version: link:../../packages/telegram
+      fast-xml-parser:
+        specifier: 5.11.1
+        version: 5.11.1
       grammy:
         specifier: 1.46.0
         version: 1.46.0
@@ -83,12 +83,12 @@ importers:
       '@watcher/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@watcher/stock-sources':
-        specifier: workspace:*
-        version: link:../../packages/stock-sources
       '@watcher/telegram':
         specifier: workspace:*
         version: link:../../packages/telegram
+      fast-xml-parser:
+        specifier: 5.11.1
+        version: 5.11.1
       grammy:
         specifier: 1.46.0
         version: 1.46.0
@@ -136,6 +136,9 @@ importers:
       prisma:
         specifier: 7.10.0
         version: 7.10.0(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@6.0.3)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/pg':
         specifier: 8.15.6
@@ -149,38 +152,6 @@ importers:
       '@watcher/core':
         specifier: workspace:*
         version: link:../core
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-    devDependencies:
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-
-  packages/publication-sources:
-    dependencies:
-      '@watcher/core':
-        specifier: workspace:*
-        version: link:../core
-      fast-xml-parser:
-        specifier: 5.11.1
-        version: 5.11.1
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-    devDependencies:
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-
-  packages/stock-sources:
-    dependencies:
-      '@watcher/core':
-        specifier: workspace:*
-        version: link:../core
-      fast-xml-parser:
-        specifier: 5.11.1
-        version: 5.11.1
       zod:
         specifier: 4.4.3
         version: 4.4.3

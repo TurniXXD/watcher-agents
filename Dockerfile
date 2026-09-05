@@ -17,8 +17,6 @@ COPY apps/stocks-bot/package.json apps/stocks-bot/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/llm/package.json packages/llm/package.json
-COPY packages/publication-sources/package.json packages/publication-sources/package.json
-COPY packages/stock-sources/package.json packages/stock-sources/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 
 FROM manifests AS dependencies
@@ -55,8 +53,6 @@ COPY --from=build --chown=node:node /app/packages/database/dist ./packages/datab
 COPY --from=build --chown=node:node /app/packages/database/prisma ./packages/database/prisma
 COPY --from=build --chown=node:node /app/packages/database/prisma.config.ts ./packages/database/prisma.config.ts
 COPY --from=build --chown=node:node /app/packages/llm/dist ./packages/llm/dist
-COPY --from=build --chown=node:node /app/packages/publication-sources/dist ./packages/publication-sources/dist
-COPY --from=build --chown=node:node /app/packages/stock-sources/dist ./packages/stock-sources/dist
 COPY --from=build --chown=node:node /app/packages/telegram/dist ./packages/telegram/dist
 
 USER node

@@ -1,6 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import {
   computeNextRun,
   contentHash,
+  decisionResultSchema,
+  normalizeObservation,
+  stockIntelligenceResultSchema,
+  stockThesisStateSchema,
   type AnalysisOutcome,
   type PipelineRepository,
   type PreparedItem,
@@ -9,6 +14,15 @@ import {
   publicationAnalysisSchema,
   stockAnalysisSchema,
 } from '@watcher/core';
+import {
+  defaultMarketAnomalyPolicy,
+  type MarketAnomalyPolicy,
+} from './stock-domain/specialized.js';
+import {
+  defaultAdvancedSignalPolicy,
+  type AdvancedSignalPolicy,
+} from './stock-domain/advanced.js';
+import { evaluateStockAlert } from './stock-domain/alerting.js';
 import type { DatabaseClient } from './client.js';
 import type { Prisma } from './generated/prisma/client.js';
 import {
@@ -19,21 +33,30 @@ import {
   StockSourceType,
   WatcherKind,
 } from './generated/prisma/enums.js';
+import { prismaJson } from './json.js';
+import { SourceHealthStore } from './source-health-store.js';
+import { StockEventStore } from './stock-event-store.js';
+import { StockReportStore } from './stock-report-store.js';
+import { ConfigurationStore } from './configuration-store.js';
 
 const DEFAULT_SCHEDULE = '0 8 * * *';
 const DEFAULT_TIMEZONE = 'Europe/Prague';
 const OLLAMA_ADVISORY_LOCK_ID = 8_643_921_771;
-const DEFAULT_STOCK_SOURCE_TYPES = [
-  StockSourceType.SEC,
-  StockSourceType.PRICE,
-  StockSourceType.FINVIZ,
-  StockSourceType.ZACKS,
-  StockSourceType.EARNINGS_WHISPERS,
-];
 const kindValue = (kind: CoreWatcherKind): WatcherKind =>
   kind === 'STOCKS' ? WatcherKind.STOCKS : WatcherKind.PUBLICATIONS;
 const identityKey = (item: { source: string; externalId: string }): string =>
   `${item.source}\u0000${item.externalId}`;
+
+export type WatcherStoreOptions = {
+  eventCooldownMs?: number;
+  tickerCooldownMs?: number;
+  sourceBackoffBaseMs?: number;
+  sourceBackoffMaximumMs?: number;
+  marketAnomalyPolicy?: Partial<MarketAnomalyPolicy>;
+  advancedSignalPolicy?: Partial<AdvancedSignalPolicy>;
+  availableStockSourceIds?: ReadonlySet<string>;
+  alertAttentionThreshold?: number;
+};
 
 const cachedOutcome = (
   kind: CoreWatcherKind,
@@ -47,7 +70,39 @@ const cachedOutcome = (
 });
 
 export class WatcherStore implements PipelineRepository {
-  public constructor(private readonly db: DatabaseClient) {}
+  private readonly stockEvents: StockEventStore;
+  private readonly sourceHealth: SourceHealthStore;
+  private readonly stockReports: StockReportStore;
+  private readonly configuration: ConfigurationStore;
+  private readonly alertAttentionThreshold: number;
+
+  public constructor(
+    private readonly db: DatabaseClient,
+    options: WatcherStoreOptions = {},
+  ) {
+    this.stockEvents = new StockEventStore(db, {
+      eventCooldownMs: options.eventCooldownMs ?? 6 * 60 * 60_000,
+      tickerCooldownMs: options.tickerCooldownMs ?? 30 * 60_000,
+      marketAnomalyPolicy: {
+        ...defaultMarketAnomalyPolicy,
+        ...options.marketAnomalyPolicy,
+      },
+      advancedSignalPolicy: {
+        ...defaultAdvancedSignalPolicy,
+        ...options.advancedSignalPolicy,
+      },
+      ...(options.availableStockSourceIds
+        ? { availableSourceIds: options.availableStockSourceIds }
+        : {}),
+    });
+    this.sourceHealth = new SourceHealthStore(db, {
+      baseBackoffMs: options.sourceBackoffBaseMs ?? 60_000,
+      maximumBackoffMs: options.sourceBackoffMaximumMs ?? 6 * 60 * 60_000,
+    });
+    this.stockReports = new StockReportStore(db);
+    this.configuration = new ConfigurationStore(db);
+    this.alertAttentionThreshold = options.alertAttentionThreshold ?? 85;
+  }
 
   public async ensureChat(
     kind: CoreWatcherKind,
@@ -55,7 +110,9 @@ export class WatcherStore implements PipelineRepository {
     timezone = DEFAULT_TIMEZONE,
   ) {
     const existing = await this.getChat(kind, chatId);
-    if (existing?.watcherConfig) return existing;
+    if (existing?.watcherConfig) {
+      return existing;
+    }
     return this.db.telegramChat.create({
       data: {
         kind: kindValue(kind),
@@ -132,7 +189,9 @@ export class WatcherStore implements PipelineRepository {
         },
         data: { runInProgress: true, runStartedAt: new Date() },
       });
-      if (claimed.count === 0) return undefined;
+      if (claimed.count === 0) {
+        return undefined;
+      }
       return transaction.watcherRun.create({
         data: {
           watcherConfigId: configId,
@@ -202,10 +261,15 @@ export class WatcherStore implements PipelineRepository {
     items: WatchItem[],
     maxAnalyses: number,
   ): Promise<PreparedItem[]> {
-    if (items.length === 0) return [];
+    if (items.length === 0) {
+      return [];
+    }
     const run = await this.db.watcherRun.findUniqueOrThrow({
       where: { id: runId },
-      select: { watcherConfigId: true },
+      select: {
+        watcherConfigId: true,
+        watcherConfig: { select: { chatConfigId: true } },
+      },
     });
     const identityFilters = items.map((item) => ({
       source: item.source,
@@ -233,49 +297,181 @@ export class WatcherStore implements PipelineRepository {
       existing.map((item) => [identityKey(item), item]),
     );
     const selectedForAnalysis = new Set<string>();
-    const selectedNewItems: WatchItem[] = [];
+    const selectedNewItems: WatchItem[] =
+      kind === 'STOCKS'
+        ? items.filter((item) => !existingByIdentity.has(identityKey(item)))
+        : [];
     let remainingAnalysisSlots = maxAnalyses === 0 ? Infinity : maxAnalyses;
 
-    for (const item of items) {
+    for (const item of kind === 'STOCKS' ? [] : items) {
       const key = identityKey(item);
       const processedItem = existingByIdentity.get(key);
       const deliveredToThisWatcher = processedItem?.analyses.some(
         (analysis) => analysis.run.watcherConfigId === run.watcherConfigId,
       );
-      if (deliveredToThisWatcher) continue;
+      if (deliveredToThisWatcher) {
+        continue;
+      }
       const latestSuccess = processedItem?.analyses[0];
-      if (latestSuccess?.result) continue;
-      if (remainingAnalysisSlots <= 0) continue;
+      if (latestSuccess?.result) {
+        continue;
+      }
+      if (remainingAnalysisSlots <= 0) {
+        continue;
+      }
       selectedForAnalysis.add(key);
       if (!processedItem) selectedNewItems.push(item);
       remainingAnalysisSlots -= 1;
     }
 
-    const created = await this.db.processedItem.createManyAndReturn({
-      skipDuplicates: true,
-      data: selectedNewItems.map((item) => ({
-        watcherKind: kindValue(kind),
-        source: item.source,
-        externalId: item.externalId,
-        title: item.title,
-        url: item.url,
-        ...(item.publishedAt === undefined
-          ? {}
-          : { publishedAt: item.publishedAt }),
-        contentHash: contentHash(item.content),
-        metadata: item.metadata as Prisma.InputJsonValue,
-      })),
+    const observations = new Map(
+      selectedNewItems.map((item) => [
+        identityKey(item),
+        normalizeObservation(kind, item),
+      ]),
+    );
+    const created = await this.db.$transaction(async (transaction) => {
+      const rows = await transaction.processedItem.createManyAndReturn({
+        skipDuplicates: true,
+        data: selectedNewItems.map((item) => {
+          const observation = observations.get(identityKey(item));
+          if (!observation) {
+            throw new Error('Normalized observation missing');
+          }
+          return {
+            watcherKind: kindValue(kind),
+            source: item.source,
+            externalId: item.externalId,
+            title: item.title,
+            url: item.url,
+            publishedAt: observation.publishedAt,
+            ticker: observation.ticker,
+            sourceType: observation.sourceType,
+            sourceUrl: observation.sourceUrl,
+            primarySource: observation.primarySource,
+            discoveredAt: observation.discoveredAt,
+            eventAt: observation.eventAt,
+            category: observation.category,
+            headline: observation.headline,
+            rawText: observation.rawText,
+            normalizedFacts: prismaJson(observation.normalizedFacts),
+            entities: observation.entities,
+            reliability: observation.reliability,
+            contentHash: contentHash(item.content),
+            metadata: prismaJson(item.metadata),
+          };
+        }),
+      });
+      if (rows.length > 0) {
+        await transaction.domainEvent.createMany({
+          data: rows.map((row) => ({
+            id: randomUUID(),
+            type: 'observation.discovered',
+            aggregateType: 'OBSERVATION',
+            aggregateId: row.id,
+            occurredAt: row.discoveredAt,
+            payload: {
+              watcherKind: kind,
+              ticker: row.ticker,
+              source: row.source,
+              externalId: row.externalId,
+              publishedAt: row.publishedAt?.toISOString() ?? null,
+            },
+          })),
+        });
+      }
+      return rows;
     });
     const createdByIdentity = new Map(
       created.map((item) => [identityKey(item), item]),
     );
+    if (kind === 'STOCKS') {
+      const companies = await this.db.stock.findMany({
+        where: {
+          chatConfigId: run.watcherConfig.chatConfigId,
+          symbol: {
+            in: items.flatMap((item) => {
+              const symbol = item.metadata.symbol;
+              return typeof symbol === 'string' ? [symbol.toUpperCase()] : [];
+            }),
+          },
+        },
+        select: { symbol: true, marketCap: true },
+      });
+      const companyContext = new Map(
+        companies.map((company) => [
+          company.symbol,
+          {
+            marketCapUsd:
+              company.marketCap === null ? null : Number(company.marketCap),
+          },
+        ]),
+      );
+      const persisted = await this.db.processedItem.findMany({
+        where: {
+          watcherKind: WatcherKind.STOCKS,
+          OR: identityFilters,
+        },
+      });
+      const persistedByIdentity = new Map(
+        persisted.map((item) => [identityKey(item), item]),
+      );
+      const prepared: PreparedItem[] = [];
+      for (const item of items) {
+        const key = identityKey(item);
+        const processedItem = existingByIdentity.get(key);
+        const deliveredToThisWatcher = processedItem?.analyses.some(
+          (analysis) => analysis.run.watcherConfigId === run.watcherConfigId,
+        );
+        if (deliveredToThisWatcher) continue;
+        const latestSuccess = processedItem?.analyses[0];
+        const record = persistedByIdentity.get(key);
+        if (!record) continue;
+        if (latestSuccess?.result) {
+          prepared.push({
+            recordId: record.id,
+            item,
+            outcome: cachedOutcome(kind, latestSuccess.result),
+          });
+          continue;
+        }
+        const event = await this.stockEvents.recordObservation(
+          runId,
+          record.id,
+          item,
+          record.discoveredAt,
+          companyContext.get(record.ticker ?? ''),
+        );
+        if (!event?.eligibleForAnalysis || remainingAnalysisSlots <= 0) {
+          continue;
+        }
+        if (await this.stockEvents.claimAnalysis(event)) {
+          const stockAnalysisContext =
+            await this.stockEvents.getAnalysisContext(
+              event.eventId,
+              run.watcherConfigId,
+            );
+          prepared.push({
+            recordId: record.id,
+            item: {
+              ...item,
+              metadata: { ...item.metadata, stockAnalysisContext },
+            },
+          });
+          remainingAnalysisSlots -= 1;
+        }
+      }
+      return prepared;
+    }
     return items.flatMap((item) => {
       const key = identityKey(item);
       const processedItem = existingByIdentity.get(key);
       const deliveredToThisWatcher = processedItem?.analyses.some(
         (analysis) => analysis.run.watcherConfigId === run.watcherConfigId,
       );
-      if (deliveredToThisWatcher) return [];
+      if (deliveredToThisWatcher) {
+        return [];
+      }
       const latestSuccess = processedItem?.analyses[0];
       if (processedItem && latestSuccess?.result)
         return [
@@ -285,7 +481,9 @@ export class WatcherStore implements PipelineRepository {
             outcome: cachedOutcome(kind, latestSuccess.result),
           },
         ];
-      if (!selectedForAnalysis.has(key)) return [];
+      if (!selectedForAnalysis.has(key)) {
+        return [];
+      }
       const createdItem = createdByIdentity.get(key);
       const recordId = processedItem?.id ?? createdItem?.id;
       return recordId ? [{ recordId, item }] : [];
@@ -297,193 +495,494 @@ export class WatcherStore implements PipelineRepository {
     itemId: string,
     outcome: AnalysisOutcome,
   ): Promise<void> {
-    await this.db.analysis.create({
-      data: {
-        runId,
-        processedItemId: itemId,
-        status:
-          outcome.status === 'SUCCESS'
-            ? AnalysisStatus.SUCCESS
-            : AnalysisStatus.FAILED,
-        ...(outcome.status === 'SUCCESS'
-          ? { result: outcome.result as Prisma.InputJsonValue }
-          : { error: outcome.error }),
-      },
+    await this.db.$transaction(async (transaction) => {
+      const completedAt = new Date();
+      const analysis = await transaction.analysis.create({
+        data: {
+          runId,
+          processedItemId: itemId,
+          status:
+            outcome.status === 'SUCCESS'
+              ? AnalysisStatus.SUCCESS
+              : AnalysisStatus.FAILED,
+          ...(outcome.status === 'SUCCESS'
+            ? { result: prismaJson(outcome.result) }
+            : { error: outcome.error }),
+          ...(outcome.metrics?.durationMs === undefined
+            ? {}
+            : { durationMs: outcome.metrics.durationMs }),
+          llmCallCount: outcome.metrics?.llmCallCount ?? 0,
+          ...(outcome.metrics?.promptTokens === undefined
+            ? {}
+            : { promptTokens: outcome.metrics.promptTokens }),
+          ...(outcome.metrics?.completionTokens === undefined
+            ? {}
+            : { completionTokens: outcome.metrics.completionTokens }),
+          estimatedCostUsd: outcome.metrics?.estimatedCostUsd ?? 0,
+        },
+      });
+      if (outcome.status === 'SUCCESS') {
+        await transaction.canonicalEvent.updateMany({
+          where: { observations: { some: { processedItemId: itemId } } },
+          data: { analysisCompletedAt: completedAt },
+        });
+        const intelligence =
+          'intelligence' in outcome.result
+            ? stockIntelligenceResultSchema.safeParse(
+                outcome.result.intelligence,
+              )
+            : null;
+        if (intelligence?.success) {
+          const result = intelligence.data;
+          await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${result.state.ticker}), hashtext('COMPANY_THESIS'))`;
+          const existingRevision = await transaction.thesisRevision.findUnique({
+            where: { eventId: result.eventId },
+            select: { id: true },
+          });
+          if (!existingRevision) {
+            const previousState =
+              await transaction.companyThesisState.findUnique({
+                where: { ticker: result.state.ticker },
+              });
+            const { decision, ...persistentState } = result.state;
+            await transaction.companyThesisState.upsert({
+              where: { ticker: result.state.ticker },
+              create: {
+                ...persistentState,
+                signalGroups: prismaJson(result.state.signalGroups),
+                catalysts: prismaJson(result.state.catalysts),
+                primaryDrivers: prismaJson(result.state.primaryDrivers),
+                risks: prismaJson(result.state.risks),
+                materialDataGaps: prismaJson(result.state.materialDataGaps),
+                ...(decision === undefined || decision === null
+                  ? {}
+                  : { decision: prismaJson(decision) }),
+                lastEventId: result.eventId,
+              },
+              update: {
+                thesis: result.state.thesis,
+                verdict: result.state.verdict,
+                confidence: result.state.confidence,
+                attentionScore: result.state.attentionScore,
+                bullScore: result.state.bullScore,
+                bearScore: result.state.bearScore,
+                netSignal: result.state.netSignal,
+                signalGroups: prismaJson(result.state.signalGroups),
+                catalysts: prismaJson(result.state.catalysts),
+                insiderConviction: result.state.insiderConviction,
+                pricedIn: result.state.pricedIn,
+                primaryDrivers: prismaJson(result.state.primaryDrivers),
+                risks: prismaJson(result.state.risks),
+                dataCoverage: result.state.dataCoverage,
+                dataQuality: result.state.dataQuality,
+                materialDataGaps: prismaJson(result.state.materialDataGaps),
+                ...(decision === undefined || decision === null
+                  ? {}
+                  : { decision: prismaJson(decision) }),
+                lastEventId: result.eventId,
+                version: { increment: 1 },
+              },
+            });
+            await transaction.thesisRevision.create({
+              data: {
+                ticker: result.state.ticker,
+                eventId: result.eventId,
+                processedItemId: itemId,
+                analysisId: analysis.id,
+                thesisChange: result.targeted.thesisChange,
+                informationChange: result.targeted.informationChange,
+                fullAnalysisPerformed: result.fullAnalysisPerformed,
+                redundancyClass: result.redundancyClass,
+                redundancyMultiplier: result.redundancyMultiplier,
+                reliabilityWeight: result.reliabilityWeight,
+                targetedAnalysis: prismaJson(result.targeted),
+                resultingState: prismaJson(result.state),
+              },
+            });
+            await transaction.domainEvent.create({
+              data: {
+                id: randomUUID(),
+                type: 'thesis.updated',
+                aggregateType: 'COMPANY',
+                aggregateId: result.state.ticker,
+                occurredAt: new Date(),
+                payload: {
+                  eventId: result.eventId,
+                  thesisChange: result.targeted.thesisChange,
+                  informationChange: result.targeted.informationChange,
+                  verdict: result.state.verdict,
+                  attentionScore: result.state.attentionScore,
+                  netSignal: result.state.netSignal,
+                  dataCoverage: result.state.dataCoverage,
+                },
+              },
+            });
+            const event = await transaction.canonicalEvent.findUniqueOrThrow({
+              where: { id: result.eventId },
+              include: {
+                primaryEvidence: true,
+                catalysts: {
+                  where: {
+                    impact: 'EXTREME',
+                    status: { in: ['UPCOMING', 'ACTIVE'] },
+                  },
+                },
+              },
+            });
+            const previousDecision = decisionResultSchema.safeParse(
+              previousState?.decision,
+            );
+            const previousVerdict = previousState
+              ? stockThesisStateSchema.shape.verdict.safeParse(
+                  previousState.verdict,
+                )
+              : null;
+            const alert = evaluateStockAlert(
+              {
+                eventType: event.eventType,
+                materiality: event.materiality,
+                title: event.title,
+                magnitude:
+                  typeof event.magnitude === 'object' &&
+                  event.magnitude !== null &&
+                  !Array.isArray(event.magnitude)
+                    ? event.magnitude
+                    : {},
+                hasExtremeCatalyst: event.catalysts.length > 0,
+              },
+              result,
+              previousState && previousVerdict?.success
+                ? {
+                    verdict: previousVerdict.data,
+                    attentionScore: previousState.attentionScore,
+                    decision: previousDecision.success
+                      ? previousDecision.data
+                      : null,
+                  }
+                : null,
+              this.alertAttentionThreshold,
+            );
+            if (alert) {
+              const run = await transaction.watcherRun.findUniqueOrThrow({
+                where: { id: runId },
+                select: { watcherConfigId: true },
+              });
+              const createdAlert = await transaction.stockAlert.create({
+                data: {
+                  watcherConfigId: run.watcherConfigId,
+                  runId,
+                  eventId: event.id,
+                  ticker: event.ticker,
+                  type: alert.type,
+                  severity: alert.severity,
+                  title: alert.title,
+                  reasons: prismaJson(alert.reasons),
+                  snapshot: prismaJson({
+                    eventType: event.eventType,
+                    eventTitle: event.title,
+                    materiality: event.materiality,
+                    detectedAt: event.firstDetectedAt.toISOString(),
+                    source: event.primaryEvidence.source,
+                    sourceUrl:
+                      event.primaryEvidence.sourceUrl ??
+                      event.primaryEvidence.url,
+                    thesisChange: result.targeted.thesisChange,
+                    previousVerdict: previousState?.verdict ?? null,
+                    verdict: result.state.verdict,
+                    attentionScore: result.state.attentionScore,
+                    netSignal: result.state.netSignal,
+                    dataCoverage: result.state.dataCoverage,
+                    pricedIn:
+                      result.decision?.pricedIn.classification ??
+                      result.state.pricedIn,
+                    recommendation:
+                      result.decision?.recommendation ?? result.state.verdict,
+                    expectedValuePercent:
+                      result.decision?.expectedValuePercent ?? null,
+                    primaryDriver: result.targeted.primaryDriver,
+                    magnitude: event.magnitude,
+                  }),
+                  eventDetectedAt: event.firstDetectedAt,
+                  analysisCompletedAt: completedAt,
+                },
+              });
+              await transaction.domainEvent.create({
+                data: {
+                  id: randomUUID(),
+                  type: 'alert.created',
+                  aggregateType: 'ALERT',
+                  aggregateId: createdAlert.id,
+                  occurredAt: completedAt,
+                  payload: {
+                    ticker: event.ticker,
+                    eventId: event.id,
+                    alertType: alert.type,
+                    severity: alert.severity,
+                  },
+                },
+              });
+            }
+          }
+        }
+      }
     });
   }
 
-  public async addStock(
-    chatConfigId: string,
-    symbol: string,
-    company?: { companyName: string; cik: string },
-  ) {
-    return this.db.stock.create({
-      data: {
-        chatConfigId,
-        symbol,
-        ...(company === undefined
-          ? {}
-          : { companyName: company.companyName, cik: company.cik }),
-        sources: {
-          create: DEFAULT_STOCK_SOURCE_TYPES.map((source) => ({
-            source,
-            enabled: true,
-          })),
-        },
+  public getStockThesis(ticker: string) {
+    return this.stockReports.getStockThesis(ticker);
+  }
+
+  public async claimPendingAlerts(watcherConfigId: string, now = new Date()) {
+    return this.stockReports.claimPendingAlerts(watcherConfigId, now);
+  }
+
+  public async markAlertDelivered(alertId: string, now = new Date()) {
+    return this.stockReports.markAlertDelivered(alertId, now);
+  }
+
+  public markAlertDeliveryFailed(alertId: string, error: string) {
+    return this.stockReports.markAlertDeliveryFailed(alertId, error);
+  }
+
+  public listRecentAlerts(chatConfigId: string, take = 20) {
+    return this.stockReports.listRecentAlerts(chatConfigId, take);
+  }
+
+  public async getStockDashboard(chatConfigId: string) {
+    return this.stockReports.getStockDashboard(chatConfigId);
+  }
+
+  public async getObservabilitySnapshot(configId: string) {
+    return this.stockReports.getObservabilitySnapshot(configId);
+  }
+
+  public listDueReconciliations(kind: CoreWatcherKind, now: Date) {
+    return this.db.watcherConfig.findMany({
+      where: {
+        enabled: true,
+        reconciliationInProgress: false,
+        nextReconciliationAt: { lte: now },
+        chatConfig: { kind: kindValue(kind) },
       },
-      include: { sources: true },
+      select: { id: true, chatConfig: { select: { chatId: true } } },
     });
+  }
+
+  public async claimReconciliation(configId: string, now = new Date()) {
+    const staleBefore = new Date(now.getTime() - 2 * 60 * 60_000);
+    const claimed = await this.db.watcherConfig.updateMany({
+      where: {
+        id: configId,
+        OR: [
+          { reconciliationInProgress: false },
+          { reconciliationStartedAt: { lt: staleBefore } },
+        ],
+      },
+      data: { reconciliationInProgress: true, reconciliationStartedAt: now },
+    });
+    if (claimed.count === 0) return false;
+    await this.db.sourceHealth.updateMany({
+      where: { watcherConfigId: configId },
+      data: { backoffUntil: null },
+    });
+    return true;
+  }
+
+  public async finishReconciliation(
+    configId: string,
+    status: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'BUSY',
+    intervalMs: number,
+    now = new Date(),
+  ) {
+    const retryMs = status === 'BUSY' ? 15 * 60_000 : intervalMs;
+    return this.db.$transaction(async (transaction) => {
+      const updated = await transaction.watcherConfig.update({
+        where: { id: configId },
+        data: {
+          reconciliationInProgress: false,
+          reconciliationStartedAt: null,
+          ...(status === 'BUSY' ? {} : { lastReconciliationAt: now }),
+          nextReconciliationAt: new Date(now.getTime() + retryMs),
+        },
+      });
+      await transaction.domainEvent.create({
+        data: {
+          id: randomUUID(),
+          type: 'reconciliation.completed',
+          aggregateType: 'WATCHER',
+          aggregateId: configId,
+          occurredAt: now,
+          payload: {
+            status,
+            nextReconciliationAt: updated.nextReconciliationAt?.toISOString(),
+          },
+        },
+      });
+      return updated;
+    });
+  }
+
+  public sourceAttemptDecision(
+    kind: CoreWatcherKind,
+    runId: string,
+    source: string,
+    target: string,
+    now: Date,
+  ) {
+    return this.sourceHealth.attemptDecision(kind, runId, source, target, now);
+  }
+
+  public recordSourceSuccess(
+    kind: CoreWatcherKind,
+    runId: string,
+    source: string,
+    target: string,
+    now: Date,
+  ) {
+    return this.sourceHealth.success(kind, runId, source, target, now);
+  }
+
+  public recordSourceFailure(
+    kind: CoreWatcherKind,
+    runId: string,
+    source: string,
+    target: string,
+    message: string,
+    now: Date,
+  ) {
+    return this.sourceHealth.failure(kind, runId, source, target, message, now);
+  }
+
+  public getRunIntelligenceSummary(runId: string) {
+    return this.stockEvents.getRunSummary(runId);
   }
 
   public async listStocks(chatConfigId: string) {
-    const stocks = await this.db.stock.findMany({
-      where: { chatConfigId },
-      include: { sources: true },
-      orderBy: { symbol: 'asc' },
-    });
-    const missingSources = stocks.flatMap((stock) => {
-      const existing = new Set(stock.sources.map(({ source }) => source));
-      return DEFAULT_STOCK_SOURCE_TYPES.flatMap((source) =>
-        existing.has(source)
-          ? []
-          : [{ stockId: stock.id, source, enabled: true }],
-      );
-    });
-    if (missingSources.length === 0) return stocks;
+    return this.configuration.listStocks(chatConfigId);
+  }
 
-    await this.db.stockSourceConfig.createMany({
-      data: missingSources,
-      skipDuplicates: true,
+  public async listCatalysts(chatConfigId: string, ticker?: string) {
+    const stocks = await this.db.stock.findMany({
+      where: {
+        chatConfigId,
+        enabled: true,
+        ...(ticker ? { symbol: ticker.trim().toUpperCase() } : {}),
+      },
+      select: { symbol: true },
     });
-    return this.db.stock.findMany({
-      where: { chatConfigId },
-      include: { sources: true },
+    if (stocks.length === 0) return [];
+    return this.db.catalyst.findMany({
+      where: {
+        ticker: { in: stocks.map(({ symbol }) => symbol) },
+        status: { in: ['UPCOMING', 'ACTIVE'] },
+      },
+      orderBy: [{ expectedStart: 'asc' }, { impact: 'desc' }],
+      take: 50,
+      include: {
+        event: {
+          select: {
+            primaryEvidence: {
+              select: { source: true, sourceUrl: true, primarySource: true },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  public async getAdvancedStockData(chatConfigId: string, ticker?: string) {
+    const stocks = await this.db.stock.findMany({
+      where: {
+        chatConfigId,
+        enabled: true,
+        ...(ticker ? { symbol: ticker.trim().toUpperCase() } : {}),
+      },
+      select: { symbol: true, companyName: true },
       orderBy: { symbol: 'asc' },
     });
+    return Promise.all(
+      stocks.map(async (stock) => {
+        const [options, institutional, shortInterest, regulatoryEvents] =
+          await Promise.all([
+            this.db.optionsSnapshot.findFirst({
+              where: { ticker: stock.symbol },
+              orderBy: { observedAt: 'desc' },
+            }),
+            this.db.institutionalSnapshot.findFirst({
+              where: { ticker: stock.symbol },
+              orderBy: { reportedAt: 'desc' },
+            }),
+            this.db.shortInterestSnapshot.findFirst({
+              where: { ticker: stock.symbol },
+              orderBy: { settlementDate: 'desc' },
+            }),
+            this.db.canonicalEvent.findMany({
+              where: {
+                ticker: stock.symbol,
+                eventType: { in: ['CLINICAL_TRIAL', 'FDA_DECISION'] },
+              },
+              orderBy: { firstDetectedAt: 'desc' },
+              take: 3,
+              include: {
+                primaryEvidence: {
+                  select: { source: true, sourceUrl: true, url: true },
+                },
+              },
+            }),
+          ]);
+        return {
+          ...stock,
+          options,
+          institutional,
+          shortInterest,
+          regulatoryEvents,
+        };
+      }),
+    );
   }
 
   public updateStockCompany(
     stockId: string,
-    company: { companyName: string; cik: string },
+    company: {
+      companyName: string;
+      cik: string;
+      exchange?: string | null;
+      industry?: string | null;
+      investorRelationsUrl?: string | null;
+    },
   ) {
-    return this.db.stock.update({
-      where: { id: stockId },
-      data: { companyName: company.companyName, cik: company.cik },
-      include: { sources: true },
-    });
+    return this.configuration.updateStockCompany(stockId, company);
   }
 
   public removeStock(chatConfigId: string, symbol: string) {
-    return this.db.stock.deleteMany({ where: { chatConfigId, symbol } });
+    return this.configuration.removeStock(chatConfigId, symbol);
   }
 
   public async toggleStockSource(stockId: string, source: StockSourceType) {
-    const current = await this.db.stockSourceConfig.findUniqueOrThrow({
-      where: { stockId_source: { stockId, source } },
-    });
-    return this.db.stockSourceConfig.update({
-      where: { id: current.id },
-      data: { enabled: !current.enabled },
-    });
-  }
-
-  public async setStockSourceConfig(
-    stockId: string,
-    source: StockSourceType,
-    config: object,
-  ) {
-    return this.db.stockSourceConfig.update({
-      where: { stockId_source: { stockId, source } },
-      data: { config, enabled: true },
-    });
+    return this.configuration.toggleStockSource(stockId, source);
   }
 
   public async addQuery(chatConfigId: string, query: string) {
-    return this.db.publicationQuery.create({
-      data: {
-        chatConfigId,
-        query,
-        normalizedQuery: query.trim().toLowerCase(),
-        sources: {
-          create: Object.values(PublicationSourceType).map((source) => ({
-            source,
-            enabled: true,
-          })),
-        },
-      },
-      include: { sources: true },
-    });
+    return this.configuration.addQuery(chatConfigId, query);
   }
 
   public async addQueries(chatConfigId: string, queries: string[]) {
-    const uniqueQueries = new Map<string, string>();
-    for (const query of queries) {
-      const trimmed = query.trim();
-      const normalized = trimmed.toLowerCase();
-      if (!uniqueQueries.has(normalized))
-        uniqueQueries.set(normalized, trimmed);
-    }
-    const normalizedQueries = [...uniqueQueries.keys()];
-    if (!normalizedQueries.length)
-      return { addedCount: 0, skippedCount: 0, totalCount: 0 };
-
-    return this.db.$transaction(async (tx) => {
-      const created = await tx.publicationQuery.createMany({
-        data: [...uniqueQueries].map(([normalizedQuery, query]) => ({
-          chatConfigId,
-          query,
-          normalizedQuery,
-        })),
-        skipDuplicates: true,
-      });
-      const savedQueries = await tx.publicationQuery.findMany({
-        where: { chatConfigId, normalizedQuery: { in: normalizedQueries } },
-        select: { id: true },
-      });
-      await tx.publicationSourceConfig.createMany({
-        data: savedQueries.flatMap((query) =>
-          Object.values(PublicationSourceType).map((source) => ({
-            queryId: query.id,
-            source,
-            enabled: true,
-          })),
-        ),
-        skipDuplicates: true,
-      });
-
-      return {
-        addedCount: created.count,
-        skippedCount: normalizedQueries.length - created.count,
-        totalCount: normalizedQueries.length,
-      };
-    });
+    return this.configuration.addQueries(chatConfigId, queries);
   }
 
   public listQueries(chatConfigId: string) {
-    return this.db.publicationQuery.findMany({
-      where: { chatConfigId },
-      include: { sources: true },
-      orderBy: { query: 'asc' },
-    });
+    return this.configuration.listQueries(chatConfigId);
   }
 
   public removeQuery(chatConfigId: string, query: string) {
-    return this.db.publicationQuery.deleteMany({
-      where: { chatConfigId, normalizedQuery: query.trim().toLowerCase() },
-    });
+    return this.configuration.removeQuery(chatConfigId, query);
   }
 
   public async togglePublicationSource(
     queryId: string,
     source: PublicationSourceType,
   ) {
-    const current = await this.db.publicationSourceConfig.findUniqueOrThrow({
-      where: { queryId_source: { queryId, source } },
-    });
-    return this.db.publicationSourceConfig.update({
-      where: { id: current.id },
-      data: { enabled: !current.enabled },
-    });
+    return this.configuration.togglePublicationSource(queryId, source);
   }
 }
 

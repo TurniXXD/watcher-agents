@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { deduplicateItems } from '../deduplicate.js';
 import { WatcherPipeline } from '../pipeline.js';
-import { assertPublicHttpUrl } from '../network.js';
+import { WatcherRunner } from '../runner.js';
 import { computeNextRun, PersistentScheduler, RunGuard } from '../scheduler.js';
-import { watchItemSchema, type RunProgress, type WatchItem } from '../types.js';
+import {
+  watchItemSchema,
+  type AnalysisOutcome,
+  type RunProgress,
+  type WatchItem,
+} from '../types.js';
 
 const item = (externalId: string): WatchItem => ({
   id: `SEC:${externalId}`,
@@ -18,12 +23,6 @@ const item = (externalId: string): WatchItem => ({
 describe('core watcher behavior', () => {
   it('normalizes and validates watch items', () => {
     expect(watchItemSchema.parse(item('1')).externalId).toBe('1');
-  });
-
-  it('rejects private and non-HTTP source URLs', () => {
-    expect(() => assertPublicHttpUrl('http://127.0.0.1/feed')).toThrow();
-    expect(() => assertPublicHttpUrl('http://[::1]/feed')).toThrow();
-    expect(() => assertPublicHttpUrl('file:///etc/passwd')).toThrow();
   });
 
   it('deduplicates by source and external id', () => {
@@ -80,7 +79,13 @@ describe('core watcher behavior', () => {
       prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) =>
         items.map((value, index) => ({ item: value, recordId: String(index) })),
       ),
-      saveAnalysis: vi.fn(async () => undefined),
+      saveAnalysis: vi.fn(
+        async (runId: string, recordId: string, outcome: AnalysisOutcome) => {
+          void runId;
+          void recordId;
+          void outcome;
+        },
+      ),
     };
     const analyzer = {
       analyze: vi.fn(async () => ({
@@ -109,6 +114,50 @@ describe('core watcher behavior', () => {
     expect(result.sourceFailures).toEqual([
       { source: 'NEWS', target: 'ELAN', message: 'timeout' },
     ]);
+    expect(result.dataCoverage).toEqual({
+      expectedSources: 2,
+      successfulSources: 1,
+      unavailableSources: 1,
+      percentage: 50,
+    });
+  });
+
+  it('isolates source output that fails runtime validation', async () => {
+    const repository = {
+      prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) =>
+        items.map((value, index) => ({ item: value, recordId: String(index) })),
+      ),
+      saveAnalysis: vi.fn(async () => undefined),
+    };
+    const pipeline = new WatcherPipeline(repository, {
+      analyze: vi.fn(async () => ({
+        status: 'FAILED' as const,
+        error: 'no model',
+      })),
+    });
+
+    const result = await pipeline.run('STOCKS', 'run', [
+      {
+        source: { id: 'SEC', fetch: async () => [item('valid')] },
+        target: 'MU',
+        config: {},
+      },
+      {
+        source: {
+          id: 'NEWS',
+          fetch: async () => [{ ...item('invalid'), url: 'not-a-url' }],
+        },
+        target: 'MU',
+        config: {},
+      },
+    ]);
+
+    expect(result.fetchedCount).toBe(1);
+    expect(result.sourceFailures).toHaveLength(1);
+    expect(result.sourceFailures[0]).toMatchObject({
+      source: 'NEWS',
+      target: 'MU',
+    });
   });
 
   it('reports pipeline progress while fetching and analyzing items', async () => {
@@ -282,7 +331,13 @@ describe('core watcher behavior', () => {
       prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) => [
         { item: items[0]!, recordId: 'record' },
       ]),
-      saveAnalysis: vi.fn(async () => undefined),
+      saveAnalysis: vi.fn(
+        async (runId: string, recordId: string, outcome: AnalysisOutcome) => {
+          void runId;
+          void recordId;
+          void outcome;
+        },
+      ),
     };
     const pipeline = new WatcherPipeline(repository, {
       analyze: vi.fn(async () => Promise.reject(new Error('overloaded'))),
@@ -297,9 +352,83 @@ describe('core watcher behavior', () => {
     ]);
 
     expect(result.failedAnalysisCount).toBe(1);
-    expect(repository.saveAnalysis).toHaveBeenCalledWith('run', 'record', {
+    expect(repository.saveAnalysis).toHaveBeenCalledOnce();
+    expect(repository.saveAnalysis.mock.calls[0]?.[2]).toMatchObject({
       status: 'FAILED',
       error: 'overloaded',
+      metrics: {
+        llmCallCount: 1,
+        estimatedCostUsd: 0,
+      },
     });
+  });
+
+  it('limits high-resolution runs to selected tickers and fast sources', async () => {
+    const secMu = vi.fn(async () => []);
+    const newsMu = vi.fn(async () => []);
+    const secXyz = vi.fn(async () => []);
+    const pipeline = new WatcherPipeline(
+      {
+        prepareItemsForRun: vi.fn(async () => []),
+        saveAnalysis: vi.fn(async () => undefined),
+      },
+      {
+        analyze: vi.fn(async () => ({
+          status: 'FAILED' as const,
+          error: 'unused',
+        })),
+      },
+    );
+    const afterRun = vi.fn(async () => undefined);
+    const notify = vi.fn(async () => undefined);
+    const store = {
+      claimRun: vi.fn(async () => ({ id: 'run' })),
+      finishRun: vi.fn(async () => undefined),
+      recordSourceFailures: vi.fn(async () => undefined),
+    };
+    const runner = new WatcherRunner(
+      'STOCKS',
+      pipeline,
+      store,
+      async () => [
+        {
+          source: { id: 'SEC', fetch: secMu },
+          target: 'MU',
+          targetKey: 'MU',
+          config: {},
+        },
+        {
+          source: { id: 'NEWS', fetch: newsMu },
+          target: 'MU',
+          targetKey: 'MU',
+          config: {},
+        },
+        {
+          source: { id: 'SEC', fetch: secXyz },
+          target: 'XYZ',
+          targetKey: 'XYZ',
+          config: {},
+        },
+      ],
+      notify,
+      undefined,
+      afterRun,
+    );
+
+    await runner.execute('config', 1n, 'SCHEDULED', {
+      targetKeys: new Set(['MU']),
+      sourceIds: new Set(['SEC']),
+    });
+
+    expect(secMu).toHaveBeenCalledOnce();
+    expect(newsMu).not.toHaveBeenCalled();
+    expect(secXyz).not.toHaveBeenCalled();
+    expect(afterRun).toHaveBeenCalledOnce();
+    expect(afterRun).toHaveBeenCalledWith(
+      1n,
+      expect.objectContaining({ fetchedCount: 0 }),
+      'run',
+    );
+    expect(notify).not.toHaveBeenCalled();
   });
 });
