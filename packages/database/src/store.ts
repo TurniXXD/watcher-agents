@@ -6,6 +6,7 @@ import {
   normalizeObservation,
   stockIntelligenceResultSchema,
   stockThesisStateSchema,
+  watchItemSchema,
   type AnalysisOutcome,
   type PipelineRepository,
   type PreparedItem,
@@ -264,6 +265,7 @@ export class WatcherStore implements PipelineRepository {
     if (items.length === 0) {
       return [];
     }
+    const safeItems = items.map((item) => watchItemSchema.parse(item));
     const run = await this.db.watcherRun.findUniqueOrThrow({
       where: { id: runId },
       select: {
@@ -271,7 +273,7 @@ export class WatcherStore implements PipelineRepository {
         watcherConfig: { select: { chatConfigId: true } },
       },
     });
-    const identityFilters = items.map((item) => ({
+    const identityFilters = safeItems.map((item) => ({
       source: item.source,
       externalId: item.externalId,
     }));
@@ -299,11 +301,11 @@ export class WatcherStore implements PipelineRepository {
     const selectedForAnalysis = new Set<string>();
     const selectedNewItems: WatchItem[] =
       kind === 'STOCKS'
-        ? items.filter((item) => !existingByIdentity.has(identityKey(item)))
+        ? safeItems.filter((item) => !existingByIdentity.has(identityKey(item)))
         : [];
     let remainingAnalysisSlots = maxAnalyses === 0 ? Infinity : maxAnalyses;
 
-    for (const item of kind === 'STOCKS' ? [] : items) {
+    for (const item of kind === 'STOCKS' ? [] : safeItems) {
       const key = identityKey(item);
       const processedItem = existingByIdentity.get(key);
       const deliveredToThisWatcher = processedItem?.analyses.some(
@@ -390,7 +392,7 @@ export class WatcherStore implements PipelineRepository {
         where: {
           chatConfigId: run.watcherConfig.chatConfigId,
           symbol: {
-            in: items.flatMap((item) => {
+            in: safeItems.flatMap((item) => {
               const symbol = item.metadata.symbol;
               return typeof symbol === 'string' ? [symbol.toUpperCase()] : [];
             }),
@@ -417,7 +419,7 @@ export class WatcherStore implements PipelineRepository {
         persisted.map((item) => [identityKey(item), item]),
       );
       const prepared: PreparedItem[] = [];
-      for (const item of items) {
+      for (const item of safeItems) {
         const key = identityKey(item);
         const processedItem = existingByIdentity.get(key);
         const deliveredToThisWatcher = processedItem?.analyses.some(
@@ -463,7 +465,7 @@ export class WatcherStore implements PipelineRepository {
       }
       return prepared;
     }
-    return items.flatMap((item) => {
+    return safeItems.flatMap((item) => {
       const key = identityKey(item);
       const processedItem = existingByIdentity.get(key);
       const deliveredToThisWatcher = processedItem?.analyses.some(

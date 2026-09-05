@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { stockIntelligenceResultSchema } from './stock-intelligence.js';
+import { removeNullBytesDeep } from './utils.js';
 
 export type SourceCapabilities = {
   sourceName: string;
@@ -48,33 +49,36 @@ export type RunIntelligenceSummary = {
 export const watcherKindSchema = z.enum(['STOCKS', 'PUBLICATIONS']);
 export type WatcherKind = z.infer<typeof watcherKindSchema>;
 
-export const watchItemSchema = z.object({
-  id: z.string().min(1),
-  source: z.string().min(1),
-  externalId: z.string().min(1),
-  title: z.string().min(1),
-  url: z.url(),
-  publishedAt: z.date().optional(),
-  content: z.string().min(1),
-  sourceType: z
-    .enum([
-      'REGULATORY',
-      'INVESTOR_RELATIONS',
-      'NEWS',
-      'MARKET_DATA',
-      'ANALYST',
-      'PUBLICATION',
-      'OTHER',
-    ])
-    .optional(),
-  primarySource: z.boolean().optional(),
-  eventAt: z.date().optional(),
-  category: z.string().min(1).optional(),
-  normalizedFacts: z.record(z.string(), z.unknown()).optional(),
-  entities: z.array(z.string()).optional(),
-  reliability: z.number().min(0).max(1).optional(),
-  metadata: z.record(z.string(), z.unknown()),
-});
+export const watchItemSchema = z.preprocess(
+  removeNullBytesDeep,
+  z.object({
+    id: z.string().min(1),
+    source: z.string().min(1),
+    externalId: z.string().min(1),
+    title: z.string().min(1),
+    url: z.url(),
+    publishedAt: z.date().optional(),
+    content: z.string().min(1),
+    sourceType: z
+      .enum([
+        'REGULATORY',
+        'INVESTOR_RELATIONS',
+        'NEWS',
+        'MARKET_DATA',
+        'ANALYST',
+        'PUBLICATION',
+        'OTHER',
+      ])
+      .optional(),
+    primarySource: z.boolean().optional(),
+    eventAt: z.date().optional(),
+    category: z.string().min(1).optional(),
+    normalizedFacts: z.record(z.string(), z.unknown()).optional(),
+    entities: z.array(z.string()).optional(),
+    reliability: z.number().min(0).max(1).optional(),
+    metadata: z.record(z.string(), z.unknown()),
+  }),
+);
 
 export type WatchItem = z.infer<typeof watchItemSchema>;
 

@@ -209,16 +209,6 @@ export class WatcherPipeline {
             },
           };
         } catch (error) {
-          this.logger?.warn(
-            {
-              kind,
-              runId,
-              source: item.source,
-              externalId: item.externalId,
-              err: error,
-            },
-            'Watcher item analysis failed',
-          );
           outcome = {
             status: 'FAILED' as const,
             error: errorMessage(error),
@@ -239,6 +229,18 @@ export class WatcherPipeline {
             status: outcome.status,
           },
           'Reusing cached watcher item analysis',
+        );
+      }
+      if (outcome.status === 'FAILED') {
+        this.logger?.warn(
+          {
+            kind,
+            runId,
+            source: item.source,
+            externalId: item.externalId,
+            analysisError: outcome.error,
+          },
+          'Watcher item analysis failed',
         );
       }
       await this.repository.saveAnalysis(runId, recordId, outcome);

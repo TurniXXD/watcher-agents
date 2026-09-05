@@ -213,8 +213,15 @@ export class OllamaProvider implements Analyzer {
           },
         );
 
-        if (!response.ok)
-          throw new Error(`Ollama returned HTTP ${response.status}`);
+        if (!response.ok) {
+          const detail = (await response.text())
+            .replaceAll(/\s+/g, ' ')
+            .trim()
+            .slice(0, 500);
+          throw new Error(
+            `Ollama returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+          );
+        }
         const payload = responseSchema.parse(await response.json());
         const json: unknown = JSON.parse(payload.message.content);
         return {

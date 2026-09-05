@@ -1,8 +1,8 @@
-import { recordValue } from '@watcher/core';
+import { recordValue, removeNullBytesDeep } from '@watcher/core';
 import type { Prisma } from './generated/prisma/client.js';
 
 export const prismaJson = (value: unknown): Prisma.InputJsonValue => {
-  const serialized = JSON.stringify(value);
+  const serialized = JSON.stringify(removeNullBytesDeep(value));
   if (serialized === undefined) {
     return {};
   }

@@ -145,6 +145,31 @@ describe('OllamaProvider', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
+  it('includes bounded Ollama response details in failures', async () => {
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'missing',
+      retries: 0,
+      fetch: vi.fn(async () =>
+        Response.json(
+          { error: `model not found ${'x'.repeat(600)}` },
+          { status: 404 },
+        ),
+      ),
+    });
+
+    const outcome = await provider.analyze('PUBLICATIONS', item);
+
+    expect(outcome).toMatchObject({
+      status: 'FAILED',
+    });
+    if (outcome.status !== 'FAILED') throw new Error('Expected failure');
+    expect(outcome.error).toContain(
+      'Ollama returned HTTP 404: {"error":"model not found',
+    );
+    expect(outcome.error.length).toBeLessThanOrEqual(526);
+  });
+
   it('allows full analysis to request a larger output budget', async () => {
     const mockFetch = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {

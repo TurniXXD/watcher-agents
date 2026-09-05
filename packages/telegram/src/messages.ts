@@ -123,6 +123,22 @@ const failureSection = (result: PipelineResult): string =>
         )
         .join('\n\n')}`;
 
+const analysisFailureSection = (result: PipelineResult): string => {
+  const failures = result.analyses.filter(
+    ({ outcome }) => outcome.status === 'FAILED',
+  );
+  if (failures.length === 0) return '';
+
+  const visible = failures.slice(0, 5).map(({ item, outcome }) => {
+    const error = outcome.status === 'FAILED' ? outcome.error : '';
+    return `• <b>${htmlText(item.source, 100)}</b> · ${htmlText(item.title, 300)}\n  ${htmlText(error, 600)}`;
+  });
+  if (failures.length > visible.length) {
+    visible.push(`• …and ${failures.length - visible.length} more`);
+  }
+  return `\n\n⚠️ <b>Analysis errors</b>\n${visible.join('\n\n')}`;
+};
+
 const materialityIcon = (value: string): string => {
   if (value === 'EXTREME') return '🚨';
   if (value === 'HIGH') return '🔴';
@@ -538,7 +554,7 @@ export const renderStockDigest = (result: PipelineResult): string => {
   ]
     .filter(Boolean)
     .join('\n\n')
-    .concat(failureSection(result))
+    .concat(analysisFailureSection(result), failureSection(result))
     .trim();
 };
 
@@ -582,6 +598,6 @@ export const renderPublicationDigest = (result: PipelineResult): string => {
   ]
     .filter(Boolean)
     .join('\n\n')
-    .concat(failureSection(result))
+    .concat(analysisFailureSection(result), failureSection(result))
     .trim();
 };

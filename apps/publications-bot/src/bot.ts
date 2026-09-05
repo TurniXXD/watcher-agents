@@ -13,23 +13,13 @@ import { Bot, InlineKeyboard, type Context } from 'grammy';
 import type { Document } from 'grammy/types';
 import { z } from 'zod';
 import type { ProgressReporter } from '@watcher/core';
+import {
+  publicationsAbout,
+  publicationsHelp,
+  scheduleExample,
+} from './copy.js';
 
-const scheduleExample = '/schedule 0 8 * * * Europe/Prague';
 const maxCsvBytes = 256 * 1024;
-
-const help = `/help — show this command list
-/status — watcher status
-/queries — list topics
-/addquery TOPIC — add a topic (all sources enabled by default)
-/addqueries — reply to an attached CSV file to add multiple topics
-/removequery TOPIC — remove a topic
-/sources — configure sources with buttons
-/listsources — list available sources and provider links
-/schedule [CRON] [TIMEZONE] — view or update schedule
-  Example: ${scheduleExample}
-/run — run now
-/pause — pause scheduled runs
-/resume — resume scheduled runs`;
 
 const addQueriesCommandPattern = /^\/addqueries(?:@\w+)?(?:\s|$)/;
 
@@ -92,7 +82,14 @@ export const createPublicationsBot = (
     store.ensureChat('PUBLICATIONS', BigInt(chatId), timezone);
   bot.command(['start', 'help'], async (ctx) => {
     await chat(ctx.chat.id);
-    await ctx.reply(`🧬 Publications Watcher\n\n${help}`);
+    await ctx.reply(`🧬 Publications Watcher\n\n${publicationsHelp}`);
+  });
+  bot.command('about', async (ctx) => {
+    await chat(ctx.chat.id);
+    await ctx.reply(publicationsAbout, {
+      parse_mode: 'Markdown',
+      link_preview_options: { is_disabled: true },
+    });
   });
   bot.command('status', async (ctx) => {
     const current = await chat(ctx.chat.id);

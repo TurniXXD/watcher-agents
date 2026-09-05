@@ -214,6 +214,41 @@ integration('WatcherStore with PostgreSQL', () => {
     });
   });
 
+  it('removes null bytes before persisting provider content', async () => {
+    const chat = await store.ensureChat('STOCKS', 778n);
+    const run = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
+    if (!run) throw new Error('Expected run');
+    const unsafeItem: WatchItem = {
+      ...watchItem('observation-with-nul'),
+      title: 'Filing\u0000 update',
+      content: 'Material\u0000 filing content',
+      normalizedFacts: { form: '8-K\u0000', nested: ['safe\u0000 text'] },
+      entities: ['M\u0000U'],
+      metadata: { symbol: 'M\u0000U' },
+    };
+
+    await store.prepareItemsForRun('STOCKS', run.id, [unsafeItem], 5);
+    const observation = await database.processedItem.findUniqueOrThrow({
+      where: {
+        watcherKind_source_externalId: {
+          watcherKind: 'STOCKS',
+          source: unsafeItem.source,
+          externalId: unsafeItem.externalId,
+        },
+      },
+    });
+
+    expect(observation).toMatchObject({
+      title: 'Filing update',
+      headline: 'Filing update',
+      rawText: 'Material filing content',
+      ticker: 'MU',
+      normalizedFacts: { form: '8-K', nested: ['safe text'] },
+      entities: ['MU'],
+      metadata: { symbol: 'MU' },
+    });
+  });
+
   it('stores routine insider filings without spending an analysis slot', async () => {
     const chat = await store.ensureChat('STOCKS', 780n);
     const run = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');

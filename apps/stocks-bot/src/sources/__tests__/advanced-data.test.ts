@@ -91,12 +91,23 @@ describe('advanced stock data sources', () => {
     ]);
   });
 
-  it('posts a ticker filter to FINRA and normalizes short interest', async () => {
+  it('posts a ticker filter to FINRA and sorts short interest locally', async () => {
     const fetcher = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         void input;
         void init;
         return Response.json([
+          {
+            symbolCode: 'MU',
+            issueName: 'Micron Technology',
+            currentShortPositionQuantity: '20000000',
+            previousShortPositionQuantity: '18000000',
+            changePreviousNumber: '2000000',
+            changePercent: '11.11',
+            averageDailyVolumeQuantity: '3500000',
+            daysToCoverQuantity: '5.71',
+            settlementDate: '2026-08-15',
+          },
           {
             symbolCode: 'MU',
             issueName: 'Micron Technology',
@@ -113,16 +124,22 @@ describe('advanced stock data sources', () => {
     );
     const [item] = await new FinraShortInterestSource(fetcher).fetch({
       symbol: 'mu',
+      maxItems: 1,
     });
 
     expect(item).toMatchObject({
       source: 'FINRA_SHORT_INTEREST',
       category: 'SHORT_INTEREST_SNAPSHOT',
       primarySource: true,
+      publishedAt: new Date('2026-08-31T00:00:00Z'),
       normalizedFacts: { changePercent: 25, daysToCover: 6.25 },
     });
     expect(fetcher.mock.calls[0]?.[1]?.method).toBe('POST');
-    expect(fetcher.mock.calls[0]?.[1]?.body).toContain('"fieldValue":"MU"');
+    const body = fetcher.mock.calls[0]?.[1]?.body;
+    if (typeof body !== 'string') throw new Error('Expected JSON body');
+    expect(body).toContain('"fieldValue":"MU"');
+    expect(body).toContain('"limit":20');
+    expect(body).not.toContain('sortFields');
   });
 
   it('versions ClinicalTrials records by their public update date', async () => {

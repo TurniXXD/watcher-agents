@@ -315,6 +315,37 @@ describe('Telegram utilities', () => {
     );
   });
 
+  it('renders escaped publication analysis failures', () => {
+    const text = renderPublicationDigest({
+      fetchedCount: 1,
+      newItemCount: 1,
+      analyzedCount: 0,
+      failedAnalysisCount: 1,
+      sourceFailures: [],
+      analyses: [
+        {
+          item: {
+            id: 'PUBMED:1',
+            source: 'PUBMED',
+            externalId: '1',
+            title: 'Fungi < soil',
+            url: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+            content: 'content',
+            metadata: { target: 'fungi' },
+          },
+          outcome: {
+            status: 'FAILED',
+            error: 'Ollama returned HTTP 400: bad <schema>',
+          },
+        },
+      ],
+    });
+
+    expect(text).toContain('⚠️ <b>Analysis errors</b>');
+    expect(text).toContain('Fungi &lt; soil');
+    expect(text).toContain('bad &lt;schema&gt;');
+  });
+
   it('renders live alerts with evidence and a safety qualification', () => {
     const text = renderStockAlert({
       ticker: 'MU',

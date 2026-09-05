@@ -41,6 +41,7 @@ export class FinraShortInterestSource implements Source<FinraShortInterestConfig
   ): Promise<WatchItem[]> {
     const symbol = config.symbol.trim().toUpperCase();
     const limit = Math.max(1, Math.min(config.maxItems ?? 4, 20));
+    const requestLimit = 20;
     const response = await this.fetcher(
       'https://api.finra.org/data/group/otcMarket/name/consolidatedShortInterest',
       {
@@ -57,8 +58,7 @@ export class FinraShortInterestSource implements Source<FinraShortInterestConfig
               fieldValue: symbol,
             },
           ],
-          limit,
-          sortFields: ['-settlementDate'],
+          limit: requestLimit,
         }),
         signal: signal
           ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
@@ -69,6 +69,9 @@ export class FinraShortInterestSource implements Source<FinraShortInterestConfig
       throw new Error(`HTTP ${response.status} from api.finra.org`);
     return responseSchema
       .parse(await response.json())
+      .sort((left, right) =>
+        right.settlementDate.localeCompare(left.settlementDate),
+      )
       .slice(0, limit)
       .map((row) => {
         const settlementAt = new Date(

@@ -35,6 +35,8 @@ import {
 } from '@watcher/core';
 import type { DiscoveryExecution } from './discovery.js';
 import { registerValidationCommands } from './validation-commands.js';
+import { scheduleExample, stocksAbout, stocksHelp } from './copy.js';
+import { renderStockList, type StockListEntry } from './stock-list.js';
 
 type StockCompany = {
   symbol: string;
@@ -45,75 +47,6 @@ type StockCompany = {
   investorRelationsUrl: string | null;
 };
 type StockCompanyLookup = (symbol: string) => Promise<StockCompany>;
-type StockListEntry = {
-  id: string;
-  symbol: string;
-  companyName: string | null;
-  cik: string | null;
-  enabled: boolean;
-  monitoringTier: string;
-  monitoringMode: string;
-  priority: number;
-  autoDiscovered: boolean;
-  attentionScore: number;
-  investigateUntil: Date | null;
-  watchReason: string | null;
-  watchUntil: Date | null;
-};
-
-const scheduleExample = '/schedule 0 8 * * * Europe/Prague';
-
-const help = `/help — show this command list
-/status — watcher status
-/dashboard — current state of every enabled stock
-/opportunities — stocks with elevated attention or favorable asymmetry
-/alerts — recently generated live alerts
-/health — runs, reconciliation, LLM metrics, and source health
-/stocks — list stocks
-/thesis SYMBOL — show the latest persistent thesis and scores
-/catalysts [SYMBOL] — list active and upcoming catalysts
-/advanced [SYMBOL] — latest options, institutional, short-interest, FDA, and trial data
-/replay SYMBOL DATE — reconstruct only information known by that date
-/eventreplay SYMBOL [FROM] [TO] — replay events and thesis transitions
-/validate — backtest stored theses, alerts, and signals against stored prices
-/backtest — return/hit-rate/MFE/MAE validation report
-/calibration — predicted vs realized 30-day probability buckets
-/signalperformance — empirical 30-day result by signal type
-/discovery — discovery scanner status and recent candidates
-/rundiscovery — run the cheap market-wide discovery scan now
-/addstock SYMBOL — add a stock (all sources enabled by default)
-/removestock SYMBOL — remove a stock
-/settier SYMBOL TIER [YYYY-MM-DD] [REASON] — set CORE/WATCH/DISCOVERY/INVESTIGATE
-/setmode SYMBOL MODE — set LOW_RESOLUTION/NORMAL/HIGH_RESOLUTION/EVENT_MODE
-/setpriority SYMBOL 0-100 — set monitoring priority
-/stockon SYMBOL — enable monitoring for a stock
-/stockoff SYMBOL — disable monitoring for a stock
-/sources — configure all stock data sources
-/listsources — list available sources and provider links
-/schedule [CRON] [TIMEZONE] — view or update schedule
-  Example: ${scheduleExample}
-/run — run now
-/reconcile — run the comprehensive daily reconciliation now
-/pause — pause scheduled runs
-/resume — resume scheduled runs`;
-
-const renderStockListEntry = (stock: StockListEntry): string => {
-  const name = stock.companyName
-    ? `${stock.symbol} — ${stock.companyName}`
-    : stock.symbol;
-  const expiry = stock.watchUntil
-    ? ` · until ${stock.watchUntil.toISOString().slice(0, 10)}`
-    : '';
-  const reason = stock.watchReason ? ` · ${stock.watchReason}` : '';
-  const investigation = stock.investigateUntil
-    ? ` · investigate until ${stock.investigateUntil.toISOString()}`
-    : '';
-  const discovery = stock.autoDiscovered
-    ? ` · auto-discovered · attention ${stock.attentionScore}`
-    : '';
-  return `${stock.enabled ? '✅' : '⏸'} ${name}\n${stock.monitoringTier} · ${stock.monitoringMode} · priority ${stock.priority}${discovery}${expiry}${investigation}${reason}`;
-};
-
 const renderDiscoveryStatus = (
   status: DiscoveryStatus,
   enabled: boolean,
@@ -196,7 +129,14 @@ export const createStocksBot = (
   };
   bot.command(['start', 'help'], async (ctx) => {
     await chat(ctx.chat.id);
-    await ctx.reply(`📈 Stocks Watcher\n\n${help}`);
+    await ctx.reply(`📈 Stocks Watcher\n\n${stocksHelp}`);
+  });
+  bot.command('about', async (ctx) => {
+    await chat(ctx.chat.id);
+    await ctx.reply(stocksAbout, {
+      parse_mode: 'Markdown',
+      link_preview_options: { is_disabled: true },
+    });
   });
   bot.command('status', async (ctx) => {
     const current = await chat(ctx.chat.id);
@@ -210,10 +150,10 @@ export const createStocksBot = (
     const stocks = await Promise.all(
       (await store.listStocks(current.id)).map(withCompany),
     );
-    await ctx.reply(
-      stocks.length
-        ? stocks.map((stock) => renderStockListEntry(stock)).join('\n')
-        : 'No stocks configured.',
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderStockList(stocks),
     );
   });
   bot.command('dashboard', async (ctx) => {

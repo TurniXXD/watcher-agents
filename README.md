@@ -148,13 +148,13 @@ Infrastructure secrets cannot be edited through Telegram. Telegram-editable sche
 
 ## Telegram commands
 
-Both bots support `/start`, `/help`, `/status`, `/listsources`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. `/help` prints the same initial command list as `/start`. `/listsources` lists each available provider with its website link.
+Both bots support `/about`, `/start`, `/help`, `/status`, `/listsources`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. `/help` prints the same alphabetized command list as `/start`, while `/about` provides a detailed Markdown overview of the bot's purpose, key functions, advantages, and usage workflow. `/listsources` lists each available provider with its website link.
 
 Manual `/run` requests first send one progress message, then update that message with `editMessageText` while sources are fetched, items are prepared, and Ollama analyses run. Run digests use Telegram formatting with clear item separators, labeled summary and detail sections, bullet lists, source links, and total run time. Link previews are disabled to keep multi-item digests compact.
 
 Stocks bot:
 
-- `/stocks`
+- `/stocks` to show labeled per-stock state plus currently watched, configured, paused, and auto-discovered counts
 - `/dashboard` to show the latest state of every enabled stock
 - `/opportunities` to show elevated-attention or favorable-asymmetry stocks
 - `/alerts` to show recent generated alerts and delivery state

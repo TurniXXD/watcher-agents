@@ -25,6 +25,31 @@ describe('core watcher behavior', () => {
     expect(watchItemSchema.parse(item('1')).externalId).toBe('1');
   });
 
+  it('removes PostgreSQL-incompatible null bytes from watch items', () => {
+    const parsed = watchItemSchema.parse({
+      ...item('nul-byte'),
+      title: 'Filing\u0000 update',
+      content: 'Material\u0000 filing content',
+      normalizedFacts: {
+        'form\u0000type': '8-K\u0000',
+        nested: ['safe\u0000 text'],
+      },
+      entities: ['MU\u0000'],
+      metadata: { symbol: 'M\u0000U' },
+    });
+
+    expect(parsed).toMatchObject({
+      title: 'Filing update',
+      content: 'Material filing content',
+      normalizedFacts: {
+        formtype: '8-K',
+        nested: ['safe text'],
+      },
+      entities: ['MU'],
+      metadata: { symbol: 'MU' },
+    });
+  });
+
   it('deduplicates by source and external id', () => {
     expect(deduplicateItems([item('1'), item('1'), item('2')])).toHaveLength(2);
   });
@@ -361,6 +386,55 @@ describe('core watcher behavior', () => {
         estimatedCostUsd: 0,
       },
     });
+  });
+
+  it('logs analyzer-returned failures with item context', async () => {
+    const logger = {
+      debug: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+    };
+    const pipeline = new WatcherPipeline(
+      {
+        prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) => [
+          { item: items[0]!, recordId: 'record' },
+        ]),
+        saveAnalysis: vi.fn(async () => undefined),
+      },
+      {
+        analyze: vi.fn(async () => ({
+          status: 'FAILED' as const,
+          error: 'Ollama returned HTTP 400',
+        })),
+      },
+      0,
+      logger,
+    );
+
+    await pipeline.run('PUBLICATIONS', 'run', [
+      {
+        source: {
+          id: 'PUBMED',
+          fetch: async () => [
+            { ...item('1'), id: 'PUBMED:1', source: 'PUBMED' },
+          ],
+        },
+        target: 'fungi',
+        config: {},
+      },
+    ]);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      {
+        kind: 'PUBLICATIONS',
+        runId: 'run',
+        source: 'PUBMED',
+        externalId: '1',
+        analysisError: 'Ollama returned HTTP 400',
+      },
+      'Watcher item analysis failed',
+    );
   });
 
   it('limits high-resolution runs to selected tickers and fast sources', async () => {

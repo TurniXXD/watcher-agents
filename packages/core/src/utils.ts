@@ -13,6 +13,25 @@ export const isRecord = (value: unknown): value is Record<string, unknown> =>
 export const recordValue = (value: unknown): Record<string, unknown> =>
   isRecord(value) ? value : {};
 
+export const removeNullBytes = (value: string): string =>
+  value.replaceAll('\u0000', '');
+
+export const removeNullBytesDeep = (value: unknown): unknown => {
+  if (typeof value === 'string') return removeNullBytes(value);
+  if (Array.isArray(value)) return value.map(removeNullBytesDeep);
+  if (!isRecord(value)) return value;
+
+  const prototype: unknown = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      removeNullBytes(key),
+      removeNullBytesDeep(entry),
+    ]),
+  );
+};
+
 export const parseDate = (
   value: string | number | null | undefined,
 ): Date | undefined => {
