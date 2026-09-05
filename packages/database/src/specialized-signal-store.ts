@@ -19,7 +19,6 @@ import {
   type MarketPricePoint,
 } from './stock-domain/index.js';
 import type { DatabaseClient } from './client.js';
-import type { Prisma } from './generated/prisma/client.js';
 import {
   CatalystDirection,
   CatalystProximity,
