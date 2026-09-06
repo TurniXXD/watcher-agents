@@ -985,8 +985,15 @@ export class WatcherStore implements PipelineRepository {
     return this.configuration.removeStock(chatConfigId, symbol);
   }
 
-  public async toggleStockSource(stockId: string, source: StockSourceType) {
-    return this.configuration.toggleStockSource(stockId, source);
+  public listStockSourceSettings(chatConfigId: string) {
+    return this.configuration.listStockSourceSettings(chatConfigId);
+  }
+
+  public async toggleStockSourceForAll(
+    chatConfigId: string,
+    source: StockSourceType,
+  ) {
+    return this.configuration.toggleStockSourceForAll(chatConfigId, source);
   }
 
   public async addQuery(chatConfigId: string, query: string) {
@@ -1005,11 +1012,18 @@ export class WatcherStore implements PipelineRepository {
     return this.configuration.removeQuery(chatConfigId, query);
   }
 
-  public async togglePublicationSource(
-    queryId: string,
+  public listPublicationSourceSettings(chatConfigId: string) {
+    return this.configuration.listPublicationSourceSettings(chatConfigId);
+  }
+
+  public async togglePublicationSourceForAll(
+    chatConfigId: string,
     source: PublicationSourceType,
   ) {
-    return this.configuration.togglePublicationSource(queryId, source);
+    return this.configuration.togglePublicationSourceForAll(
+      chatConfigId,
+      source,
+    );
   }
 }
 

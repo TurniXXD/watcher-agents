@@ -257,4 +257,55 @@ describe('Phase 5 stock analysis', () => {
     expect(outcome.result.intelligence?.fullAnalysisPerformed).toBe(false);
     expect(outcome.result.intelligence?.decision).toBeNull();
   });
+
+  it('normalizes omitted helper fields from a compact targeted response', async () => {
+    const existingState = buildNextThesisState(context(), targeted, full).state;
+    const compactTargeted = {
+      materiality: 'LOW',
+      thesisChange: 'UNCHANGED',
+      informationChange: 'NO_MEANINGFUL_CHANGE',
+      catalystChange: 'NO_CHANGE',
+      primaryDriver: 'Routine filing update',
+      explanation: 'The filing does not materially change the current thesis.',
+      risks: [],
+      confidence: 0.7,
+    };
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        fetch: async () => response(compactTargeted),
+      }),
+    );
+
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'SEC:compact',
+      source: 'SEC',
+      externalId: 'compact',
+      title: 'Routine filing update',
+      url: 'https://www.sec.gov/example',
+      content: 'A routine filing with no material thesis change.',
+      metadata: {
+        stockAnalysisContext: context({
+          currentThesis: existingState,
+          event: { ...context().event, action: 'TARGETED_ANALYSIS' },
+        }),
+      },
+    });
+
+    if (outcome.status !== 'SUCCESS') {
+      throw new Error(`Expected stock intelligence result: ${outcome.error}`);
+    }
+    if (!('intelligence' in outcome.result)) {
+      throw new Error('Expected stock intelligence result');
+    }
+    expect(outcome.result.intelligence?.targeted).toMatchObject({
+      reanalysisRequired: false,
+      affectedSignalGroups: [],
+      catalystChange: 'UNCHANGED',
+      recommendationChange: false,
+    });
+    expect(outcome.result.intelligence?.fullAnalysisPerformed).toBe(false);
+  });
 });

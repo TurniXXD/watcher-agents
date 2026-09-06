@@ -17,6 +17,7 @@ import {
 } from './onboarding.js';
 import type { CalendarEvent } from './calendar.js';
 import { renderCalendarSummary } from './calendar.js';
+import { normalizeHyphenatedBotCommand } from './utils/telegram-command.js';
 import type { GeocodingProvider } from './weather.js';
 
 type VoicePreview = (context: Context, voice: BriefingVoiceId) => Promise<void>;
@@ -112,13 +113,13 @@ const onboardingPrompt = (configuration: BriefingConfiguration): string => {
     return 'Choose the voice for your morning briefing.';
   }
   if (step === 'GOOGLE_CALENDAR') {
-    return 'Next, connect Google Calendar so I can tell you what you have today.';
+    return "Google Calendar is optional. Connect it to include today's events, or skip it and continue.";
   }
   if (step === 'SUBSCRIPTIONS') {
     return `${subscriptionText(configuration)}\n\nChoose which watchers to include.`;
   }
   if (step === 'BRIEFING_TIME') {
-    return `Choose your local morning briefing time. Use /briefing-time HH:mm, or keep ${configuration.settings.briefingTime}.`;
+    return `Choose your local morning briefing time. Use /briefing_time HH:mm, or keep ${configuration.settings.briefingTime}.`;
   }
   return `Setup complete.\n\n${renderConfiguration(configuration)}`;
 };
@@ -136,6 +137,10 @@ export const createBriefingBot = (
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
+  bot.use(async (context, next) => {
+    normalizeHyphenatedBotCommand(context.message);
+    await next();
+  });
   bot.use(async (context, next) => {
     const startedAt = Date.now();
     const command = commandName(context.message?.text);
@@ -198,7 +203,13 @@ export const createBriefingBot = (
   };
 
   bot.command('start', async (context) => {
-    const configuration = await store.ensure(BigInt(context.chat.id));
+    let configuration = await store.ensure(BigInt(context.chat.id));
+    if (configuration.onboarding.currentStep === 'GOOGLE_CALENDAR') {
+      configuration = await store.setOnboardingStep(
+        BigInt(context.chat.id),
+        'SUBSCRIPTIONS',
+      );
+    }
     if (configuration.onboarding.completed) {
       await context.reply(
         `☀️ Personal Morning Briefing\n\n${renderConfiguration(configuration)}\n\n${briefingHelp}`,
@@ -208,7 +219,7 @@ export const createBriefingBot = (
     await prompt(context, configuration);
   });
   bot.command('help', async (context) => context.reply(briefingHelp));
-  bot.command(['settings', 'briefing-settings'], async (context) => {
+  bot.command(['settings', 'briefing_settings'], async (context) => {
     await context.reply(
       renderConfiguration(await store.ensure(BigInt(context.chat.id))),
     );
@@ -233,18 +244,18 @@ export const createBriefingBot = (
     );
     await context.reply(subscriptionText(configuration));
   });
-  bot.command(['subscribe-all', 'unsubscribe-all'], async (context) => {
+  bot.command(['subscribe_all', 'unsubscribe_all'], async (context) => {
     const configuration = await store.setAllSubscriptions(
       BigInt(context.chat.id),
-      commandName(context.message?.text) === 'subscribe-all',
+      commandName(context.message?.text) === 'subscribe_all',
     );
     await context.reply(subscriptionText(configuration));
   });
-  bot.command(['location', 'location-status'], async (context) => {
+  bot.command(['location', 'location_status'], async (context) => {
     const configuration = await store.ensure(BigInt(context.chat.id));
     await context.reply(renderConfiguration(configuration));
   });
-  bot.command('location-set', async (context) => {
+  bot.command('location_set', async (context) => {
     const query = commandArgument(context.message?.text);
     if (query && geocoding) {
       const [location] = await geocoding.search(
@@ -283,7 +294,7 @@ export const createBriefingBot = (
         .oneTime(),
     });
   });
-  bot.command('location-clear', async (context) => {
+  bot.command('location_clear', async (context) => {
     await store.clearLocation(BigInt(context.chat.id));
     await context.reply('Location disabled.');
   });
@@ -300,7 +311,7 @@ export const createBriefingBot = (
       await advance(context, configuration);
     }
   });
-  bot.command(['voice', 'voice-list'], async (context) => {
+  bot.command(['voice', 'voice_list'], async (context) => {
     const configuration = await store.ensure(BigInt(context.chat.id));
     await context.reply(
       commandName(context.message?.text) === 'voice'
@@ -308,7 +319,7 @@ export const createBriefingBot = (
         : 'Available voices:\namy\nhfc_female\nhfc_male',
     );
   });
-  bot.command('voice-set', async (context) => {
+  bot.command('voice_set', async (context) => {
     const voice = briefingVoiceIdSchema.parse(
       commandArgument(context.message?.text),
     );
@@ -319,19 +330,19 @@ export const createBriefingBot = (
     if (configuration.onboarding.currentStep === 'VOICE') {
       configuration = await store.setOnboardingStep(
         BigInt(context.chat.id),
-        'GOOGLE_CALENDAR',
+        'SUBSCRIPTIONS',
       );
       await prompt(context, configuration);
     }
   });
-  bot.command('voice-preview', async (context) => {
+  bot.command('voice_preview', async (context) => {
     const voice = briefingVoiceIdSchema.parse(
       commandArgument(context.message?.text),
     );
     if (previewVoice) await previewVoice(context, voice);
     else await context.reply('Voice previews are not installed yet.');
   });
-  bot.command('briefing-time', async (context) => {
+  bot.command('briefing_time', async (context) => {
     const briefingTime = commandArgument(context.message?.text);
     let configuration = await store.updateSettings(BigInt(context.chat.id), {
       briefingTime,
@@ -344,10 +355,10 @@ export const createBriefingBot = (
     }
     await context.reply(renderConfiguration(configuration));
   });
-  bot.command('briefing-duration', async (context) => {
+  bot.command('briefing_duration', async (context) => {
     const minutes = Number(commandArgument(context.message?.text));
     if (!Number.isInteger(minutes)) {
-      await context.reply('Usage: /briefing-duration MINUTES');
+      await context.reply('Usage: /briefing_duration MINUTES');
       return;
     }
     const configuration = await store.updateSettings(BigInt(context.chat.id), {
@@ -355,10 +366,10 @@ export const createBriefingBot = (
     });
     await context.reply(renderConfiguration(configuration));
   });
-  bot.command('briefing-max-duration', async (context) => {
+  bot.command('briefing_max_duration', async (context) => {
     const minutes = Number(commandArgument(context.message?.text));
     if (!Number.isInteger(minutes)) {
-      await context.reply('Usage: /briefing-max-duration MINUTES');
+      await context.reply('Usage: /briefing_max_duration MINUTES');
       return;
     }
     const configuration = await store.updateSettings(BigInt(context.chat.id), {
@@ -366,10 +377,10 @@ export const createBriefingBot = (
     });
     await context.reply(renderConfiguration(configuration));
   });
-  bot.command('briefing-transcript', async (context) => {
+  bot.command('briefing_transcript', async (context) => {
     const mode = commandArgument(context.message?.text)?.toLowerCase();
     if (mode !== 'on' && mode !== 'off') {
-      await context.reply('Usage: /briefing-transcript on|off');
+      await context.reply('Usage: /briefing_transcript on|off');
       return;
     }
     const configuration = await store.updateSettings(BigInt(context.chat.id), {
@@ -408,8 +419,8 @@ export const createBriefingBot = (
   };
 
   bot.command('briefing', (context) => executeBriefing(context, 'MANUAL'));
-  bot.command('briefing-test', (context) => executeBriefing(context, 'TEST'));
-  bot.command('calendar-status', async (context) => {
+  bot.command('briefing_test', (context) => executeBriefing(context, 'TEST'));
+  bot.command('calendar_status', async (context) => {
     const connected = calendar
       ? (await calendar.status(BigInt(context.chat.id))).connected
       : false;
@@ -419,7 +430,7 @@ export const createBriefingBot = (
         : 'Google Calendar is not connected.',
     );
   });
-  bot.command('calendar-connect', async (context) => {
+  bot.command('calendar_connect', async (context) => {
     if (!calendar) {
       await context.reply(
         'Google Calendar OAuth is not configured on this server yet.',
@@ -431,7 +442,7 @@ export const createBriefingBot = (
       reply_markup: new InlineKeyboard().url('Connect Google Calendar', url),
     });
   });
-  bot.command('calendar-refresh', async (context) => {
+  bot.command('calendar_refresh', async (context) => {
     if (!calendar) {
       await context.reply(
         'Google Calendar OAuth is not configured on this server yet.',
@@ -445,7 +456,7 @@ export const createBriefingBot = (
     );
     await context.reply(renderCalendarSummary(events));
   });
-  bot.command('calendar-disconnect', async (context) => {
+  bot.command('calendar_disconnect', async (context) => {
     if (calendar) await calendar.disconnect(BigInt(context.chat.id));
     else {
       await store.updateSettings(BigInt(context.chat.id), {
@@ -466,7 +477,7 @@ export const createBriefingBot = (
   });
   bot.callbackQuery('onb:location:city', async (context) => {
     await context.answerCallbackQuery();
-    await context.reply('Enter a city with /location-set CITY, COUNTRY.');
+    await context.reply('Enter a city with /location_set CITY, COUNTRY.');
   });
   bot.callbackQuery('onb:location:skip', async (context) => {
     const configuration = await store.clearLocation(BigInt(context.chat!.id));
@@ -493,7 +504,7 @@ export const createBriefingBot = (
     await store.updateSettings(BigInt(context.chat!.id), { voice });
     const configuration = await store.setOnboardingStep(
       BigInt(context.chat!.id),
-      'GOOGLE_CALENDAR',
+      'SUBSCRIPTIONS',
     );
     await context.answerCallbackQuery();
     await prompt(context, configuration);

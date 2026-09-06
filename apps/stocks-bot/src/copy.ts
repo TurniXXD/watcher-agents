@@ -1,7 +1,7 @@
 const scheduleExample = '/schedule 0 8 * * * Europe/Prague';
 
 export const stocksHelp = `/about — what the stocks bot does and how to use it
-/addstock SYMBOL — add a stock (all sources enabled by default)
+/addstock SYMBOL — add a stock using the global source settings
 /advanced [SYMBOL] — latest options, institutional, short-interest, FDA, and trial data
 /alerts — recently generated live alerts
 /backtest — return/hit-rate/MFE/MAE validation report
@@ -57,7 +57,7 @@ Stocks Watcher is a private, self-hosted Telegram research assistant for monitor
 
 *How to use it*
 1. Add a company with \`/addstock SYMBOL\`, then review it with \`/stocks\`.
-2. Use \`/sources\` to enable or disable providers for each stock and \`/listsources\` to see what every provider contributes.
+2. Use \`/sources\` to enable or disable providers globally for every current and future stock, and \`/listsources\` to see what every provider contributes.
 3. Run \`/run\` for an immediate check, or configure recurring monitoring with \`/schedule CRON TIMEZONE\`.
 4. Read \`/dashboard\`, \`/thesis SYMBOL\`, \`/catalysts\`, \`/alerts\`, and \`/opportunities\` for the current decision picture.
 5. Use \`/health\` when diagnosing coverage or model issues, and \`/replay\`, \`/eventreplay\`, \`/validate\`, and \`/backtest\` to audit historical behavior.

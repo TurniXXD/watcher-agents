@@ -171,6 +171,50 @@ integration('WatcherStore with PostgreSQL', () => {
     expect(stock?.sources.every(({ enabled }) => enabled)).toBe(true);
   });
 
+  it('applies stock source switches globally and reuses them for new stocks', async () => {
+    const chat = await store.ensureChat('STOCKS', 124n);
+    const company = (ticker: string) => ({
+      chatConfigId: chat.id,
+      ticker,
+      companyName: ticker,
+      cik: null,
+      exchange: 'Nasdaq',
+      sector: null,
+      industry: null,
+      marketCap: null,
+      currency: 'USD',
+      country: 'US',
+      investorRelationsUrl: null,
+      enabled: true,
+      monitoringTier: 'WATCH' as const,
+      monitoringMode: 'NORMAL' as const,
+      priority: 50,
+      tags: [],
+      watchReason: null,
+      watchUntil: null,
+    });
+    await Promise.all([
+      universe.createCompany(company('MU')),
+      universe.createCompany(company('NVDA')),
+    ]);
+
+    await expect(
+      store.toggleStockSourceForAll(chat.id, 'NEWS'),
+    ).resolves.toEqual({ source: 'NEWS', enabled: false, affectedCount: 2 });
+    await universe.createCompany(company('AMD'));
+
+    const newsSettings = await database.stockSourceConfig.findMany({
+      where: { source: 'NEWS', stock: { chatConfigId: chat.id } },
+      select: { enabled: true },
+    });
+    expect(newsSettings).toHaveLength(3);
+    expect(newsSettings.every(({ enabled }) => !enabled)).toBe(true);
+    expect(await store.listStockSourceSettings(chat.id)).toContainEqual({
+      source: 'NEWS',
+      enabled: false,
+    });
+  });
+
   it('persists normalized observations and an atomic discovery event', async () => {
     const chat = await store.ensureChat('STOCKS', 777n);
     const run = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
@@ -1124,15 +1168,41 @@ integration('WatcherStore with PostgreSQL', () => {
     expect(investigating.sources).toHaveLength(19);
     expect(investigating.sources.every(({ enabled }) => enabled)).toBe(true);
 
+    const promotionRun = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
+    if (!promotionRun) throw new Error('Expected promotion run');
+    await store.prepareItemsForRun(
+      'STOCKS',
+      promotionRun.id,
+      [
+        {
+          ...watchItem('discovery-promotion-source'),
+          title: 'Micron announces a major acquisition',
+          content: 'Micron entered a definitive major acquisition agreement.',
+        },
+      ],
+      5,
+    );
+    const promotionEvent = await database.canonicalEvent.findFirstOrThrow({
+      where: {
+        ticker: 'MU',
+        primaryEvidence: { source: 'SEC' },
+      },
+      orderBy: { firstDetectedAt: 'desc' },
+    });
+    await database.canonicalEvent.update({
+      where: { id: promotionEvent.id },
+      data: { firstDetectedAt: now },
+    });
+
     await discovery.promoteMaterialEvents(
       chat.id,
       {
         events: [
           {
-            eventId: 'event-1',
+            eventId: promotionEvent.id,
             ticker: 'MU',
             eventType: 'ACQUISITION',
-            title: 'Micron announces a major acquisition',
+            title: promotionEvent.title,
             materiality: 'HIGH',
             action: 'FULL_ANALYSIS',
             decision: 'DUPLICATE',
@@ -1155,6 +1225,19 @@ integration('WatcherStore with PostgreSQL', () => {
       attentionScore: 90,
       watchStartedAt: now,
     });
+    const [listedStock] = await store.listStocks(chat.id);
+    expect(listedStock).toMatchObject({
+      symbol: 'MU',
+      watchReason: promotionEvent.title,
+      discoverySignals: [
+        {
+          source: 'ALPHA_VANTAGE_MARKET_MOVERS',
+          trigger: 'PRICE_MOVE',
+          reason: '+6.50% price move on 2,000,000 shares',
+        },
+      ],
+    });
+    expect(listedStock?.watchReasonSource).toMatchObject({ source: 'SEC' });
 
     await discovery.reconcileExpired(new Date('2026-09-04T12:01:00Z'));
     expect(
@@ -1262,6 +1345,27 @@ integration('WatcherStore with PostgreSQL', () => {
 
     expect(query.sources).toHaveLength(4);
     expect(query.sources.every(({ enabled }) => enabled)).toBe(true);
+  });
+
+  it('applies publication source switches globally and reuses them for new queries', async () => {
+    const chat = await store.ensureChat('PUBLICATIONS', 125n);
+    await store.addQueries(chat.id, ['soil microbiome', 'fungal ecology']);
+
+    await expect(
+      store.togglePublicationSourceForAll(chat.id, 'PUBMED'),
+    ).resolves.toEqual({ source: 'PUBMED', enabled: false, affectedCount: 2 });
+    await store.addQuery(chat.id, 'plant pathology');
+
+    const pubmedSettings = await database.publicationSourceConfig.findMany({
+      where: { source: 'PUBMED', query: { chatConfigId: chat.id } },
+      select: { enabled: true },
+    });
+    expect(pubmedSettings).toHaveLength(3);
+    expect(pubmedSettings.every(({ enabled }) => !enabled)).toBe(true);
+    expect(await store.listPublicationSourceSettings(chat.id)).toContainEqual({
+      source: 'PUBMED',
+      enabled: false,
+    });
   });
 
   it('serializes Ollama leases across database sessions', async () => {

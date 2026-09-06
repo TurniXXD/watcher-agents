@@ -98,9 +98,19 @@ export class BriefingCoordinator {
     );
     const configuration =
       await this.dependencies.configuration.ensure(telegramChatId);
-    if (!configuration.onboarding.completed) {
+    if (type === 'SCHEDULED' && !configuration.onboarding.completed) {
       throw new Error(
-        'Complete onboarding with /start before generating a briefing',
+        'Complete onboarding with /start before enabling scheduled briefings',
+      );
+    }
+    if (type !== 'SCHEDULED' && !configuration.onboarding.completed) {
+      this.dependencies.logger?.info(
+        {
+          telegramChatId: telegramChatId.toString(),
+          runType: type,
+          onboardingStep: configuration.onboarding.currentStep,
+        },
+        'Generating briefing with saved and default settings before onboarding completion',
       );
     }
     const subscriptions = configuration.subscriptions

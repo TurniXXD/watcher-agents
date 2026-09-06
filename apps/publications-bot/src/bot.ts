@@ -4,12 +4,14 @@ import {
   authorizationMiddleware,
   commandArgument,
   formatRunDuration,
+  globalSourceKeyboard,
+  globalSourceSettingsText,
   parsePublicationQueriesCsv,
   publicationQuerySchema,
   renderPublicationSourceList,
   renderRunProgress,
 } from '@watcher/telegram';
-import { Bot, InlineKeyboard, type Context } from 'grammy';
+import { Bot, type Context } from 'grammy';
 import type { Document } from 'grammy/types';
 import { z } from 'zod';
 import type { ProgressReporter } from '@watcher/core';
@@ -113,7 +115,9 @@ export const createPublicationsBot = (
     );
     const current = await chat(ctx.chat.id);
     await store.addQuery(current.id, query);
-    await ctx.reply(`“${query}” added. All publication sources are enabled.`);
+    await ctx.reply(
+      `“${query}” added with the current global source settings.`,
+    );
   });
   const addQueriesFromCsv = async (ctx: Context): Promise<void> => {
     if (!ctx.chat) return;
@@ -139,7 +143,7 @@ export const createPublicationsBot = (
 
     const result = await store.addQueries(current.id, queries);
     await ctx.reply(
-      `Imported ${result.addedCount} ${result.addedCount === 1 ? 'query' : 'queries'} from CSV. ${result.skippedCount} ${result.skippedCount === 1 ? 'duplicate was' : 'duplicates were'} skipped. All publication sources are enabled for new queries.`,
+      `Imported ${result.addedCount} ${result.addedCount === 1 ? 'query' : 'queries'} from CSV. ${result.skippedCount} ${result.skippedCount === 1 ? 'duplicate was' : 'duplicates were'} skipped. New queries inherited the global source settings.`,
     );
   };
   bot.command('addqueries', addQueriesFromCsv);
@@ -163,21 +167,11 @@ export const createPublicationsBot = (
   bot.command('sources', async (ctx) => {
     const current = await chat(ctx.chat.id);
     const queries = await store.listQueries(current.id);
-    if (!queries.length) return ctx.reply('Add a query first.');
-    for (const query of queries) {
-      const keyboard = new InlineKeyboard();
-      query.sources.forEach((source) =>
-        keyboard
-          .text(
-            `${source.enabled ? '✅' : '❌'} ${source.source}`,
-            `ps:${query.id}:${source.source}`,
-          )
-          .row(),
-      );
-      await ctx.reply(`Sources for “${query.query}”`, {
-        reply_markup: keyboard,
-      });
-    }
+    const settings = await store.listPublicationSourceSettings(current.id);
+    await ctx.reply(
+      globalSourceSettingsText('Publications watcher', queries.length, 'query'),
+      { reply_markup: globalSourceKeyboard(settings, 'ps') },
+    );
   });
   bot.command('listsources', async (ctx) => {
     await ctx.reply(renderPublicationSourceList(), {
@@ -185,15 +179,30 @@ export const createPublicationsBot = (
       link_preview_options: { is_disabled: true },
     });
   });
-  bot.callbackQuery(/^ps:([^:]+):(.+)$/, async (ctx) => {
-    const [, queryId, source] = ctx.match;
-    if (!queryId || !source) return;
-    await store.togglePublicationSource(
-      queryId,
-      z.enum(PublicationSourceType).parse(source),
+  bot.callbackQuery(/^ps:/, async (ctx) => {
+    const sourceToken = ctx.callbackQuery.data.split(':').at(-1);
+    if (!sourceToken || !ctx.chat) return;
+    const sourceTypes = Object.values(PublicationSourceType);
+    const source = /^\d+$/.test(sourceToken)
+      ? sourceTypes[Number(sourceToken)]
+      : z.enum(PublicationSourceType).parse(sourceToken);
+    if (!source) return ctx.answerCallbackQuery('Unknown source');
+    const current = await chat(ctx.chat.id);
+    const updated = await store.togglePublicationSourceForAll(
+      current.id,
+      source,
     );
-    await ctx.answerCallbackQuery('Updated');
-    await ctx.editMessageReplyMarkup();
+    const [queries, settings] = await Promise.all([
+      store.listQueries(current.id),
+      store.listPublicationSourceSettings(current.id),
+    ]);
+    await ctx.answerCallbackQuery(
+      `${source} ${updated.enabled ? 'enabled' : 'disabled'} for all queries`,
+    );
+    await ctx.editMessageText(
+      globalSourceSettingsText('Publications watcher', queries.length, 'query'),
+      { reply_markup: globalSourceKeyboard(settings, 'ps') },
+    );
   });
   bot.command('schedule', async (ctx) => {
     const current = await chat(ctx.chat.id);

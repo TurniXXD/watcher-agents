@@ -9,6 +9,7 @@ import type { DatabaseClient } from './client.js';
 import type { Stock } from './generated/prisma/client.js';
 import { MonitoringMode, MonitoringTier } from './generated/prisma/enums.js';
 import { defaultStockSourceTypes } from './stock-source-defaults.js';
+import { stockSourceSettingsForChat } from './utils/source-settings.js';
 
 const companyRecord = (stock: Stock): CompanyUniverseRecord => ({
   id: stock.id,
@@ -38,6 +39,13 @@ export class CompanyUniverseStore implements CompanyUniverseRepository {
   public async createCompany(
     input: CompanyUniverseInput,
   ): Promise<CompanyUniverseRecord> {
+    const sourceSettings = await stockSourceSettingsForChat(
+      this.db,
+      input.chatConfigId,
+    );
+    const enabledBySource = new Map(
+      sourceSettings.map(({ source, enabled }) => [source, enabled]),
+    );
     const stock = await this.db.$transaction(async (transaction) => {
       const created = await transaction.stock.create({
         data: {
@@ -63,7 +71,7 @@ export class CompanyUniverseStore implements CompanyUniverseRepository {
           sources: {
             create: defaultStockSourceTypes.map((source) => ({
               source,
-              enabled: true,
+              enabled: enabledBySource.get(source) ?? true,
             })),
           },
         },

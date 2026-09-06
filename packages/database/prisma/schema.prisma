@@ -594,6 +594,7 @@ model WatcherConfig {
   reconciliationStartedAt  DateTime?
   lastReconciliationAt     DateTime?
   nextReconciliationAt     DateTime?         @default(now())
+  sourceSettings           Json               @default("{}")
   createdAt                DateTime          @default(now())
   updatedAt                DateTime          @updatedAt
   chatConfig               TelegramChat      @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)

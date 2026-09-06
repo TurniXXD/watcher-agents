@@ -16,6 +16,7 @@ import {
   WatcherKind,
 } from './generated/prisma/enums.js';
 import { defaultStockSourceTypes } from './stock-source-defaults.js';
+import { stockSourceSettingsForChat } from './utils/source-settings.js';
 
 export type DiscoveryLifecycleOptions = {
   investigationMs: number;
@@ -202,6 +203,17 @@ export class StockDiscoveryStore {
     profile: DiscoveryCompanyProfile,
     now = new Date(),
   ): Promise<{ activated: boolean; ticker: string }> {
+    const config = await this.db.watcherConfig.findUniqueOrThrow({
+      where: { id: watcherConfigId },
+      select: { chatConfigId: true },
+    });
+    const sourceSettings = await stockSourceSettingsForChat(
+      this.db,
+      config.chatConfigId,
+    );
+    const enabledBySource = new Map(
+      sourceSettings.map(({ source, enabled }) => [source, enabled]),
+    );
     return this.db.$transaction(async (transaction) => {
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${watcherConfigId}), hashtext(${candidate.ticker}))`;
       const existingSignal = await transaction.discoverySignal.findUnique({
@@ -215,10 +227,6 @@ export class StockDiscoveryStore {
       if (existingSignal) {
         return { activated: false, ticker: candidate.ticker };
       }
-      const config = await transaction.watcherConfig.findUniqueOrThrow({
-        where: { id: watcherConfigId },
-        select: { chatConfigId: true },
-      });
       const existing = await transaction.stock.findUnique({
         where: {
           chatConfigId_symbol: {
@@ -294,7 +302,7 @@ export class StockDiscoveryStore {
               sources: {
                 create: defaultStockSourceTypes.map((source) => ({
                   source,
-                  enabled: true,
+                  enabled: enabledBySource.get(source) ?? true,
                 })),
               },
             },

@@ -13,6 +13,8 @@ import {
   authorizationMiddleware,
   commandArgument,
   formatRunDuration,
+  globalSourceKeyboard,
+  globalSourceSettingsText,
   renderCatalystList,
   renderAdvancedStockData,
   renderOpportunityFeed,
@@ -25,7 +27,7 @@ import {
   sendSplitMessage,
   stockSymbolSchema,
 } from '@watcher/telegram';
-import { Bot, InlineKeyboard } from 'grammy';
+import { Bot } from 'grammy';
 import { z } from 'zod';
 import {
   errorMessage,
@@ -37,6 +39,7 @@ import type { DiscoveryExecution } from './discovery.js';
 import { registerValidationCommands } from './validation-commands.js';
 import { scheduleExample, stocksAbout, stocksHelp } from './copy.js';
 import { renderStockList, type StockListEntry } from './stock-list.js';
+import { hasReportableStockInformation } from './run-output.js';
 
 type StockCompany = {
   symbol: string;
@@ -122,7 +125,7 @@ export const createStocksBot = (
         industry: company.industry,
         investorRelationsUrl: company.investorRelationsUrl,
       });
-      return updated;
+      return { ...stock, ...updated };
     } catch {
       return stock;
     }
@@ -276,7 +279,7 @@ export const createStocksBot = (
       investorRelationsUrl: company.investorRelationsUrl,
     });
     await ctx.reply(
-      `${company.symbol} — ${company.companyName} added. All stock sources are enabled.`,
+      `${company.symbol} — ${company.companyName} added with the current global source settings.`,
     );
   });
   bot.command('settier', async (ctx) => {
@@ -373,23 +376,11 @@ export const createStocksBot = (
   bot.command('sources', async (ctx) => {
     const current = await chat(ctx.chat.id);
     const stocks = await store.listStocks(current.id);
-    if (!stocks.length) {
-      return ctx.reply('Add a stock first.');
-    }
-    for (const stock of stocks) {
-      const keyboard = new InlineKeyboard();
-      const sourceTypes = Object.values(StockSourceType);
-      stock.sources.forEach((source) => {
-        const sourceIndex = sourceTypes.indexOf(source.source);
-        keyboard
-          .text(
-            `${source.enabled ? '✅' : '❌'} ${source.source}`,
-            `ss:${stock.id}:${sourceIndex}`,
-          )
-          .row();
-      });
-      await ctx.reply(`${stock.symbol} sources`, { reply_markup: keyboard });
-    }
+    const settings = await store.listStockSourceSettings(current.id);
+    await ctx.reply(
+      globalSourceSettingsText('Stock watcher', stocks.length, 'stock'),
+      { reply_markup: globalSourceKeyboard(settings, 'ss') },
+    );
   });
   bot.command('listsources', async (ctx) => {
     await ctx.reply(renderStockSourceList(), {
@@ -425,19 +416,27 @@ export const createStocksBot = (
       ),
     );
   });
-  bot.callbackQuery(/^ss:([^:]+):(.+)$/, async (ctx) => {
-    const [, stockId, sourceToken] = ctx.match;
-    if (!stockId || !sourceToken) {
-      return;
-    }
+  bot.callbackQuery(/^ss:/, async (ctx) => {
+    const sourceToken = ctx.callbackQuery.data.split(':').at(-1);
+    if (!sourceToken || !ctx.chat) return;
     const sourceTypes = Object.values(StockSourceType);
     const source = /^\d+$/.test(sourceToken)
       ? sourceTypes[Number(sourceToken)]
       : z.enum(StockSourceType).parse(sourceToken);
     if (!source) return ctx.answerCallbackQuery('Unknown source');
-    await store.toggleStockSource(stockId, source);
-    await ctx.answerCallbackQuery('Updated');
-    await ctx.editMessageReplyMarkup();
+    const current = await chat(ctx.chat.id);
+    const updated = await store.toggleStockSourceForAll(current.id, source);
+    const [stocks, settings] = await Promise.all([
+      store.listStocks(current.id),
+      store.listStockSourceSettings(current.id),
+    ]);
+    await ctx.answerCallbackQuery(
+      `${source} ${updated.enabled ? 'enabled' : 'disabled'} for all stocks`,
+    );
+    await ctx.editMessageText(
+      globalSourceSettingsText('Stock watcher', stocks.length, 'stock'),
+      { reply_markup: globalSourceKeyboard(settings, 'ss') },
+    );
   });
   bot.command('schedule', async (ctx) => {
     const current = await chat(ctx.chat.id);
@@ -493,6 +492,15 @@ export const createStocksBot = (
         ctx.chat.id,
         progressMessage.message_id,
         `Run failed after ${formatRunDuration(result.durationMs)}: ${result.error}`,
+      );
+    if (
+      result.status === 'COMPLETED' &&
+      !hasReportableStockInformation(result.result)
+    )
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        progressMessage.message_id,
+        `Nothing new found.\nDuration: ${formatRunDuration(result.result.durationMs ?? 0)}`,
       );
   });
   bot.command('reconcile', async (ctx) => {

@@ -5,11 +5,20 @@ import { fetchText } from './utils/http.js';
 
 export type ZacksConfig = { symbol: string };
 
+const zacksRankSchema = z.preprocess(
+  (value) => (typeof value === 'number' ? String(value) : value),
+  z.enum(['1', '2', '3', '4', '5']).nullable().catch(null),
+);
+const zacksRankTextSchema = z
+  .enum(['Strong Buy', 'Buy', 'Hold', 'Sell', 'Strong Sell'])
+  .nullable()
+  .catch(null);
+
 const quoteSchema = z.object({
   ticker: z.string().min(1),
   name: z.string().min(1),
-  zacks_rank: z.string().regex(/^[1-5]$/),
-  zacks_rank_text: z.enum(['Strong Buy', 'Buy', 'Hold', 'Sell', 'Strong Sell']),
+  zacks_rank: zacksRankSchema,
+  zacks_rank_text: zacksRankTextSchema,
   last: z.string().min(1),
   net_change: z.string().min(1),
   percent_net_change: z.string().min(1),
@@ -54,6 +63,7 @@ export class ZacksSource implements Source<ZacksConfig> {
     const response = quoteResponseSchema.parse(JSON.parse(text));
     const quote = response[symbol];
     if (!quote) throw new Error(`Zacks quote was not found for ${symbol}`);
+    if (!quote.zacks_rank || !quote.zacks_rank_text) return [];
 
     const rank = `${quote.zacks_rank}-${quote.zacks_rank_text}`;
     const content = [

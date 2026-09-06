@@ -255,10 +255,12 @@ export const targetedStockAnalysisSchema = z.object({
   materiality: z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'EXTREME']),
   thesisChange: thesisChangeSchema,
   informationChange: informationChangeSchema,
-  reanalysisRequired: z.boolean(),
-  affectedSignalGroups: z.array(targetedSignalSchema),
-  catalystChange: z.enum(['ADDED', 'UPDATED', 'REMOVED', 'UNCHANGED']),
-  recommendationChange: z.boolean(),
+  reanalysisRequired: z.boolean().default(false),
+  affectedSignalGroups: z.array(targetedSignalSchema).default([]),
+  catalystChange: z
+    .enum(['ADDED', 'UPDATED', 'REMOVED', 'UNCHANGED'])
+    .catch('UNCHANGED'),
+  recommendationChange: z.boolean().default(false),
   primaryDriver: z.string().min(1),
   explanation: z.string().min(1),
   risks: z.array(z.string()),

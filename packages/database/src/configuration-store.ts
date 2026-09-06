@@ -1,35 +1,106 @@
 import type { DatabaseClient } from './client.js';
 import { PublicationSourceType } from './generated/prisma/enums.js';
-import type { StockSourceType } from './generated/prisma/enums.js';
+import { type StockSourceType } from './generated/prisma/enums.js';
 import { defaultStockSourceTypes } from './stock-source-defaults.js';
+import { prismaJson } from './utils/json.js';
+import {
+  effectiveSourceEnabled,
+  publicationSourceSettingsForChat,
+  sourceSettingsRecord,
+  stockSourceSettingsForChat,
+} from './utils/source-settings.js';
 
 export class ConfigurationStore {
   public constructor(private readonly db: DatabaseClient) {}
 
   public async listStocks(chatConfigId: string) {
-    const stocks = await this.db.stock.findMany({
+    let stocks = await this.db.stock.findMany({
       where: { chatConfigId },
-      include: { sources: true },
+      include: {
+        sources: true,
+        discoverySignals: {
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+          select: { source: true, trigger: true, reason: true },
+        },
+      },
       orderBy: { symbol: 'asc' },
     });
+    const globalSettings = await this.listStockSourceSettings(chatConfigId);
+    const enabledBySource = new Map(
+      globalSettings.map(({ source, enabled }) => [source, enabled]),
+    );
     const missingSources = stocks.flatMap((stock) => {
       const existing = new Set(stock.sources.map(({ source }) => source));
       return defaultStockSourceTypes.flatMap((source) =>
         existing.has(source)
           ? []
-          : [{ stockId: stock.id, source, enabled: true }],
+          : [
+              {
+                stockId: stock.id,
+                source,
+                enabled: enabledBySource.get(source) ?? true,
+              },
+            ],
       );
     });
-    if (missingSources.length === 0) return stocks;
-    await this.db.stockSourceConfig.createMany({
-      data: missingSources,
-      skipDuplicates: true,
-    });
-    return this.db.stock.findMany({
-      where: { chatConfigId },
-      include: { sources: true },
-      orderBy: { symbol: 'asc' },
-    });
+    if (missingSources.length > 0) {
+      await this.db.stockSourceConfig.createMany({
+        data: missingSources,
+        skipDuplicates: true,
+      });
+      stocks = await this.db.stock.findMany({
+        where: { chatConfigId },
+        include: {
+          sources: true,
+          discoverySignals: {
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+            select: { source: true, trigger: true, reason: true },
+          },
+        },
+        orderBy: { symbol: 'asc' },
+      });
+    }
+    const watchReasonPairs = stocks.flatMap((stock) =>
+      stock.watchReason
+        ? [{ ticker: stock.symbol, title: stock.watchReason }]
+        : [],
+    );
+    const watchEvents = watchReasonPairs.length
+      ? await this.db.canonicalEvent.findMany({
+          where: { OR: watchReasonPairs },
+          orderBy: { firstDetectedAt: 'desc' },
+          select: {
+            ticker: true,
+            title: true,
+            primaryEvidence: {
+              select: { source: true, sourceUrl: true, url: true },
+            },
+          },
+        })
+      : [];
+    const watchSourceByReason = new Map<
+      string,
+      { source: string; url: string }
+    >();
+    for (const event of watchEvents) {
+      const key = `${event.ticker}\u0000${event.title}`;
+      if (!watchSourceByReason.has(key)) {
+        watchSourceByReason.set(key, {
+          source: event.primaryEvidence.source,
+          url: event.primaryEvidence.sourceUrl ?? event.primaryEvidence.url,
+        });
+      }
+    }
+    return stocks.map((stock) => ({
+      ...stock,
+      watchReasonSource: stock.watchReason
+        ? (watchSourceByReason.get(
+            `${stock.symbol}\u0000${stock.watchReason}`,
+          ) ?? null)
+        : null,
+    }));
   }
 
   public updateStockCompany(
@@ -65,17 +136,59 @@ export class ConfigurationStore {
     return this.db.stock.deleteMany({ where: { chatConfigId, symbol } });
   }
 
-  public async toggleStockSource(stockId: string, source: StockSourceType) {
-    const current = await this.db.stockSourceConfig.findUniqueOrThrow({
-      where: { stockId_source: { stockId, source } },
-    });
-    return this.db.stockSourceConfig.update({
-      where: { id: current.id },
-      data: { enabled: !current.enabled },
+  public listStockSourceSettings(chatConfigId: string) {
+    return stockSourceSettingsForChat(this.db, chatConfigId);
+  }
+
+  public async toggleStockSourceForAll(
+    chatConfigId: string,
+    source: StockSourceType,
+  ) {
+    return this.db.$transaction(async (transaction) => {
+      const watcher = await transaction.watcherConfig.findUniqueOrThrow({
+        where: { chatConfigId },
+        select: { id: true, sourceSettings: true },
+      });
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${watcher.id}), hashtext(${source}))`;
+      const existing = await transaction.stockSourceConfig.findMany({
+        where: { source, stock: { chatConfigId } },
+        select: { enabled: true },
+      });
+      const settings = sourceSettingsRecord(watcher.sourceSettings);
+      const enabled = !effectiveSourceEnabled(
+        settings,
+        source,
+        existing.map((entry) => entry.enabled),
+      );
+      const stocks = await transaction.stock.findMany({
+        where: { chatConfigId },
+        select: { id: true },
+      });
+      if (stocks.length > 0) {
+        await transaction.stockSourceConfig.createMany({
+          data: stocks.map((stock) => ({ stockId: stock.id, source, enabled })),
+          skipDuplicates: true,
+        });
+        await transaction.stockSourceConfig.updateMany({
+          where: { source, stock: { chatConfigId } },
+          data: { enabled },
+        });
+      }
+      await transaction.watcherConfig.update({
+        where: { id: watcher.id },
+        data: {
+          sourceSettings: prismaJson({ ...settings, [source]: enabled }),
+        },
+      });
+      return { source, enabled, affectedCount: stocks.length };
     });
   }
 
-  public addQuery(chatConfigId: string, query: string) {
+  public async addQuery(chatConfigId: string, query: string) {
+    const settings = await this.listPublicationSourceSettings(chatConfigId);
+    const enabledBySource = new Map(
+      settings.map(({ source, enabled }) => [source, enabled]),
+    );
     return this.db.publicationQuery.create({
       data: {
         chatConfigId,
@@ -84,7 +197,7 @@ export class ConfigurationStore {
         sources: {
           create: Object.values(PublicationSourceType).map((source) => ({
             source,
-            enabled: true,
+            enabled: enabledBySource.get(source) ?? true,
           })),
         },
       },
@@ -104,6 +217,10 @@ export class ConfigurationStore {
     if (!normalizedQueries.length) {
       return { addedCount: 0, skippedCount: 0, totalCount: 0 };
     }
+    const settings = await this.listPublicationSourceSettings(chatConfigId);
+    const enabledBySource = new Map(
+      settings.map(({ source, enabled }) => [source, enabled]),
+    );
     return this.db.$transaction(async (transaction) => {
       const created = await transaction.publicationQuery.createMany({
         data: [...uniqueQueries].map(([normalizedQuery, query]) => ({
@@ -122,7 +239,7 @@ export class ConfigurationStore {
           Object.values(PublicationSourceType).map((source) => ({
             queryId: id,
             source,
-            enabled: true,
+            enabled: enabledBySource.get(source) ?? true,
           })),
         ),
         skipDuplicates: true,
@@ -135,12 +252,42 @@ export class ConfigurationStore {
     });
   }
 
-  public listQueries(chatConfigId: string) {
-    return this.db.publicationQuery.findMany({
+  public async listQueries(chatConfigId: string) {
+    let queries = await this.db.publicationQuery.findMany({
       where: { chatConfigId },
       include: { sources: true },
       orderBy: { query: 'asc' },
     });
+    const settings = await this.listPublicationSourceSettings(chatConfigId);
+    const enabledBySource = new Map(
+      settings.map(({ source, enabled }) => [source, enabled]),
+    );
+    const missingSources = queries.flatMap((query) => {
+      const existing = new Set(query.sources.map(({ source }) => source));
+      return Object.values(PublicationSourceType).flatMap((source) =>
+        existing.has(source)
+          ? []
+          : [
+              {
+                queryId: query.id,
+                source,
+                enabled: enabledBySource.get(source) ?? true,
+              },
+            ],
+      );
+    });
+    if (missingSources.length > 0) {
+      await this.db.publicationSourceConfig.createMany({
+        data: missingSources,
+        skipDuplicates: true,
+      });
+      queries = await this.db.publicationQuery.findMany({
+        where: { chatConfigId },
+        include: { sources: true },
+        orderBy: { query: 'asc' },
+      });
+    }
+    return queries;
   }
 
   public removeQuery(chatConfigId: string, query: string) {
@@ -149,16 +296,55 @@ export class ConfigurationStore {
     });
   }
 
-  public async togglePublicationSource(
-    queryId: string,
+  public listPublicationSourceSettings(chatConfigId: string) {
+    return publicationSourceSettingsForChat(this.db, chatConfigId);
+  }
+
+  public async togglePublicationSourceForAll(
+    chatConfigId: string,
     source: PublicationSourceType,
   ) {
-    const current = await this.db.publicationSourceConfig.findUniqueOrThrow({
-      where: { queryId_source: { queryId, source } },
-    });
-    return this.db.publicationSourceConfig.update({
-      where: { id: current.id },
-      data: { enabled: !current.enabled },
+    return this.db.$transaction(async (transaction) => {
+      const watcher = await transaction.watcherConfig.findUniqueOrThrow({
+        where: { chatConfigId },
+        select: { id: true, sourceSettings: true },
+      });
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${watcher.id}), hashtext(${source}))`;
+      const existing = await transaction.publicationSourceConfig.findMany({
+        where: { source, query: { chatConfigId } },
+        select: { enabled: true },
+      });
+      const settings = sourceSettingsRecord(watcher.sourceSettings);
+      const enabled = !effectiveSourceEnabled(
+        settings,
+        source,
+        existing.map((entry) => entry.enabled),
+      );
+      const queries = await transaction.publicationQuery.findMany({
+        where: { chatConfigId },
+        select: { id: true },
+      });
+      if (queries.length > 0) {
+        await transaction.publicationSourceConfig.createMany({
+          data: queries.map((query) => ({
+            queryId: query.id,
+            source,
+            enabled,
+          })),
+          skipDuplicates: true,
+        });
+        await transaction.publicationSourceConfig.updateMany({
+          where: { source, query: { chatConfigId } },
+          data: { enabled },
+        });
+      }
+      await transaction.watcherConfig.update({
+        where: { id: watcher.id },
+        data: {
+          sourceSettings: prismaJson({ ...settings, [source]: enabled }),
+        },
+      });
+      return { source, enabled, affectedCount: queries.length };
     });
   }
 }

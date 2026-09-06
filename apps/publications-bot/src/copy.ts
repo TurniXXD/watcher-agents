@@ -2,7 +2,7 @@ const scheduleExample = '/schedule 0 8 * * * Europe/Prague';
 
 export const publicationsHelp = `/about — what the publications bot does and how to use it
 /addqueries — import topics from an attached CSV file
-/addquery TOPIC — add a topic (all sources enabled by default)
+/addquery TOPIC — add a topic using the global source settings
 /help — show this command list
 /listsources — list available sources and provider links
 /pause — pause scheduled runs
@@ -38,7 +38,7 @@ Publications Watcher is a private, self-hosted Telegram research assistant for f
 *How to use it*
 1. Add a topic with \`/addquery TOPIC\`, or import many topics by attaching a CSV to \`/addqueries\`.
 2. Review configured topics with \`/queries\`.
-3. Use \`/sources\` to control providers per topic and \`/listsources\` to review provider coverage.
+3. Use \`/sources\` to control providers globally for every current and future topic, and \`/listsources\` to review provider coverage.
 4. Run \`/run\` for an immediate search, or configure recurring checks with \`/schedule CRON TIMEZONE\`.
 5. Check \`/status\` for scheduling state. Use \`/pause\` and \`/resume\` without losing topics or source settings.
 6. Remove a topic with \`/removequery TOPIC\` when it is no longer relevant.

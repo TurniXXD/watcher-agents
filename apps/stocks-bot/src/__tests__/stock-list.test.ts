@@ -31,7 +31,18 @@ describe('stock list rendering', () => {
         autoDiscovered: true,
         attentionScore: 98,
         investigateUntil: new Date('2026-09-05T21:16:44.725Z'),
-        watchReason: '+44.66% price move on 4,353,325 shares',
+        watchReason: 'American Outdoor Brands, Inc.: 10-Q',
+        discoverySignals: [
+          {
+            source: 'ALPHA_VANTAGE_MARKET_MOVERS',
+            trigger: 'PRICE_MOVE',
+            reason: '+44.66% price move on 4,353,325 shares',
+          },
+        ],
+        watchReasonSource: {
+          source: 'SEC',
+          url: 'https://www.sec.gov/Archives/example-10q.htm',
+        },
       }),
       stock('MU', { enabled: false }),
     ]);
@@ -48,7 +59,16 @@ describe('stock list rendering', () => {
       '⏳ <b>Investigation until:</b> 2026-09-05 21:16:44 UTC',
     );
     expect(text).toContain(
-      '📝 <b>Reason:</b> +44.66% price move on 4,353,325 shares',
+      '🌐 <b>Discovery source:</b> <a href="https://www.alphavantage.co/">Alpha Vantage Market Movers</a> · Price Move',
+    );
+    expect(text).toContain(
+      '💡 <b>Discovery reason:</b> +44.66% price move on 4,353,325 shares',
+    );
+    expect(text).toContain(
+      '📝 <b>Reason:</b> American Outdoor Brands, Inc.: 10-Q',
+    );
+    expect(text).toContain(
+      '📰 <b>Watch source:</b> <a href="https://www.sec.gov/Archives/example-10q.htm">SEC</a>',
     );
     expect(text).toContain('⏸ <b>MU</b>');
   });

@@ -58,7 +58,7 @@ const configuration: BriefingConfiguration = {
 describe('briefing onboarding copy and transitions', () => {
   it('advances through every persisted onboarding step', () => {
     expect(nextOnboardingStep('LOCATION')).toBe('VOICE');
-    expect(nextOnboardingStep('VOICE')).toBe('GOOGLE_CALENDAR');
+    expect(nextOnboardingStep('VOICE')).toBe('SUBSCRIPTIONS');
     expect(nextOnboardingStep('GOOGLE_CALENDAR')).toBe('SUBSCRIPTIONS');
     expect(nextOnboardingStep('SUBSCRIPTIONS')).toBe('BRIEFING_TIME');
     expect(nextOnboardingStep('BRIEFING_TIME')).toBe('COMPLETE');
@@ -74,7 +74,10 @@ describe('briefing onboarding copy and transitions', () => {
   });
 
   it('keeps the documented command list alphabetical', () => {
-    const commands = briefingHelp.split('\n').map((line) => line.split(' ')[0]);
+    const commands = briefingHelp
+      .split('\n')
+      .map((line) => line.split(' ')[0] ?? '');
     expect(commands).toEqual([...commands].sort());
+    expect(commands.every((command) => !command.includes('-'))).toBe(true);
   });
 });

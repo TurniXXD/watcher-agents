@@ -6,7 +6,6 @@ import type {
 const steps: BriefingOnboardingStepId[] = [
   'LOCATION',
   'VOICE',
-  'GOOGLE_CALENDAR',
   'SUBSCRIPTIONS',
   'BRIEFING_TIME',
   'COMPLETE',
@@ -14,8 +13,14 @@ const steps: BriefingOnboardingStepId[] = [
 
 export const nextOnboardingStep = (
   current: BriefingOnboardingStepId,
-): BriefingOnboardingStepId =>
-  steps[Math.min(steps.indexOf(current) + 1, steps.length - 1)] ?? 'COMPLETE';
+): BriefingOnboardingStepId => {
+  // Keep accepting the persisted legacy step, but do not make Calendar part
+  // of the required onboarding sequence.
+  if (current === 'GOOGLE_CALENDAR') return 'SUBSCRIPTIONS';
+  return (
+    steps[Math.min(steps.indexOf(current) + 1, steps.length - 1)] ?? 'COMPLETE'
+  );
+};
 
 export const renderConfiguration = (
   configuration: BriefingConfiguration,
@@ -46,30 +51,30 @@ export const renderConfiguration = (
 
 export const briefingHelp = [
   '/briefing — generate a briefing now',
-  '/briefing-duration MINUTES — set target length',
-  '/briefing-max-duration MINUTES — set hard maximum length',
-  '/briefing-settings — show briefing configuration',
-  '/briefing-test — generate a short test briefing',
-  '/briefing-time HH:mm — set local delivery time',
-  '/briefing-transcript on|off — configure text transcript',
-  '/calendar-connect — connect Google Calendar',
-  '/calendar-disconnect — disconnect Google Calendar',
-  '/calendar-refresh — refresh Calendar status',
-  '/calendar-status — show Calendar status',
+  '/briefing_duration MINUTES — set target length',
+  '/briefing_max_duration MINUTES — set hard maximum length',
+  '/briefing_settings — show briefing configuration',
+  '/briefing_test — generate a short test briefing',
+  '/briefing_time HH:mm — set local delivery time',
+  '/briefing_transcript on|off — configure text transcript',
+  '/calendar_connect — connect Google Calendar',
+  '/calendar_disconnect — disconnect Google Calendar',
+  '/calendar_refresh — refresh Calendar status',
+  '/calendar_status — show Calendar status',
   '/help — show commands',
   '/location — show saved location',
-  '/location-clear — disable location',
-  '/location-set — location setup instructions',
-  '/location-status — show saved location',
+  '/location_clear — disable location',
+  '/location_set — location setup instructions',
+  '/location_status — show saved location',
   '/settings — show briefing configuration',
   '/start — start or resume onboarding',
   '/subscribe WATCHER — enable stocks or medical',
-  '/subscribe-all — enable all watchers',
+  '/subscribe_all — enable all watchers',
   '/subscriptions — show watcher subscriptions',
   '/unsubscribe WATCHER — disable stocks or medical',
-  '/unsubscribe-all — disable all watchers',
+  '/unsubscribe_all — disable all watchers',
   '/voice — show selected voice',
-  '/voice-list — list supported voices',
-  '/voice-preview VOICE — preview a voice',
-  '/voice-set VOICE — select a voice',
+  '/voice_list — list supported voices',
+  '/voice_preview VOICE — preview a voice',
+  '/voice_set VOICE — select a voice',
 ].join('\n');

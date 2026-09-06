@@ -122,6 +122,27 @@ describe('ZacksSource', () => {
       'Zacks quote was not found for MU',
     );
   });
+
+  it('treats a covered ticker without a current Zacks rank as no result', async () => {
+    const source = new ZacksSource(
+      vi.fn(async () =>
+        Response.json({
+          BANL: {
+            ticker: 'BANL',
+            name: 'CBL International Ltd',
+            zacks_rank: 'N/A',
+            zacks_rank_text: 'Not Ranked',
+            last: '1.23',
+            net_change: '0.00',
+            percent_net_change: '0.00',
+            updated: 'Sep 06, 2026 04:00 PM',
+          },
+        }),
+      ),
+    );
+
+    await expect(source.fetch({ symbol: 'BANL' })).resolves.toEqual([]);
+  });
 });
 
 describe('TradingViewNewsSource', () => {

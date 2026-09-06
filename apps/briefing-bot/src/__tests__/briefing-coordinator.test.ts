@@ -8,11 +8,11 @@ import type { BriefingDeliveryInput } from '../delivery.js';
 
 const now = new Date('2026-09-06T05:00:00.000Z');
 
-const configuration = (): BriefingConfiguration => ({
+const configuration = (onboardingCompleted = true): BriefingConfiguration => ({
   settings: {
     id: 'settings-1',
     telegramChatId: '123',
-    onboardingComplete: true,
+    onboardingComplete: onboardingCompleted,
     language: 'en',
     voice: 'amy',
     timezone: 'Europe/Prague',
@@ -40,8 +40,8 @@ const configuration = (): BriefingConfiguration => ({
     updatedAt: now.toISOString(),
   },
   onboarding: {
-    completed: true,
-    currentStep: 'COMPLETE',
+    completed: onboardingCompleted,
+    currentStep: onboardingCompleted ? 'COMPLETE' : 'VOICE',
     updatedAt: now.toISOString(),
   },
 });
@@ -74,6 +74,7 @@ const dependencies = (
   options: {
     ttsFails?: boolean;
     watcherHealth?: 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE';
+    onboardingCompleted?: boolean;
   } = {},
 ) => {
   const seen = new Map<string, BriefingRunRecord>();
@@ -135,7 +136,9 @@ const dependencies = (
   };
   return {
     value: {
-      configuration: { ensure: async () => configuration() },
+      configuration: {
+        ensure: async () => configuration(options.onboardingCompleted ?? true),
+      },
       runs,
       storyStates: { save: vi.fn() },
       storyEngine: {
@@ -198,6 +201,26 @@ const dependencies = (
 };
 
 describe('BriefingCoordinator', () => {
+  it('allows a manual briefing before optional onboarding is complete', async () => {
+    const setup = dependencies({ onboardingCompleted: false });
+    const coordinator = new BriefingCoordinator(setup.value);
+
+    const result = await coordinator.generate(123n, 'MANUAL');
+
+    expect(result.run.status).toBe('SUCCESS');
+    expect(setup.starts).toHaveLength(1);
+  });
+
+  it('keeps scheduled delivery disabled until onboarding is complete', async () => {
+    const setup = dependencies({ onboardingCompleted: false });
+    const coordinator = new BriefingCoordinator(setup.value);
+
+    await expect(coordinator.generate(123n, 'SCHEDULED', now)).rejects.toThrow(
+      'Complete onboarding with /start before enabling scheduled briefings',
+    );
+    expect(setup.starts).toHaveLength(0);
+  });
+
   it('delivers a scheduled occurrence once and uses the prior scheduled window', async () => {
     const setup = dependencies();
     setup.runs.lastSuccessfulScheduled.mockResolvedValue({

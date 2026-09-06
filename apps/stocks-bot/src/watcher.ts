@@ -23,12 +23,12 @@ import {
   ZacksSource,
   type SecEdgarSource,
 } from './sources/index.js';
-import {
-  formatRunDuration,
-  renderStockDigest,
-  sendSplitMessage,
-} from '@watcher/telegram';
+import { renderStockDigest, sendSplitMessage } from '@watcher/telegram';
 import type { Api } from 'grammy';
+import {
+  hasReportableStockInformation,
+  reportableStockResult,
+} from './run-output.js';
 
 const stockDisplayName = (stock: {
   symbol: string;
@@ -113,13 +113,14 @@ export const createStocksRunner = (
     }
     try {
       const company = await sec.lookupCompanyProfile(stock.symbol);
-      return store.updateStockCompany(stock.id, {
+      const updated = await store.updateStockCompany(stock.id, {
         companyName: company.companyName,
         cik: company.cik,
         exchange: company.exchange,
         industry: company.industry,
         investorRelationsUrl: company.investorRelationsUrl,
       });
+      return { ...stock, ...updated };
     } catch {
       return stock;
     }
@@ -298,17 +299,13 @@ export const createStocksRunner = (
   const notify = async (
     chatId: bigint,
     result: PipelineResult,
-    manual: boolean,
   ): Promise<void> => {
-    if (result.newItemCount === 0 && result.sourceFailures.length === 0) {
-      if (manual)
-        await api.sendMessage(
-          chatId.toString(),
-          `Nothing new found.\nDuration: ${formatRunDuration(result.durationMs ?? 0)}`,
-        );
-      return;
-    }
-    await sendSplitMessage(api, chatId, renderStockDigest(result));
+    if (!hasReportableStockInformation(result)) return;
+    await sendSplitMessage(
+      api,
+      chatId,
+      renderStockDigest(reportableStockResult(result)),
+    );
   };
   return new WatcherRunner(
     'STOCKS',
