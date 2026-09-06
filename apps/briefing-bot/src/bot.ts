@@ -152,17 +152,21 @@ export const createBriefingBot = (
       : callback
         ? 'Briefing bot callback received'
         : 'Briefing bot update received';
-    (command || callback ? logger?.info : logger?.debug)?.(fields, message);
+    if (command || callback) logger?.info(fields, message);
+    else logger?.debug(fields, message);
     try {
       await next();
-      (command || callback ? logger?.info : logger?.debug)?.(
-        { ...fields, durationMs: Date.now() - startedAt },
-        command
-          ? 'Briefing bot command completed'
-          : callback
-            ? 'Briefing bot callback completed'
-            : 'Briefing bot update completed',
-      );
+      const completedFields = {
+        ...fields,
+        durationMs: Date.now() - startedAt,
+      };
+      const completedMessage = command
+        ? 'Briefing bot command completed'
+        : callback
+          ? 'Briefing bot callback completed'
+          : 'Briefing bot update completed';
+      if (command || callback) logger?.info(completedFields, completedMessage);
+      else logger?.debug(completedFields, completedMessage);
     } catch (error) {
       logger?.error(
         { ...fields, err: error, durationMs: Date.now() - startedAt },

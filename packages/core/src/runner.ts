@@ -171,11 +171,7 @@ export class WatcherRunner {
         percent: 100,
         step: 'Complete',
       });
-      if (
-        trigger === 'MANUAL' ||
-        result.newItemCount > 0 ||
-        result.sourceFailures.length > 0
-      ) {
+      if (trigger === 'MANUAL' || result.newItemCount > 0) {
         this.logger?.info(
           {
             kind: this.kind,
@@ -187,6 +183,17 @@ export class WatcherRunner {
           'Sending watcher run notification',
         );
         await this.notify(chatId, result, trigger === 'MANUAL');
+      } else {
+        this.logger?.info(
+          {
+            kind: this.kind,
+            configId,
+            runId: run.id,
+            trigger,
+            sourceFailureCount: result.sourceFailures.length,
+          },
+          'Watcher run notification suppressed because no new content was found',
+        );
       }
       this.logger?.info(
         {

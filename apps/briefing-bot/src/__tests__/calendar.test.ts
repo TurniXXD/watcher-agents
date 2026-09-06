@@ -39,10 +39,14 @@ describe('Google Calendar integration', () => {
   it('encrypts refresh tokens with authenticated encryption', () => {
     const cipher = new CalendarCredentialCipher(encryptionKey);
     const encrypted = cipher.encrypt('refresh-secret');
+    const parts = encrypted.split('.');
+    const ciphertext = Buffer.from(parts[3]!, 'base64url');
+    ciphertext[0] = ciphertext[0]! ^ 1;
+    parts[3] = ciphertext.toString('base64url');
 
     expect(encrypted).not.toContain('refresh-secret');
     expect(cipher.decrypt(encrypted)).toBe('refresh-secret');
-    expect(() => cipher.decrypt(`${encrypted.slice(0, -1)}x`)).toThrow();
+    expect(() => cipher.decrypt(parts.join('.'))).toThrow();
   });
 
   it('uses state-bound offline OAuth and never persists a plaintext token', async () => {

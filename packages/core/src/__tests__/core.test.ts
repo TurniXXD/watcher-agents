@@ -568,6 +568,58 @@ describe('core watcher behavior', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  it('keeps scheduled source-only failures silent when no new content was found', async () => {
+    const notify = vi.fn(async () => undefined);
+    const store = {
+      claimRun: vi.fn(async () => ({ id: 'scheduled-run' })),
+      finishRun: vi.fn(async () => undefined),
+      recordSourceFailures: vi.fn(async () => undefined),
+    };
+    const runner = new WatcherRunner(
+      'STOCKS',
+      new WatcherPipeline(
+        {
+          prepareItemsForRun: vi.fn(async () => []),
+          saveAnalysis: vi.fn(async () => undefined),
+        },
+        { analyze: vi.fn() },
+      ),
+      store,
+      async () => [
+        {
+          source: {
+            id: 'NEWS',
+            fetch: vi.fn(async () => {
+              throw new Error('RATE_LIMITED provider backoff active');
+            }),
+          },
+          target: 'GRNQ',
+          config: {},
+        },
+      ],
+      notify,
+    );
+
+    await expect(
+      runner.execute('config', 1n, 'SCHEDULED'),
+    ).resolves.toMatchObject({
+      status: 'COMPLETED',
+      result: {
+        newItemCount: 0,
+        sourceFailures: [
+          expect.objectContaining({ source: 'NEWS', target: 'GRNQ' }),
+        ],
+      },
+    });
+
+    expect(notify).not.toHaveBeenCalled();
+    expect(store.finishRun).toHaveBeenCalledWith(
+      'config',
+      'scheduled-run',
+      expect.objectContaining({ status: 'PARTIAL', newItemCount: 0 }),
+    );
+  });
+
   it('reports fatal watcher failures to the lifecycle observer', async () => {
     const afterFailure = vi.fn(async () => undefined);
     const store = {
