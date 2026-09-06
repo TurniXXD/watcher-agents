@@ -505,4 +505,49 @@ describe('core watcher behavior', () => {
     );
     expect(notify).not.toHaveBeenCalled();
   });
+
+  it('reports fatal watcher failures to the lifecycle observer', async () => {
+    const afterFailure = vi.fn(async () => undefined);
+    const store = {
+      claimRun: vi.fn(async () => ({ id: 'failed-run' })),
+      finishRun: vi.fn(async () => undefined),
+      recordSourceFailures: vi.fn(async () => undefined),
+    };
+    const runner = new WatcherRunner(
+      'PUBLICATIONS',
+      new WatcherPipeline(
+        {
+          prepareItemsForRun: vi.fn(async () => {
+            throw new Error('database unavailable');
+          }),
+          saveAnalysis: vi.fn(async () => undefined),
+        },
+        { analyze: vi.fn() },
+      ),
+      store,
+      async () => [
+        {
+          source: { id: 'PUBMED', fetch: vi.fn(async () => []) },
+          target: 'query',
+          config: {},
+        },
+      ],
+      vi.fn(),
+      undefined,
+      undefined,
+      afterFailure,
+    );
+
+    await expect(runner.execute('config', 1n, 'SCHEDULED')).resolves.toEqual(
+      expect.objectContaining({
+        status: 'FAILED',
+        error: 'database unavailable',
+      }),
+    );
+    expect(afterFailure).toHaveBeenCalledWith(
+      1n,
+      'database unavailable',
+      'failed-run',
+    );
+  });
 });

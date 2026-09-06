@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { parseDate, type Source, type WatchItem } from '@watcher/core';
 import { z } from 'zod';
-import { fetchText } from './http.js';
+import { fetchText } from './utils/http.js';
 
 const responseSchema = z.object({
   articles: z

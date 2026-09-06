@@ -7,6 +7,8 @@ import {
 } from './core/index.js';
 import {
   CompanyUniverseStore,
+  BriefingWatcherHealthStore,
+  PostgresBriefingEventRepository,
   StockDiscoveryStore,
   createDatabaseClient,
   WatcherStore,
@@ -27,9 +29,12 @@ import { StockDiscoveryCoordinator } from './discovery.js';
 import { env } from './env.js';
 import { StockReconciliationCoordinator } from './reconciliation.js';
 import { createStocksRunner } from './watcher.js';
+import { publishStockBriefingEvents } from './briefing-publisher.js';
 
 const logger = createLogger('stocks-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
+const briefingEvents = new PostgresBriefingEventRepository(database, logger);
+const briefingWatcherHealth = new BriefingWatcherHealthStore(database);
 const availableStockSourceIds = new Set([
   'SEC',
   'INVESTOR_RELATIONS',
@@ -156,6 +161,26 @@ const runner = createStocksRunner(
   env.OLLAMA_MAX_ITEMS_PER_RUN,
   logger,
   async (chatId, result) => {
+    const publication = await publishStockBriefingEvents(
+      briefingEvents,
+      result,
+      logger,
+    );
+    logger.info(publication, 'Stock briefing events published');
+    const health = await briefingWatcherHealth.recordRun({
+      watcherBot: 'stocks',
+      degraded:
+        result.sourceFailures.length > 0 ||
+        result.failedAnalysisCount > 0 ||
+        publication.failed > 0,
+      eventsEmitted: publication.published,
+      failedEventPublications: publication.failed,
+      sourceFailures: result.sourceFailures.length,
+    });
+    logger.info(
+      { watcherBot: health.watcherBot, watcherHealth: health.status },
+      'Briefing producer health updated',
+    );
     const chatConfig = await store.getChat('STOCKS', chatId);
     if (chatConfig) {
       await discoveryStore.escalateAttentionSignals(
@@ -183,6 +208,16 @@ const runner = createStocksRunner(
         }
       }
     }
+  },
+  async (_chatId, error) => {
+    const health = await briefingWatcherHealth.recordFailure({
+      watcherBot: 'stocks',
+      error,
+    });
+    logger.warn(
+      { watcherBot: health.watcherBot, watcherHealth: health.status },
+      'Briefing producer marked unavailable',
+    );
   },
 );
 runtime.runner = runner;

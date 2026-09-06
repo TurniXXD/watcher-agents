@@ -57,6 +57,11 @@ export const createStocksRunner = (
     result: PipelineResult,
     runId: string,
   ) => Promise<void>,
+  afterFailure?: (
+    chatId: bigint,
+    error: string,
+    runId: string,
+  ) => Promise<void>,
 ): WatcherRunner => {
   const price = new StooqPriceSource();
   const investorRelations = new InvestorRelationsSource();
@@ -313,5 +318,6 @@ export const createStocksRunner = (
     notify,
     logger,
     afterRun,
+    afterFailure,
   );
 };

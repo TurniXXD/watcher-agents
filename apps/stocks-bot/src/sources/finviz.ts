@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { parseDate, type Source, type WatchItem } from '@watcher/core';
-import { fetchText, htmlAttribute, stripHtml } from './http.js';
+import { fetchText, htmlAttribute, stripHtml } from './utils/http.js';
 
 export type FinvizConfig = { symbol: string; maxItems?: number };
 

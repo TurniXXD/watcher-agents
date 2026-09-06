@@ -11,7 +11,7 @@ import {
   fetchText,
   normalizeWhitespace,
   stripHtml,
-} from './http.js';
+} from './utils/http.js';
 
 export type TradingViewNewsConfig = {
   symbol: string;

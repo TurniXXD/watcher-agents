@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isAuthorized, parseAllowedUserIds } from '../authorization.js';
-import { parsePublicationQueriesCsv } from '../input.js';
-import { escapeHtml, htmlText, optionalSourceLink } from '../html.js';
+import { escapeHtml, htmlText, optionalSourceLink } from '../utils/html.js';
+import { parsePublicationQueriesCsv } from '../utils/input.js';
 import {
   formatRunDuration,
   renderCatalystList,

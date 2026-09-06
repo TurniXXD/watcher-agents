@@ -113,5 +113,39 @@ services:
         max-file: '3'
         max-size: 10m
 
+  briefing-bot:
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    command: ['node', 'apps/briefing-bot/dist/index.js']
+    env_file:
+      - ./deploy/runtime/briefing-bot.env
+    environment:
+      NODE_ENV: production
+    ports:
+      - '127.0.0.1:8789:8789'
+    volumes:
+      - ./deploy/piper-voices:/data/piper:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '-e', 'process.kill(1, 0)']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=512m
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+
 volumes:
   watcher-postgres:

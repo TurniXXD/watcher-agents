@@ -1,5 +1,5 @@
 import type { Source, WatchItem } from '@watcher/core';
-import { fetchText } from './http.js';
+import { fetchText } from './utils/http.js';
 
 export class StooqPriceSource implements Source<{ symbol: string }> {
   public readonly id = 'PRICE';

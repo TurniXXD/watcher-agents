@@ -1,4 +1,4 @@
-import { escapeHtml } from './html.js';
+import { escapeHtml } from './utils/html.js';
 
 const percent = (value: number | null): string =>
   value === null ? 'n/a' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;

@@ -1,6 +1,6 @@
 import type { Source, WatchItem } from '@watcher/core';
-import { fetchPublicText, htmlAttribute } from './http.js';
-import { assertPublicHttpUrlResolved } from './network.js';
+import { fetchPublicText, htmlAttribute } from './utils/http.js';
+import { assertPublicHttpUrlResolved } from './utils/network.js';
 import { RssStockSource } from './rss.js';
 
 export type InvestorRelationsConfig = {

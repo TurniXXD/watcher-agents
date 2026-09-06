@@ -26,6 +26,16 @@ export const createPublicationsRunner = (
   api: Api,
   maxItemsPerRun: number,
   logger?: WatcherLogger,
+  afterRun?: (
+    chatId: bigint,
+    result: PipelineResult,
+    runId: string,
+  ) => Promise<void>,
+  afterFailure?: (
+    chatId: bigint,
+    error: string,
+    runId: string,
+  ) => Promise<void>,
 ): WatcherRunner => {
   const sources = {
     [PublicationSourceType.PUBMED]: new PubMedSource(),
@@ -79,5 +89,7 @@ export const createPublicationsRunner = (
     requestsForChat,
     notify,
     logger,
+    afterRun,
+    afterFailure,
   );
 };

@@ -1,13 +1,21 @@
 import { PersistentScheduler, createLogger } from '@watcher/core';
-import { createDatabaseClient, WatcherStore } from '@watcher/database';
+import {
+  createDatabaseClient,
+  BriefingWatcherHealthStore,
+  PostgresBriefingEventRepository,
+  WatcherStore,
+} from '@watcher/database';
 import { OllamaProvider } from '@watcher/llm';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { createPublicationsBot } from './bot.js';
 import { env } from './env.js';
 import { createPublicationsRunner } from './watcher.js';
+import { publishMedicalBriefingEvents } from './briefing-publisher.js';
 
 const logger = createLogger('publications-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
+const briefingEvents = new PostgresBriefingEventRepository(database, logger);
+const briefingWatcherHealth = new BriefingWatcherHealthStore(database);
 const store = new WatcherStore(database, {
   sourceBackoffBaseMs: env.SOURCE_BACKOFF_BASE_SECONDS * 1000,
   sourceBackoffMaximumMs: env.SOURCE_BACKOFF_MAX_MINUTES * 60_000,
@@ -40,6 +48,38 @@ const runner = createPublicationsRunner(
   bot.api,
   env.OLLAMA_MAX_ITEMS_PER_RUN,
   logger,
+  async (_chatId, result) => {
+    const publication = await publishMedicalBriefingEvents(
+      briefingEvents,
+      result,
+      logger,
+    );
+    logger.info(publication, 'Medical briefing events published');
+    const health = await briefingWatcherHealth.recordRun({
+      watcherBot: 'medical',
+      degraded:
+        result.sourceFailures.length > 0 ||
+        result.failedAnalysisCount > 0 ||
+        publication.failed > 0,
+      eventsEmitted: publication.published,
+      failedEventPublications: publication.failed,
+      sourceFailures: result.sourceFailures.length,
+    });
+    logger.info(
+      { watcherBot: health.watcherBot, watcherHealth: health.status },
+      'Briefing producer health updated',
+    );
+  },
+  async (_chatId, error) => {
+    const health = await briefingWatcherHealth.recordFailure({
+      watcherBot: 'medical',
+      error,
+    });
+    logger.warn(
+      { watcherBot: health.watcherBot, watcherHealth: health.status },
+      'Briefing producer marked unavailable',
+    );
+  },
 );
 runtime.runner = runner;
 const scheduler = new PersistentScheduler(

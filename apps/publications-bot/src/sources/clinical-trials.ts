@@ -1,6 +1,6 @@
 import type { Source, WatchItem } from '@watcher/core';
 import { z } from 'zod';
-import { fetchJson } from './http.js';
+import { fetchJson } from './utils/http.js';
 
 const responseSchema = z.object({
   studies: z.array(

@@ -1,6 +1,6 @@
 import type { Source, WatchItem } from '@watcher/core';
 import { z } from 'zod';
-import { fetchText, stripHtml } from './http.js';
+import { fetchText, stripHtml } from './utils/http.js';
 
 const tickersSchema = z.record(
   z.string(),

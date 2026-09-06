@@ -2,7 +2,7 @@
 
 Production deployment uses GitHub Actions, GitHub Container Registry (GHCR), Tailscale, OpenSSH, Docker Compose, and a server-managed runtime configuration. The `deploy-vps` workflow runs after `watcher-ci` succeeds on `main`; it can also be started manually from the Actions page.
 
-GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, and the one-shot `migrate` service. Ollama remains outside this Compose stack.
+GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `briefing-bot`, and the one-shot `migrate` service. Ollama remains outside this Compose stack.
 
 ## Security model
 
@@ -130,6 +130,7 @@ Runtime credentials are intentionally not uploaded by GitHub Actions. Create the
 | `deploy/runtime/migrate.env`          | Prisma migration database URL      |
 | `deploy/runtime/stocks-bot.env`       | Stocks bot runtime and credentials |
 | `deploy/runtime/publications-bot.env` | Publications bot runtime values    |
+| `deploy/runtime/briefing-bot.env`     | Morning briefing bot credentials   |
 
 You can copy the readable examples from `deploy/presets`, or render all files from environment variables:
 
@@ -141,6 +142,7 @@ cp deploy/presets/postgres.env.example deploy/runtime/postgres.env
 cp deploy/presets/migrate.env.example deploy/runtime/migrate.env
 cp deploy/presets/stocks-bot.env.example deploy/runtime/stocks-bot.env
 cp deploy/presets/publications-bot.env.example deploy/runtime/publications-bot.env
+cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
 chmod 600 deploy/runtime/*.env
 ```
 
@@ -159,7 +161,7 @@ Before enabling automatic deployment:
 1. Confirm the VPS can reach Ollama at the configured `OLLAMA_URL`.
 2. Apply the conservative Ollama systemd settings documented in the root README (`OLLAMA_NUM_PARALLEL=1`, one loaded model, and a small queue), then verify them with `systemctl show ollama` and `ollama ps`.
 3. Confirm the deployment user can run `docker compose version` without sudo.
-4. Confirm all five runtime env files exist and are mode `0600`.
+4. Confirm all six runtime env files exist and are mode `0600`, and install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`.
 5. Push the completed application to `main` and wait for `watcher-ci` to pass.
 6. Approve the `production` environment deployment if approval protection is enabled.
 
@@ -172,7 +174,7 @@ The workflow then:
 5. Starts PostgreSQL and waits for readiness.
 6. Creates a compressed pre-deployment database backup when the database already exists.
 7. Applies committed Prisma migrations.
-8. Starts both bots and waits for their health checks.
+8. Starts all three bots and waits for their health checks.
 9. Restores the prior image tag if the new containers fail health checks.
 
 Migrations must remain backward-compatible with the previous application image because container rollback does not reverse a database migration.
@@ -197,7 +199,7 @@ docker compose \
   --env-file deploy/runtime/compose.env \
   --env-file .release.env \
   -f docker-compose.production.yml \
-  logs --tail 200 stocks-bot publications-bot
+  logs --tail 200 stocks-bot publications-bot briefing-bot
 ```
 
 Backups are stored in `/opt/watcher/backups` and retained for 14 days by default. Override `BACKUP_RETENTION_DAYS` only when invoking `deploy/deploy.sh` manually.

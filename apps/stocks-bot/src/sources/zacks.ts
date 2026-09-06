@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Source, WatchItem } from '@watcher/core';
 import { z } from 'zod';
-import { fetchText } from './http.js';
+import { fetchText } from './utils/http.js';
 
 export type ZacksConfig = { symbol: string };
 

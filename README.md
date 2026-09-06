@@ -1,11 +1,12 @@
 # Watcher
 
-Watcher is a self-hosted, Telegram-only monitoring system for one operator. It runs two independent TypeScript bot processes on one Linux server:
+Watcher is a production-oriented, self-hosted, Telegram-only monitoring system for one operator. It runs three independent TypeScript bot processes on one Linux server:
 
 - **Stocks Watcher** monitors SEC filings, auto-discovered issuer feeds, GDELT news, TradingView symbol news, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, and price snapshots.
 - **Publications Watcher** monitors PubMed, bioRxiv, ClinicalTrials.gov, and openFDA results.
+- **Personal Morning Briefing** consumes meaningful normalized events from both watchers, combines them with optional weather and read-only Google Calendar context, and delivers a scheduled or manual spoken briefing through Telegram.
 
-Both bots share PostgreSQL, the same idempotent watcher pipeline, and an external Ollama instance. There is no web UI, Redis, host cron, or bundled Ollama service.
+The services share PostgreSQL and an external Ollama instance. There is no web UI, Redis, host cron, or bundled Ollama service. See [the Morning Briefing architecture and operations](docs/morning-briefing-architecture.md).
 
 ## How it works
 
@@ -18,14 +19,14 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
 - Node.js 24
 - pnpm 11.6.0
 - Docker Engine with Docker Compose v2 for the recommended local and production paths
-- Two private Telegram bots created with BotFather
+- Three private Telegram bots created with BotFather
 - Ollama reachable from the bot containers, with the configured model already pulled
 - An identifiable SEC user agent such as `Watcher/1.0 operator@example.com`
 - An Alpha Vantage API key if market-wide stock discovery should be enabled
 
 ## Quick start with Docker Compose
 
-1. Open `@BotFather` in Telegram, run `/newbot` twice, and keep the two resulting tokens separate. Disable group access if the bots do not need it. To find your numeric Telegram user ID, send a message to a reputable ID bot or call `https://api.telegram.org/bot<TOKEN>/getUpdates` once after messaging your new bot and read `message.from.id`. Put only trusted numeric IDs in `TELEGRAM_ALLOWED_USER_IDS`.
+1. Open `@BotFather` in Telegram, run `/newbot` three times, and keep the resulting tokens separate. Disable group access if the bots do not need it. To find your numeric Telegram user ID, call `https://api.telegram.org/bot<TOKEN>/getUpdates` once after messaging your new bot and read `message.from.id`. Put only trusted numeric IDs in `TELEGRAM_ALLOWED_USER_IDS`.
 
 2. Copy the environment template and fill in real values:
 
@@ -36,13 +37,19 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
 
 3. Make sure Ollama accepts connections from Docker. On Linux and Docker Desktop, the default URL is `http://host.docker.internal:11434`. Pull the configured model first, for example `ollama pull qwen3:8b`.
 
-4. Build, migrate, and start both bots:
+4. Download the accepted Piper voice models, then build, migrate, and start all bots:
 
    ```bash
+   PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh
    docker compose up -d --build
    docker compose ps
-   docker compose logs -f stocks-bot publications-bot
+   docker compose logs -f stocks-bot publications-bot briefing-bot
    ```
+
+   The installer includes `cs_CZ-jirka-medium`. The Briefing Bot keeps the
+   selected English voice for the main briefing and automatically switches to
+   Jirka for Calendar event sentences detected as Czech, then joins every
+   segment into one Opus voice message.
 
 PostgreSQL is not published to the host. Its data lives in the `watcher-postgres` named volume. The one-shot `migrate` service must complete before either bot starts.
 
@@ -89,60 +96,62 @@ Use `pnpm db:migrate -- --name <migration-name>` during schema development. Comm
 
 Every application variable is represented in `.env.example`.
 
-| Name                                                | Used by               | Meaning                                                                                       |
-| --------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------- |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | PostgreSQL            | Local Compose database initialization                                                         |
-| `DATABASE_URL`                                      | migrations, both bots | PostgreSQL connection URL                                                                     |
-| `STOCKS_TELEGRAM_TOKEN`                             | stocks bot            | BotFather token for the stocks bot                                                            |
-| `PUBLICATIONS_TELEGRAM_TOKEN`                       | publications bot      | BotFather token for the publications bot                                                      |
-| `TELEGRAM_ALLOWED_USER_IDS`                         | both bots             | Comma-separated Telegram numeric user IDs; every command and callback is denied unless listed |
-| `OLLAMA_URL`                                        | both bots             | Ollama base URL                                                                               |
-| `OLLAMA_MODEL`                                      | both bots             | Installed Ollama model name                                                                   |
-| `OLLAMA_KEEP_ALIVE`                                 | both bots             | How long Ollama keeps the model loaded; defaults to `5m`                                      |
-| `OLLAMA_MAX_ITEMS_PER_RUN`                          | both bots             | Maximum new items analyzed in one run; `0` means all new items and is the default             |
-| `OLLAMA_NUM_CTX`                                    | both bots             | Per-request context size; defaults to `4096`                                                  |
-| `OLLAMA_NUM_PREDICT`                                | both bots             | Maximum generated tokens per analysis; defaults to `768`                                      |
-| `OLLAMA_FULL_ANALYSIS_NUM_PREDICT`                  | stocks bot            | Output-token cap for the larger thesis/scenario response; defaults to `1536`                  |
-| `OLLAMA_RETRIES`                                    | both bots             | Retry count after a failed or invalid response; defaults to `1`                               |
-| `OLLAMA_THINK`                                      | both bots             | Enables model thinking output; defaults to `false` to avoid unnecessary compute               |
-| `OLLAMA_TIMEOUT_MS`                                 | both bots             | Per-attempt timeout, from 10–180 seconds; defaults to 120 seconds                             |
-| `SEC_USER_AGENT`                                    | stocks bot            | SEC-compliant app name and contact address                                                    |
-| `DEFAULT_TIMEZONE`                                  | both bots             | IANA timezone used for a newly created watcher                                                |
-| `LOG_LEVEL`                                         | both bots             | Pino log level, normally `info`                                                               |
-| `STOCK_EVENT_COOLDOWN_MINUTES`                      | stocks bot            | Same-event analysis cooldown; defaults to 360 minutes                                         |
-| `STOCK_TICKER_ANALYSIS_COOLDOWN_MINUTES`            | stocks bot            | Same-ticker analysis cooldown; defaults to 30 minutes                                         |
-| `SOURCE_BACKOFF_BASE_SECONDS`                       | both bots             | Initial source-failure backoff; defaults to 60 seconds                                        |
-| `SOURCE_BACKOFF_MAX_MINUTES`                        | both bots             | Maximum exponential source backoff; defaults to 360 minutes                                   |
-| `ALERT_ATTENTION_THRESHOLD`                         | stocks bot            | Attention score that creates a live alert when crossed; defaults to 85                        |
-| `RECONCILIATION_INTERVAL_MINUTES`                   | stocks bot            | Interval for comprehensive recovery scans; defaults to one day                                |
-| `VALIDATION_MIN_SAMPLE_SIZE`                        | stocks bot            | Completed 30-day samples required to mark signal statistics adequate; defaults to 20          |
-| `ALPHA_VANTAGE_API_KEY`                             | stocks bot            | Optional Alpha Vantage key for discovery and institutional holdings                           |
-| `ALPHA_VANTAGE_OPTIONS_ENABLED`                     | stocks bot            | Enables premium realtime option-chain requests; defaults to `false`                           |
-| `QUIVER_API_TOKEN`                                  | stocks bot            | Optional Quiver bearer token; leaving it empty disables Quiver requests                       |
-| `PRICE_ANOMALY_THRESHOLD_PERCENT`                   | stocks bot            | Absolute daily-return anomaly threshold; defaults to 4%                                       |
-| `GAP_ANOMALY_THRESHOLD_PERCENT`                     | stocks bot            | Absolute opening-gap anomaly threshold; defaults to 3%                                        |
-| `RELATIVE_VOLUME_ANOMALY_THRESHOLD`                 | stocks bot            | Relative-volume anomaly multiplier; defaults to 3                                             |
-| `VOLATILITY_EXPANSION_THRESHOLD`                    | stocks bot            | Current-move versus historical-volatility multiplier; defaults to 2                           |
-| `MARKET_BASELINE_MIN_SNAPSHOTS`                     | stocks bot            | Minimum stored volume snapshots before relative-volume detection; defaults to 5               |
-| `OPTIONS_VOLUME_OI_ANOMALY_THRESHOLD`               | stocks bot            | Contract option-volume/open-interest anomaly ratio; defaults to 2                             |
-| `OPTIONS_VOLUME_BASELINE_MULTIPLIER`                | stocks bot            | Aggregate options-volume anomaly versus recent baseline; defaults to 3                        |
-| `OPTIONS_BASELINE_MIN_SNAPSHOTS`                    | stocks bot            | Prior option snapshots required for an aggregate-volume baseline; defaults to 3               |
-| `INSTITUTIONAL_CHANGE_THRESHOLD_PERCENT`            | stocks bot            | Absolute institutional holdings-change threshold; defaults to 5%                              |
-| `SHORT_INTEREST_CHANGE_THRESHOLD_PERCENT`           | stocks bot            | Absolute reported short-interest change threshold; defaults to 10%                            |
-| `SHORT_INTEREST_DAYS_TO_COVER_THRESHOLD`            | stocks bot            | Days-to-cover threshold for a short-interest anomaly; defaults to 5                           |
-| `DISCOVERY_MARKET_DATA_ENTITLEMENT`                 | stocks bot            | `EOD`, `DELAYED`, or `REALTIME`; must match the key's market-data entitlement                 |
-| `DISCOVERY_SCAN_INTERVAL_MINUTES`                   | stocks bot            | Market-wide scan interval; defaults to one day                                                |
-| `DISCOVERY_MOVE_THRESHOLD_PERCENT`                  | stocks bot            | Minimum absolute move for a discovery candidate; defaults to 4%                               |
-| `DISCOVERY_MIN_PRICE`                               | stocks bot            | Minimum candidate price; defaults to 2                                                        |
-| `DISCOVERY_MIN_VOLUME`                              | stocks bot            | Minimum current snapshot volume; defaults to 100,000                                          |
-| `DISCOVERY_MIN_DOLLAR_VOLUME`                       | stocks bot            | Minimum price × volume; defaults to 1,000,000                                                 |
-| `DISCOVERY_MAX_CANDIDATES`                          | stocks bot            | Maximum candidates investigated per market-wide scan; defaults to 10                          |
-| `DISCOVERY_SUPPORTED_EXCHANGES`                     | stocks bot            | Comma-separated SEC exchange names accepted by discovery                                      |
-| `DISCOVERY_EXCLUDE_OTC`                             | stocks bot            | Reject SEC profiles whose exchange contains `OTC`; defaults to true                           |
-| `DISCOVERY_INVESTIGATION_MINUTES`                   | stocks bot            | Time allowed for a temporary investigation; defaults to 90 minutes                            |
-| `DISCOVERY_HIGH_RESOLUTION_INTERVAL_MINUTES`        | stocks bot            | Interval for SEC/IR/GDELT/TradingView/price checks while escalated; defaults to 5 minutes     |
-| `DISCOVERY_EVENT_MODE_MINUTES`                      | stocks bot            | Duration of event-mode polling after material evidence; defaults to 120 minutes               |
-| `DISCOVERY_WATCH_DAYS`                              | stocks bot            | Watch lifetime after automatic promotion; defaults to 14 days                                 |
+| Name                                                | Used by              | Meaning                                                                                       |
+| --------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------- |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | PostgreSQL           | Local Compose database initialization                                                         |
+| `DATABASE_URL`                                      | migrations, all bots | PostgreSQL connection URL                                                                     |
+| `STOCKS_TELEGRAM_TOKEN`                             | stocks bot           | BotFather token for the stocks bot                                                            |
+| `PUBLICATIONS_TELEGRAM_TOKEN`                       | publications bot     | BotFather token for the publications bot                                                      |
+| `BRIEFING_TELEGRAM_TOKEN`                           | briefing bot         | Distinct BotFather token for the personal morning briefing bot                                |
+| `TELEGRAM_ALLOWED_USER_IDS`                         | all bots             | Comma-separated Telegram numeric user IDs; every command and callback is denied unless listed |
+| `OLLAMA_URL`                                        | all bots             | Ollama base URL                                                                               |
+| `OLLAMA_MODEL`                                      | all bots             | Installed Ollama model name                                                                   |
+| `OLLAMA_KEEP_ALIVE`                                 | all bots             | How long Ollama keeps the model loaded; defaults to `5m`                                      |
+| `OLLAMA_MAX_ITEMS_PER_RUN`                          | both bots            | Maximum new items analyzed in one run; `0` means all new items and is the default             |
+| `OLLAMA_NUM_CTX`                                    | both bots            | Per-request context size; defaults to `4096`                                                  |
+| `BRIEFING_OLLAMA_NUM_CTX`                           | briefing bot         | Briefing script context size; defaults to `8192` without increasing producer requests         |
+| `OLLAMA_NUM_PREDICT`                                | both bots            | Maximum generated tokens per analysis; defaults to `768`                                      |
+| `OLLAMA_FULL_ANALYSIS_NUM_PREDICT`                  | stocks bot           | Output-token cap for the larger thesis/scenario response; defaults to `1536`                  |
+| `OLLAMA_RETRIES`                                    | both bots            | Retry count after a failed or invalid response; defaults to `1`                               |
+| `OLLAMA_THINK`                                      | both bots            | Enables model thinking output; defaults to `false` to avoid unnecessary compute               |
+| `OLLAMA_TIMEOUT_MS`                                 | both bots            | Per-attempt timeout, from 10–180 seconds; defaults to 120 seconds                             |
+| `SEC_USER_AGENT`                                    | stocks bot           | SEC-compliant app name and contact address                                                    |
+| `DEFAULT_TIMEZONE`                                  | all bots             | IANA timezone used for a newly created watcher or briefing setting                            |
+| `LOG_LEVEL`                                         | all bots             | Pino log level, normally `info`                                                               |
+| `STOCK_EVENT_COOLDOWN_MINUTES`                      | stocks bot           | Same-event analysis cooldown; defaults to 360 minutes                                         |
+| `STOCK_TICKER_ANALYSIS_COOLDOWN_MINUTES`            | stocks bot           | Same-ticker analysis cooldown; defaults to 30 minutes                                         |
+| `SOURCE_BACKOFF_BASE_SECONDS`                       | both bots            | Initial source-failure backoff; defaults to 60 seconds                                        |
+| `SOURCE_BACKOFF_MAX_MINUTES`                        | both bots            | Maximum exponential source backoff; defaults to 360 minutes                                   |
+| `ALERT_ATTENTION_THRESHOLD`                         | stocks bot           | Attention score that creates a live alert when crossed; defaults to 85                        |
+| `RECONCILIATION_INTERVAL_MINUTES`                   | stocks bot           | Interval for comprehensive recovery scans; defaults to one day                                |
+| `VALIDATION_MIN_SAMPLE_SIZE`                        | stocks bot           | Completed 30-day samples required to mark signal statistics adequate; defaults to 20          |
+| `ALPHA_VANTAGE_API_KEY`                             | stocks bot           | Optional Alpha Vantage key for discovery and institutional holdings                           |
+| `ALPHA_VANTAGE_OPTIONS_ENABLED`                     | stocks bot           | Enables premium realtime option-chain requests; defaults to `false`                           |
+| `QUIVER_API_TOKEN`                                  | stocks bot           | Optional Quiver bearer token; leaving it empty disables Quiver requests                       |
+| `PRICE_ANOMALY_THRESHOLD_PERCENT`                   | stocks bot           | Absolute daily-return anomaly threshold; defaults to 4%                                       |
+| `GAP_ANOMALY_THRESHOLD_PERCENT`                     | stocks bot           | Absolute opening-gap anomaly threshold; defaults to 3%                                        |
+| `RELATIVE_VOLUME_ANOMALY_THRESHOLD`                 | stocks bot           | Relative-volume anomaly multiplier; defaults to 3                                             |
+| `VOLATILITY_EXPANSION_THRESHOLD`                    | stocks bot           | Current-move versus historical-volatility multiplier; defaults to 2                           |
+| `MARKET_BASELINE_MIN_SNAPSHOTS`                     | stocks bot           | Minimum stored volume snapshots before relative-volume detection; defaults to 5               |
+| `OPTIONS_VOLUME_OI_ANOMALY_THRESHOLD`               | stocks bot           | Contract option-volume/open-interest anomaly ratio; defaults to 2                             |
+| `OPTIONS_VOLUME_BASELINE_MULTIPLIER`                | stocks bot           | Aggregate options-volume anomaly versus recent baseline; defaults to 3                        |
+| `OPTIONS_BASELINE_MIN_SNAPSHOTS`                    | stocks bot           | Prior option snapshots required for an aggregate-volume baseline; defaults to 3               |
+| `INSTITUTIONAL_CHANGE_THRESHOLD_PERCENT`            | stocks bot           | Absolute institutional holdings-change threshold; defaults to 5%                              |
+| `SHORT_INTEREST_CHANGE_THRESHOLD_PERCENT`           | stocks bot           | Absolute reported short-interest change threshold; defaults to 10%                            |
+| `SHORT_INTEREST_DAYS_TO_COVER_THRESHOLD`            | stocks bot           | Days-to-cover threshold for a short-interest anomaly; defaults to 5                           |
+| `DISCOVERY_MARKET_DATA_ENTITLEMENT`                 | stocks bot           | `EOD`, `DELAYED`, or `REALTIME`; must match the key's market-data entitlement                 |
+| `DISCOVERY_SCAN_INTERVAL_MINUTES`                   | stocks bot           | Market-wide scan interval; defaults to one day                                                |
+| `DISCOVERY_MOVE_THRESHOLD_PERCENT`                  | stocks bot           | Minimum absolute move for a discovery candidate; defaults to 4%                               |
+| `DISCOVERY_MIN_PRICE`                               | stocks bot           | Minimum candidate price; defaults to 2                                                        |
+| `DISCOVERY_MIN_VOLUME`                              | stocks bot           | Minimum current snapshot volume; defaults to 100,000                                          |
+| `DISCOVERY_MIN_DOLLAR_VOLUME`                       | stocks bot           | Minimum price × volume; defaults to 1,000,000                                                 |
+| `DISCOVERY_MAX_CANDIDATES`                          | stocks bot           | Maximum candidates investigated per market-wide scan; defaults to 10                          |
+| `DISCOVERY_SUPPORTED_EXCHANGES`                     | stocks bot           | Comma-separated SEC exchange names accepted by discovery                                      |
+| `DISCOVERY_EXCLUDE_OTC`                             | stocks bot           | Reject SEC profiles whose exchange contains `OTC`; defaults to true                           |
+| `DISCOVERY_INVESTIGATION_MINUTES`                   | stocks bot           | Time allowed for a temporary investigation; defaults to 90 minutes                            |
+| `DISCOVERY_HIGH_RESOLUTION_INTERVAL_MINUTES`        | stocks bot           | Interval for SEC/IR/GDELT/TradingView/price checks while escalated; defaults to 5 minutes     |
+| `DISCOVERY_EVENT_MODE_MINUTES`                      | stocks bot           | Duration of event-mode polling after material evidence; defaults to 120 minutes               |
+| `DISCOVERY_WATCH_DAYS`                              | stocks bot           | Watch lifetime after automatic promotion; defaults to 14 days                                 |
 
 Infrastructure secrets cannot be edited through Telegram. Telegram-editable schedules, watchlists, query lists, and source switches are persisted in PostgreSQL.
 
@@ -186,6 +195,18 @@ Publications bot:
 - `/removequery TOPIC`
 - `/sources` to toggle PubMed, bioRxiv, ClinicalTrials.gov, and openFDA
 - `/listsources` to list available publication sources and provider links
+
+Personal Morning Briefing bot:
+
+- `/start` to begin or resume persisted onboarding
+- `/briefing` and `/briefing-test` to generate a full or short briefing now
+- `/briefing-settings`, `/briefing-time HH:mm`, `/briefing-duration MINUTES`, `/briefing-max-duration MINUTES`, and `/briefing-transcript on|off`
+- `/subscriptions`, `/subscribe WATCHER`, `/unsubscribe WATCHER`, `/subscribe-all`, and `/unsubscribe-all`
+- `/location-set CITY`, `/location-clear`, and `/location-status`
+- `/voice-list`, `/voice-set VOICE`, and `/voice-preview VOICE`
+- `/calendar-connect`, `/calendar-status`, `/calendar-refresh`, and `/calendar-disconnect`
+
+The briefing scheduler uses the configured IANA timezone and a PostgreSQL claim, while manual/test runs have independent windows. It clusters related Stocks and Medical events, suppresses unchanged stories, selects to a variable spoken-word budget, and uses Piper for OGG/Opus audio. Failed weather, Calendar, script, TTS, source, or Telegram stages degrade independently. Voice upload exhaustion falls back to text. Every run persists producer health, enabled-input coverage, selection/noise counts, stage latency, voice, word count, planned duration, audio duration, and delivery failures.
 
 New stocks and publication queries enable every available source by default. Cron expressions use five fields; an optional final IANA timezone may be supplied. Use `/schedule` without arguments to view the current schedule and example syntax, or set one with `/schedule 0 8 * * * Europe/Prague`.
 

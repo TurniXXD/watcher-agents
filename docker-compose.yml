@@ -92,5 +92,34 @@ services:
     tmpfs:
       - /tmp
 
+  briefing-bot:
+    image: ${WATCHER_IMAGE:-watcher:local}
+    command: ['node', 'apps/briefing-bot/dist/index.js']
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    environment:
+      OLLAMA_NUM_CTX: ${BRIEFING_OLLAMA_NUM_CTX:-8192}
+    ports:
+      - '127.0.0.1:8789:8789'
+    volumes:
+      - ./deploy/piper-voices:/data/piper:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'node', '-e', 'process.kill(1, 0)']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=512m
+
 volumes:
   watcher-postgres:

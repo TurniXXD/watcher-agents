@@ -6,7 +6,7 @@ import {
   isRecord,
   parseDate,
   recordValue,
-} from '../utils.js';
+} from '../utils/general.js';
 
 describe('shared utilities', () => {
   it('parses supported date representations consistently', () => {

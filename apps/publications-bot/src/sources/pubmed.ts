@@ -1,7 +1,7 @@
 import type { Source, WatchItem } from '@watcher/core';
 import { XMLParser } from 'fast-xml-parser';
 import { z } from 'zod';
-import { fetchJson, fetchText } from './http.js';
+import { fetchJson, fetchText } from './utils/http.js';
 
 const searchSchema = z.object({
   esearchresult: z.object({ idlist: z.array(z.string()) }),

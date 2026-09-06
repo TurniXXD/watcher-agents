@@ -7,7 +7,7 @@ import {
   type StockThesisState,
 } from '@watcher/core';
 import type { Api } from 'grammy';
-import { htmlText, optionalSourceLink, sourceLink } from './html.js';
+import { htmlText, optionalSourceLink, sourceLink } from './utils/html.js';
 
 const LIMIT = 4000;
 const MAX_TITLE = 500;

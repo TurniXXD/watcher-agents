@@ -44,6 +44,31 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
 
+  apps/briefing-bot:
+    dependencies:
+      '@watcher/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@watcher/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@watcher/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@watcher/telegram':
+        specifier: workspace:*
+        version: link:../../packages/telegram
+      grammy:
+        specifier: 1.46.0
+        version: 1.46.0
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   apps/publications-bot:
     dependencies:
       '@watcher/core':

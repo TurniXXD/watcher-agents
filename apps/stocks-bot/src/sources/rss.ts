@@ -1,7 +1,10 @@
 import { parseDate, type Source, type WatchItem } from '@watcher/core';
 import { XMLParser } from 'fast-xml-parser';
-import { fetchPublicText, stripHtml } from './http.js';
-import { assertPublicHttpUrl, assertPublicHttpUrlResolved } from './network.js';
+import { fetchPublicText, stripHtml } from './utils/http.js';
+import {
+  assertPublicHttpUrl,
+  assertPublicHttpUrlResolved,
+} from './utils/network.js';
 
 type FeedConfig = { symbol: string; feedUrl: string; maxItems?: number };
 type FeedEntry = Record<string, unknown>;

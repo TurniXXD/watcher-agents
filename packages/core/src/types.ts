@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { stockIntelligenceResultSchema } from './stock-intelligence.js';
-import { removeNullBytesDeep } from './utils.js';
+import { removeNullBytesDeep } from './utils/general.js';
 
 export type SourceCapabilities = {
   sourceName: string;

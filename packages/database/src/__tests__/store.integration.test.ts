@@ -6,6 +6,7 @@ import { PostgresEventJournal } from '../event-journal.js';
 import { WatcherStore } from '../store.js';
 import { CompanyUniverseStore } from '../universe-store.js';
 import { StockDiscoveryStore } from '../discovery-store.js';
+import { ResourceLeaseStore } from '../resource-lease-store.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -1168,5 +1169,37 @@ integration('WatcherStore with PostgreSQL', () => {
     release?.();
     await Promise.all([first, second]);
     expect(order).toEqual(['first-start', 'first-end', 'second']);
+  });
+
+  it('serializes Ollama and speech generation on the shared local-model lease', async () => {
+    const resources = new ResourceLeaseStore(database);
+    let release: (() => void) | undefined;
+    let markStarted: (() => void) | undefined;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const order: string[] = [];
+    const analysis = store.withOllamaLease(async () => {
+      order.push('analysis-start');
+      markStarted?.();
+      await waiting;
+      order.push('analysis-end');
+    });
+    await started;
+    const speech = resources.withExclusiveLease(
+      'HEAVY_LOCAL_MODEL',
+      async () => {
+        order.push('speech');
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(order).toEqual(['analysis-start']);
+    release?.();
+    await Promise.all([analysis, speech]);
+    expect(order).toEqual(['analysis-start', 'analysis-end', 'speech']);
   });
 });

@@ -1,6 +1,6 @@
 import type { DomainEvent, EventJournal } from './stock-domain/events.js';
 import type { DatabaseClient } from './client.js';
-import { prismaJson } from './json.js';
+import { prismaJson } from './utils/json.js';
 
 export class PostgresEventJournal implements EventJournal {
   public constructor(private readonly db: DatabaseClient) {}

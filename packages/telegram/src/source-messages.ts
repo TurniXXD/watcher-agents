@@ -1,4 +1,4 @@
-import { htmlText, optionalSourceLink } from './html.js';
+import { htmlText, optionalSourceLink } from './utils/html.js';
 
 type SourceListing = { name: string; description: string; url?: string };
 

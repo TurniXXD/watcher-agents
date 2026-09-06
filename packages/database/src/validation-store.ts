@@ -5,7 +5,7 @@ import {
 } from '@watcher/core';
 import type { DatabaseClient } from './client.js';
 import { RunStatus, ValidationTargetType } from './generated/prisma/enums.js';
-import { nullableNumber, prismaJson } from './json.js';
+import { nullableNumber, prismaJson } from './utils/json.js';
 import {
   calculateCalibration,
   calculatePriceOutcome,

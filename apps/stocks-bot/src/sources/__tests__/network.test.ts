@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertPublicHttpUrl } from '../network.js';
+import { assertPublicHttpUrl } from '../utils/network.js';
 
 describe('stock source network safety', () => {
   it('rejects private and non-HTTP source URLs', () => {

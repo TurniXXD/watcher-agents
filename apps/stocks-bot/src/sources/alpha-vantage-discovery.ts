@@ -6,7 +6,7 @@ import type {
 import { finiteNumber } from '@watcher/core';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { fetchText } from './http.js';
+import { fetchText } from './utils/http.js';
 
 const moverSchema = z.object({
   ticker: z.string().trim().min(1),

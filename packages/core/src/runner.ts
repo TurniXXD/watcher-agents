@@ -7,7 +7,7 @@ import type {
 } from './types.js';
 import type { WatcherLogger } from './logger.js';
 import type { WatcherPipeline } from './pipeline.js';
-import { errorMessage } from './utils.js';
+import { errorMessage } from './utils/general.js';
 
 export interface RunStore {
   claimRun(
@@ -61,6 +61,11 @@ export class WatcherRunner {
     private readonly afterRun?: (
       chatId: bigint,
       result: PipelineResult,
+      runId: string,
+    ) => Promise<void>,
+    private readonly afterFailure?: (
+      chatId: bigint,
+      error: string,
       runId: string,
     ) => Promise<void>,
   ) {}
@@ -218,6 +223,19 @@ export class WatcherRunner {
         status: 'FAILED',
         error: message,
       });
+      try {
+        await this.afterFailure?.(chatId, message, run.id);
+      } catch (lifecycleError) {
+        this.logger?.error(
+          {
+            kind: this.kind,
+            configId,
+            runId: run.id,
+            err: lifecycleError,
+          },
+          'Watcher failure lifecycle update failed',
+        );
+      }
       return { status: 'FAILED', error: message, durationMs };
     }
   }

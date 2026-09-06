@@ -1,4 +1,4 @@
-import { nullableNumber } from '../json.js';
+import { nullableNumber } from '../utils/json.js';
 import { average } from './statistics.js';
 import { summarizeOutcomes, type OutcomeMetric } from './validation.js';
 

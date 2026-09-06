@@ -26,6 +26,7 @@ coverage/
 .release.env.previous
 backups/
 deploy/runtime/
+deploy/piper-voices/
 
 # Logs
 *.log

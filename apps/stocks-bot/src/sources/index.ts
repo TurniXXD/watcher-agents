@@ -4,7 +4,7 @@ export * from './earnings-whispers.js';
 export * from './finviz.js';
 export * from './finra-short-interest.js';
 export * from './investor-relations.js';
-export * from './network.js';
+export * from './utils/network.js';
 export * from './news.js';
 export * from './price.js';
 export * from './quiver.js';

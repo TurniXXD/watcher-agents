@@ -34,7 +34,7 @@ import {
   StockSourceType,
   WatcherKind,
 } from './generated/prisma/enums.js';
-import { prismaJson } from './json.js';
+import { prismaJson } from './utils/json.js';
 import { SourceHealthStore } from './source-health-store.js';
 import { StockEventStore } from './stock-event-store.js';
 import { StockReportStore } from './stock-report-store.js';
@@ -42,7 +42,7 @@ import { ConfigurationStore } from './configuration-store.js';
 
 const DEFAULT_SCHEDULE = '0 8 * * *';
 const DEFAULT_TIMEZONE = 'Europe/Prague';
-const OLLAMA_ADVISORY_LOCK_ID = 8_643_921_771;
+const LOCAL_MODEL_RESOURCE = 'HEAVY_LOCAL_MODEL';
 const kindValue = (kind: CoreWatcherKind): WatcherKind =>
   kind === 'STOCKS' ? WatcherKind.STOCKS : WatcherKind.PUBLICATIONS;
 const identityKey = (item: { source: string; externalId: string }): string =>
@@ -140,7 +140,7 @@ export class WatcherStore implements PipelineRepository {
   public withOllamaLease<T>(task: () => Promise<T>): Promise<T> {
     return this.db.$transaction(
       async (transaction) => {
-        await transaction.$executeRaw`SELECT pg_advisory_xact_lock(${OLLAMA_ADVISORY_LOCK_ID})`;
+        await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${LOCAL_MODEL_RESOURCE}))`;
         return task();
       },
       { maxWait: 600_000, timeout: 600_000 },

@@ -1,6 +1,6 @@
 import { deduplicateItems } from './deduplicate.js';
 import type { WatcherLogger } from './logger.js';
-import { errorMessage } from './utils.js';
+import { errorMessage } from './utils/general.js';
 import {
   watchItemSchema,
   type Analyzer,

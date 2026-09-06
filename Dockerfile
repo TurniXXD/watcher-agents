@@ -1,10 +1,13 @@
-FROM node:24.14.0-alpine AS base
+FROM node:24.14.0-bookworm AS base
 
 ENV PNPM_HOME=/pnpm
 ENV COREPACK_HOME=/corepack
 ENV PATH=$PNPM_HOME:$PATH
 
-RUN apk add --no-cache openssl \
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g; s|http://security.debian.org|https://security.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/* \
     && corepack enable \
     && corepack prepare pnpm@11.6.0 --activate
 WORKDIR /app
@@ -12,6 +15,7 @@ WORKDIR /app
 FROM base AS manifests
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/briefing-bot/package.json apps/briefing-bot/package.json
 COPY apps/publications-bot/package.json apps/publications-bot/package.json
 COPY apps/stocks-bot/package.json apps/stocks-bot/package.json
 COPY packages/core/package.json packages/core/package.json
@@ -39,11 +43,19 @@ FROM base AS runtime
 
 ENV NODE_ENV=production
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg python3 python3-pip \
+    && python3 -m pip install --break-system-packages --no-cache-dir piper-tts==1.4.2 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --from=production-dependencies --chown=node:node /app/apps/briefing-bot/node_modules ./apps/briefing-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/publications-bot/node_modules ./apps/publications-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/stocks-bot/node_modules ./apps/stocks-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/package.json /app/pnpm-workspace.yaml ./
+COPY --from=build --chown=node:node /app/apps/briefing-bot/package.json ./apps/briefing-bot/package.json
+COPY --from=build --chown=node:node /app/apps/briefing-bot/dist ./apps/briefing-bot/dist
 COPY --from=build --chown=node:node /app/apps/publications-bot/package.json ./apps/publications-bot/package.json
 COPY --from=build --chown=node:node /app/apps/publications-bot/dist ./apps/publications-bot/dist
 COPY --from=build --chown=node:node /app/apps/stocks-bot/package.json ./apps/stocks-bot/package.json

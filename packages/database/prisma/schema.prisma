@@ -243,6 +243,325 @@ enum AlertSeverity {
   EXTREME
 }
 
+enum BriefingWatcherBot {
+  STOCKS
+  MEDICAL
+}
+
+enum BriefingConfidence {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum BriefingEventStatus {
+  NEW
+  DEVELOPING
+  UNCHANGED
+  RESOLVED
+}
+
+enum BriefingVoice {
+  AMY
+  HFC_FEMALE
+  HFC_MALE
+}
+
+enum BriefingOnboardingStep {
+  LOCATION
+  VOICE
+  GOOGLE_CALENDAR
+  SUBSCRIPTIONS
+  BRIEFING_TIME
+  COMPLETE
+}
+
+enum BriefingLocationMode {
+  STATIC
+  LAST_SHARED
+  DISABLED
+}
+
+enum BriefingRunType {
+  SCHEDULED
+  MANUAL
+  TEST
+}
+
+enum BriefingRunStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum BriefingDeliveryChannel {
+  VOICE
+  INDEX
+  TRANSCRIPT
+  TEXT_FALLBACK
+}
+
+enum BriefingDeliveryStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum BriefingWatcherHealthStatus {
+  HEALTHY
+  DEGRADED
+  UNAVAILABLE
+}
+
+model BriefingEvent {
+  id               String                      @id
+  watcherBot       BriefingWatcherBot
+  externalEventId  String?
+  occurredAt       DateTime?
+  publishedAt      DateTime?
+  detectedAt       DateTime
+  createdAt        DateTime
+  updatedAt        DateTime
+  category         String
+  subcategory      String?
+  title            String
+  summary          String
+  importance       Int
+  novelty          Int
+  relevance        Int
+  urgency          Int
+  actionable       Boolean
+  action           String?
+  entities         Json
+  tags             String[]
+  sourceUrls       String[]
+  primarySource    String?
+  confidence       BriefingConfidence
+  status           BriefingEventStatus
+  deduplicationKey String?
+  relatedEventIds  String[]                    @default([])
+  metadata         Json?
+  storyClusters    BriefingStoryClusterEvent[]
+
+  @@unique([watcherBot, externalEventId])
+  @@unique([watcherBot, deduplicationKey])
+  @@index([watcherBot, detectedAt])
+  @@index([status, detectedAt])
+  @@map("briefing_events")
+}
+
+model BriefingStoryCluster {
+  id           String                      @id
+  title        String
+  summary      String
+  status       BriefingEventStatus
+  importance   Int
+  novelty      Int
+  relevance    Int
+  urgency      Int
+  actionable   Boolean
+  actionItems  String[]                    @default([])
+  watcherBots  BriefingWatcherBot[]
+  entities     Json
+  sourceUrls   String[]                    @default([])
+  firstEventAt DateTime
+  lastEventAt  DateTime
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+  events       BriefingStoryClusterEvent[]
+
+  @@index([status, lastEventAt])
+  @@map("briefing_story_clusters")
+}
+
+model BriefingStoryClusterEvent {
+  clusterId String
+  eventId   String               @unique
+  createdAt DateTime             @default(now())
+  cluster   BriefingStoryCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  event     BriefingEvent        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([clusterId, eventId])
+  @@map("briefing_story_cluster_events")
+}
+
+model BriefingSettings {
+  id                     String                    @id @default(uuid())
+  telegramChatId         BigInt                    @unique
+  onboardingComplete     Boolean                   @default(false)
+  language               String                    @default("en")
+  voice                  BriefingVoice             @default(AMY)
+  timezone               String                    @default("Europe/Prague")
+  briefingTime           String                    @default("07:00")
+  targetDurationMinutes  Int                       @default(7)
+  maximumDurationMinutes Int                       @default(15)
+  sendTranscript         Boolean                   @default(false)
+  calendarEnabled        Boolean                   @default(false)
+  weatherEnabled         Boolean                   @default(true)
+  nextBriefingAt         DateTime?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  subscriptions          BriefingSubscription[]
+  location               BriefingLocation?
+  onboarding             OnboardingState?
+  runs                   BriefingRun[]
+  storyStates            BriefingStoryState[]
+  calendarIntegration    CalendarIntegrationState?
+
+  @@index([onboardingComplete, nextBriefingAt])
+  @@map("briefing_settings")
+}
+
+model BriefingSubscription {
+  id         String             @id @default(uuid())
+  settingsId String
+  watcherBot BriefingWatcherBot
+  enabled    Boolean            @default(true)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  settings   BriefingSettings   @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@unique([settingsId, watcherBot])
+  @@index([settingsId, enabled])
+  @@map("briefing_subscriptions")
+}
+
+model BriefingLocation {
+  id         String               @id @default(uuid())
+  settingsId String               @unique
+  mode       BriefingLocationMode
+  city       String?
+  country    String?
+  latitude   Float?
+  longitude  Float?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  settings   BriefingSettings     @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@map("briefing_locations")
+}
+
+model OnboardingState {
+  id          String                 @id @default(uuid())
+  settingsId  String                 @unique
+  completed   Boolean                @default(false)
+  currentStep BriefingOnboardingStep @default(LOCATION)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  settings    BriefingSettings       @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@map("onboarding_state")
+}
+
+model BriefingRun {
+  id                         String                    @id @default(uuid())
+  settingsId                 String
+  idempotencyKey             String                    @unique
+  type                       BriefingRunType
+  scheduledFor               DateTime?
+  startedAt                  DateTime                  @default(now())
+  completedAt                DateTime?
+  periodStart                DateTime
+  periodEnd                  DateTime
+  subscriptions              BriefingWatcherBot[]
+  location                   Json?
+  weatherAvailable           Boolean                   @default(false)
+  calendarAvailable          Boolean                   @default(false)
+  status                     BriefingRunStatus         @default(RUNNING)
+  selectedStoryIds           String[]                  @default([])
+  displayScript              String?
+  ttsScript                  String?
+  wordCount                  Int?
+  targetDurationSeconds      Int
+  maximumDurationSeconds     Int
+  actualAudioDurationSeconds Float?
+  voice                      BriefingVoice?
+  telegramMessageId          String?
+  failureReason              String?
+  briefingDataCoverage       Int?
+  metrics                    Json?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  settings                   BriefingSettings          @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  lastForStoryStates         BriefingStoryState[]      @relation("LastBriefingRun")
+  deliveryAttempts           BriefingDeliveryAttempt[]
+
+  @@index([settingsId, type, status, startedAt])
+  @@index([settingsId, periodEnd])
+  @@map("briefing_runs")
+}
+
+model BriefingWatcherHealth {
+  watcherBot              BriefingWatcherBot          @id
+  status                  BriefingWatcherHealthStatus
+  lastRunAt               DateTime
+  lastSuccessAt           DateTime?
+  lastFailureAt           DateTime?
+  lastError               String?
+  eventsEmitted           Int                         @default(0)
+  failedEventPublications Int                         @default(0)
+  sourceFailures          Int                         @default(0)
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+
+  @@index([status, lastRunAt])
+  @@map("briefing_watcher_health")
+}
+
+model BriefingDeliveryAttempt {
+  id                String                  @id @default(uuid())
+  runId             String
+  channel           BriefingDeliveryChannel
+  attempt           Int
+  status            BriefingDeliveryStatus  @default(RUNNING)
+  telegramMessageId String?
+  failureReason     String?
+  startedAt         DateTime                @default(now())
+  completedAt       DateTime?
+  run               BriefingRun             @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, channel, attempt])
+  @@index([runId, channel, status])
+  @@map("briefing_delivery_attempts")
+}
+
+model BriefingStoryState {
+  id                String              @id @default(uuid())
+  settingsId        String
+  storyId           String
+  firstMentionedAt  DateTime
+  lastMentionedAt   DateTime
+  lastSummary       String
+  importance        Int
+  status            BriefingEventStatus
+  lastBriefingRunId String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  settings          BriefingSettings    @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  lastBriefingRun   BriefingRun?        @relation("LastBriefingRun", fields: [lastBriefingRunId], references: [id], onDelete: SetNull)
+
+  @@unique([settingsId, storyId])
+  @@index([settingsId, status, lastMentionedAt])
+  @@map("briefing_story_states")
+}
+
+model CalendarIntegrationState {
+  id                    String           @id @default(uuid())
+  settingsId            String           @unique
+  encryptedRefreshToken String?
+  oauthStateHash        String?          @unique
+  oauthStateExpiresAt   DateTime?
+  calendarIds           String[]         @default(["primary"])
+  connectedAt           DateTime?
+  lastRefreshAt         DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  settings              BriefingSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@map("calendar_integration_state")
+}
+
 model TelegramChat {
   id            String             @id @default(uuid())
   kind          WatcherKind
@@ -325,7 +644,7 @@ model SourceFailure {
 }
 
 model ProcessedItem {
-  id                String               @id @default(uuid())
+  id                String                 @id @default(uuid())
   watcherKind       WatcherKind
   source            String
   externalId        String
@@ -333,23 +652,23 @@ model ProcessedItem {
   url               String
   publishedAt       DateTime?
   ticker            String?
-  sourceType        String               @default("OTHER")
+  sourceType        String                 @default("OTHER")
   sourceUrl         String?
-  primarySource     Boolean              @default(false)
-  discoveredAt      DateTime             @default(now())
+  primarySource     Boolean                @default(false)
+  discoveredAt      DateTime               @default(now())
   eventAt           DateTime?
-  category          String               @default("OTHER")
+  category          String                 @default("OTHER")
   headline          String?
   rawText           String?
-  normalizedFacts   Json                 @default("{}")
-  entities          Json                 @default("[]")
-  reliability       Float                @default(0.5)
+  normalizedFacts   Json                   @default("{}")
+  entities          Json                   @default("[]")
+  reliability       Float                  @default(0.5)
   contentHash       String
   metadata          Json
-  firstSeenAt       DateTime             @default(now())
+  firstSeenAt       DateTime               @default(now())
   analyses          Analysis[]
   eventObservations EventObservation[]
-  primaryForEvents  CanonicalEvent[]     @relation("PrimaryEvidence")
+  primaryForEvents  CanonicalEvent[]       @relation("PrimaryEvidence")
   insiderSignal     InsiderSignal?
   marketSnapshot    MarketSnapshot?
   offExchange       OffExchangeSnapshot?
@@ -539,40 +858,40 @@ model OptionsSnapshot {
 }
 
 model InstitutionalSnapshot {
-  id                 String        @id @default(uuid())
-  processedItemId    String        @unique
-  ticker             String
-  reportedAt         DateTime
-  totalShares        Decimal?      @db.Decimal(30, 4)
-  totalValueUsd      Decimal?      @db.Decimal(30, 2)
-  netShareChange     Decimal?      @db.Decimal(30, 4)
-  changePercent      Decimal?      @db.Decimal(12, 6)
-  holderCount        Int?
-  topHolders         Json          @default("[]")
-  materialChange     Boolean       @default(false)
-  reasons            Json          @default("[]")
-  createdAt          DateTime      @default(now())
-  processedItem      ProcessedItem @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+  id              String        @id @default(uuid())
+  processedItemId String        @unique
+  ticker          String
+  reportedAt      DateTime
+  totalShares     Decimal?      @db.Decimal(30, 4)
+  totalValueUsd   Decimal?      @db.Decimal(30, 2)
+  netShareChange  Decimal?      @db.Decimal(30, 4)
+  changePercent   Decimal?      @db.Decimal(12, 6)
+  holderCount     Int?
+  topHolders      Json          @default("[]")
+  materialChange  Boolean       @default(false)
+  reasons         Json          @default("[]")
+  createdAt       DateTime      @default(now())
+  processedItem   ProcessedItem @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
 
   @@index([ticker, reportedAt])
   @@index([ticker, materialChange, reportedAt])
 }
 
 model ShortInterestSnapshot {
-  id                   String        @id @default(uuid())
-  processedItemId      String        @unique
-  ticker               String
-  settlementDate       DateTime
-  currentShortPosition BigInt
+  id                    String        @id @default(uuid())
+  processedItemId       String        @unique
+  ticker                String
+  settlementDate        DateTime
+  currentShortPosition  BigInt
   previousShortPosition BigInt?
-  changeShares         BigInt?
-  changePercent        Decimal?      @db.Decimal(12, 6)
-  averageDailyVolume   BigInt?
-  daysToCover          Decimal?      @db.Decimal(12, 6)
-  materialChange       Boolean       @default(false)
-  reasons              Json          @default("[]")
-  createdAt            DateTime      @default(now())
-  processedItem        ProcessedItem @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
+  changeShares          BigInt?
+  changePercent         Decimal?      @db.Decimal(12, 6)
+  averageDailyVolume    BigInt?
+  daysToCover           Decimal?      @db.Decimal(12, 6)
+  materialChange        Boolean       @default(false)
+  reasons               Json          @default("[]")
+  createdAt             DateTime      @default(now())
+  processedItem         ProcessedItem @relation(fields: [processedItemId], references: [id], onDelete: Cascade)
 
   @@index([ticker, settlementDate])
   @@index([ticker, materialChange, settlementDate])

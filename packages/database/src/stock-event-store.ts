@@ -20,7 +20,7 @@ import {
 import type { DatabaseClient } from './client.js';
 import type { Prisma } from './generated/prisma/client.js';
 import { EventDecision, Materiality } from './generated/prisma/enums.js';
-import { jsonObject, prismaJson } from './json.js';
+import { jsonObject, prismaJson } from './utils/json.js';
 import { StockSpecializedSignalStore } from './specialized-signal-store.js';
 
 type EventStoreOptions = {

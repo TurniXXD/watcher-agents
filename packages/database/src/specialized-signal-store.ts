@@ -27,7 +27,7 @@ import {
   InsiderTransactionType,
   Materiality,
 } from './generated/prisma/enums.js';
-import { jsonObject, prismaJson } from './json.js';
+import { jsonObject, prismaJson } from './utils/json.js';
 
 const marketPoint = (
   observation: NormalizedObservation,
