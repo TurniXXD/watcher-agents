@@ -1,3 +1,4 @@
+import { sourceHttpError } from '@watcher/core';
 import { assertPublicHttpUrlResolved } from './network.js';
 
 export const normalizeWhitespace = (value: string): string =>
@@ -35,8 +36,7 @@ export const fetchText = async (
       ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
       : AbortSignal.timeout(30_000),
   });
-  if (!response.ok)
-    throw new Error(`HTTP ${response.status} from ${new URL(url).hostname}`);
+  if (!response.ok) throw sourceHttpError(response, url);
   return response.text();
 };
 
@@ -72,8 +72,7 @@ export const fetchPublicText = async (
       url = await resolvePublicUrl(new URL(location, url).toString());
       continue;
     }
-    if (!response.ok)
-      throw new Error(`HTTP ${response.status} from ${url.hostname}`);
+    if (!response.ok) throw sourceHttpError(response, url);
     return response.text();
   }
 

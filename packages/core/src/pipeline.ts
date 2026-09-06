@@ -1,5 +1,10 @@
 import { deduplicateItems } from './deduplicate.js';
 import type { WatcherLogger } from './logger.js';
+import {
+  ProviderRequestLimiter,
+  type ProviderRequestPolicy,
+} from './provider-limiter.js';
+import { isSourceRateLimited, sourceRetryAt } from './source-http-error.js';
 import { errorMessage } from './utils/general.js';
 import {
   watchItemSchema,
@@ -8,12 +13,22 @@ import {
   type PipelineResult,
   type ProgressReporter,
   type SourceFailure,
+  type Source,
   type SourceRequest,
   type WatcherKind,
   type WatchItem,
 } from './types.js';
 
-class SourceBackoffError extends Error {}
+class SourceBackoffError extends Error {
+  public override readonly name = 'SourceBackoffError';
+
+  public constructor(
+    message: string,
+    public readonly retryAt?: Date,
+  ) {
+    super(message);
+  }
+}
 
 type PipelineRunOptions = {
   analysisStep?: string;
@@ -22,12 +37,36 @@ type PipelineRunOptions = {
 };
 
 export class WatcherPipeline {
+  private readonly providerLimiters = new Map<string, ProviderRequestLimiter>();
+
   public constructor(
     private readonly repository: PipelineRepository,
     private readonly analyzer: Analyzer,
     private readonly maxItemsPerRun = 0,
     private readonly logger?: WatcherLogger,
   ) {}
+
+  private providerPolicy(source: Source): ProviderRequestPolicy {
+    if (source.capabilities?.requestPolicy) {
+      return source.capabilities.requestPolicy;
+    }
+    const rateLimit = source.capabilities?.rateLimitPerMinute;
+    return {
+      maxConcurrency: rateLimit ? 1 : 4,
+      minimumSpacingMs: rateLimit ? Math.ceil(60_000 / rateLimit) : 0,
+      sharedRateLimitBackoff: true,
+    };
+  }
+
+  private limiterFor(source: Source): ProviderRequestLimiter {
+    const policy = this.providerPolicy(source);
+    const providerKey = policy.providerKey ?? source.id;
+    const existing = this.providerLimiters.get(providerKey);
+    if (existing) return existing;
+    const limiter = new ProviderRequestLimiter(policy);
+    this.providerLimiters.set(providerKey, limiter);
+    return limiter;
+  }
 
   public async run(
     kind: WatcherKind,
@@ -41,68 +80,93 @@ export class WatcherPipeline {
       'Fetching watcher sources',
     );
     const settled = await Promise.allSettled(
-      requests.map(async ({ source, target, config }) => {
-        const sourceStartedAt = Date.now();
-        const attemptAt = new Date();
-        const attempt = await this.repository.sourceAttemptDecision?.(
-          kind,
-          runId,
-          source.id,
-          target,
-          attemptAt,
-        );
-        if (attempt && !attempt.allowed) {
-          const retry = attempt.retryAt
-            ? ` until ${attempt.retryAt.toISOString()}`
-            : '';
-          throw new SourceBackoffError(
-            `${attempt.status ?? 'UNAVAILABLE'} backoff active${retry}`,
-          );
-        }
-        this.logger?.debug(
-          { kind, runId, source: source.id, target },
-          'Fetching watcher source',
-        );
-        let items: WatchItem[];
-        try {
-          items = (await source.fetch(config, options.signal)).map((item) =>
-            watchItemSchema.parse(item),
-          );
-          await this.repository.recordSourceSuccess?.(
+      requests.map(({ source, target, config }) =>
+        this.limiterFor(source).run(async () => {
+          const policy = this.providerPolicy(source);
+          const sourceStartedAt = Date.now();
+          const attemptAt = new Date();
+          const attempt = await this.repository.sourceAttemptDecision?.(
             kind,
             runId,
             source.id,
             target,
-            new Date(),
+            attemptAt,
+            {
+              ...(policy.providerKey
+                ? { providerKey: policy.providerKey }
+                : {}),
+              sharedRateLimitBackoff: policy.sharedRateLimitBackoff,
+            },
           );
-        } catch (error) {
-          await this.repository.recordSourceFailure?.(
-            kind,
-            runId,
-            source.id,
-            target,
-            errorMessage(error),
-            new Date(),
+          if (attempt && !attempt.allowed) {
+            const retry = attempt.retryAt
+              ? ` until ${attempt.retryAt.toISOString()}`
+              : '';
+            throw new SourceBackoffError(
+              `${attempt.status ?? 'UNAVAILABLE'} backoff active${retry}`,
+              attempt.retryAt,
+            );
+          }
+          this.logger?.debug(
+            { kind, runId, source: source.id, target },
+            'Fetching watcher source',
           );
-          throw error;
-        }
-        this.logger?.info(
-          {
-            kind,
-            runId,
+          let items: WatchItem[];
+          try {
+            items = (await source.fetch(config, options.signal)).map((item) =>
+              watchItemSchema.parse(item),
+            );
+            await this.repository.recordSourceSuccess?.(
+              kind,
+              runId,
+              source.id,
+              target,
+              new Date(),
+              {
+                ...(policy.providerKey
+                  ? { providerKey: policy.providerKey }
+                  : {}),
+                sharedRateLimitBackoff: policy.sharedRateLimitBackoff,
+              },
+            );
+          } catch (error) {
+            const retryAt = sourceRetryAt(error);
+            await this.repository.recordSourceFailure?.(
+              kind,
+              runId,
+              source.id,
+              target,
+              errorMessage(error),
+              new Date(),
+              {
+                ...(policy.providerKey
+                  ? { providerKey: policy.providerKey }
+                  : {}),
+                sharedRateLimitBackoff: policy.sharedRateLimitBackoff,
+                rateLimited: isSourceRateLimited(error),
+                ...(retryAt ? { retryAt } : {}),
+              },
+            );
+            throw error;
+          }
+          this.logger?.info(
+            {
+              kind,
+              runId,
+              source: source.id,
+              target,
+              itemCount: items.length,
+              durationMs: Date.now() - sourceStartedAt,
+            },
+            'Watcher source fetched',
+          );
+          return {
+            items,
             source: source.id,
             target,
-            itemCount: items.length,
-            durationMs: Date.now() - sourceStartedAt,
-          },
-          'Watcher source fetched',
-        );
-        return {
-          items,
-          source: source.id,
-          target,
-        };
-      }),
+          };
+        }),
+      ),
     );
 
     const fetchedItems: WatchItem[] = [];

@@ -10,6 +10,7 @@ import {
   type AnalysisOutcome,
   type PipelineRepository,
   type PreparedItem,
+  type SourceHealthContext,
   type WatcherKind as CoreWatcherKind,
   type WatchItem,
   publicationAnalysisSchema,
@@ -35,7 +36,10 @@ import {
   WatcherKind,
 } from './generated/prisma/enums.js';
 import { prismaJson } from './utils/json.js';
-import { SourceHealthStore } from './source-health-store.js';
+import {
+  PROVIDER_BACKOFF_TARGET,
+  SourceHealthStore,
+} from './source-health-store.js';
 import { StockEventStore } from './stock-event-store.js';
 import { StockReportStore } from './stock-report-store.js';
 import { ConfigurationStore } from './configuration-store.js';
@@ -784,7 +788,10 @@ export class WatcherStore implements PipelineRepository {
     });
     if (claimed.count === 0) return false;
     await this.db.sourceHealth.updateMany({
-      where: { watcherConfigId: configId },
+      where: {
+        watcherConfigId: configId,
+        target: { not: PROVIDER_BACKOFF_TARGET },
+      },
       data: { backoffUntil: null },
     });
     return true;
@@ -830,8 +837,16 @@ export class WatcherStore implements PipelineRepository {
     source: string,
     target: string,
     now: Date,
+    context?: SourceHealthContext,
   ) {
-    return this.sourceHealth.attemptDecision(kind, runId, source, target, now);
+    return this.sourceHealth.attemptDecision(
+      kind,
+      runId,
+      source,
+      target,
+      now,
+      context,
+    );
   }
 
   public recordSourceSuccess(
@@ -840,8 +855,9 @@ export class WatcherStore implements PipelineRepository {
     source: string,
     target: string,
     now: Date,
+    context?: SourceHealthContext,
   ) {
-    return this.sourceHealth.success(kind, runId, source, target, now);
+    return this.sourceHealth.success(kind, runId, source, target, now, context);
   }
 
   public recordSourceFailure(
@@ -851,8 +867,17 @@ export class WatcherStore implements PipelineRepository {
     target: string,
     message: string,
     now: Date,
+    context?: SourceHealthContext,
   ) {
-    return this.sourceHealth.failure(kind, runId, source, target, message, now);
+    return this.sourceHealth.failure(
+      kind,
+      runId,
+      source,
+      target,
+      message,
+      now,
+      context,
+    );
   }
 
   public getRunIntelligenceSummary(runId: string) {

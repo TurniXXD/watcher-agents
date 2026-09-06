@@ -37,6 +37,18 @@ import {
 } from './weather.js';
 
 const logger = createLogger('briefing-bot', env.LOG_LEVEL);
+const allowedUserIds = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
+logger.info(
+  {
+    logLevel: env.LOG_LEVEL,
+    allowedUserCount: allowedUserIds.size,
+    calendarConfigured: Boolean(env.GOOGLE_CALENDAR_CLIENT_ID),
+    ollamaModel: env.OLLAMA_MODEL,
+    schedulerIntervalMs: env.BRIEFING_SCHEDULER_INTERVAL_MS,
+    piperKeepTemporaryFiles: env.PIPER_KEEP_TEMP === 'true',
+  },
+  'Briefing bot configuration loaded',
+);
 const database = createDatabaseClient(env.DATABASE_URL);
 const configuration = new BriefingConfigurationStore(database);
 const calendarStore = new CalendarIntegrationStore(database);
@@ -54,6 +66,7 @@ const tts = new PiperLocalTtsProvider({
   ffmpegExecutable: env.FFMPEG_PATH,
   ffprobeExecutable: env.FFPROBE_PATH,
   keepTemporaryFiles: env.PIPER_KEEP_TEMP === 'true',
+  logger,
 });
 const calendarConfigured = Boolean(env.GOOGLE_CALENDAR_CLIENT_ID);
 const calendarOAuth = calendarConfigured
@@ -95,7 +108,7 @@ const calendarCommands: CalendarCommands | undefined =
 const runtime: { coordinator?: BriefingCoordinator } = {};
 const bot = createBriefingBot(
   env.BRIEFING_TELEGRAM_TOKEN,
-  parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS),
+  allowedUserIds,
   configuration,
   (error) => logger.error({ err: error }, 'Telegram update failed'),
   async (context, voice) => {
@@ -120,6 +133,7 @@ const bot = createBriefingBot(
       progress,
     );
   },
+  logger,
 );
 const scriptModel = new OllamaProvider({
   url: env.OLLAMA_URL,
@@ -136,6 +150,7 @@ const delivery = new BriefingDeliveryService(
   {
     maxAttempts: env.BRIEFING_TELEGRAM_ATTEMPTS,
     baseDelayMs: env.BRIEFING_TELEGRAM_RETRY_BASE_MS,
+    logger,
   },
 );
 runtime.coordinator = new BriefingCoordinator({
@@ -168,6 +183,7 @@ const scheduler = new BriefingScheduler(
   },
   env.BRIEFING_SCHEDULER_INTERVAL_MS,
   (error) => logger.error({ err: error }, 'Briefing scheduler failed'),
+  logger,
 );
 const oauthServer = calendarOAuth
   ? new OAuthCallbackServer(

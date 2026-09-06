@@ -15,7 +15,83 @@ const responseSchema = z.object({
   prompt_eval_count: z.number().int().nonnegative().optional(),
   eval_count: z.number().int().nonnegative().optional(),
   total_duration: z.number().nonnegative().optional(),
+  done_reason: z.string().optional(),
 });
+
+class TruncatedStructuredOutputError extends Error {
+  public override readonly name = 'TruncatedStructuredOutputError';
+}
+
+const completeJsonEnd = (value: string, start: number): number | undefined => {
+  const opening = value[start];
+  if (opening !== '{' && opening !== '[') return undefined;
+  const expectedClosings = [opening === '{' ? '}' : ']'];
+  let quoted = false;
+  let escaped = false;
+  for (let index = start + 1; index < value.length; index += 1) {
+    const character = value[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') {
+      quoted = true;
+      continue;
+    }
+    if (character === '{') expectedClosings.push('}');
+    else if (character === '[') expectedClosings.push(']');
+    else if (character === '}' || character === ']') {
+      if (expectedClosings.at(-1) !== character) return undefined;
+      expectedClosings.pop();
+      if (expectedClosings.length === 0) return index + 1;
+    }
+  }
+  return undefined;
+};
+
+export const parseStructuredJson = (content: string): unknown => {
+  const trimmed = content.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/iu)?.[1];
+  const candidates = fenced ? [trimmed, fenced.trim()] : [trimmed];
+  let directError: unknown;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as unknown;
+    } catch (error) {
+      directError ??= error;
+    }
+  }
+
+  let incompleteJson = false;
+  for (let start = 0; start < trimmed.length; start += 1) {
+    if (trimmed[start] !== '{' && trimmed[start] !== '[') continue;
+    const end = completeJsonEnd(trimmed, start);
+    if (end === undefined) {
+      incompleteJson = true;
+      continue;
+    }
+    try {
+      return JSON.parse(trimmed.slice(start, end)) as unknown;
+    } catch {
+      // Continue to another JSON-looking section in the response.
+    }
+  }
+  if (incompleteJson) {
+    throw new TruncatedStructuredOutputError(
+      'Ollama structured response ended before its JSON was complete',
+    );
+  }
+  throw directError instanceof Error
+    ? directError
+    : new Error('Ollama returned no JSON object');
+};
+
+const correctivePrompt = (reason: string, truncated: boolean): string =>
+  `${truncated ? 'Your previous JSON response was truncated.' : 'Your previous response did not match the required JSON schema.'}
+Return the complete corrected JSON object now. Output only JSON: no Markdown fences, commentary, or reasoning.
+Validation failure: ${reason.slice(0, 1_000)}`;
 
 const stockJsonSchema = {
   type: 'object',
@@ -185,9 +261,33 @@ export class OllamaProvider implements Analyzer {
     generation: { numPredict?: number } = {},
   ): Promise<StructuredGeneration<T>> {
     let lastError = 'Unknown Ollama error';
+    let invalidContent: string | undefined;
+    let invalidReason: string | undefined;
+    let previousWasTruncated = false;
+    const configuredNumPredict =
+      generation.numPredict ?? this.options.numPredict ?? 768;
 
     for (let attempt = 0; attempt <= this.#retries; attempt += 1) {
       try {
+        const numPredict = Math.min(configuredNumPredict * 2 ** attempt, 8_192);
+        const messages = [
+          { role: 'user', content: prompt },
+          ...(invalidContent && invalidReason
+            ? [
+                {
+                  role: 'assistant',
+                  content: invalidContent.slice(0, 6_000),
+                },
+                {
+                  role: 'user',
+                  content: correctivePrompt(
+                    invalidReason,
+                    previousWasTruncated,
+                  ),
+                },
+              ]
+            : []),
+        ];
         const response = await this.#fetch(
           `${this.options.url.replace(/\/$/, '')}/api/chat`,
           {
@@ -199,12 +299,11 @@ export class OllamaProvider implements Analyzer {
               keep_alive: this.options.keepAlive ?? '5m',
               think: this.options.think ?? false,
               format,
-              messages: [{ role: 'user', content: prompt }],
+              messages,
               options: {
                 temperature: 0.1,
                 num_ctx: this.options.numCtx ?? 4096,
-                num_predict:
-                  generation.numPredict ?? this.options.numPredict ?? 768,
+                num_predict: numPredict,
               },
             }),
             signal: signal
@@ -223,16 +322,43 @@ export class OllamaProvider implements Analyzer {
           );
         }
         const payload = responseSchema.parse(await response.json());
-        const json: unknown = JSON.parse(payload.message.content);
+        invalidContent = payload.message.content;
+        const reachedTokenLimit =
+          payload.done_reason === 'length' ||
+          (payload.eval_count !== undefined &&
+            payload.eval_count >= numPredict);
+        let json: unknown;
+        try {
+          json = parseStructuredJson(payload.message.content);
+        } catch (error) {
+          const truncated =
+            error instanceof TruncatedStructuredOutputError ||
+            reachedTokenLimit;
+          previousWasTruncated = truncated;
+          invalidReason = truncated
+            ? `output reached its ${numPredict}-token limit before completing JSON`
+            : errorMessage(error);
+          throw new Error(invalidReason, { cause: error });
+        }
+        let result: T;
+        try {
+          result = schema.parse(json);
+        } catch (error) {
+          previousWasTruncated = reachedTokenLimit;
+          invalidReason = reachedTokenLimit
+            ? `output reached its ${numPredict}-token limit before completing the required JSON fields: ${errorMessage(error)}`
+            : errorMessage(error);
+          throw error;
+        }
         return {
-          result: schema.parse(json),
+          result,
           metrics: {
             ...(payload.total_duration === undefined
               ? {}
               : {
                   durationMs: Math.round(payload.total_duration / 1_000_000),
                 }),
-            llmCallCount: 1,
+            llmCallCount: attempt + 1,
             ...(payload.prompt_eval_count === undefined
               ? {}
               : { promptTokens: payload.prompt_eval_count }),

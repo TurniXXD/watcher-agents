@@ -1,3 +1,5 @@
+import { sourceHttpError } from '@watcher/core';
+
 export const fetchJson = async (
   fetcher: typeof fetch,
   url: string,
@@ -9,8 +11,7 @@ export const fetchJson = async (
       ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
       : AbortSignal.timeout(30_000),
   });
-  if (!response.ok)
-    throw new Error(`HTTP ${response.status} from ${new URL(url).hostname}`);
+  if (!response.ok) throw sourceHttpError(response, url);
   return response.json();
 };
 
@@ -25,7 +26,6 @@ export const fetchText = async (
       ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
       : AbortSignal.timeout(30_000),
   });
-  if (!response.ok)
-    throw new Error(`HTTP ${response.status} from ${new URL(url).hostname}`);
+  if (!response.ok) throw sourceHttpError(response, url);
   return response.text();
 };

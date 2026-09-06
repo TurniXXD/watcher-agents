@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Source, WatchItem } from '@watcher/core';
+import { sourceHttpError, type Source, type WatchItem } from '@watcher/core';
 import { z } from 'zod';
 
 export type EarningsWhispersConfig = { symbol: string };
@@ -71,8 +71,7 @@ const fetchJson = async <T>(
     signal: requestSignal(signal),
   });
   if (response.status === 204) return undefined;
-  if (!response.ok)
-    throw new Error(`HTTP ${response.status} from ${new URL(url).hostname}`);
+  if (!response.ok) throw sourceHttpError(response, url);
   return schema.parse(await response.json());
 };
 
@@ -140,8 +139,7 @@ export class EarningsWhispersSource implements Source<EarningsWhispersConfig> {
       },
       signal: requestSignal(signal),
     });
-    if (!page.ok)
-      throw new Error(`HTTP ${page.status} from ${new URL(pageUrl).hostname}`);
+    if (!page.ok) throw sourceHttpError(page, pageUrl);
     const cookie = cookieHeader(page.headers);
     await page.text();
     if (!cookie)

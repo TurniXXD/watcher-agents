@@ -56,6 +56,10 @@ export class OAuthCallbackServer {
       this.server!.once('error', reject);
       this.server!.listen(port, host, resolve);
     });
+    this.logger.info(
+      { host, port, callbackPath: this.callbackPath },
+      'Calendar OAuth callback server started',
+    );
   }
 
   public async stop(): Promise<void> {
@@ -65,6 +69,7 @@ export class OAuthCallbackServer {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
     });
+    this.logger.info('Calendar OAuth callback server stopped');
   }
 
   private async handle(
@@ -76,6 +81,10 @@ export class OAuthCallbackServer {
     }
     const url = new URL(requestUrl, 'http://localhost');
     if (url.pathname !== this.callbackPath) {
+      this.logger.debug(
+        { method, path: url.pathname },
+        'Ignored request to Calendar OAuth callback server',
+      );
       return { status: 404, body: 'Not found' };
     }
     const oauthError = url.searchParams.get('error');
@@ -83,6 +92,10 @@ export class OAuthCallbackServer {
     const chatId = await this.oauth.completeCallback(
       url.searchParams.get('code') ?? '',
       url.searchParams.get('state') ?? '',
+    );
+    this.logger.info(
+      { telegramChatId: chatId.toString() },
+      'Google Calendar OAuth callback completed',
     );
     await this.onConnected(chatId);
     return {

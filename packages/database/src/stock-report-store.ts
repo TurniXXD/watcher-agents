@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseClient } from './client.js';
+import { PROVIDER_BACKOFF_TARGET } from './source-health-store.js';
 import { average } from './stock-domain/statistics.js';
 
 const firstByTicker = <T extends { ticker: string }>(values: T[]) => {
@@ -190,7 +191,10 @@ export class StockReportStore {
         include: { analyses: true, sourceFailures: true },
       }),
       this.db.sourceHealth.findMany({
-        where: { watcherConfigId: configId },
+        where: {
+          watcherConfigId: configId,
+          target: { not: PROVIDER_BACKOFF_TARGET },
+        },
         orderBy: [{ status: 'desc' }, { source: 'asc' }],
       }),
       this.db.stockAlert.count({

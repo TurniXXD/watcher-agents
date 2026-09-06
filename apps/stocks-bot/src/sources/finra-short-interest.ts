@@ -1,4 +1,9 @@
-import { finiteNumber, type Source, type WatchItem } from '@watcher/core';
+import {
+  finiteNumber,
+  sourceHttpError,
+  type Source,
+  type WatchItem,
+} from '@watcher/core';
 import { z } from 'zod';
 
 export type FinraShortInterestConfig = { symbol: string; maxItems?: number };
@@ -65,8 +70,12 @@ export class FinraShortInterestSource implements Source<FinraShortInterestConfig
           : AbortSignal.timeout(30_000),
       },
     );
-    if (!response.ok)
-      throw new Error(`HTTP ${response.status} from api.finra.org`);
+    if (!response.ok) {
+      throw sourceHttpError(
+        response,
+        'https://api.finra.org/data/group/otcMarket/name/consolidatedShortInterest',
+      );
+    }
     return responseSchema
       .parse(await response.json())
       .sort((left, right) =>

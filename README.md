@@ -53,7 +53,7 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
 
 PostgreSQL is not published to the host. Its data lives in the `watcher-postgres` named volume. The one-shot `migrate` service must complete before either bot starts.
 
-The bots emit structured JSON logs. At `LOG_LEVEL=info`, each run records start, prepared source count, per-source fetch outcomes, source failures, notification sends, and completion counters. Set `LOG_LEVEL=debug` to also log individual item analysis and cached-analysis reuse.
+The bots emit structured JSON logs. At `LOG_LEVEL=info`, watcher runs record start, prepared source count, per-source fetch outcomes, source failures, notification sends, and completion counters. The briefing bot records commands, scheduled run claims, context availability and latency, story-selection metrics, script and audio generation, Telegram delivery channels, and the final run duration. Set `LOG_LEVEL=debug` to also log individual watcher item analysis, cached-analysis reuse, idle briefing scheduler checks, non-command Telegram updates, Piper chunks, and delivery attempts.
 
 To stop the application without deleting data:
 
@@ -258,9 +258,9 @@ The query list also starts empty. Add a topic such as `/addquery mycorrhizal fun
 - **ClinicalTrials.gov:** uses the v2 structured API.
 - **openFDA:** searches drug adverse-event reports by generic drug name; a provider 404 is treated as no results.
 
-External APIs can change, throttle, or return incomplete data. One source failure does not cancel other source results and is included in the run record and digest. Persistent source health applies bounded exponential backoff and reports backoff skips; a later successful check restores healthy status. The system does not invent fallback content.
+External APIs can change, throttle, or return incomplete data. One source failure does not cancel other source results and is included in the run record and digest. Requests are coordinated by a shared limiter for each provider: GDELT is queried serially with at least five seconds between starts, PubMed serializes every NCBI E-utilities request at no more than one per second, bioRxiv reuses one provider response across all queries for 30 minutes, and all Alpha Vantage or Quiver adapters share their provider's queue. The first rate-limit response pauses queued calls for that provider, honors `Retry-After` when supplied, and persists the provider-wide backoff so later runs and other Telegram users do not immediately retry it. Other source failures retain bounded target-specific exponential backoff; a later successful check restores healthy status. The system does not invent fallback content.
 
-Ollama responses are requested as structured JSON and validated with Zod. Malformed responses get a small bounded retry; persistent failures are stored as failed analyses instead of crashing the run. Source content is truncated before it is sent to the model.
+Ollama responses are requested as structured JSON and validated with Zod. The parser safely extracts JSON from Markdown fences or leading commentary. Malformed output gets a small bounded corrective retry containing the validation problem and twice the previous output-token budget, up to 8192 tokens. `done_reason`, token counts, and unfinished JSON structure distinguish truncation so the repair prompt can say that the response was cut off. Persistent failures are stored as failed analyses instead of crashing the run. Source content is truncated before it is sent to the model.
 
 ## Ollama resource protection
 

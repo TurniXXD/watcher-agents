@@ -1,3 +1,4 @@
+import type { WatcherLogger } from '@watcher/core';
 import type {
   BriefingConfiguration,
   BriefingConfigurationStore,
@@ -131,9 +132,45 @@ export const createBriefingBot = (
   geocoding?: GeocodingProvider,
   calendar?: CalendarCommands,
   runBriefing?: BriefingCommandRunner,
+  logger?: WatcherLogger,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
+  bot.use(async (context, next) => {
+    const startedAt = Date.now();
+    const command = commandName(context.message?.text);
+    const callback = context.callbackQuery?.data;
+    const fields = {
+      updateId: context.update.update_id,
+      telegramChatId: context.chat?.id.toString(),
+      telegramUserId: context.from?.id.toString(),
+      ...(command ? { command } : {}),
+      ...(callback ? { callback } : {}),
+    };
+    const message = command
+      ? 'Briefing bot command received'
+      : callback
+        ? 'Briefing bot callback received'
+        : 'Briefing bot update received';
+    (command || callback ? logger?.info : logger?.debug)?.(fields, message);
+    try {
+      await next();
+      (command || callback ? logger?.info : logger?.debug)?.(
+        { ...fields, durationMs: Date.now() - startedAt },
+        command
+          ? 'Briefing bot command completed'
+          : callback
+            ? 'Briefing bot callback completed'
+            : 'Briefing bot update completed',
+      );
+    } catch (error) {
+      logger?.error(
+        { ...fields, err: error, durationMs: Date.now() - startedAt },
+        'Briefing bot update failed',
+      );
+      throw error;
+    }
+  });
 
   const prompt = async (
     context: Context,

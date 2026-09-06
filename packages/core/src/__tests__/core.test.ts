@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { deduplicateItems } from '../deduplicate.js';
 import { WatcherPipeline } from '../pipeline.js';
+import { SourceHttpError } from '../source-http-error.js';
 import { WatcherRunner } from '../runner.js';
 import { computeNextRun, PersistentScheduler, RunGuard } from '../scheduler.js';
 import {
@@ -145,6 +146,67 @@ describe('core watcher behavior', () => {
       unavailableSources: 1,
       percentage: 50,
     });
+  });
+
+  it('stops queued requests for a provider after its first rate limit', async () => {
+    const retryAt = new Date(Date.now() + 60_000);
+    const fetchSource = vi.fn(async () => {
+      throw new SourceHttpError(429, 'api.gdeltproject.org', retryAt);
+    });
+    const recordSourceFailure = vi.fn(async () => undefined);
+    const source = {
+      id: 'NEWS',
+      capabilities: {
+        sourceName: 'GDELT',
+        sourceType: 'NEWS' as const,
+        minimumIntervalMs: 0,
+        preferredIntervalMs: 0,
+        maximumIntervalMs: 0,
+        supportsStreaming: false,
+        costPerRequestUsd: 0,
+        rateLimitPerMinute: null,
+        priority: 1,
+        requestPolicy: {
+          maxConcurrency: 1,
+          minimumSpacingMs: 0,
+          sharedRateLimitBackoff: true,
+        },
+      },
+      fetch: fetchSource,
+    };
+    const pipeline = new WatcherPipeline(
+      {
+        prepareItemsForRun: vi.fn(async () => []),
+        saveAnalysis: vi.fn(async () => undefined),
+        recordSourceFailure,
+      },
+      { analyze: vi.fn() },
+    );
+
+    const result = await pipeline.run('STOCKS', 'run', [
+      { source, target: 'MU', config: {} },
+      { source, target: 'NVDA', config: {} },
+    ]);
+
+    expect(fetchSource).toHaveBeenCalledOnce();
+    expect(recordSourceFailure).toHaveBeenCalledOnce();
+    expect(recordSourceFailure).toHaveBeenCalledWith(
+      'STOCKS',
+      'run',
+      'NEWS',
+      'MU',
+      expect.stringContaining('HTTP 429'),
+      expect.any(Date),
+      {
+        sharedRateLimitBackoff: true,
+        rateLimited: true,
+        retryAt,
+      },
+    );
+    expect(result.sourceFailures).toHaveLength(2);
+    expect(result.sourceFailures[1]?.message).toContain(
+      'RATE_LIMITED provider backoff active',
+    );
   });
 
   it('isolates source output that fails runtime validation', async () => {

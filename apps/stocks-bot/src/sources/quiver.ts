@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import { parseDate, type Source, type WatchItem } from '@watcher/core';
+import {
+  parseDate,
+  sourceHttpError,
+  type Source,
+  type WatchItem,
+} from '@watcher/core';
 import { z } from 'zod';
 
 export type QuiverConfig = { symbol: string; maxItems?: number };
@@ -134,6 +139,12 @@ export class QuiverSource implements Source<QuiverConfig> {
       costPerRequestUsd: 0,
       rateLimitPerMinute: null,
       priority: 55,
+      requestPolicy: {
+        providerKey: 'QUIVER',
+        maxConcurrency: 1,
+        minimumSpacingMs: 1_000,
+        sharedRateLimitBackoff: true,
+      },
     };
   }
 
@@ -170,9 +181,8 @@ export class QuiverSource implements Source<QuiverConfig> {
         ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
         : AbortSignal.timeout(30_000),
     });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} from api.quiverquant.com`);
-    }
+    if (!response.ok)
+      throw sourceHttpError(response, this.endpoint(symbol, maxItems));
     const rows = datasetSchema[this.id].parse(await response.json());
     return this.normalize(symbol, rows)
       .sort(

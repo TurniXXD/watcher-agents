@@ -1,4 +1,8 @@
-import type { Source, WatchItem } from '@watcher/core';
+import {
+  ProviderRequestLimiter,
+  type Source,
+  type WatchItem,
+} from '@watcher/core';
 import { XMLParser } from 'fast-xml-parser';
 import { z } from 'zod';
 import { fetchJson, fetchText } from './utils/http.js';
@@ -31,7 +35,18 @@ export class PubMedSource implements Source<{
     costPerRequestUsd: 0,
     rateLimitPerMinute: 180,
     priority: 90,
+    requestPolicy: {
+      providerKey: 'NCBI_EUTILS',
+      maxConcurrency: 1,
+      minimumSpacingMs: 0,
+      sharedRateLimitBackoff: true,
+    },
   };
+  private readonly requestLimiter = new ProviderRequestLimiter({
+    maxConcurrency: 1,
+    minimumSpacingMs: 1_000,
+    sharedRateLimitBackoff: true,
+  });
   public constructor(private readonly fetcher: typeof fetch = fetch) {}
 
   public async fetch(
@@ -47,10 +62,12 @@ export class PubMedSource implements Source<{
       tool: 'watcher',
     });
     const search = searchSchema.parse(
-      await fetchJson(
-        this.fetcher,
-        `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?${params}`,
-        signal,
+      await this.requestLimiter.run(() =>
+        fetchJson(
+          this.fetcher,
+          `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?${params}`,
+          signal,
+        ),
       ),
     );
     if (search.esearchresult.idlist.length === 0) return [];
@@ -60,10 +77,12 @@ export class PubMedSource implements Source<{
       retmode: 'xml',
       tool: 'watcher',
     });
-    const xml = await fetchText(
-      this.fetcher,
-      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?${fetchParams}`,
-      signal,
+    const xml = await this.requestLimiter.run(() =>
+      fetchText(
+        this.fetcher,
+        `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?${fetchParams}`,
+        signal,
+      ),
     );
     const parsed = new XMLParser({ ignoreAttributes: false }).parse(xml) as {
       PubmedArticleSet?: { PubmedArticle?: PubmedArticle | PubmedArticle[] };

@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import { parseDate, type Source, type WatchItem } from '@watcher/core';
+import {
+  parseDate,
+  sourceHttpError,
+  type Source,
+  type WatchItem,
+} from '@watcher/core';
 import { z } from 'zod';
 
 export type StockRegulatoryConfig = {
@@ -95,8 +100,7 @@ const requestJson = async (
       : AbortSignal.timeout(30_000),
   });
   if (response.status === 404) return null;
-  if (!response.ok)
-    throw new Error(`HTTP ${response.status} from ${url.hostname}`);
+  if (!response.ok) throw sourceHttpError(response, url);
   return schema.parse(await response.json());
 };
 

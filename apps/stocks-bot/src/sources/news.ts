@@ -36,6 +36,11 @@ export class GdeltNewsSource implements Source<NewsConfig> {
     costPerRequestUsd: 0,
     rateLimitPerMinute: null,
     priority: 75,
+    requestPolicy: {
+      maxConcurrency: 1,
+      minimumSpacingMs: 5_000,
+      sharedRateLimitBackoff: true,
+    },
   };
 
   public constructor(private readonly fetcher: typeof fetch = fetch) {}
@@ -58,16 +63,22 @@ export class GdeltNewsSource implements Source<NewsConfig> {
       'maxrecords',
       String(Math.min(config.maxItems ?? 10, 25)),
     );
-    const response = responseSchema.parse(
-      JSON.parse(
-        await fetchText(
-          this.fetcher,
-          url.toString(),
-          { accept: 'application/json' },
-          signal,
-        ),
-      ),
+    const responseText = await fetchText(
+      this.fetcher,
+      url.toString(),
+      { accept: 'application/json' },
+      signal,
     );
+    if (
+      /requests more sparingly|rate[_ -]?limit|limit requests|too many requests/i.test(
+        responseText,
+      )
+    ) {
+      throw new Error(
+        `GDELT rate limit: ${responseText.replaceAll(/\s+/g, ' ').trim().slice(0, 500)}`,
+      );
+    }
+    const response = responseSchema.parse(JSON.parse(responseText));
     return response.articles.map((article) => {
       const externalId = createHash('sha256').update(article.url).digest('hex');
       const publishedAt = parseDate(article.seendate);

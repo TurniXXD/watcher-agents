@@ -2,6 +2,7 @@ import {
   type BriefingDeliveryAttemptRecord,
   type BriefingDeliveryChannelId,
 } from '@watcher/database';
+import type { WatcherLogger } from '@watcher/core';
 import { escapeHtml } from '@watcher/telegram';
 import type { TtsResult } from './tts.js';
 import type { BriefingTelegramTransport } from './telegram-transport.js';
@@ -87,6 +88,7 @@ export class BriefingDeliveryService {
       maxAttempts?: number;
       baseDelayMs?: number;
       sleep?: (durationMs: number) => Promise<void>;
+      logger?: WatcherLogger;
     } = {},
   ) {}
 
@@ -163,6 +165,10 @@ export class BriefingDeliveryService {
   ): Promise<{ success: boolean; messageId?: string }> {
     const completed = await this.attempts.successful(runId, channel);
     if (completed) {
+      this.options.logger?.info(
+        { briefingRunId: runId, channel },
+        'Skipping already completed briefing delivery channel',
+      );
       return {
         success: true,
         ...(completed.telegramMessageId
@@ -175,14 +181,44 @@ export class BriefingDeliveryService {
     const sleep = this.options.sleep ?? defaultSleep;
     for (let index = 0; index < maximum; index += 1) {
       const attempt = await this.attempts.start(runId, channel);
+      const startedAt = Date.now();
+      this.options.logger?.debug(
+        {
+          briefingRunId: runId,
+          channel,
+          attempt: index + 1,
+          maximumAttempts: maximum,
+        },
+        'Starting briefing delivery attempt',
+      );
       try {
         const messageIds = await operation();
         const messageId = messageIds[0];
         if (!messageId) throw new Error('Telegram returned no message ID');
         await this.attempts.succeed(attempt.id, messageId);
+        this.options.logger?.info(
+          {
+            briefingRunId: runId,
+            channel,
+            attempt: index + 1,
+            durationMs: Date.now() - startedAt,
+          },
+          'Briefing delivery channel succeeded',
+        );
         return { success: true, messageId };
       } catch (error) {
         await this.attempts.fail(attempt.id, errorMessage(error));
+        this.options.logger?.warn(
+          {
+            err: error,
+            briefingRunId: runId,
+            channel,
+            attempt: index + 1,
+            maximumAttempts: maximum,
+            durationMs: Date.now() - startedAt,
+          },
+          'Briefing delivery attempt failed',
+        );
         if (index + 1 < maximum) {
           await sleep(baseDelayMs * 2 ** index);
         }

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   finiteNumber,
   parseDate,
+  sourceHttpError,
   type Source,
   type WatchItem,
 } from '@watcher/core';
@@ -57,7 +58,7 @@ const checkedRows = async (
       : AbortSignal.timeout(30_000),
   });
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status} from alphavantage.co`);
+    throw sourceHttpError(response, url);
   }
   const payload = responseSchema.parse(await response.json());
   const providerError =
@@ -78,6 +79,12 @@ export class AlphaVantageOptionsSource implements Source<AlphaVantageStockConfig
     costPerRequestUsd: 0,
     rateLimitPerMinute: null,
     priority: 55,
+    requestPolicy: {
+      providerKey: 'ALPHA_VANTAGE',
+      maxConcurrency: 1,
+      minimumSpacingMs: 1_100,
+      sharedRateLimitBackoff: true,
+    },
   };
 
   public constructor(
@@ -208,6 +215,12 @@ export class AlphaVantageInstitutionalSource implements Source<AlphaVantageStock
     costPerRequestUsd: 0,
     rateLimitPerMinute: null,
     priority: 60,
+    requestPolicy: {
+      providerKey: 'ALPHA_VANTAGE',
+      maxConcurrency: 1,
+      minimumSpacingMs: 1_100,
+      sharedRateLimitBackoff: true,
+    },
   };
 
   public constructor(

@@ -1,7 +1,7 @@
 import type { WatchItem } from '@watcher/core';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { OllamaProvider } from '../ollama.js';
+import { OllamaProvider, parseStructuredJson } from '../ollama.js';
 
 const item: WatchItem = {
   id: 'PUBMED:1',
@@ -14,6 +14,15 @@ const item: WatchItem = {
 };
 
 describe('OllamaProvider', () => {
+  it('extracts JSON from Markdown fences and leading commentary', () => {
+    expect(parseStructuredJson('```json\n{"ok":true}\n```')).toEqual({
+      ok: true,
+    });
+    expect(
+      parseStructuredJson('Based on the source, the result is:\n{"ok":true}'),
+    ).toEqual({ ok: true });
+  });
+
   it('parses and validates structured responses', async () => {
     const mockFetch = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -143,6 +152,118 @@ describe('OllamaProvider', () => {
       'FAILED',
     );
     expect(mockFetch).toHaveBeenCalledTimes(2);
+    const secondCall = mockFetch.mock.calls[1] as unknown as
+      [RequestInfo | URL, RequestInit?] | undefined;
+    const secondRequestBody = secondCall?.[1]?.body;
+    expect(typeof secondRequestBody).toBe('string');
+    if (typeof secondRequestBody !== 'string') {
+      throw new Error('Expected Ollama request body to be a string');
+    }
+    expect(
+      (
+        JSON.parse(secondRequestBody) as {
+          options: { num_predict: number };
+        }
+      ).options.num_predict,
+    ).toBe(1_536);
+  });
+
+  it('repairs a truncated response with a larger output budget', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          done_reason: 'length',
+          eval_count: 512,
+          message: { content: '{"ok":' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ message: { content: '{"ok":true}' } }),
+      );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      numPredict: 512,
+      retries: 1,
+      fetch: mockFetch,
+    });
+
+    const generated = await provider.generateStructuredWithMetrics(
+      'Return an object.',
+      { type: 'object' },
+      z.object({ ok: z.boolean() }),
+    );
+
+    expect(generated.result).toEqual({ ok: true });
+    expect(generated.metrics.llmCallCount).toBe(2);
+    const secondCall = mockFetch.mock.calls[1] as unknown as
+      [RequestInfo | URL, RequestInit?] | undefined;
+    const secondRequestBody = secondCall?.[1]?.body;
+    expect(typeof secondRequestBody).toBe('string');
+    if (typeof secondRequestBody !== 'string') {
+      throw new Error('Expected Ollama request body to be a string');
+    }
+    const secondBody = JSON.parse(secondRequestBody) as {
+      messages: Array<{ role: string; content: string }>;
+      options: { num_predict: number };
+    };
+    expect(secondBody.options.num_predict).toBe(1_024);
+    expect(secondBody.messages).toHaveLength(3);
+    expect(secondBody.messages[2]?.content).toContain(
+      'previous JSON response was truncated',
+    );
+    expect(secondBody.messages[2]?.content).toContain('Output only JSON');
+  });
+
+  it('treats token-limited valid but incomplete JSON as truncated', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          done_reason: 'length',
+          eval_count: 256,
+          message: { content: '{"title":"Partial"}' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          message: {
+            content: '{"title":"Complete","summary":"Finished"}',
+          },
+        }),
+      );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      numPredict: 256,
+      retries: 1,
+      fetch: mockFetch,
+    });
+
+    await expect(
+      provider.generateStructured(
+        'Return an object.',
+        { type: 'object' },
+        z.object({ title: z.string(), summary: z.string() }),
+      ),
+    ).resolves.toEqual({ title: 'Complete', summary: 'Finished' });
+
+    const secondCall = mockFetch.mock.calls[1] as unknown as
+      [RequestInfo | URL, RequestInit?] | undefined;
+    const secondRequestBody = secondCall?.[1]?.body;
+    expect(typeof secondRequestBody).toBe('string');
+    if (typeof secondRequestBody !== 'string') {
+      throw new Error('Expected Ollama request body to be a string');
+    }
+    const secondBody = JSON.parse(secondRequestBody) as {
+      messages: Array<{ content: string }>;
+      options: { num_predict: number };
+    };
+    expect(secondBody.options.num_predict).toBe(512);
+    expect(secondBody.messages[2]?.content).toContain(
+      'previous JSON response was truncated',
+    );
   });
 
   it('includes bounded Ollama response details in failures', async () => {

@@ -86,7 +86,16 @@ export class BriefingCoordinator {
     scheduledFor?: Date,
     progress: BriefingProgress = () => Promise.resolve(),
   ): Promise<BriefingCoordinatorResult> {
+    const runStartedAt = Date.now();
     const now = this.dependencies.now?.() ?? new Date();
+    this.dependencies.logger?.info(
+      {
+        telegramChatId: telegramChatId.toString(),
+        runType: type,
+        scheduledFor: scheduledFor?.toISOString(),
+      },
+      'Briefing run requested',
+    );
     const configuration =
       await this.dependencies.configuration.ensure(telegramChatId);
     if (!configuration.onboarding.completed) {
@@ -151,10 +160,43 @@ export class BriefingCoordinator {
       maximumDurationSeconds: maximumMinutes * 60,
       voice: configuration.settings.voice,
     });
-    if (!started.created) return { run: started.run, duplicate: true };
+    if (!started.created) {
+      this.dependencies.logger?.info(
+        {
+          briefingRunId: started.run.id,
+          telegramChatId: telegramChatId.toString(),
+          runType: type,
+          runStatus: started.run.status,
+        },
+        'Duplicate briefing run skipped',
+      );
+      return { run: started.run, duplicate: true };
+    }
+
+    this.dependencies.logger?.info(
+      {
+        briefingRunId: started.run.id,
+        telegramChatId: telegramChatId.toString(),
+        runType: type,
+        periodStart: periodStart.toISOString(),
+        periodEnd: periodEnd.toISOString(),
+        subscriptions,
+        timezone: configuration.settings.timezone,
+        weatherEnabled: configuration.settings.weatherEnabled,
+        calendarEnabled: configuration.settings.calendarEnabled,
+        targetMinutes,
+        maximumMinutes,
+        voice: configuration.settings.voice,
+      },
+      'Briefing run started',
+    );
 
     try {
       await progress('Loading weather, calendar, and watcher events', 15);
+      this.dependencies.logger?.info(
+        { briefingRunId: started.run.id },
+        'Loading briefing context and watcher events',
+      );
       const [weatherResult, calendarResult, storiesResult, watcherHealth] =
         await Promise.all([
           measured(() =>
@@ -205,6 +247,24 @@ export class BriefingCoordinator {
         storyResult.stories,
         duration.wordBudget,
       );
+      this.dependencies.logger?.info(
+        {
+          briefingRunId: started.run.id,
+          weatherStatus: weather.status,
+          weatherDurationMs: weatherResult.durationMs,
+          calendarStatus: calendar.status,
+          calendarEventCount: calendar.value.length,
+          calendarDurationMs: calendarResult.durationMs,
+          watcherEventsDurationMs: storiesResult.durationMs,
+          storyMetrics: storyResult.metrics,
+          selectedStoryCount: selectedStories.length,
+          coveragePercent: coverage.percentage,
+          plannedMinutes: duration.plannedMinutes,
+          wordBudget: duration.wordBudget,
+          maximumWords: duration.maximumWords,
+        },
+        'Briefing inputs prepared',
+      );
       const scriptInput = {
         date: dateLabel(now, configuration.settings.timezone),
         localTime: local.time,
@@ -236,6 +296,14 @@ export class BriefingCoordinator {
       } as const;
 
       await progress('Writing the spoken briefing', 45);
+      this.dependencies.logger?.info(
+        {
+          briefingRunId: started.run.id,
+          selectedStoryCount: selectedStories.length,
+          wordBudget: duration.wordBudget,
+        },
+        'Generating briefing script',
+      );
       const scriptStartedAt = Date.now();
       let scriptDegraded = false;
       let script: GeneratedBriefingScript;
@@ -253,8 +321,26 @@ export class BriefingCoordinator {
         script = fallbackBriefingScript(scriptInput);
       }
       const scriptDurationMs = Date.now() - scriptStartedAt;
+      this.dependencies.logger?.info(
+        {
+          briefingRunId: started.run.id,
+          durationMs: scriptDurationMs,
+          wordCount: script.wordCount,
+          segmentCount: script.ttsSegments.length,
+          degraded: scriptDegraded,
+        },
+        'Briefing script generated',
+      );
 
       await progress('Generating voice audio', 70);
+      this.dependencies.logger?.info(
+        {
+          briefingRunId: started.run.id,
+          voice: configuration.settings.voice,
+          segmentCount: script.ttsSegments.length,
+        },
+        'Generating briefing audio',
+      );
       let audio: TtsResult | undefined;
       let ttsFailure: string | undefined;
       const ttsStartedAt = Date.now();
@@ -263,6 +349,7 @@ export class BriefingCoordinator {
           script.ttsScript,
           script.ttsSegments,
           configuration.settings.voice,
+          started.run.id,
         );
       } catch (error) {
         ttsFailure = error instanceof Error ? error.message : String(error);
@@ -272,8 +359,29 @@ export class BriefingCoordinator {
         );
       }
       const ttsDurationMs = Date.now() - ttsStartedAt;
+      if (audio) {
+        this.dependencies.logger?.info(
+          {
+            briefingRunId: started.run.id,
+            durationMs: ttsDurationMs,
+            generationDurationMs: audio.generationDurationMs,
+            audioDurationSeconds: audio.audioDurationSeconds,
+            chunkCount: audio.chunkCount,
+            voice: audio.voice,
+          },
+          'Briefing audio generated',
+        );
+      }
 
       await progress('Delivering to Telegram', 90);
+      this.dependencies.logger?.info(
+        {
+          briefingRunId: started.run.id,
+          hasAudio: Boolean(audio),
+          sendTranscript: configuration.settings.sendTranscript,
+        },
+        'Delivering briefing to Telegram',
+      );
       const deliveryStartedAt = Date.now();
       const delivery = await this.dependencies.delivery.deliver({
         runId: started.run.id,
@@ -289,6 +397,15 @@ export class BriefingCoordinator {
         sendTranscript: configuration.settings.sendTranscript,
       });
       const telegramUploadDurationMs = Date.now() - deliveryStartedAt;
+      this.dependencies.logger?.info(
+        {
+          briefingRunId: started.run.id,
+          durationMs: telegramUploadDurationMs,
+          deliveryStatus: delivery.status,
+          failedChannels: delivery.failedChannels,
+        },
+        'Briefing delivery finished',
+      );
       const runMetrics = buildBriefingRunMetrics({
         storyMetrics: storyResult.metrics,
         selectedStories,
@@ -388,6 +505,7 @@ export class BriefingCoordinator {
           watcherHealth: runMetrics.watcherHealth,
           briefingDataCoverage: coverage.percentage,
           briefingMetrics: runMetrics,
+          totalDurationMs: Date.now() - runStartedAt,
         },
         'Briefing run completed',
       );
@@ -402,6 +520,15 @@ export class BriefingCoordinator {
         status: 'FAILED',
         failureReason: error instanceof Error ? error.message : String(error),
       });
+      this.dependencies.logger?.error(
+        {
+          err: error,
+          briefingRunId: started.run.id,
+          runType: type,
+          totalDurationMs: Date.now() - runStartedAt,
+        },
+        'Briefing run failed',
+      );
       throw error;
     }
   }
@@ -410,11 +537,16 @@ export class BriefingCoordinator {
     text: string,
     segments: GeneratedBriefingScript['ttsSegments'],
     voice: 'amy' | 'hfc_female' | 'hfc_male',
+    briefingRunId: string,
   ): Promise<TtsResult> {
     let failure: unknown;
     const attempts = Math.max(1, this.dependencies.ttsAttempts ?? 2);
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
+        this.dependencies.logger?.debug(
+          { briefingRunId, attempt: attempt + 1, maximumAttempts: attempts },
+          'Starting Piper TTS attempt',
+        );
         return await this.dependencies.resources.withExclusiveLease(
           'HEAVY_LOCAL_MODEL',
           () =>
@@ -427,6 +559,15 @@ export class BriefingCoordinator {
         );
       } catch (error) {
         failure = error;
+        this.dependencies.logger?.warn(
+          {
+            err: error,
+            briefingRunId,
+            attempt: attempt + 1,
+            maximumAttempts: attempts,
+          },
+          'Piper TTS attempt failed',
+        );
       }
     }
     throw failure instanceof Error

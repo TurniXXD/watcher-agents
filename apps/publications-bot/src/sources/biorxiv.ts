@@ -15,6 +15,16 @@ const responseSchema = z.object({
   ),
 });
 
+type BioRxivPayload = z.infer<typeof responseSchema>;
+type CachedPayload = {
+  url: string;
+  expiresAt: number;
+  promise: Promise<BioRxivPayload>;
+};
+
+const CACHE_TTL_MS = 30 * 60_000;
+const FAILURE_CACHE_TTL_MS = 5 * 60_000;
+
 export class BioRxivSource implements Source<{
   query: string;
   maxItems?: number;
@@ -30,8 +40,35 @@ export class BioRxivSource implements Source<{
     costPerRequestUsd: 0,
     rateLimitPerMinute: null,
     priority: 80,
+    requestPolicy: {
+      maxConcurrency: 1,
+      minimumSpacingMs: 0,
+      sharedRateLimitBackoff: true,
+    },
   };
+  private cachedPayload?: CachedPayload;
   public constructor(private readonly fetcher: typeof fetch = fetch) {}
+
+  private payload(url: string, signal?: AbortSignal): Promise<BioRxivPayload> {
+    const now = Date.now();
+    if (this.cachedPayload?.url === url && this.cachedPayload.expiresAt > now) {
+      return this.cachedPayload.promise;
+    }
+    const promise = fetchJson(this.fetcher, url, signal).then((value) =>
+      responseSchema.parse(value),
+    );
+    this.cachedPayload = {
+      url,
+      expiresAt: now + CACHE_TTL_MS,
+      promise,
+    };
+    void promise.catch(() => {
+      if (this.cachedPayload?.promise === promise) {
+        this.cachedPayload.expiresAt = Date.now() + FAILURE_CACHE_TTL_MS;
+      }
+    });
+    return promise;
+  }
 
   public async fetch(
     config: { query: string; maxItems?: number },
@@ -40,12 +77,9 @@ export class BioRxivSource implements Source<{
     const end = new Date();
     const start = new Date(end.getTime() - 7 * 86_400_000);
     const date = (value: Date) => value.toISOString().slice(0, 10);
-    const payload = responseSchema.parse(
-      await fetchJson(
-        this.fetcher,
-        `https://api.biorxiv.org/details/biorxiv/${date(start)}/${date(end)}/0`,
-        signal,
-      ),
+    const payload = await this.payload(
+      `https://api.biorxiv.org/details/biorxiv/${date(start)}/${date(end)}/0`,
+      signal,
     );
     const terms = config.query.toLowerCase().split(/\s+/).filter(Boolean);
     return payload.collection

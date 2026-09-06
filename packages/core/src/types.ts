@@ -19,6 +19,12 @@ export type SourceCapabilities = {
   costPerRequestUsd: number;
   rateLimitPerMinute: number | null;
   priority: number;
+  requestPolicy?: {
+    providerKey?: string;
+    maxConcurrency: number;
+    minimumSpacingMs: number;
+    sharedRateLimitBackoff: boolean;
+  };
 };
 
 export type RunEventSummary = {
@@ -171,6 +177,13 @@ export type SourceAttemptDecision = {
   status?: 'HEALTHY' | 'DEGRADED' | 'RATE_LIMITED' | 'UNAVAILABLE';
 };
 
+export type SourceHealthContext = {
+  providerKey?: string;
+  sharedRateLimitBackoff?: boolean;
+  rateLimited?: boolean;
+  retryAt?: Date;
+};
+
 export interface PipelineRepository {
   prepareItemsForRun(
     kind: WatcherKind,
@@ -189,6 +202,7 @@ export interface PipelineRepository {
     source: string,
     target: string,
     now: Date,
+    context?: SourceHealthContext,
   ): Promise<SourceAttemptDecision>;
   recordSourceSuccess?(
     kind: WatcherKind,
@@ -196,6 +210,7 @@ export interface PipelineRepository {
     source: string,
     target: string,
     now: Date,
+    context?: SourceHealthContext,
   ): Promise<void>;
   recordSourceFailure?(
     kind: WatcherKind,
@@ -204,6 +219,7 @@ export interface PipelineRepository {
     target: string,
     message: string,
     now: Date,
+    context?: SourceHealthContext,
   ): Promise<void>;
   getRunIntelligenceSummary?(
     runId: string,

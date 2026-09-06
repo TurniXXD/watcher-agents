@@ -897,6 +897,127 @@ integration('WatcherStore with PostgreSQL', () => {
     ).toEqual({ allowed: true, status: 'HEALTHY' });
   });
 
+  it('shares provider rate-limit backoff across targets and honors Retry-After', async () => {
+    const chat = await store.ensureChat('STOCKS', 793n);
+    const run = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
+    if (!run) throw new Error('Expected run');
+    const now = new Date('2026-09-04T10:00:00Z');
+    const retryAt = new Date('2026-09-04T10:02:00Z');
+    const context = {
+      sharedRateLimitBackoff: true,
+      rateLimited: true,
+      retryAt,
+    };
+
+    await store.recordSourceFailure(
+      'STOCKS',
+      run.id,
+      'NEWS',
+      'MU',
+      'HTTP 429 rate limit',
+      now,
+      context,
+    );
+    const snapshot = await store.getObservabilitySnapshot(
+      chat.watcherConfig!.id,
+    );
+    expect(snapshot.sourceHealth).not.toContainEqual(
+      expect.objectContaining({ target: '__PROVIDER__' }),
+    );
+    await expect(
+      store.claimReconciliation(
+        chat.watcherConfig!.id,
+        new Date(now.getTime() + 500),
+      ),
+    ).resolves.toBe(true);
+    const otherChat = await store.ensureChat('STOCKS', 794n);
+    const otherRun = await store.claimRun(
+      otherChat.watcherConfig!.id,
+      'MANUAL',
+    );
+    if (!otherRun) throw new Error('Expected second run');
+
+    await expect(
+      store.sourceAttemptDecision(
+        'STOCKS',
+        otherRun.id,
+        'NEWS',
+        'NVDA',
+        new Date(now.getTime() + 1_000),
+        context,
+      ),
+    ).resolves.toMatchObject({
+      allowed: false,
+      status: 'RATE_LIMITED',
+      retryAt,
+    });
+
+    await store.recordSourceSuccess(
+      'STOCKS',
+      otherRun.id,
+      'NEWS',
+      'NVDA',
+      new Date(retryAt.getTime() + 1_000),
+      context,
+    );
+    await expect(
+      store.sourceAttemptDecision(
+        'STOCKS',
+        otherRun.id,
+        'NEWS',
+        'AAPL',
+        new Date(retryAt.getTime() + 2_000),
+        context,
+      ),
+    ).resolves.toEqual({ allowed: true, status: 'HEALTHY' });
+  });
+
+  it('treats legacy target rate limits as provider-wide backoff', async () => {
+    const firstChat = await store.ensureChat('STOCKS', 795n);
+    const firstRun = await store.claimRun(
+      firstChat.watcherConfig!.id,
+      'MANUAL',
+    );
+    if (!firstRun) throw new Error('Expected first run');
+    const now = new Date('2026-09-04T11:00:00Z');
+    const retryAt = new Date('2026-09-04T11:10:00Z');
+    await store.recordSourceFailure(
+      'STOCKS',
+      firstRun.id,
+      'NEWS',
+      'MU',
+      'HTTP 429 rate limit',
+      now,
+      {
+        sharedRateLimitBackoff: false,
+        rateLimited: true,
+        retryAt,
+      },
+    );
+
+    const secondChat = await store.ensureChat('STOCKS', 796n);
+    const secondRun = await store.claimRun(
+      secondChat.watcherConfig!.id,
+      'MANUAL',
+    );
+    if (!secondRun) throw new Error('Expected second run');
+
+    await expect(
+      store.sourceAttemptDecision(
+        'STOCKS',
+        secondRun.id,
+        'NEWS',
+        'NVDA',
+        new Date(now.getTime() + 1_000),
+        { sharedRateLimitBackoff: true },
+      ),
+    ).resolves.toMatchObject({
+      allowed: false,
+      status: 'RATE_LIMITED',
+      retryAt,
+    });
+  });
+
   it('persists company universe state and lifecycle events', async () => {
     const chat = await store.ensureChat('STOCKS', 778n);
     const created = await universe.createCompany({

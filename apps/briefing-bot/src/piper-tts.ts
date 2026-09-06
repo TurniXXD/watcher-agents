@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { briefingVoiceIdSchema } from '@watcher/database';
+import type { WatcherLogger } from '@watcher/core';
 import { chunkSpokenText } from './utils/audio-chunks.js';
 import { runProcess, type ProcessRunner } from './utils/process-runner.js';
 import type { TtsInput, TtsLanguage, TtsProvider, TtsResult } from './tts.js';
@@ -17,6 +18,7 @@ export type PiperTtsOptions = {
   keepTemporaryFiles?: boolean;
   run?: ProcessRunner;
   now?: () => number;
+  logger?: WatcherLogger;
 };
 
 const concatEntry = (path: string): string =>
@@ -51,9 +53,28 @@ export class PiperLocalTtsProvider implements TtsProvider {
     if (chunks.length === 0) throw new Error('TTS text must not be empty');
     const directory = await mkdtemp(join(tmpdir(), 'watcher-piper-'));
     const startedAt = this.now();
+    this.options.logger?.info(
+      {
+        voice,
+        segmentCount: segments.length,
+        chunkCount: chunks.length,
+        languages: [...new Set(segments.map(({ language }) => language))],
+      },
+      'Piper speech generation started',
+    );
     try {
       const wavFiles: string[] = [];
       for (const [index, chunk] of chunks.entries()) {
+        this.options.logger?.debug(
+          {
+            voice,
+            chunk: index + 1,
+            chunkCount: chunks.length,
+            modelId: chunk.definition.modelId,
+            characterCount: chunk.text.length,
+          },
+          'Generating Piper audio chunk',
+        );
         const output = join(
           directory,
           `chunk-${String(index).padStart(3, '0')}.wav`,
@@ -123,6 +144,15 @@ export class PiperLocalTtsProvider implements TtsProvider {
       if (!Number.isFinite(audioDurationSeconds) || audioDurationSeconds <= 0) {
         throw new Error('ffprobe returned an invalid audio duration');
       }
+      this.options.logger?.info(
+        {
+          voice,
+          chunkCount: chunks.length,
+          generationDurationMs: this.now() - startedAt,
+          audioDurationSeconds,
+        },
+        'Piper speech generation completed',
+      );
       return {
         audio: await readFile(output),
         mimeType: 'audio/ogg',
