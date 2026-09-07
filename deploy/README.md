@@ -175,7 +175,7 @@ Before enabling automatic deployment:
 1. Confirm the VPS can reach Ollama at the configured `OLLAMA_URL`.
 2. Apply the conservative Ollama systemd settings documented in the root README (`OLLAMA_NUM_PARALLEL=1`, one loaded model, and a small queue), then verify them with `systemctl show ollama` and `ollama ps`.
 3. Confirm the deployment user can run `docker compose version` without sudo.
-4. Confirm all runtime env files exist and are mode `0600`, and install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`.
+4. Confirm all runtime env files exist, and install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation.
 5. Push the completed application to `main` and wait for `watcher-ci` to pass.
 6. Approve the `production` environment deployment if approval protection is enabled.
 
@@ -225,6 +225,6 @@ To redeploy an older application version, run `deploy-vps` manually from a branc
 - **Tailscale ping fails:** verify the OAuth client includes the auth-key/device write permissions, owns `tag:ci`, and the tailnet policy allows `tag:ci` to reach the server.
 - **SSH host verification fails:** regenerate the line only after verifying that the VPS host-key fingerprint changed for a legitimate reason.
 - **GHCR pull is denied:** confirm `GHCR_TOKEN` has `read:packages`, organization SSO authorization, and access to the package.
-- **Runtime file rejected:** run `chmod 600 /opt/watcher/deploy/runtime/*.env`.
+- **Runtime file rejected:** confirm the deployment user owns `/opt/watcher/deploy/runtime`, then run `chmod 700 /opt/watcher/deploy/runtime && chmod 600 /opt/watcher/deploy/runtime/*.env`.
 - **Ollama is unreachable:** ensure Ollama listens on an address reachable from Docker and keep `OLLAMA_URL=http://host.docker.internal:11434`; production Compose provides the Linux host-gateway mapping.
 - **A rollout fails:** the workflow prints Compose status plus migration and bot logs. Also inspect `/opt/watcher/backups` before attempting database recovery.

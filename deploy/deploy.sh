@@ -32,6 +32,11 @@ for required_file in "${required_files[@]}"; do
   fi
 done
 
+chmod 700 deploy/runtime
+while IFS= read -r runtime_file; do
+  chmod 600 "$runtime_file"
+done < <(find deploy/runtime -maxdepth 1 -type f -print)
+
 if ! [[ "$BACKUP_RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
   echo "BACKUP_RETENTION_DAYS must be a non-negative integer." >&2
   exit 1
