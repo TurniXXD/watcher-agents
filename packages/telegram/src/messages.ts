@@ -185,7 +185,7 @@ const intelligenceSection = (result: PipelineResult): string => {
     .slice(0, 12)
     .map(
       (event) =>
-        `${materialityIcon(event.materiality)} <b>${htmlText(event.ticker, 30)}</b> · ${htmlText(event.eventType, 100)} · ${htmlText(event.materiality, 20)}\n${htmlText(event.title, 500)}${signalDetails(event)}\n<i>${htmlText(event.decision === 'ANALYZE' ? 'Analyzed' : event.decision === 'COOLDOWN' ? 'Stored; ticker cooldown active' : 'Stored without LLM analysis', 100)}</i>`,
+        `${materialityIcon(event.materiality)} <b>${htmlText(event.ticker, 30)}</b> · ${htmlText(event.eventType, 100)} · ${htmlText(event.materiality, 20)}\n${optionalSourceLink(event.title, event.sourceUrl, 500)}${signalDetails(event)}\n<i>${htmlText(event.decision === 'ANALYZE' ? 'Analyzed' : event.decision === 'COOLDOWN' ? 'Stored; ticker cooldown active' : 'Stored without LLM analysis', 100)}</i>`,
     );
   const counters = [
     `${intelligence.newEventCount} new`,

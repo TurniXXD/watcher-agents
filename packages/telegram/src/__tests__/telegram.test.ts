@@ -196,6 +196,8 @@ describe('Telegram utilities', () => {
             ticker: 'MU',
             eventType: 'MANAGEMENT_CHANGE',
             title: 'Micron leadership update',
+            sourceUrl:
+              'https://www.sec.gov/Archives/edgar/data/1/leadership.htm',
             materiality: 'MEDIUM',
             action: 'TARGETED_ANALYSIS',
             decision: 'ANALYZE',
@@ -263,6 +265,9 @@ describe('Telegram utilities', () => {
     expect(text).toContain('⏱ <b>Run time:</b> 6m 6s');
     expect(text).toContain('🧭 <b>Event processing</b>');
     expect(text).toContain('1 new · 1 duplicates');
+    expect(text).toContain(
+      '<a href="https://www.sec.gov/Archives/edgar/data/1/leadership.htm">Micron leadership update</a>',
+    );
     expect(text).toContain(
       '<a href="https://www.sec.gov/Archives/edgar/data/1/a.htm">SEC</a>\n\n──────────\n\n<b>2. MU</b>',
     );

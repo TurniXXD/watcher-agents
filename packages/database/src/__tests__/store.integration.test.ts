@@ -319,6 +319,12 @@ integration('WatcherStore with PostgreSQL', () => {
     expect(await store.getRunIntelligenceSummary(run.id)).toMatchObject({
       newEventCount: 1,
       storedOnlyCount: 1,
+      events: [
+        {
+          sourceUrl:
+            'https://www.sec.gov/Archives/edgar/data/723125/000110465926101067/primary.xml',
+        },
+      ],
     });
   });
 

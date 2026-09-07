@@ -16,19 +16,28 @@ export const htmlText = (value: string, limit: number): string => {
   return output;
 };
 
-export const sourceLink = (source: string, rawUrl: string): string => {
-  const label = htmlText(source, 100);
+export const sourceLink = (
+  source: string,
+  rawUrl: string,
+  labelLimit = 100,
+): string => {
+  const label = htmlText(source, labelLimit);
   const url = new URL(rawUrl).toString();
   return url.length <= 2048
     ? `<a href="${escapeHtml(url)}">${label}</a>`
     : label;
 };
 
-export const optionalSourceLink = (source: string, rawUrl: unknown): string => {
-  if (typeof rawUrl !== 'string' || !rawUrl) return htmlText(source, 100);
+export const optionalSourceLink = (
+  source: string,
+  rawUrl: unknown,
+  labelLimit = 100,
+): string => {
+  if (typeof rawUrl !== 'string' || !rawUrl)
+    return htmlText(source, labelLimit);
   try {
-    return sourceLink(source, rawUrl);
+    return sourceLink(source, rawUrl, labelLimit);
   } catch {
-    return htmlText(source, 100);
+    return htmlText(source, labelLimit);
   }
 };

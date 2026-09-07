@@ -687,7 +687,15 @@ export class StockEventStore {
   ): Promise<RunIntelligenceSummary | undefined> {
     const relations = await this.db.eventObservation.findMany({
       where: { runId },
-      include: { event: true },
+      include: {
+        event: {
+          include: {
+            primaryEvidence: {
+              select: { sourceUrl: true, url: true },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: 'asc' },
     });
     if (relations.length === 0) return undefined;
@@ -696,6 +704,9 @@ export class StockEventStore {
       ticker: relation.event.ticker,
       eventType: relation.event.eventType,
       title: relation.event.title,
+      sourceUrl:
+        relation.event.primaryEvidence.sourceUrl ??
+        relation.event.primaryEvidence.url,
       materiality: relation.event.materiality,
       action: relation.event.action,
       decision: relation.decision,

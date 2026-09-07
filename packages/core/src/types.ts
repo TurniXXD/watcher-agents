@@ -32,6 +32,7 @@ export type RunEventSummary = {
   ticker: string;
   eventType: string;
   title: string;
+  sourceUrl?: string | null;
   materiality: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
   action:
     | 'STORE'
