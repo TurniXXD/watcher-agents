@@ -25,6 +25,36 @@ required_files=(
   deploy/runtime/briefing-bot.env
 )
 
+required_env_values=(
+  "deploy/runtime/postgres.env:POSTGRES_DB"
+  "deploy/runtime/postgres.env:POSTGRES_USER"
+  "deploy/runtime/postgres.env:POSTGRES_PASSWORD"
+  "deploy/runtime/migrate.env:DATABASE_URL"
+  "deploy/runtime/stocks-bot.env:DATABASE_URL"
+  "deploy/runtime/stocks-bot.env:STOCKS_TELEGRAM_TOKEN"
+  "deploy/runtime/stocks-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/stocks-bot.env:OLLAMA_URL"
+  "deploy/runtime/stocks-bot.env:OLLAMA_MODEL"
+  "deploy/runtime/stocks-bot.env:SEC_USER_AGENT"
+  "deploy/runtime/publications-bot.env:DATABASE_URL"
+  "deploy/runtime/publications-bot.env:PUBLICATIONS_TELEGRAM_TOKEN"
+  "deploy/runtime/publications-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/publications-bot.env:OLLAMA_URL"
+  "deploy/runtime/publications-bot.env:OLLAMA_MODEL"
+  "deploy/runtime/news-bot.env:DATABASE_URL"
+  "deploy/runtime/news-bot.env:NEWS_TELEGRAM_TOKEN"
+  "deploy/runtime/news-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/news-bot.env:OLLAMA_URL"
+  "deploy/runtime/news-bot.env:OLLAMA_MODEL"
+  "deploy/runtime/mu-clubs-monitor.env:DATABASE_URL"
+  "deploy/runtime/mu-clubs-monitor.env:MU_CLUBS_API_TOKEN"
+  "deploy/runtime/briefing-bot.env:DATABASE_URL"
+  "deploy/runtime/briefing-bot.env:BRIEFING_TELEGRAM_TOKEN"
+  "deploy/runtime/briefing-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/briefing-bot.env:OLLAMA_URL"
+  "deploy/runtime/briefing-bot.env:OLLAMA_MODEL"
+)
+
 for required_file in "${required_files[@]}"; do
   if [[ ! -f "$required_file" ]]; then
     echo "Missing required deployment file: $DEPLOY_DIR/$required_file" >&2
@@ -36,6 +66,24 @@ chmod 700 deploy/runtime
 while IFS= read -r runtime_file; do
   chmod 600 "$runtime_file"
 done < <(find deploy/runtime -maxdepth 1 -type f -print)
+
+missing_env_values=()
+for required_env_value in "${required_env_values[@]}"; do
+  file="${required_env_value%%:*}"
+  key="${required_env_value#*:}"
+  line="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1 || true)"
+  value="${line#*=}"
+
+  if [[ -z "$line" || -z "$value" || "$value" == "''" || "$value" == '""' ]]; then
+    missing_env_values+=("$file: $key")
+  fi
+done
+
+if ((${#missing_env_values[@]} > 0)); then
+  echo "Runtime environment files are missing required values:" >&2
+  printf '%s\n' "${missing_env_values[@]}" >&2
+  exit 1
+fi
 
 if ! [[ "$BACKUP_RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
   echo "BACKUP_RETENTION_DAYS must be a non-negative integer." >&2

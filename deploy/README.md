@@ -226,5 +226,6 @@ To redeploy an older application version, run `deploy-vps` manually from a branc
 - **SSH host verification fails:** regenerate the line only after verifying that the VPS host-key fingerprint changed for a legitimate reason.
 - **GHCR pull is denied:** confirm `GHCR_TOKEN` has `read:packages`, organization SSO authorization, and access to the package.
 - **Runtime file rejected:** confirm the deployment user owns `/opt/watcher/deploy/runtime`, then run `chmod 700 /opt/watcher/deploy/runtime && chmod 600 /opt/watcher/deploy/runtime/*.env`.
+- **Missing runtime value:** add the reported key to the reported file. For example, if `news-bot.env` is missing `NEWS_TELEGRAM_TOKEN`, add a distinct BotFather token to `/opt/watcher/deploy/runtime/news-bot.env`, run `chmod 600 /opt/watcher/deploy/runtime/news-bot.env`, and redeploy.
 - **Ollama is unreachable:** ensure Ollama listens on an address reachable from Docker and keep `OLLAMA_URL=http://host.docker.internal:11434`; production Compose provides the Linux host-gateway mapping.
 - **A rollout fails:** the workflow prints Compose status plus migration and bot logs. Also inspect `/opt/watcher/backups` before attempting database recovery.
