@@ -211,6 +211,8 @@ services:
       - ./deploy/runtime/briefing-bot.env
     environment:
       NODE_ENV: production
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports:
       - '127.0.0.1:8789:8789'
     volumes:

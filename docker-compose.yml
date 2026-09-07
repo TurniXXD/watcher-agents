@@ -177,6 +177,8 @@ services:
       - ${WATCHER_ENV_FILE:-.env.example}
     environment:
       OLLAMA_NUM_CTX: ${BRIEFING_OLLAMA_NUM_CTX:-8192}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports:
       - '127.0.0.1:8789:8789'
     volumes:

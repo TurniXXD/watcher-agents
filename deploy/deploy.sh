@@ -129,6 +129,25 @@ if ((${#insecure_files[@]} > 0)); then
   exit 1
 fi
 
+interpolated_secret_files=()
+while IFS= read -r runtime_file; do
+  while IFS= read -r runtime_line || [[ -n "$runtime_line" ]]; do
+    without_escaped_dollars="${runtime_line//\$\$/}"
+    if [[ "$without_escaped_dollars" =~ \$\{?[A-Za-z_] ]]; then
+      interpolated_secret_files+=("$runtime_file")
+      break
+    fi
+  done <"$runtime_file"
+done < <(find deploy/runtime -maxdepth 1 -type f -print)
+
+if ((${#interpolated_secret_files[@]} > 0)); then
+  echo "Runtime environment files contain an unescaped Docker Compose variable reference:" >&2
+  printf '%s\n' "${interpolated_secret_files[@]}" >&2
+  echo "Regenerate them with deploy/render-env.sh or escape each literal dollar sign as two dollar signs." >&2
+  echo "If an affected database password was already used, rotate the database role password and every DATABASE_URL together." >&2
+  exit 1
+fi
+
 umask 077
 
 cat >"$CANDIDATE_FILE" <<EOF
@@ -231,7 +250,7 @@ if ! compose_candidate up \
   stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot; then
   echo "Release failed its container health checks." >&2
 
-  if [[ -f "$RELEASE_FILE" ]]; then
+  if [[ -f "$RELEASE_FILE" ]] && ! cmp -s "$CANDIDATE_FILE" "$RELEASE_FILE"; then
     echo "Restoring the previous healthy application image..."
     compose_release pull stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot
     compose_release up \
@@ -240,6 +259,8 @@ if ! compose_candidate up \
       --wait \
       --wait-timeout 180 \
       stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot
+  elif [[ -f "$RELEASE_FILE" ]]; then
+    echo "Previous release matches the failed candidate; skipping an ineffective rollback." >&2
   fi
 
   exit 1
