@@ -1,13 +1,13 @@
 const scheduleExample = '/schedule 0 8 * * * Europe/Prague';
 
 export const publicationsHelp = `/about — what the publications bot does and how to use it
-/addqueries — import topics from an attached CSV file
-/addquery TOPIC — add a topic using the global source settings
+/add_queries — import topics from an attached CSV file
+/add_query TOPIC — add a topic using the global source settings
 /help — show this command list
-/listsources — list available sources and provider links
+/list_sources — list available sources and provider links
 /pause — pause scheduled runs
 /queries — list topics
-/removequery TOPIC — remove a topic
+/remove_query TOPIC — remove a topic
 /resume — resume scheduled runs
 /run — run now
 /schedule [CRON] [TIMEZONE] — view or update schedule
@@ -36,12 +36,12 @@ Publications Watcher is a private, self-hosted Telegram research assistant for f
 • Efficient: durable deduplication and bounded analysis prevent repeated processing.
 
 *How to use it*
-1. Add a topic with \`/addquery TOPIC\`, or import many topics by attaching a CSV to \`/addqueries\`.
+1. Add a topic with \`/add_query TOPIC\`, or import many topics by attaching a CSV to \`/add_queries\`.
 2. Review configured topics with \`/queries\`.
-3. Use \`/sources\` to control providers globally for every current and future topic, and \`/listsources\` to review provider coverage.
+3. Use \`/sources\` to control providers globally for every current and future topic, and \`/list_sources\` to review provider coverage.
 4. Run \`/run\` for an immediate search, or configure recurring checks with \`/schedule CRON TIMEZONE\`.
 5. Check \`/status\` for scheduling state. Use \`/pause\` and \`/resume\` without losing topics or source settings.
-6. Remove a topic with \`/removequery TOPIC\` when it is no longer relevant.
+6. Remove a topic with \`/remove_query TOPIC\` when it is no longer relevant.
 
 _Important:_ The bot summarizes available source material. Always consult the linked record and primary evidence before relying on a result for research, clinical, or regulatory decisions.`;
 

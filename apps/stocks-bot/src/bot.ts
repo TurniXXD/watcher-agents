@@ -236,7 +236,7 @@ export const createStocksBot = (
       ),
     );
   });
-  bot.command('rundiscovery', async (ctx) => {
+  bot.command(['run_discovery', 'rundiscovery'], async (ctx) => {
     const current = await chat(ctx.chat.id);
     if (!discoveryEnabled) {
       await ctx.reply(
@@ -257,7 +257,7 @@ export const createStocksBot = (
           : `Discovery scan complete in ${formatRunDuration(result.durationMs)}. Observed ${result.observedCount}, selected ${result.candidateCount}, activated ${result.activatedTickers.length}${result.activatedTickers.length ? ` (${result.activatedTickers.join(', ')})` : ''}, rejected ${result.rejectedCount}.`;
     await ctx.api.editMessageText(ctx.chat.id, progress.message_id, message);
   });
-  bot.command('addstock', async (ctx) => {
+  bot.command(['add_stock', 'addstock'], async (ctx) => {
     const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
     const current = await chat(ctx.chat.id);
     let company: StockCompany;
@@ -282,7 +282,7 @@ export const createStocksBot = (
       `${company.symbol} — ${company.companyName} added with the current global source settings.`,
     );
   });
-  bot.command('settier', async (ctx) => {
+  bot.command(['set_tier', 'settier'], async (ctx) => {
     const argument = commandArgument(ctx.message?.text);
     const [rawSymbol, rawTier, possibleDate, ...reasonParts] =
       argument.split(/\s+/);
@@ -319,7 +319,7 @@ export const createStocksBot = (
     });
     await ctx.reply(`${updated.ticker} tier set to ${updated.monitoringTier}.`);
   });
-  bot.command('setmode', async (ctx) => {
+  bot.command(['set_mode', 'setmode'], async (ctx) => {
     const [rawSymbol, rawMode] = commandArgument(ctx.message?.text).split(
       /\s+/,
     );
@@ -333,7 +333,7 @@ export const createStocksBot = (
       `${updated.ticker} monitoring mode set to ${updated.monitoringMode}.`,
     );
   });
-  bot.command('setpriority', async (ctx) => {
+  bot.command(['set_priority', 'setpriority'], async (ctx) => {
     const [rawSymbol, rawPriority] = commandArgument(ctx.message?.text).split(
       /\s+/,
     );
@@ -355,17 +355,17 @@ export const createStocksBot = (
     const updated = await universe.updateState(current.id, symbol, { enabled });
     return `${updated.ticker} monitoring ${enabled ? 'enabled' : 'disabled'}.`;
   };
-  bot.command('stockon', async (ctx) => {
+  bot.command(['stock_on', 'stockon'], async (ctx) => {
     await ctx.reply(
       await setStockEnabled(ctx.chat.id, ctx.message?.text, true),
     );
   });
-  bot.command('stockoff', async (ctx) => {
+  bot.command(['stock_off', 'stockoff'], async (ctx) => {
     await ctx.reply(
       await setStockEnabled(ctx.chat.id, ctx.message?.text, false),
     );
   });
-  bot.command('removestock', async (ctx) => {
+  bot.command(['remove_stock', 'removestock'], async (ctx) => {
     const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
     const current = await chat(ctx.chat.id);
     const result = await store.removeStock(current.id, symbol);
@@ -382,7 +382,7 @@ export const createStocksBot = (
       { reply_markup: globalSourceKeyboard(settings, 'ss') },
     );
   });
-  bot.command('listsources', async (ctx) => {
+  bot.command(['list_sources', 'listsources'], async (ctx) => {
     await ctx.reply(renderStockSourceList(), {
       parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },

@@ -1,4 +1,5 @@
 export * from './briefing.js';
+export * from './utils/network.js';
 export * from './deduplicate.js';
 export * from './logger.js';
 export * from './observation.js';

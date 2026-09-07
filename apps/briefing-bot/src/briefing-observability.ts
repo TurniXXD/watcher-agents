@@ -1,4 +1,4 @@
-import type { WatcherBotId } from '@watcher/core';
+import { registeredWatcherBots, type WatcherBotId } from '@watcher/core';
 import type { BriefingWatcherHealthRecord } from '@watcher/database';
 import type { ContextAvailability } from './script-generator.js';
 import type {
@@ -94,18 +94,17 @@ export const calculateWatcherNoise = (
   metrics: StoryEngineMetrics,
   selectedStories: readonly BriefingStoryCluster[],
 ): Record<WatcherBotId, WatcherNoiseMetrics> => {
-  const selectedEventIds = {
-    stocks: new Set<string>(),
-    medical: new Set<string>(),
-  };
+  const selectedEventIds = Object.fromEntries(
+    registeredWatcherBots.map((watcherBot) => [watcherBot, new Set<string>()]),
+  ) as Record<WatcherBotId, Set<string>>;
   for (const story of selectedStories) {
     for (const event of story.events) {
       selectedEventIds[event.watcherBot].add(event.id);
     }
   }
   return Object.fromEntries(
-    (['stocks', 'medical'] as const).map((watcherBot) => {
-      const eventsEmitted = metrics.eventsByWatcher[watcherBot];
+    registeredWatcherBots.map((watcherBot) => {
+      const eventsEmitted = metrics.eventsByWatcher[watcherBot] ?? 0;
       const eventsSelected = selectedEventIds[watcherBot].size;
       const selectionRate = percentage(eventsSelected, eventsEmitted);
       return [
@@ -116,7 +115,7 @@ export const calculateWatcherNoise = (
           eventsOmitted: Math.max(0, eventsEmitted - eventsSelected),
           selectionRate,
           duplicateRate: percentage(
-            metrics.duplicateReductionByWatcher[watcherBot],
+            metrics.duplicateReductionByWatcher[watcherBot] ?? 0,
             eventsEmitted,
           ),
           flaggedForTuning: eventsEmitted >= 20 && selectionRate < 10,
@@ -158,7 +157,7 @@ export const watcherHealthFromCoverage = (
   coverage: BriefingCoverage,
 ): BriefingRunMetrics['watcherHealth'] =>
   Object.fromEntries(
-    (['stocks', 'medical'] as const).map((watcherBot) => [
+    registeredWatcherBots.map((watcherBot) => [
       watcherBot,
       coverage.components.find(({ id }) => id === watcherBot)?.status ??
         'UNAVAILABLE',

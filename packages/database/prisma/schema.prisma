@@ -10,6 +10,7 @@ datasource db {
 enum WatcherKind {
   STOCKS
   PUBLICATIONS
+  NEWS
 }
 
 enum RunTrigger {
@@ -246,6 +247,53 @@ enum AlertSeverity {
 enum BriefingWatcherBot {
   STOCKS
   MEDICAL
+  NEWS
+  MU_CLUBS
+}
+
+enum MuClubSourceType {
+  WEBSITE
+  INSTAGRAM
+  FACEBOOK
+  RSS
+  CALENDAR
+  LINKTREE
+  OTHER
+}
+
+enum MuClubSourceStatus {
+  ACTIVE
+  UNSUPPORTED
+  BROKEN
+  MANUAL
+  NO_MONITORABLE_SOURCE
+}
+
+enum MuClubActivityType {
+  NEW_EVENT
+  REGISTRATION_OPEN
+  RECRUITMENT
+  MEETING
+  WORKSHOP
+  LECTURE
+  DEADLINE
+  TRIP
+  VOLUNTEER_OPPORTUNITY
+  ANNOUNCEMENT
+  OTHER_RELEVANT_UPDATE
+}
+
+enum MuMonitorRunStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+enum NewsScope {
+  CZECH
+  GLOBAL
 }
 
 enum BriefingConfidence {
@@ -571,6 +619,8 @@ model TelegramChat {
   watcherConfig WatcherConfig?
   stocks        Stock[]
   queries       PublicationQuery[]
+  newsFeeds     NewsFeed[]
+  newsTopics    NewsTopic[]
 
   @@unique([kind, chatId])
 }
@@ -1221,4 +1271,177 @@ model PublicationSourceConfig {
   query   PublicationQuery      @relation(fields: [queryId], references: [id], onDelete: Cascade)
 
   @@unique([queryId, source])
+}
+
+model NewsFeed {
+  id           String       @id @default(uuid())
+  chatConfigId String
+  scope        NewsScope
+  name         String
+  url          String
+  enabled      Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  chatConfig   TelegramChat @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([chatConfigId, scope, url])
+  @@index([chatConfigId, scope, enabled])
+}
+
+model NewsTopic {
+  id              String       @id @default(uuid())
+  chatConfigId    String
+  scope           NewsScope
+  topic           String
+  normalizedTopic String
+  createdAt       DateTime     @default(now())
+  chatConfig      TelegramChat @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([chatConfigId, scope, normalizedTopic])
+  @@index([chatConfigId, scope])
+}
+
+model MuClub {
+  id           String             @id
+  slug         String             @unique
+  name         String
+  status       MuClubSourceStatus @default(ACTIVE)
+  discoveryUrl String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  sources      MuClubSource[]
+  activities   MuClubActivity[]
+
+  @@map("mu_clubs")
+}
+
+model MuClubSource {
+  id               String             @id
+  clubId           String
+  type             MuClubSourceType
+  url              String?
+  externalId       String?
+  username         String?
+  status           MuClubSourceStatus @default(ACTIVE)
+  lastCheckedAt    DateTime?
+  lastSuccessfulAt DateTime?
+  lastError        String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  club             MuClub             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  activities       MuClubActivity[]
+  sourceRuns       MuSourceRun[]
+
+  @@index([clubId, status])
+  @@map("mu_club_sources")
+}
+
+model InstagramAccount {
+  username      String          @id
+  displayName   String?
+  biography     String?
+  profileUrl    String
+  externalLinks Json
+  fetchedAt     DateTime
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  posts         InstagramPost[]
+
+  @@map("instagram_accounts")
+}
+
+model InstagramPost {
+  id          String   @id
+  username    String
+  shortcode   String?
+  caption     String?
+  publishedAt DateTime?
+  url         String
+  mediaType   String?
+  imageUrl    String?
+  contentHash String
+  raw         Json?
+  fetchedAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  account     InstagramAccount @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@unique([username, shortcode])
+  @@index([username, publishedAt])
+  @@map("instagram_posts")
+}
+
+model MuClubActivity {
+  id             String             @id @default(uuid())
+  clubId         String
+  sourceId       String
+  externalItemId String
+  contentHash    String
+  type           MuClubActivityType
+  title          String
+  summary        String
+  sourceUrl      String
+  publishedAt    DateTime?
+  startAt        DateTime?
+  deadlineAt     DateTime?
+  location       String?
+  signupUrl      String?
+  importance     Int
+  confidence     Float
+  raw            Json
+  detectedAt     DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  club           MuClub             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  source         MuClubSource       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, externalItemId])
+  @@unique([clubId, contentHash])
+  @@index([detectedAt, importance])
+  @@index([clubId, startAt])
+  @@map("mu_club_activities")
+}
+
+model MuMonitorState {
+  id            String   @id
+  runInProgress Boolean  @default(false)
+  runStartedAt  DateTime?
+  nextRunAt     DateTime
+  lastRunAt     DateTime?
+  updatedAt     DateTime @updatedAt
+
+  @@map("mu_monitor_state")
+}
+
+model MuMonitorRun {
+  id             String             @id @default(uuid())
+  trigger        RunTrigger
+  status         MuMonitorRunStatus @default(RUNNING)
+  startedAt      DateTime           @default(now())
+  finishedAt     DateTime?
+  sourceCount    Int                @default(0)
+  fetchedCount   Int                @default(0)
+  activityCount  Int                @default(0)
+  sourceFailures Int                @default(0)
+  error          String?
+  sourceRuns     MuSourceRun[]
+
+  @@index([startedAt])
+  @@map("mu_monitor_runs")
+}
+
+model MuSourceRun {
+  id           String       @id @default(uuid())
+  monitorRunId String
+  sourceId     String
+  success      Boolean
+  itemCount    Int          @default(0)
+  error        String?
+  durationMs   Int
+  createdAt    DateTime     @default(now())
+  monitorRun   MuMonitorRun @relation(fields: [monitorRunId], references: [id], onDelete: Cascade)
+  source       MuClubSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([monitorRunId])
+  @@index([sourceId, createdAt])
+  @@map("mu_source_runs")
 }

@@ -135,6 +135,49 @@ describe('OllamaProvider', () => {
     );
   });
 
+  it('uses the news schema and profile topics for news analysis', async () => {
+    const mockFetch = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        void input;
+        void init;
+        return Response.json({
+          message: {
+            content: JSON.stringify({
+              title: 'Energy policy update',
+              summary: 'The government changed its energy policy.',
+              importance: 8,
+              relevance: 9,
+              category: 'POLITICS',
+              keyFacts: ['Policy changed'],
+              whyItMatters: 'It affects energy investment.',
+              entities: ['Czech government'],
+              confidence: 0.8,
+            }),
+          },
+        });
+      },
+    );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      fetch: mockFetch,
+    });
+    const outcome = await provider.analyze('NEWS', {
+      ...item,
+      metadata: { scope: 'CZECH', topics: ['energy'] },
+    });
+
+    expect(outcome).toMatchObject({
+      status: 'SUCCESS',
+      result: { category: 'POLITICS', relevance: 9 },
+    });
+    const requestBody = mockFetch.mock.calls[0]?.[1]?.body;
+    expect(typeof requestBody).toBe('string');
+    if (typeof requestBody !== 'string') throw new Error('Expected body');
+    expect(requestBody).toContain('Configured topics');
+    expect(requestBody).toContain('energy');
+  });
+
   it('retries invalid output then records failure', async () => {
     const mockFetch = vi.fn(
       async () =>
@@ -148,9 +191,7 @@ describe('OllamaProvider', () => {
       retries: 1,
       fetch: mockFetch,
     });
-    expect((await provider.analyze('PUBLICATIONS', item)).status).toBe(
-      'FAILED',
-    );
+    expect((await provider.analyze('STOCKS', item)).status).toBe('FAILED');
     expect(mockFetch).toHaveBeenCalledTimes(2);
     const secondCall = mockFetch.mock.calls[1] as unknown as
       [RequestInfo | URL, RequestInit?] | undefined;
@@ -166,6 +207,84 @@ describe('OllamaProvider', () => {
         }
       ).options.num_predict,
     ).toBe(1_536);
+  });
+
+  it('normalizes repairable publication schema deviations', async () => {
+    const mockFetch = vi.fn(async () =>
+      Response.json({
+        message: {
+          content: JSON.stringify({
+            title: 'Paper',
+            abstract: 'Normalized summary',
+            importance: 10.7,
+            relevance: '8.6',
+            findings: 'One finding',
+            methods: null,
+            significance: 'Useful result',
+            confidence: 1.2,
+          }),
+        },
+      }),
+    );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      fetch: mockFetch,
+    });
+
+    const outcome = await provider.analyze('PUBLICATIONS', item);
+
+    expect(outcome).toMatchObject({
+      status: 'SUCCESS',
+      result: {
+        title: 'Paper',
+        summary: 'Normalized summary',
+        importance: 10,
+        relevance: 9,
+        keyFindings: ['One finding'],
+        methods: [],
+        limitations: [],
+        whyInteresting: 'Useful result',
+        confidence: 1,
+      },
+    });
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
+
+  it('records a persistent incomplete publication response after a bounded repair retry', async () => {
+    const mockFetch = vi.fn(async () =>
+      Response.json({
+        message: {
+          content: JSON.stringify({
+            title: { text: 'Wrong shape' },
+            importance: null,
+            relevance: null,
+            confidence: null,
+          }),
+        },
+      }),
+    );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      retries: 1,
+      fetch: mockFetch,
+    });
+
+    const outcome = await provider.analyze('PUBLICATIONS', item);
+
+    expect(outcome).toMatchObject({ status: 'FAILED' });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const secondCall = mockFetch.mock.calls[1] as unknown as
+      [RequestInfo | URL, RequestInit?] | undefined;
+    const secondRequestBody = secondCall?.[1]?.body;
+    expect(typeof secondRequestBody).toBe('string');
+    if (typeof secondRequestBody !== 'string') {
+      throw new Error('Expected Ollama request body to be a string');
+    }
+    expect(secondRequestBody).toContain(
+      'Every required property must be present and non-null',
+    );
   });
 
   it('repairs a truncated response with a larger output budget', async () => {

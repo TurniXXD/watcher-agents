@@ -1,4 +1,8 @@
-import type { BriefingEventRepository, WatcherBotId } from '@watcher/core';
+import {
+  registeredWatcherBots,
+  type BriefingEventRepository,
+  type WatcherBotId,
+} from '@watcher/core';
 import type {
   BriefingStoryClusterStore,
   BriefingStoryStateRecord,
@@ -13,6 +17,8 @@ type ClusterPersistence = Pick<
   BriefingStoryClusterStore,
   'findIdByEventIds' | 'save'
 >;
+
+const MAX_CANDIDATE_EVENTS = 1_000;
 
 export type StoryEngineInput = {
   telegramChatId: bigint;
@@ -77,7 +83,8 @@ export class StoryEngine {
             watcherBots: input.subscriptions,
             detectedAfter: input.periodStart,
             detectedThrough: input.periodEnd,
-            limit: 500,
+            detectedOrder: 'desc',
+            limit: MAX_CANDIDATE_EVENTS,
           });
     let clustered = clusterBriefingEvents(retrieved);
     if (this.clusters) {
@@ -108,20 +115,19 @@ export class StoryEngine {
       return [applyContinuity(cluster, prior)];
     });
     const stories = rankStories(selected);
-    const eventsByWatcher = {
-      stocks: retrieved.filter(({ watcherBot }) => watcherBot === 'stocks')
-        .length,
-      medical: retrieved.filter(({ watcherBot }) => watcherBot === 'medical')
-        .length,
-    };
-    const clusteredByWatcher = {
-      stocks: clustered.filter(({ watcherBots }) =>
-        watcherBots.includes('stocks'),
-      ).length,
-      medical: clustered.filter(({ watcherBots }) =>
-        watcherBots.includes('medical'),
-      ).length,
-    };
+    const eventsByWatcher = Object.fromEntries(
+      registeredWatcherBots.map((watcherBot) => [
+        watcherBot,
+        retrieved.filter((event) => event.watcherBot === watcherBot).length,
+      ]),
+    ) as Record<WatcherBotId, number>;
+    const clusteredByWatcher = Object.fromEntries(
+      registeredWatcherBots.map((watcherBot) => [
+        watcherBot,
+        clustered.filter(({ watcherBots }) => watcherBots.includes(watcherBot))
+          .length,
+      ]),
+    ) as Record<WatcherBotId, number>;
     return {
       stories,
       metrics: {
@@ -135,16 +141,15 @@ export class StoryEngine {
         ).length,
         selected: stories.length,
         eventsByWatcher,
-        duplicateReductionByWatcher: {
-          stocks: Math.max(
-            0,
-            eventsByWatcher.stocks - clusteredByWatcher.stocks,
-          ),
-          medical: Math.max(
-            0,
-            eventsByWatcher.medical - clusteredByWatcher.medical,
-          ),
-        },
+        duplicateReductionByWatcher: Object.fromEntries(
+          registeredWatcherBots.map((watcherBot) => [
+            watcherBot,
+            Math.max(
+              0,
+              eventsByWatcher[watcherBot] - clusteredByWatcher[watcherBot],
+            ),
+          ]),
+        ) as Record<WatcherBotId, number>,
       },
     };
   }

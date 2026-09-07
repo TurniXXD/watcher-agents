@@ -70,6 +70,8 @@ const isUniqueConstraintViolation = (error: unknown): boolean =>
   error.code === 'P2002';
 
 export class PostgresBriefingEventRepository implements BriefingEventRepository {
+  private static readonly MAX_LIST_LIMIT = 1_000;
+
   public constructor(
     private readonly db: DatabaseClient,
     private readonly logger?: WatcherLogger,
@@ -111,7 +113,11 @@ export class PostgresBriefingEventRepository implements BriefingEventRepository 
   public async list(query: BriefingEventQuery = {}): Promise<BriefingEvent[]> {
     this.assertValidDate(query.detectedAfter, 'detectedAfter');
     this.assertValidDate(query.detectedThrough, 'detectedThrough');
-    const limit = Math.min(500, Math.max(1, Math.trunc(query.limit ?? 100)));
+    const limit = Math.min(
+      PostgresBriefingEventRepository.MAX_LIST_LIMIT,
+      Math.max(1, Math.trunc(query.limit ?? 100)),
+    );
+    const detectedOrder = query.detectedOrder ?? 'asc';
     const records = await this.db.briefingEvent.findMany({
       where: {
         ...(query.watcherBots
@@ -135,7 +141,7 @@ export class PostgresBriefingEventRepository implements BriefingEventRepository 
             }
           : {}),
       },
-      orderBy: [{ detectedAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ detectedAt: detectedOrder }, { id: 'asc' }],
       take: limit,
     });
     return records.map(toBriefingEvent);

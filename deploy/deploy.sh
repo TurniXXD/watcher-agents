@@ -20,6 +20,8 @@ required_files=(
   deploy/runtime/migrate.env
   deploy/runtime/stocks-bot.env
   deploy/runtime/publications-bot.env
+  deploy/runtime/news-bot.env
+  deploy/runtime/mu-clubs-monitor.env
   deploy/runtime/briefing-bot.env
 )
 
@@ -83,7 +85,7 @@ echo "Validating production Compose configuration..."
 compose_candidate config --quiet
 
 echo "Pulling release $IMAGE_TAG..."
-compose_candidate pull postgres migrate stocks-bot publications-bot briefing-bot
+compose_candidate pull postgres migrate stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot
 
 echo "Starting PostgreSQL..."
 compose_candidate up -d postgres
@@ -125,18 +127,18 @@ if ! compose_candidate up \
   --remove-orphans \
   --wait \
   --wait-timeout 180 \
-  stocks-bot publications-bot briefing-bot; then
+  stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot; then
   echo "Release failed its container health checks." >&2
 
   if [[ -f "$RELEASE_FILE" ]]; then
     echo "Restoring the previous healthy application image..."
-    compose_release pull stocks-bot publications-bot briefing-bot
+    compose_release pull stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot
     compose_release up \
       -d \
       --remove-orphans \
       --wait \
       --wait-timeout 180 \
-      stocks-bot publications-bot briefing-bot
+      stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot
   fi
 
   exit 1

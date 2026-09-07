@@ -105,7 +105,7 @@ Canonical investment `Event` extraction is deliberately not implemented in Phase
 
 Tiers are `CORE`, `WATCH`, `DISCOVERY`, and `INVESTIGATE`. Modes are `LOW_RESOLUTION`, `NORMAL`, `HIGH_RESOLUTION`, and `EVENT_MODE`. Automated tier transitions are restricted to the documented lifecycle. Manual operator transitions are allowed as explicit overrides. Newly manually-added stocks default to `WATCH`/`NORMAL`, priority 50.
 
-The Telegram commands `/settier`, `/setmode`, `/setpriority`, `/stockon`, and `/stockoff` expose Phase 1 state without adding a web UI.
+The Telegram commands `/set_tier`, `/set_mode`, `/set_priority`, `/stock_on`, and `/stock_off` expose Phase 1 state without adding a web UI.
 
 ## 11. Discovery to investigate to watch flow
 

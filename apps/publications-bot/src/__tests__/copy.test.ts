@@ -5,7 +5,7 @@ const commandNames = (help: string): string[] =>
   help
     .split('\n')
     .filter((line) => line.startsWith('/'))
-    .map((line) => line.match(/^\/([a-z]+)/)?.[1] ?? '');
+    .map((line) => line.match(/^\/([a-z_]+)/)?.[1] ?? '');
 
 describe('publications bot command copy', () => {
   it('lists every help command alphabetically', () => {
@@ -14,13 +14,13 @@ describe('publications bot command copy', () => {
     expect(commands).toEqual([...commands].sort());
     expect(commands).toEqual([
       'about',
-      'addqueries',
-      'addquery',
+      'add_queries',
+      'add_query',
       'help',
-      'listsources',
+      'list_sources',
       'pause',
       'queries',
-      'removequery',
+      'remove_query',
       'resume',
       'run',
       'schedule',
@@ -34,7 +34,7 @@ describe('publications bot command copy', () => {
     expect(publicationsAbout).toContain('*What it does*');
     expect(publicationsAbout).toContain('*Key advantages*');
     expect(publicationsAbout).toContain('*How to use it*');
-    expect(publicationsAbout).toContain('`/addquery TOPIC`');
+    expect(publicationsAbout).toContain('`/add_query TOPIC`');
     expect(publicationsAbout.length).toBeLessThanOrEqual(4096);
   });
 });

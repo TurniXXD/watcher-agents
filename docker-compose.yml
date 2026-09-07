@@ -5,6 +5,8 @@ services:
     image: postgres:16-alpine
     env_file:
       - ${WATCHER_ENV_FILE:-.env.example}
+    ports:
+      - '127.0.0.1:5433:5432'
     volumes:
       - watcher-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -79,6 +81,64 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test: ['CMD', 'node', '-e', 'process.kill(1, 0)']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
+  news-bot:
+    image: ${WATCHER_IMAGE:-watcher:local}
+    command: ['node', 'apps/news-bot/dist/index.js']
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'node', '-e', 'process.kill(1, 0)']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
+  mu-clubs-monitor:
+    image: ${WATCHER_IMAGE:-watcher:local}
+    command: ['node', 'apps/mu-clubs-monitor/dist/index.js']
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    environment:
+      MU_CLUBS_HOST: 0.0.0.0
+    ports:
+      - '127.0.0.1:4010:4010'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4010/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5

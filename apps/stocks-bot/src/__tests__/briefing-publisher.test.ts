@@ -5,6 +5,8 @@ import {
 } from '@watcher/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  earningsReminderBriefingEvents,
+  publishEarningsReminderBriefingEvents,
   publishStockBriefingEvents,
   stockBriefingEvents,
 } from '../briefing-publisher.js';
@@ -101,6 +103,93 @@ describe('stock briefing publisher', () => {
     await expect(
       publishStockBriefingEvents(repository, result()),
     ).resolves.toEqual({ published: 0, failed: 1 });
+    expect(save).toHaveBeenCalledOnce();
+  });
+
+  it('creates earnings reminders one week and one day before a confirmed report date', () => {
+    const catalysts = [
+      {
+        id: 'catalyst-1',
+        ticker: 'MU',
+        companyName: 'Micron Technology, Inc.',
+        description: 'Confirmed quarterly earnings report',
+        expectedStart: new Date('2026-09-30T20:00:00.000Z'),
+        exactDateKnown: true,
+        impact: 'HIGH',
+        source: 'EARNINGS_WHISPERS',
+        sourceUrl: 'https://www.earningswhispers.com/stocks/MU',
+      },
+    ];
+
+    const weekBefore = earningsReminderBriefingEvents(
+      catalysts,
+      new Date('2026-09-23T05:00:00.000Z'),
+      'Europe/Prague',
+    );
+    const dayBefore = earningsReminderBriefingEvents(
+      catalysts,
+      new Date('2026-09-29T05:00:00.000Z'),
+      'Europe/Prague',
+    );
+    const otherDay = earningsReminderBriefingEvents(
+      catalysts,
+      new Date('2026-09-28T05:00:00.000Z'),
+      'Europe/Prague',
+    );
+
+    expect(weekBefore).toHaveLength(1);
+    expect(dayBefore).toHaveLength(1);
+    expect(otherDay).toHaveLength(0);
+    expect(briefingEventSchema.parse(weekBefore[0])).toMatchObject({
+      id: 'stocks:earnings-reminder:MU:2026-09-30:7d',
+      category: 'STOCK_EARNINGS',
+      subcategory: 'EARNINGS_REMINDER',
+      importance: 65,
+      urgency: 60,
+      actionable: true,
+      entities: [{ name: 'Micron Technology, Inc.', ticker: 'MU' }],
+      tags: ['EARNINGS', 'EARNINGS_REMINDER', '7D_BEFORE'],
+      deduplicationKey: 'stocks:earnings-reminder:MU:2026-09-30:7d',
+      relatedEventIds: ['catalyst-1'],
+    });
+    expect(dayBefore[0]).toMatchObject({
+      importance: 75,
+      urgency: 85,
+      tags: ['EARNINGS', 'EARNINGS_REMINDER', '1D_BEFORE'],
+    });
+  });
+
+  it('publishes earnings reminders through the briefing repository', async () => {
+    const save = vi.fn(async (rawEvent: unknown) => ({
+      created: true,
+      event: briefingEventSchema.parse(rawEvent),
+    }));
+    const repository: BriefingEventRepository = {
+      save,
+      list: vi.fn(async () => []),
+    };
+
+    await expect(
+      publishEarningsReminderBriefingEvents(
+        repository,
+        [
+          {
+            id: 'catalyst-1',
+            ticker: 'MU',
+            companyName: null,
+            description: 'Confirmed quarterly earnings report',
+            expectedStart: new Date('2026-09-30T20:00:00.000Z'),
+            exactDateKnown: true,
+            impact: 'HIGH',
+            source: 'EARNINGS_WHISPERS',
+            sourceUrl: 'https://www.earningswhispers.com/stocks/MU',
+          },
+        ],
+        undefined,
+        new Date('2026-09-29T05:00:00.000Z'),
+        'Europe/Prague',
+      ),
+    ).resolves.toEqual({ published: 1, failed: 0 });
     expect(save).toHaveBeenCalledOnce();
   });
 });

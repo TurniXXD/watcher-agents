@@ -56,10 +56,12 @@ integration('briefing persistent state', () => {
     });
     expect(first.subscriptions).toMatchObject([
       { watcherBot: 'medical', enabled: true },
+      { watcherBot: 'mu-clubs', enabled: true },
+      { watcherBot: 'news', enabled: true },
       { watcherBot: 'stocks', enabled: true },
     ]);
     expect(second.settings.id).toBe(first.settings.id);
-    expect(await database.briefingSubscription.count()).toBe(2);
+    expect(await database.briefingSubscription.count()).toBe(4);
   });
 
   it('validates settings as one consistent aggregate', async () => {
@@ -94,7 +96,7 @@ integration('briefing persistent state', () => {
     expect(
       repeated.subscriptions.find(({ watcherBot }) => watcherBot === 'stocks'),
     ).toMatchObject({ enabled: false });
-    expect(await database.briefingSubscription.count()).toBe(2);
+    expect(await database.briefingSubscription.count()).toBe(4);
     await expect(
       configuration.setSubscription(103n, 'weather', true),
     ).rejects.toThrow();

@@ -6,6 +6,7 @@ export * from './briefing-run-store.js';
 export * from './briefing-schedule-store.js';
 export * from './briefing-story-store.js';
 export * from './briefing-watcher-health-store.js';
+export * from './news-configuration-store.js';
 export * from './client.js';
 export * from './calendar-integration-store.js';
 export * from './configuration-store.js';
@@ -20,3 +21,11 @@ export * from './specialized-signal-store.js';
 export * from './universe-store.js';
 export * from './validation-store.js';
 export * from './stock-domain/index.js';
+export {
+  MuClubActivityType,
+  MuClubSourceStatus,
+  MuClubSourceType,
+  MuMonitorRunStatus,
+  RunTrigger,
+} from './generated/prisma/enums.js';
+export type { Prisma } from './generated/prisma/client.js';

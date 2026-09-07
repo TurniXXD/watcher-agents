@@ -59,6 +59,8 @@ jobs:
             test -f deploy/presets/migrate.env.example
             test -f deploy/presets/stocks-bot.env.example
             test -f deploy/presets/publications-bot.env.example
+            test -f deploy/presets/news-bot.env.example
+            test -f deploy/presets/mu-clubs-monitor.env.example
             test -f deploy/presets/briefing-bot.env.example
             production_compose_ready=true
           fi
@@ -166,6 +168,8 @@ jobs:
             cp deploy/presets/migrate.env.example deploy/runtime/migrate.env
             cp deploy/presets/stocks-bot.env.example deploy/runtime/stocks-bot.env
             cp deploy/presets/publications-bot.env.example deploy/runtime/publications-bot.env
+            cp deploy/presets/news-bot.env.example deploy/runtime/news-bot.env
+            cp deploy/presets/mu-clubs-monitor.env.example deploy/runtime/mu-clubs-monitor.env
             cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
             chmod 600 deploy/runtime/*.env
 

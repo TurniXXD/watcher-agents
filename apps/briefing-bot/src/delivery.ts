@@ -58,21 +58,34 @@ const durationLabel = (seconds: number): string => {
   return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, '0')}`;
 };
 
-export const renderBriefingIndex = (index: BriefingIndex): string => {
+const telegramCaptionLimit = 1024;
+
+export const renderBriefingCaption = (index: BriefingIndex): string => {
   const lines = [`☀️ <b>Morning Briefing — ${escapeHtml(index.dateLabel)}</b>`];
-  if (index.location) lines.push(`📍 ${escapeHtml(index.location)}`);
+  const append = (...additionalLines: string[]): boolean => {
+    if ([...lines, ...additionalLines].join('\n').length > telegramCaptionLimit)
+      return false;
+    lines.push(...additionalLines);
+    return true;
+  };
+
+  if (index.location) append(`📍 ${escapeHtml(index.location)}`);
   if (index.audioDurationSeconds !== undefined) {
-    lines.push(`🎙 ${durationLabel(index.audioDurationSeconds)}`);
+    append(`🎙 ${durationLabel(index.audioDurationSeconds)}`);
   }
   if (index.calendar.status === 'AVAILABLE') {
-    lines.push(`🗓 ${index.calendar.count} events today`);
+    append(`🗓 ${index.calendar.count} events today`);
   } else if (index.calendar.status === 'UNAVAILABLE') {
-    lines.push('🗓 Calendar unavailable');
+    append('🗓 Calendar unavailable');
   }
-  const topics = index.topics.slice(0, 8);
-  if (topics.length > 0) {
-    lines.push('', '<b>Topics:</b>');
-    lines.push(...topics.map((topic) => `• ${escapeHtml(topic)}`));
+  let topicAdded = false;
+  for (const topic of index.topics.slice(0, 8)) {
+    const topicLine = `• ${escapeHtml(topic)}`;
+    const added = topicAdded
+      ? append(topicLine)
+      : append('', '<b>Topics:</b>', topicLine);
+    if (!added) break;
+    topicAdded = true;
   }
   return lines.join('\n');
 };
@@ -115,7 +128,10 @@ export class BriefingDeliveryService {
       await this.telegram.sendVoice(input.telegramChatId, {
         audio: audio.audio,
         fileName: audio.fileName,
-        caption: `☀️ <b>Morning Briefing — ${escapeHtml(input.index.dateLabel)}</b>`,
+        caption: renderBriefingCaption({
+          ...input.index,
+          audioDurationSeconds: audio.audioDurationSeconds,
+        }),
       }),
     ]);
     if (!voice.success) {
@@ -132,17 +148,6 @@ export class BriefingDeliveryService {
         failedChannels,
       };
     }
-
-    const index = await this.attempt(input.runId, 'INDEX', () =>
-      this.telegram.sendHtml(
-        input.telegramChatId,
-        renderBriefingIndex({
-          ...input.index,
-          audioDurationSeconds: audio.audioDurationSeconds,
-        }),
-      ),
-    );
-    if (!index.success) failedChannels.push('INDEX');
 
     if (input.sendTranscript) {
       const transcript = await this.attempt(input.runId, 'TRANSCRIPT', () =>

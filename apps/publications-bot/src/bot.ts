@@ -23,7 +23,8 @@ import {
 
 const maxCsvBytes = 256 * 1024;
 
-const addQueriesCommandPattern = /^\/addqueries(?:@\w+)?(?:\s|$)/;
+const addQueriesCommandPattern =
+  /^\/(?:add_queries|addqueries)(?:@\w+)?(?:\s|$)/;
 
 const isCsvDocument = (document: Document): boolean => {
   const fileName = document.file_name?.toLowerCase();
@@ -109,7 +110,7 @@ export const createPublicationsBot = (
         : 'No queries configured.',
     );
   });
-  bot.command('addquery', async (ctx) => {
+  bot.command(['add_query', 'addquery'], async (ctx) => {
     const query = publicationQuerySchema.parse(
       commandArgument(ctx.message?.text),
     );
@@ -124,7 +125,7 @@ export const createPublicationsBot = (
     const document = getCsvDocument(ctx);
     if (!document) {
       await ctx.reply(
-        'Attach a CSV file and use /addqueries as the caption, or reply to a CSV file with /addqueries. The CSV can have a query or topic header, otherwise the first column is used.',
+        'Attach a CSV file and use /add_queries as the caption, or reply to a CSV file with /add_queries. The CSV can have a query or topic header, otherwise the first column is used.',
       );
       return;
     }
@@ -146,7 +147,7 @@ export const createPublicationsBot = (
       `Imported ${result.addedCount} ${result.addedCount === 1 ? 'query' : 'queries'} from CSV. ${result.skippedCount} ${result.skippedCount === 1 ? 'duplicate was' : 'duplicates were'} skipped. New queries inherited the global source settings.`,
     );
   };
-  bot.command('addqueries', addQueriesFromCsv);
+  bot.command(['add_queries', 'addqueries'], addQueriesFromCsv);
   bot.on('message:document', async (ctx, next) => {
     if (addQueriesCommandPattern.test(ctx.message.caption ?? '')) {
       await addQueriesFromCsv(ctx);
@@ -154,7 +155,7 @@ export const createPublicationsBot = (
     }
     await next();
   });
-  bot.command('removequery', async (ctx) => {
+  bot.command(['remove_query', 'removequery'], async (ctx) => {
     const query = publicationQuerySchema.parse(
       commandArgument(ctx.message?.text),
     );
@@ -173,7 +174,7 @@ export const createPublicationsBot = (
       { reply_markup: globalSourceKeyboard(settings, 'ps') },
     );
   });
-  bot.command('listsources', async (ctx) => {
+  bot.command(['list_sources', 'listsources'], async (ctx) => {
     await ctx.reply(renderPublicationSourceList(), {
       parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },

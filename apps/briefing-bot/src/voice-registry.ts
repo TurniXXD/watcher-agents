@@ -35,4 +35,4 @@ export const czechCalendarVoice = Object.freeze({
 });
 
 export const voicePreviewText =
-  "Good morning. Here's your morning briefing. We'll start with today's weather and schedule, then move into the most important market and medical developments from the last twenty-four hours.";
+  "Good morning. Here's your morning briefing. We'll start with today's weather and schedule, then move into the most important market, medical, and news developments from the last twenty-four hours.";

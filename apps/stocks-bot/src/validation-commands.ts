@@ -60,13 +60,13 @@ export const registerValidationCommands = (
     );
   });
 
-  bot.command('eventreplay', async (ctx) => {
+  bot.command(['event_replay', 'eventreplay'], async (ctx) => {
     const [rawSymbol, rawFrom, rawTo, ...extra] = commandArgument(
       ctx.message?.text,
     ).split(/\s+/);
     if (!rawSymbol || extra.length) {
       await ctx.reply(
-        'Usage: /eventreplay SYMBOL [FROM_DATE_OR_ISO] [TO_DATE_OR_ISO]',
+        'Usage: /event_replay SYMBOL [FROM_DATE_OR_ISO] [TO_DATE_OR_ISO]',
       );
       return;
     }
@@ -100,7 +100,7 @@ export const registerValidationCommands = (
         ? 'A validation run is already in progress.'
         : result.status === 'FAILED'
           ? `Validation failed after ${formatRunDuration(result.durationMs)}: ${result.error}`
-          : `Validation complete in ${formatRunDuration(result.durationMs)}. ${result.targetCount} targets evaluated; ${result.outcomeCount} have a real stored anchor price. Use /backtest, /calibration, and /signalperformance for results.`;
+          : `Validation complete in ${formatRunDuration(result.durationMs)}. ${result.targetCount} targets evaluated; ${result.outcomeCount} have a real stored anchor price. Use /backtest, /calibration, and /signal_performance for results.`;
     await ctx.api.editMessageText(ctx.chat.id, progress.message_id, message);
   });
 
@@ -125,7 +125,7 @@ export const registerValidationCommands = (
     );
   });
 
-  bot.command('signalperformance', async (ctx) => {
+  bot.command(['signal_performance', 'signalperformance'], async (ctx) => {
     const current = await getChat(ctx.chat.id);
     await sendSplitMessage(
       ctx.api,

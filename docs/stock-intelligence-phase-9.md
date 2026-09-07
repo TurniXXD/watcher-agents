@@ -6,7 +6,7 @@ Phase 9 validates the stored intelligence system against later market outcomes w
 
 `/replay SYMBOL DATE` reconstructs the latest thesis, price snapshot, and canonical events that were actually available to that Telegram watcher at the requested UTC timestamp. An event is visible only when it had already been detected and its primary evidence had already been published. A thesis revision is visible only after its own creation time and only when its processed evidence was already published. Later filings, articles, revisions, prices, and outcomes are excluded.
 
-`/eventreplay SYMBOL [FROM] [TO]` returns canonical-event detections and persisted thesis transitions in chronological order. It replays the immutable states the live engine actually stored; it does not ask the current LLM to invent a counterfactual historical answer.
+`/event_replay SYMBOL [FROM] [TO]` returns canonical-event detections and persisted thesis transitions in chronological order. It replays the immutable states the live engine actually stored; it does not ask the current LLM to invent a counterfactual historical answer.
 
 ## Outcome validation
 
@@ -26,7 +26,7 @@ Running validation again is idempotent through the `(watcherConfigId, targetType
 
 `/calibration` compares the midpoint of the model's stored 30-day probability range with realized positive returns in fixed 50–55, 55–60, 60–65, 65–70, 70–80, and 80%+ buckets. Raw LLM probabilities are not trusted or rewritten automatically.
 
-`/signalperformance` groups 30-day outcomes by canonical signal type, including insider, earnings, clinical/FDA, government contract, patent, congressional, options, price, volume, short-interest, and Quiver-derived events. Groups below `VALIDATION_MIN_SAMPLE_SIZE` remain visible but are marked insufficient. No automatic model-weight update is performed.
+`/signal_performance` groups 30-day outcomes by canonical signal type, including insider, earnings, clinical/FDA, government contract, patent, congressional, options, price, volume, short-interest, and Quiver-derived events. Groups below `VALIDATION_MIN_SAMPLE_SIZE` remain visible but are marked insufficient. No automatic model-weight update is performed.
 
 ## Limitations
 

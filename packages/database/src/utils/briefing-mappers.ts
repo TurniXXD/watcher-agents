@@ -20,14 +20,22 @@ export type BriefingWatcherHealthStatusId =
 export const toDatabaseWatcher = (
   watcherBot: WatcherBotId,
 ): BriefingWatcherBot =>
-  watcherBot === 'stocks'
-    ? BriefingWatcherBot.STOCKS
-    : BriefingWatcherBot.MEDICAL;
+  ({
+    stocks: BriefingWatcherBot.STOCKS,
+    medical: BriefingWatcherBot.MEDICAL,
+    news: BriefingWatcherBot.NEWS,
+    'mu-clubs': BriefingWatcherBot.MU_CLUBS,
+  })[watcherBot];
 
 export const fromDatabaseWatcher = (
   watcherBot: BriefingWatcherBot,
 ): WatcherBotId =>
-  watcherBot === BriefingWatcherBot.STOCKS ? 'stocks' : 'medical';
+  ({
+    [BriefingWatcherBot.STOCKS]: 'stocks',
+    [BriefingWatcherBot.MEDICAL]: 'medical',
+    [BriefingWatcherBot.NEWS]: 'news',
+    [BriefingWatcherBot.MU_CLUBS]: 'mu-clubs',
+  })[watcherBot] as WatcherBotId;
 
 export const fromDatabaseConfidence = (
   confidence: DatabaseBriefingConfidence,

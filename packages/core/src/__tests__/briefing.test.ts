@@ -67,8 +67,13 @@ describe('briefing event contract', () => {
     ).toThrow();
   });
 
-  it('exposes only the two implemented producers in the registry', () => {
-    expect(registeredWatcherBots).toEqual(['stocks', 'medical']);
+  it('exposes the implemented producers in the registry', () => {
+    expect(registeredWatcherBots).toEqual([
+      'stocks',
+      'medical',
+      'news',
+      'mu-clubs',
+    ]);
     expect(getWatcherRegistration('stocks')).toMatchObject({
       displayName: 'Stocks',
       producerKind: 'STOCKS',
@@ -76,6 +81,14 @@ describe('briefing event contract', () => {
     expect(getWatcherRegistration('medical')).toMatchObject({
       displayName: 'Medical',
       producerKind: 'PUBLICATIONS',
+    });
+    expect(getWatcherRegistration('news')).toMatchObject({
+      displayName: 'News',
+      producerKind: 'NEWS',
+    });
+    expect(getWatcherRegistration('mu-clubs')).toMatchObject({
+      displayName: 'MU Clubs',
+      producerKind: 'MU_CLUBS',
     });
   });
 });

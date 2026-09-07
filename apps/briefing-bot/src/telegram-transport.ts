@@ -9,7 +9,6 @@ export type TelegramVoiceInput = {
 
 export type BriefingTelegramTransport = {
   sendVoice: (chatId: string, input: TelegramVoiceInput) => Promise<string>;
-  sendHtml: (chatId: string, html: string) => Promise<string[]>;
   sendPlainText: (chatId: string, text: string) => Promise<string[]>;
 };
 
@@ -26,10 +25,6 @@ export class GrammyBriefingTransport implements BriefingTelegramTransport {
       { caption: input.caption, parse_mode: 'HTML' },
     );
     return String(message.message_id);
-  }
-
-  public async sendHtml(chatId: string, html: string): Promise<string[]> {
-    return this.sendParts(chatId, splitTelegramMessage(html));
   }
 
   public async sendPlainText(chatId: string, text: string): Promise<string[]> {

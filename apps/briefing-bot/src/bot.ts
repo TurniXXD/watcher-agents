@@ -1,4 +1,8 @@
-import type { WatcherLogger } from '@watcher/core';
+import {
+  getWatcherRegistration,
+  registeredWatcherBots,
+  type WatcherLogger,
+} from '@watcher/core';
 import type {
   BriefingConfiguration,
   BriefingConfigurationStore,
@@ -45,7 +49,7 @@ const subscriptionText = (configuration: BriefingConfiguration): string =>
     '',
     ...configuration.subscriptions.map(
       ({ watcherBot, enabled }) =>
-        `${enabled ? '✅' : '❌'} ${watcherBot === 'stocks' ? 'Stocks' : 'Medical'}`,
+        `${enabled ? '✅' : '❌'} ${getWatcherRegistration(watcherBot).displayName}`,
     ),
   ].join('\n');
 
@@ -233,7 +237,7 @@ export const createBriefingBot = (
     const watcher = commandArgument(context.message?.text);
     if (!watcher) {
       await context.reply(
-        'Available watchers: stocks, medical\nUsage: /subscribe stocks',
+        `Available watchers: ${registeredWatcherBots.join(', ')}\nUsage: /subscribe mu-clubs`,
       );
       return;
     }
@@ -533,23 +537,26 @@ export const createBriefingBot = (
     await context.answerCallbackQuery();
     await prompt(context, configuration);
   });
-  bot.callbackQuery(/^onb:subscription:(stocks|medical)$/, async (context) => {
-    const current = await store.ensure(BigInt(context.chat!.id));
-    const watcher = context.match[1];
-    const subscription = current.subscriptions.find(
-      ({ watcherBot }) => watcherBot === watcher,
-    );
-    const configuration = await store.setSubscription(
-      BigInt(context.chat!.id),
-      watcher,
-      !(subscription?.enabled ?? false),
-    );
-    await context.answerCallbackQuery('Updated');
-    const keyboard = onboardingKeyboard(configuration);
-    await context.editMessageText(onboardingPrompt(configuration), {
-      ...(keyboard ? { reply_markup: keyboard } : {}),
-    });
-  });
+  bot.callbackQuery(
+    /^onb:subscription:(stocks|medical|news|mu-clubs)$/,
+    async (context) => {
+      const current = await store.ensure(BigInt(context.chat!.id));
+      const watcher = context.match[1];
+      const subscription = current.subscriptions.find(
+        ({ watcherBot }) => watcherBot === watcher,
+      );
+      const configuration = await store.setSubscription(
+        BigInt(context.chat!.id),
+        watcher,
+        !(subscription?.enabled ?? false),
+      );
+      await context.answerCallbackQuery('Updated');
+      const keyboard = onboardingKeyboard(configuration);
+      await context.editMessageText(onboardingPrompt(configuration), {
+        ...(keyboard ? { reply_markup: keyboard } : {}),
+      });
+    },
+  );
   bot.callbackQuery('onb:subscriptions:continue', async (context) => {
     const configuration = await store.setOnboardingStep(
       BigInt(context.chat!.id),

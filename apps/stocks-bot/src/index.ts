@@ -29,7 +29,10 @@ import { StockDiscoveryCoordinator } from './discovery.js';
 import { env } from './env.js';
 import { StockReconciliationCoordinator } from './reconciliation.js';
 import { createStocksRunner } from './watcher.js';
-import { publishStockBriefingEvents } from './briefing-publisher.js';
+import {
+  publishEarningsReminderBriefingEvents,
+  publishStockBriefingEvents,
+} from './briefing-publisher.js';
 
 const logger = createLogger('stocks-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
@@ -167,22 +170,20 @@ const runner = createStocksRunner(
       logger,
     );
     logger.info(publication, 'Stock briefing events published');
-    const health = await briefingWatcherHealth.recordRun({
-      watcherBot: 'stocks',
-      degraded:
-        result.sourceFailures.length > 0 ||
-        result.failedAnalysisCount > 0 ||
-        publication.failed > 0,
-      eventsEmitted: publication.published,
-      failedEventPublications: publication.failed,
-      sourceFailures: result.sourceFailures.length,
-    });
-    logger.info(
-      { watcherBot: health.watcherBot, watcherHealth: health.status },
-      'Briefing producer health updated',
-    );
+    let reminderPublication = { published: 0, failed: 0 };
     const chatConfig = await store.getChat('STOCKS', chatId);
     if (chatConfig) {
+      reminderPublication = await publishEarningsReminderBriefingEvents(
+        briefingEvents,
+        await store.listUpcomingEarningsReminderCandidates(chatConfig.id),
+        logger,
+        new Date(),
+        chatConfig.watcherConfig?.timezone ?? env.DEFAULT_TIMEZONE,
+      );
+      logger.info(
+        reminderPublication,
+        'Earnings reminder briefing events published',
+      );
       await discoveryStore.escalateAttentionSignals(
         chatConfig.id,
         result.intelligence,
@@ -208,6 +209,29 @@ const runner = createStocksRunner(
         }
       }
     }
+    const publishedEvents =
+      publication.published + reminderPublication.published;
+    const failedEventPublications =
+      publication.failed + reminderPublication.failed;
+    const health = await briefingWatcherHealth.recordRun({
+      watcherBot: 'stocks',
+      degraded:
+        result.sourceFailures.length > 0 ||
+        result.failedAnalysisCount > 0 ||
+        failedEventPublications > 0,
+      eventsEmitted: publishedEvents,
+      failedEventPublications,
+      sourceFailures: result.sourceFailures.length,
+    });
+    logger.info(
+      {
+        watcherBot: health.watcherBot,
+        watcherHealth: health.status,
+        stockEventsPublished: publication.published,
+        earningsRemindersPublished: reminderPublication.published,
+      },
+      'Briefing producer health updated',
+    );
   },
   async (_chatId, error) => {
     const health = await briefingWatcherHealth.recordFailure({

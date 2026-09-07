@@ -143,7 +143,8 @@ describe('StoryEngine', () => {
       watcherBots: ['stocks', 'medical'],
       detectedAfter: new Date('2026-09-05T05:00:00.000Z'),
       detectedThrough: new Date('2026-09-06T06:00:00.000Z'),
-      limit: 500,
+      detectedOrder: 'desc',
+      limit: 1_000,
     });
     expect(result.stories).toMatchObject([
       {

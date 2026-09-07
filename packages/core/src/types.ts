@@ -52,7 +52,7 @@ export type RunIntelligenceSummary = {
   cooldownCount: number;
 };
 
-export const watcherKindSchema = z.enum(['STOCKS', 'PUBLICATIONS']);
+export const watcherKindSchema = z.enum(['STOCKS', 'PUBLICATIONS', 'NEWS']);
 export type WatcherKind = z.infer<typeof watcherKindSchema>;
 
 export const watchItemSchema = z.preprocess(
@@ -143,7 +143,33 @@ export const publicationAnalysisSchema = z.object({
 });
 
 export type PublicationAnalysis = z.infer<typeof publicationAnalysisSchema>;
-export type WatchAnalysis = StockAnalysis | PublicationAnalysis;
+
+export const newsAnalysisSchema = z.object({
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  importance: z.number().int().min(1).max(10),
+  relevance: z.number().int().min(1).max(10),
+  category: z.enum([
+    'POLITICS',
+    'BUSINESS',
+    'ECONOMY',
+    'TECHNOLOGY',
+    'SCIENCE',
+    'HEALTH',
+    'SECURITY',
+    'CLIMATE',
+    'CULTURE',
+    'SPORT',
+    'OTHER',
+  ]),
+  keyFacts: z.array(z.string()),
+  whyItMatters: z.string().min(1),
+  entities: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+});
+
+export type NewsAnalysis = z.infer<typeof newsAnalysisSchema>;
+export type WatchAnalysis = StockAnalysis | PublicationAnalysis | NewsAnalysis;
 
 export type AnalysisMetrics = {
   durationMs?: number;

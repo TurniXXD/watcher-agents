@@ -1,16 +1,18 @@
 # Watcher
 
-Watcher is a production-oriented, self-hosted, Telegram-only monitoring system for one operator. It runs three independent TypeScript bot processes on one Linux server:
+Watcher is a production-oriented, self-hosted, Telegram-only monitoring system for one operator. It runs independent TypeScript bot processes on one Linux server:
 
 - **Stocks Watcher** monitors SEC filings, auto-discovered issuer feeds, GDELT news, TradingView symbol news, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, and price snapshots.
 - **Publications Watcher** monitors PubMed, bioRxiv, ClinicalTrials.gov, and openFDA results.
-- **Personal Morning Briefing** consumes meaningful normalized events from both watchers, combines them with optional weather and read-only Google Calendar context, and delivers a scheduled or manual spoken briefing through Telegram.
+- **News Watcher** runs Czech and Global editorial profiles through one shared RSS/Atom ingestion, deduplication, and ranking engine.
+- **MU Clubs Monitor** checks verified public websites, Linktrees, and Instagram profiles for meaningful Brno/MUNI club activities and publishes qualifying items to the briefing event stream.
+- **Personal Morning Briefing** consumes meaningful normalized events from the watcher producers, combines them with optional weather and read-only Google Calendar context, and delivers a scheduled or manual spoken briefing through Telegram.
 
 The services share PostgreSQL and an external Ollama instance. There is no web UI, Redis, host cron, or bundled Ollama service. See [the Morning Briefing architecture and operations](docs/morning-briefing-architecture.md).
 
 ## How it works
 
-Each source normalizes provider data into a common `WatchItem`; the persistence boundary records a richer normalized observation with source provenance and separate publication, discovery, and event timestamps. A run waits for all enabled targets and sources with `Promise.allSettled`, records individual source failures, reserves new items through PostgreSQL uniqueness constraints, analyzes only reserved items with Ollama, and persists the run result. Company and observation changes also produce append-only domain journal events. Already processed SEC filings, RSS/news entries, price snapshots, PubMed articles, bioRxiv papers, clinical trials, and FDA reports are skipped for both bots by their stable source identity. Manual and scheduled runs use this exact same path.
+Each source normalizes provider data into a common `WatchItem`; the persistence boundary records a richer normalized observation with source provenance and separate publication, discovery, and event timestamps. A run waits for all enabled targets and sources with `Promise.allSettled`, records individual source failures, reserves new items through PostgreSQL uniqueness constraints, analyzes only reserved items with Ollama, and persists the run result. Company and observation changes also produce append-only domain journal events. Already processed SEC filings, RSS/news entries, price snapshots, PubMed articles, bioRxiv papers, clinical trials, and FDA reports are skipped by stable source identity. Manual and scheduled runs use this exact same path.
 
 Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recoverable after two hours. Stock digests are sent only when a run contains a successful analysis or a new non-duplicate stock event; provider backoffs, source failures, and failed analyses remain available in structured logs and `/health` but do not create or clutter a stock digest. Scheduled runs stay silent when nothing useful is new, while a manual `/run` edits its progress message to report that no new content was found.
 
@@ -19,14 +21,14 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
 - Node.js 24
 - pnpm 11.6.0
 - Docker Engine with Docker Compose v2 for the recommended local and production paths
-- Three private Telegram bots created with BotFather
+- Four private Telegram bots created with BotFather
 - Ollama reachable from the bot containers, with the configured model already pulled
 - An identifiable SEC user agent such as `Watcher/1.0 operator@example.com`
 - An Alpha Vantage API key if market-wide stock discovery should be enabled
 
 ## Quick start with Docker Compose
 
-1. Open `@BotFather` in Telegram, run `/newbot` three times, and keep the resulting tokens separate. Disable group access if the bots do not need it. To find your numeric Telegram user ID, call `https://api.telegram.org/bot<TOKEN>/getUpdates` once after messaging your new bot and read `message.from.id`. Put only trusted numeric IDs in `TELEGRAM_ALLOWED_USER_IDS`.
+1. Open `@BotFather` in Telegram, create one bot for each service, and keep the resulting tokens separate. Disable group access if the bots do not need it. To find your numeric Telegram user ID, call `https://api.telegram.org/bot<TOKEN>/getUpdates` once after messaging your new bot and read `message.from.id`. Put only trusted numeric IDs in `TELEGRAM_ALLOWED_USER_IDS`.
 
 2. Copy the environment template and fill in real values:
 
@@ -43,7 +45,7 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
    PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh
    docker compose up -d --build
    docker compose ps
-   docker compose logs -f stocks-bot publications-bot briefing-bot
+   docker compose logs -f stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot
    ```
 
    The installer includes `cs_CZ-jirka-medium`. The Briefing Bot keeps the
@@ -51,7 +53,7 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
    Jirka for Calendar event sentences detected as Czech, then joins every
    segment into one Opus voice message.
 
-PostgreSQL is not published to the host. Its data lives in the `watcher-postgres` named volume. The one-shot `migrate` service must complete before either bot starts.
+PostgreSQL is published only on host loopback as `127.0.0.1:5433`; it is not directly reachable from the public internet. Its data lives in the `watcher-postgres` named volume. The one-shot `migrate` service must complete before either bot starts. For remote administration, use the SSH/Tailscale tunnel documented in `deploy/README.md`.
 
 The bots emit structured JSON logs. At `LOG_LEVEL=info`, watcher runs record start, prepared source count, per-source fetch outcomes, source failures, notification sends, and completion counters. The briefing bot records commands, scheduled run claims, context availability and latency, story-selection metrics, script and audio generation, Telegram delivery channels, and the final run duration. Set `LOG_LEVEL=debug` to also log individual watcher item analysis, cached-analysis reuse, idle briefing scheduler checks, non-command Telegram updates, Piper chunks, and delivery attempts.
 
@@ -76,6 +78,8 @@ Start a PostgreSQL instance, set `DATABASE_URL`, apply the committed migration, 
 pnpm db:deploy
 pnpm --filter @watcher/stocks-bot dev
 pnpm --filter @watcher/publications-bot dev
+pnpm --filter @watcher/news-bot dev
+pnpm --filter @watcher/mu-clubs-monitor dev
 ```
 
 The standard repository checks are:
@@ -102,26 +106,33 @@ Every application variable is represented in `.env.example`.
 | `DATABASE_URL`                                      | migrations, all bots | PostgreSQL connection URL                                                                     |
 | `STOCKS_TELEGRAM_TOKEN`                             | stocks bot           | BotFather token for the stocks bot                                                            |
 | `PUBLICATIONS_TELEGRAM_TOKEN`                       | publications bot     | BotFather token for the publications bot                                                      |
+| `NEWS_TELEGRAM_TOKEN`                               | news bot             | Distinct BotFather token for the Czech and Global news profiles                               |
 | `BRIEFING_TELEGRAM_TOKEN`                           | briefing bot         | Distinct BotFather token for the personal morning briefing bot                                |
+| `MU_CLUBS_API_TOKEN`                                | MU Clubs monitor     | Bearer token protecting its activity, registry, briefing, and manual-run endpoints            |
+| `MU_CLUBS_HOST`, `MU_CLUBS_PORT`                    | MU Clubs monitor     | Internal HTTP listener; Compose publishes port 4010 to host loopback only                     |
+| `MU_CLUBS_MONITOR_INTERVAL_MINUTES`                 | MU Clubs monitor     | Scheduled monitor cadence                                                                     |
+| `INSTAGRAM_CACHE_TTL_MINUTES`                       | shared Instagram     | Reuse window for public profile and post results                                              |
+| `INSTAGRAM_MIN_REQUEST_INTERVAL_MS`                 | shared Instagram     | Minimum delay between public Instagram requests                                               |
+| `INSTAGRAM_MAX_POSTS_PER_FETCH`                     | shared Instagram     | Hard cap on posts requested per profile                                                       |
 | `TELEGRAM_ALLOWED_USER_IDS`                         | all bots             | Comma-separated Telegram numeric user IDs; every command and callback is denied unless listed |
 | `OLLAMA_URL`                                        | all bots             | Ollama base URL                                                                               |
 | `OLLAMA_MODEL`                                      | all bots             | Installed Ollama model name                                                                   |
 | `OLLAMA_KEEP_ALIVE`                                 | all bots             | How long Ollama keeps the model loaded; defaults to `5m`                                      |
-| `OLLAMA_MAX_ITEMS_PER_RUN`                          | both bots            | Maximum new items analyzed in one run; `0` means all new items and is the default             |
-| `OLLAMA_NUM_CTX`                                    | both bots            | Per-request context size; defaults to `4096`                                                  |
+| `OLLAMA_MAX_ITEMS_PER_RUN`                          | watcher producers    | Maximum new items analyzed in one run; `0` means all new items and is the default             |
+| `OLLAMA_NUM_CTX`                                    | watcher producers    | Per-request context size; defaults to `4096`                                                  |
 | `BRIEFING_OLLAMA_NUM_CTX`                           | briefing bot         | Briefing script context size; defaults to `8192` without increasing producer requests         |
-| `OLLAMA_NUM_PREDICT`                                | both bots            | Maximum generated tokens per analysis; defaults to `768`                                      |
+| `OLLAMA_NUM_PREDICT`                                | watcher producers    | Maximum generated tokens per analysis; defaults to `768`                                      |
 | `OLLAMA_FULL_ANALYSIS_NUM_PREDICT`                  | stocks bot           | Output-token cap for the larger thesis/scenario response; defaults to `1536`                  |
-| `OLLAMA_RETRIES`                                    | both bots            | Retry count after a failed or invalid response; defaults to `1`                               |
-| `OLLAMA_THINK`                                      | both bots            | Enables model thinking output; defaults to `false` to avoid unnecessary compute               |
-| `OLLAMA_TIMEOUT_MS`                                 | both bots            | Per-attempt timeout, from 10–180 seconds; defaults to 120 seconds                             |
+| `OLLAMA_RETRIES`                                    | watcher producers    | Retry count after a failed or invalid response; defaults to `1`                               |
+| `OLLAMA_THINK`                                      | watcher producers    | Enables model thinking output; defaults to `false` to avoid unnecessary compute               |
+| `OLLAMA_TIMEOUT_MS`                                 | watcher producers    | Per-attempt timeout, from 10–180 seconds; defaults to 120 seconds                             |
 | `SEC_USER_AGENT`                                    | stocks bot           | SEC-compliant app name and contact address                                                    |
 | `DEFAULT_TIMEZONE`                                  | all bots             | IANA timezone used for a newly created watcher or briefing setting                            |
 | `LOG_LEVEL`                                         | all bots             | Pino log level, normally `info`                                                               |
 | `STOCK_EVENT_COOLDOWN_MINUTES`                      | stocks bot           | Same-event analysis cooldown; defaults to 360 minutes                                         |
 | `STOCK_TICKER_ANALYSIS_COOLDOWN_MINUTES`            | stocks bot           | Same-ticker analysis cooldown; defaults to 30 minutes                                         |
-| `SOURCE_BACKOFF_BASE_SECONDS`                       | both bots            | Initial source-failure backoff; defaults to 60 seconds                                        |
-| `SOURCE_BACKOFF_MAX_MINUTES`                        | both bots            | Maximum exponential source backoff; defaults to 360 minutes                                   |
+| `SOURCE_BACKOFF_BASE_SECONDS`                       | watcher producers    | Initial source-failure backoff; defaults to 60 seconds                                        |
+| `SOURCE_BACKOFF_MAX_MINUTES`                        | watcher producers    | Maximum exponential source backoff; defaults to 360 minutes                                   |
 | `ALERT_ATTENTION_THRESHOLD`                         | stocks bot           | Attention score that creates a live alert when crossed; defaults to 85                        |
 | `RECONCILIATION_INTERVAL_MINUTES`                   | stocks bot           | Interval for comprehensive recovery scans; defaults to one day                                |
 | `VALIDATION_MIN_SAMPLE_SIZE`                        | stocks bot           | Completed 30-day samples required to mark signal statistics adequate; defaults to 20          |
@@ -153,11 +164,11 @@ Every application variable is represented in `.env.example`.
 | `DISCOVERY_EVENT_MODE_MINUTES`                      | stocks bot           | Duration of event-mode polling after material evidence; defaults to 120 minutes               |
 | `DISCOVERY_WATCH_DAYS`                              | stocks bot           | Watch lifetime after automatic promotion; defaults to 14 days                                 |
 
-Infrastructure secrets cannot be edited through Telegram. Telegram-editable schedules, watchlists, query lists, and source switches are persisted in PostgreSQL.
+Infrastructure secrets cannot be edited through Telegram. Telegram-editable schedules, watchlists, query lists, news feeds/topics, and source switches are persisted in PostgreSQL.
 
 ## Telegram commands
 
-Both bots support `/about`, `/start`, `/help`, `/status`, `/listsources`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. `/help` prints the same alphabetized command list as `/start`, while `/about` provides a detailed Markdown overview of the bot's purpose, key functions, advantages, and usage workflow. `/listsources` lists each available provider with its website link.
+Stocks and Publications support `/about`, `/start`, `/help`, `/status`, `/list_sources`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. News supports the common lifecycle commands plus profile-aware feed and topic configuration. `/help` prints an alphabetized command list, while `/about` explains each bot's purpose and workflow.
 
 Manual `/run` requests first send one progress message, then update that message with `editMessageText` while sources are fetched, items are prepared, and Ollama analyses run. Run digests use Telegram formatting with clear item separators, labeled summary and detail sections, bullet lists, source links, and total run time. Link previews are disabled to keep multi-item digests compact.
 
@@ -169,32 +180,48 @@ Stocks bot:
 - `/alerts` to show recent generated alerts and delivery state
 - `/health` to show run, reconciliation, source, LLM, latency, and queue metrics
 - `/replay SYMBOL DATE` for a strict historical as-of view that excludes later-known information
-- `/eventreplay SYMBOL [FROM] [TO]` for the chronological event and thesis-transition stream
+- `/event_replay SYMBOL [FROM] [TO]` for the chronological event and thesis-transition stream
 - `/validate` to match stored theses, alerts, and signals to stored price outcomes
-- `/backtest`, `/calibration`, and `/signalperformance` for validation reports
+- `/backtest`, `/calibration`, and `/signal_performance` for validation reports
 - `/reconcile` to run the comprehensive recovery scan now
 - `/catalysts [SYMBOL]` to list active and upcoming catalyst records with evidence
 - `/advanced [SYMBOL]` to inspect the latest options, institutional, short-interest, FDA, and clinical-trial data
 - `/thesis SYMBOL` to show the latest persistent thesis, decision state, scenarios, coverage, and signal scores
 - `/discovery` to show scanner state, active investigations, and recent signals
-- `/rundiscovery` to run the configured cheap market-wide scanner immediately
-- `/addstock SYMBOL`
-- `/removestock SYMBOL`
-- `/settier SYMBOL TIER [YYYY-MM-DD] [REASON]`
-- `/setmode SYMBOL MODE`
-- `/setpriority SYMBOL 0-100`
-- `/stockon SYMBOL` and `/stockoff SYMBOL`
+- `/run_discovery` to run the configured cheap market-wide scanner immediately
+- `/add_stock SYMBOL`
+- `/remove_stock SYMBOL`
+- `/set_tier SYMBOL TIER [YYYY-MM-DD] [REASON]`
+- `/set_mode SYMBOL MODE`
+- `/set_priority SYMBOL 0-100`
+- `/stock_on SYMBOL` and `/stock_off SYMBOL`
 - `/sources` to toggle each stock source globally for all current and future stocks, including advanced and optional Quiver datasets
-- `/listsources` to list available stock sources and provider links
+- `/list_sources` to list available stock sources and provider links
 
 Publications bot:
 
 - `/queries`
-- `/addquery TOPIC`
-- `/addqueries` to import multiple topics from a CSV attachment
-- `/removequery TOPIC`
+- `/add_query TOPIC`
+- `/add_queries` to import multiple topics from a CSV attachment
+- `/remove_query TOPIC`
 - `/sources` to toggle PubMed, bioRxiv, ClinicalTrials.gov, and openFDA globally for all current and future queries
-- `/listsources` to list available publication sources and provider links
+- `/list_sources` to list available publication sources and provider links
+
+News bot:
+
+- `/feed_add PROFILE URL [NAME]`, `/feed_remove ID`, `/feed_enable ID`, and `/feed_disable ID`
+- `/feeds` to list Czech and Global feeds with their stable IDs
+- `/topic_add PROFILE TOPIC`, `/topic_remove PROFILE TOPIC`, and `/topics`
+- `/run` to process both profiles, or `/run czech` / `/run global` for one profile
+- `/schedule`, `/status`, `/pause`, and `/resume` for the shared persisted runner
+
+MU Clubs monitor:
+
+- `GET /activities` lists persisted normalized club activities; filters include `since`, `club`, `minImportance`, and `limit`
+- `GET /briefing` returns the last 24 hours of briefing-worthy activities by default
+- `GET /clubs` shows active, unsupported, and excluded club/source registry entries
+- `POST /run` invokes the same source pipeline used by the scheduler
+- These endpoints require `Authorization: Bearer $MU_CLUBS_API_TOKEN`; only `GET /healthz` is unauthenticated
 
 Personal Morning Briefing bot:
 
@@ -206,15 +233,15 @@ Personal Morning Briefing bot:
 - `/voice_list`, `/voice_set VOICE`, and `/voice_preview VOICE`
 - `/calendar_connect`, `/calendar_status`, `/calendar_refresh`, and `/calendar_disconnect`
 
-Telegram command names use underscores. Legacy briefing commands typed with hyphens are normalized to their underscore equivalents for compatibility.
+Multiword Telegram command names use underscores. Legacy concatenated stock/publication names remain accepted as aliases, and legacy briefing commands typed with hyphens are normalized to their underscore equivalents.
 
-Manual and test briefings can run with the saved settings and safe defaults before onboarding is complete. Scheduled delivery starts only after onboarding is completed. Google Calendar is optional; an unconnected calendar simply contributes no calendar events. The briefing scheduler uses the configured IANA timezone and a PostgreSQL claim, while manual/test runs have independent windows. It clusters related Stocks and Medical events, suppresses unchanged stories, selects to a variable spoken-word budget, and uses Piper for OGG/Opus audio. Failed weather, Calendar, script, TTS, source, or Telegram stages degrade independently. Voice upload exhaustion falls back to text. Every run persists producer health, enabled-input coverage, selection/noise counts, stage latency, voice, word count, planned duration, audio duration, and delivery failures.
+Manual and test briefings can run with the saved settings and safe defaults before onboarding is complete. Scheduled delivery starts only after onboarding is completed. Google Calendar is optional; an unconnected calendar simply contributes no calendar events. The briefing scheduler uses the configured IANA timezone and a PostgreSQL claim, while manual/test runs have independent windows. It collects the newest subscribed watcher events in the briefing window before clustering and ranking, so large producer batches cannot push fresh developments out of the candidate set. It clusters related Stocks, Medical, News, and MU Clubs events, suppresses unchanged stories, selects to a variable spoken-word budget, and uses Piper for OGG/Opus audio. The compact index is included in the voice caption, so a successful delivery sends only one message unless the optional transcript is enabled. Failed weather, Calendar, script, TTS, source, or Telegram stages degrade independently. Voice upload exhaustion falls back to text. Every run persists producer health, enabled-input coverage, selection/noise counts, stage latency, voice, word count, planned duration, audio duration, and delivery failures.
 
 Stock and publication source switches are global within their respective bot. Every source is enabled initially; `/sources` changes it for all current entries and saves the same setting for entries added later. Cron expressions use five fields; an optional final IANA timezone may be supplied. Use `/schedule` without arguments to view the current schedule and example syntax, or set one with `/schedule 0 8 * * * Europe/Prague`.
 
 ### Stocks
 
-The watchlist starts empty. `ELAN`, `CVS`, `NVO`, `PFE`, and `BMY` are examples only; none is seeded or mandatory. Add only the symbols you want with `/addstock`. When a stock is added, Watcher resolves the ticker through SEC EDGAR, stores the company name and CIK, and shows the company name in `/stocks` and stock run digests.
+The watchlist starts empty. `ELAN`, `CVS`, `NVO`, `PFE`, and `BMY` are examples only; none is seeded or mandatory. Add only the symbols you want with `/add_stock`. When a stock is added, Watcher resolves the ticker through SEC EDGAR, stores the company name and CIK, and shows the company name in `/stocks` and stock run digests. Confirmed upcoming quarterly earnings dates for watched stocks produce Morning Briefing reminders one week before and one day before the report date.
 
 Available stock sources are SEC EDGAR, issuer RSS/Atom feeds auto-discovered from SEC company metadata, GDELT news discovery, TradingView symbol news, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, Stooq price, FINRA short interest, ClinicalTrials.gov, openFDA Drugs@FDA, Alpha Vantage institutional/options data, and six optional Quiver datasets. Every source switch is enabled initially. Credential-backed switches remain dormant when their server credential or entitlement flag is absent. Provider URLs are built into the bot; use `/sources` to change a source globally for all existing stocks and as the default for stocks added later.
 
@@ -238,7 +265,11 @@ Phase 9 adds strict historical and chronological event replay plus persisted out
 
 ### Publications
 
-The query list also starts empty. Add a topic such as `/addquery mycorrhizal fungi`; it is stored exactly for display and in normalized form for duplicate protection. To import many topics, upload a CSV file with a `query` or `topic` column and reply to it with `/addqueries`, or attach the CSV with `/addqueries` as the document caption. If no header is present, the first column is used. PubMed, bioRxiv, ClinicalTrials.gov, and openFDA are enabled initially. Use `/sources` to disable or enable a provider globally for all existing queries and as the default for queries added later.
+The query list also starts empty. Add a topic such as `/add_query mycorrhizal fungi`; it is stored exactly for display and in normalized form for duplicate protection. To import many topics, upload a CSV file with a `query` or `topic` column and reply to it with `/add_queries`, or attach the CSV with `/add_queries` as the document caption. If no header is present, the first column is used. PubMed, bioRxiv, ClinicalTrials.gov, and openFDA are enabled initially. Use `/sources` to disable or enable a provider globally for all existing queries and as the default for queries added later.
+
+### News
+
+News feeds and topics start empty; no editorial source list is imposed. Add public RSS or Atom URLs to either the `czech` or `global` profile. Topics steer relevance ranking within that profile; if a profile has no topics, Ollama assesses general public significance. Feed responses are normalized and deduplicated through the shared watcher pipeline, while important and relevant stories are published to the Briefing Bot as durable `news` events. Enable or disable the `news` subscription from the Briefing Bot independently of the News Watcher's own schedule.
 
 ## Source support and limitations
 
@@ -259,17 +290,18 @@ The query list also starts empty. Add a topic such as `/addquery mycorrhizal fun
 - **bioRxiv:** queries the official API over a recent date window and filters matching title/abstract text.
 - **ClinicalTrials.gov:** uses the v2 structured API.
 - **openFDA:** searches drug adverse-event reports by generic drug name; a provider 404 is treated as no results.
+- **News RSS/Atom:** reads only operator-configured public feed URLs. Initial URLs and every redirect are checked against private, loopback, link-local, and special-purpose network targets. Analysis uses the feed-provided title and summary; it does not scrape arbitrary linked article pages.
 
 External APIs can change, throttle, or return incomplete data. One source failure does not cancel other source results and is included in the run record and digest. Requests are coordinated by a shared limiter for each provider: GDELT is queried serially with at least five seconds between starts, PubMed serializes every NCBI E-utilities request at no more than one per second, bioRxiv reuses one provider response across all queries for 30 minutes, and all Alpha Vantage or Quiver adapters share their provider's queue. The first rate-limit response pauses queued calls for that provider, honors `Retry-After` when supplied, and persists the provider-wide backoff so later runs and other Telegram users do not immediately retry it. Other source failures retain bounded target-specific exponential backoff; a later successful check restores healthy status. The system does not invent fallback content.
 
-Ollama responses are requested as structured JSON and validated with Zod. The parser safely extracts JSON from Markdown fences or leading commentary. Malformed output gets a small bounded corrective retry containing the validation problem and twice the previous output-token budget, up to 8192 tokens. `done_reason`, token counts, and unfinished JSON structure distinguish truncation so the repair prompt can say that the response was cut off. Persistent failures are stored as failed analyses instead of crashing the run. Source content is truncated before it is sent to the model.
+Ollama responses are requested as structured JSON and validated with Zod. The parser safely extracts JSON from Markdown fences or leading commentary. Malformed output gets a small bounded corrective retry containing the validation problem and twice the previous output-token budget, up to 8192 tokens. `done_reason`, token counts, and unfinished JSON structure distinguish truncation so the repair prompt can say that the response was cut off. Publication output also normalizes safe model deviations such as known field aliases, a single string where a string array is required, numeric strings, and decimal or out-of-range scores. It does not invent missing summaries or scores; persistent failures are stored as failed analyses instead of crashing the run. Source content is truncated before it is sent to the model.
 
 ## Ollama resource protection
 
 Watcher intentionally does not use Redis for Ollama coordination. PostgreSQL already belongs to the system and provides one global advisory lock shared by both bot containers. Analysis therefore has five layers of protection:
 
 1. Sources may fetch concurrently, but expensive LLM analyses are sequential inside each run.
-2. The PostgreSQL advisory lock permits only one Ollama analysis across both bots at a time.
+2. The PostgreSQL advisory lock permits only one Ollama analysis across watcher producers at a time.
 3. Canonical event deduplication, materiality, and persisted cooldowns reject redundant or low-value stock work before Ollama.
 4. `OLLAMA_MAX_ITEMS_PER_RUN` caps eligible analyses after the stock materiality gate. The default `0` processes every eligible event (and every new publication item).
 5. Context, output length, timeout, retry count, thinking, and model keep-alive are bounded by environment variables.
@@ -309,9 +341,11 @@ apps/
     src/sources/           SEC, market, feed, and alternative-data adapters
   publications-bot/       process lifecycle and publication Telegram workflows
     src/sources/           PubMed, bioRxiv, trials, and FDA adapters
+  mu-clubs-monitor/       public club activity monitoring, API, classification, and scheduling
 packages/
   core/                   cross-bot pipeline, event bus, scheduling, networking, and common types
   database/               Prisma schema, migrations, client, persistence store
+  sources/                reusable source infrastructure: Instagram, safe public HTML, discovery, and caching
   llm/                    Ollama adapter, prompts, validation
   telegram/               authorization, parsing, keyboards, digest splitting
 deploy/                    VPS/Tailscale/GHCR deployment configuration
@@ -327,7 +361,7 @@ Real credentials belong only in the GitHub `production` environment or mode-`060
 
 ## Security and operations
 
-- PostgreSQL has no host port in either Compose definition.
+- PostgreSQL binds host port `5433` to loopback only. Remote administration requires an authenticated SSH/Tailscale tunnel; the database is never bound to a public interface.
 - Application and migration containers run as a non-root user, with read-only filesystems, `no-new-privileges`, and a writable `/tmp` tmpfs.
 - Both processes handle `SIGTERM` and `SIGINT`, stop polling, and disconnect from PostgreSQL.
 - Logs redact known token, password, authorization, and database URL fields.
@@ -338,7 +372,7 @@ See `AGENTS.md` for the project constraints and completion contract for future c
 ## Troubleshooting
 
 - **A bot exits immediately:** inspect `docker compose logs <service>`. Missing or malformed environment variables are rejected at startup.
-- **A run returns source errors:** inspect `docker compose logs -f stocks-bot` or `docker compose logs -f publications-bot`. Look for `Watcher source failed` with its `source`, `target`, and error message. Temporarily set `LOG_LEVEL=debug` for per-item analysis logs.
+- **A run returns source errors:** inspect the owning service, for example `docker compose logs -f stocks-bot`, `publications-bot`, or `mu-clubs-monitor`. Look for the structured source failure and its error message. Temporarily set `LOG_LEVEL=debug` for additional diagnostics.
 - **Telegram does not respond:** confirm the correct token is assigned to the correct service, your numeric user ID is allowlisted, and no second process is polling the same bot token.
 - **Ollama connection fails:** from the VPS, verify Ollama is listening beyond loopback when appropriate; from a temporary container, verify `host.docker.internal:11434` is reachable. Keep Ollama behind the host firewall or private network.
 - **SEC fails:** provide an identifiable `SEC_USER_AGENT`, verify outbound HTTPS, and avoid lowering the built-in request spacing.

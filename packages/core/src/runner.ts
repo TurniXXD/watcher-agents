@@ -135,7 +135,9 @@ export class WatcherRunner {
           analysisStep:
             this.kind === 'STOCKS'
               ? 'Evaluating events and thesis'
-              : 'Analyzing publications',
+              : this.kind === 'PUBLICATIONS'
+                ? 'Analyzing publications'
+                : 'Analyzing news',
           ...(onProgress ? { onProgress } : {}),
           ...(options.signal ? { signal: options.signal } : {}),
         },

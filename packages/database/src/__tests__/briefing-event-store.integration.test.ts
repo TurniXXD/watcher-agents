@@ -68,6 +68,37 @@ integration('PostgresBriefingEventRepository', () => {
     expect(listed).toEqual([saved.event]);
   });
 
+  it('can read the newest detected events first before applying the limit', async () => {
+    await repository.save(
+      event({
+        id: 'stocks:old',
+        externalEventId: 'old',
+        deduplicationKey: 'stocks:old',
+      }),
+    );
+    await repository.save(
+      event({
+        id: 'stocks:new',
+        externalEventId: 'new',
+        deduplicationKey: 'stocks:new',
+        detectedAt: '2026-09-05T06:30:00.000Z',
+        createdAt: '2026-09-05T06:30:00.000Z',
+        updatedAt: '2026-09-05T06:30:00.000Z',
+        title: 'Newer material catalyst',
+      }),
+    );
+
+    const listed = await repository.list({
+      watcherBots: ['stocks'],
+      detectedAfter: new Date('2026-09-05T06:00:00.000Z'),
+      detectedThrough: new Date('2026-09-05T07:00:00.000Z'),
+      detectedOrder: 'desc',
+      limit: 1,
+    });
+
+    expect(listed.map(({ id }) => id)).toEqual(['stocks:new']);
+  });
+
   it('uses producer identity keys idempotently and keeps the canonical id', async () => {
     await repository.save(event());
     const updated = await repository.save(

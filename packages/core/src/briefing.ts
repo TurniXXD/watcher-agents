@@ -22,7 +22,40 @@ export const medicalBriefingCategories = [
   'MEDICAL_PUBLIC_HEALTH',
 ] as const;
 
-export const watcherBotIdSchema = z.enum(['stocks', 'medical']);
+export const newsBriefingCategories = [
+  'NEWS_POLITICS',
+  'NEWS_BUSINESS',
+  'NEWS_ECONOMY',
+  'NEWS_TECHNOLOGY',
+  'NEWS_SCIENCE',
+  'NEWS_HEALTH',
+  'NEWS_SECURITY',
+  'NEWS_CLIMATE',
+  'NEWS_CULTURE',
+  'NEWS_SPORT',
+  'NEWS_OTHER',
+] as const;
+
+export const muClubsBriefingCategories = [
+  'CLUB_NEW_EVENT',
+  'CLUB_REGISTRATION_OPEN',
+  'CLUB_RECRUITMENT',
+  'CLUB_MEETING',
+  'CLUB_WORKSHOP',
+  'CLUB_LECTURE',
+  'CLUB_DEADLINE',
+  'CLUB_TRIP',
+  'CLUB_VOLUNTEER_OPPORTUNITY',
+  'CLUB_ANNOUNCEMENT',
+  'CLUB_OTHER_RELEVANT_UPDATE',
+] as const;
+
+export const watcherBotIdSchema = z.enum([
+  'stocks',
+  'medical',
+  'news',
+  'mu-clubs',
+]);
 export type WatcherBotId = z.infer<typeof watcherBotIdSchema>;
 
 export const briefingEventStatusSchema = z.enum([
@@ -101,10 +134,7 @@ export const briefingEventSchema = z
   })
   .strict()
   .superRefine((event, context) => {
-    const allowedCategories =
-      event.watcherBot === 'stocks'
-        ? stockBriefingCategories
-        : medicalBriefingCategories;
+    const allowedCategories = watcherRegistry[event.watcherBot].categories;
     if (!(allowedCategories as readonly string[]).includes(event.category)) {
       context.addIssue({
         code: 'custom',
@@ -119,7 +149,7 @@ export type BriefingEvent = z.infer<typeof briefingEventSchema>;
 export type WatcherRegistration = {
   id: WatcherBotId;
   displayName: string;
-  producerKind: 'STOCKS' | 'PUBLICATIONS';
+  producerKind: 'STOCKS' | 'PUBLICATIONS' | 'NEWS' | 'MU_CLUBS';
   categories: readonly string[];
 };
 
@@ -135,6 +165,18 @@ export const watcherRegistry = Object.freeze({
     displayName: 'Medical',
     producerKind: 'PUBLICATIONS',
     categories: medicalBriefingCategories,
+  }),
+  news: Object.freeze({
+    id: 'news',
+    displayName: 'News',
+    producerKind: 'NEWS',
+    categories: newsBriefingCategories,
+  }),
+  'mu-clubs': Object.freeze({
+    id: 'mu-clubs',
+    displayName: 'MU Clubs',
+    producerKind: 'MU_CLUBS',
+    categories: muClubsBriefingCategories,
   }),
 } satisfies Record<WatcherBotId, WatcherRegistration>);
 
@@ -154,6 +196,7 @@ export type BriefingEventQuery = {
   statuses?: readonly BriefingEventStatus[];
   detectedAfter?: Date;
   detectedThrough?: Date;
+  detectedOrder?: 'asc' | 'desc';
   limit?: number;
 };
 

@@ -48,7 +48,7 @@ An automatically promoted watch receives a configurable `watchUntil`. At expiry,
 
 ## Operations
 
-`/discovery` shows whether the provider is configured, scan timestamps, active investigations, and recent signal decisions. `/rundiscovery` triggers the same persisted coordinator used by the scheduler. `/stocks` labels auto-discovered names and displays their attention score and investigation deadline.
+`/discovery` shows whether the provider is configured, scan timestamps, active investigations, and recent signal decisions. `/run_discovery` triggers the same persisted coordinator used by the scheduler. `/stocks` labels auto-discovered names and displays their attention score and investigation deadline.
 
 Important configuration is documented in `.env.example`. The defaults select at most ten candidates above a 4% move, $2 price, 100,000 current shares, and $1 million current dollar volume; investigate for 90 minutes; poll fast sources every five minutes; keep event mode for two hours; and keep an automatically promoted watch for fourteen days.
 

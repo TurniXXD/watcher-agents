@@ -4,6 +4,7 @@ import {
   contentHash,
   decisionResultSchema,
   normalizeObservation,
+  newsAnalysisSchema,
   stockIntelligenceResultSchema,
   stockThesisStateSchema,
   watchItemSchema,
@@ -29,6 +30,8 @@ import type { DatabaseClient } from './client.js';
 import type { Prisma } from './generated/prisma/client.js';
 import {
   AnalysisStatus,
+  CatalystStatus,
+  CatalystType,
   PublicationSourceType,
   RunStatus,
   RunTrigger,
@@ -47,8 +50,7 @@ import { ConfigurationStore } from './configuration-store.js';
 const DEFAULT_SCHEDULE = '0 8 * * *';
 const DEFAULT_TIMEZONE = 'Europe/Prague';
 const LOCAL_MODEL_RESOURCE = 'HEAVY_LOCAL_MODEL';
-const kindValue = (kind: CoreWatcherKind): WatcherKind =>
-  kind === 'STOCKS' ? WatcherKind.STOCKS : WatcherKind.PUBLICATIONS;
+const kindValue = (kind: CoreWatcherKind): WatcherKind => WatcherKind[kind];
 const identityKey = (item: { source: string; externalId: string }): string =>
   `${item.source}\u0000${item.externalId}`;
 
@@ -63,6 +65,18 @@ export type WatcherStoreOptions = {
   alertAttentionThreshold?: number;
 };
 
+export type EarningsReminderCandidate = {
+  id: string;
+  ticker: string;
+  companyName: string | null;
+  description: string;
+  expectedStart: Date;
+  exactDateKnown: boolean;
+  impact: string;
+  source: string | null;
+  sourceUrl: string | null;
+};
+
 const cachedOutcome = (
   kind: CoreWatcherKind,
   result: Prisma.JsonValue,
@@ -71,7 +85,9 @@ const cachedOutcome = (
   result:
     kind === 'STOCKS'
       ? stockAnalysisSchema.parse(result)
-      : publicationAnalysisSchema.parse(result),
+      : kind === 'PUBLICATIONS'
+        ? publicationAnalysisSchema.parse(result)
+        : newsAnalysisSchema.parse(result),
 });
 
 export class WatcherStore implements PipelineRepository {
@@ -915,6 +931,59 @@ export class WatcherStore implements PipelineRepository {
         },
       },
     });
+  }
+
+  public async listUpcomingEarningsReminderCandidates(
+    chatConfigId: string,
+  ): Promise<EarningsReminderCandidate[]> {
+    const stocks = await this.db.stock.findMany({
+      where: { chatConfigId, enabled: true },
+      select: { symbol: true, companyName: true },
+    });
+    if (stocks.length === 0) return [];
+    const stocksBySymbol = new Map(
+      stocks.map((stock) => [stock.symbol, stock.companyName] as const),
+    );
+    const catalysts = await this.db.catalyst.findMany({
+      where: {
+        ticker: { in: stocks.map(({ symbol }) => symbol) },
+        catalystType: CatalystType.EARNINGS,
+        status: CatalystStatus.UPCOMING,
+        expectedStart: { not: null },
+        exactDateKnown: true,
+      },
+      orderBy: [{ expectedStart: 'asc' }, { impact: 'desc' }],
+      take: 200,
+      include: {
+        event: {
+          select: {
+            primaryEvidence: {
+              select: { source: true, sourceUrl: true, url: true },
+            },
+          },
+        },
+      },
+    });
+    return catalysts.flatMap((catalyst) =>
+      catalyst.expectedStart
+        ? [
+            {
+              id: catalyst.id,
+              ticker: catalyst.ticker,
+              companyName: stocksBySymbol.get(catalyst.ticker) ?? null,
+              description: catalyst.description,
+              expectedStart: catalyst.expectedStart,
+              exactDateKnown: catalyst.exactDateKnown,
+              impact: catalyst.impact,
+              source: catalyst.event.primaryEvidence?.source ?? null,
+              sourceUrl:
+                catalyst.event.primaryEvidence?.sourceUrl ??
+                catalyst.event.primaryEvidence?.url ??
+                null,
+            },
+          ]
+        : [],
+    );
   }
 
   public async getAdvancedStockData(chatConfigId: string, ticker?: string) {

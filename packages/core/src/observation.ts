@@ -14,7 +14,7 @@ export type ObservationSourceType = z.infer<typeof observationSourceTypeSchema>;
 
 export const normalizedObservationSchema = z.object({
   id: z.string().min(1),
-  watcherKind: z.enum(['STOCKS', 'PUBLICATIONS']),
+  watcherKind: z.enum(['STOCKS', 'PUBLICATIONS', 'NEWS']),
   ticker: z.string().min(1).nullable(),
   source: z.string().min(1),
   sourceType: observationSourceTypeSchema,

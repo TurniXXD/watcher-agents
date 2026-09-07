@@ -5,7 +5,7 @@ const commandNames = (help: string): string[] =>
   help
     .split('\n')
     .filter((line) => line.startsWith('/'))
-    .map((line) => line.match(/^\/([a-z]+)/)?.[1] ?? '');
+    .map((line) => line.match(/^\/([a-z_]+)/)?.[1] ?? '');
 
 describe('stocks bot command copy', () => {
   it('lists every help command alphabetically', () => {
@@ -14,7 +14,7 @@ describe('stocks bot command copy', () => {
     expect(commands).toEqual([...commands].sort());
     expect(commands).toEqual([
       'about',
-      'addstock',
+      'add_stock',
       'advanced',
       'alerts',
       'backtest',
@@ -22,28 +22,28 @@ describe('stocks bot command copy', () => {
       'catalysts',
       'dashboard',
       'discovery',
-      'eventreplay',
+      'event_replay',
       'health',
       'help',
-      'listsources',
+      'list_sources',
       'opportunities',
       'pause',
       'reconcile',
-      'removestock',
+      'remove_stock',
       'replay',
       'resume',
       'run',
-      'rundiscovery',
+      'run_discovery',
       'schedule',
-      'setmode',
-      'setpriority',
-      'settier',
-      'signalperformance',
+      'set_mode',
+      'set_priority',
+      'set_tier',
+      'signal_performance',
       'sources',
       'start',
       'status',
-      'stockoff',
-      'stockon',
+      'stock_off',
+      'stock_on',
       'stocks',
       'thesis',
       'validate',
@@ -54,7 +54,7 @@ describe('stocks bot command copy', () => {
     expect(stocksAbout).toContain('*What it does*');
     expect(stocksAbout).toContain('*Key advantages*');
     expect(stocksAbout).toContain('*How to use it*');
-    expect(stocksAbout).toContain('`/addstock SYMBOL`');
+    expect(stocksAbout).toContain('`/add_stock SYMBOL`');
     expect(stocksAbout.length).toBeLessThanOrEqual(4096);
   });
 });

@@ -14,6 +14,8 @@ There is no separate application named Medical Bot. The existing `apps/publicati
 
 Each app owns its commands and callbacks. `packages/telegram` shares authorization, input parsing, HTML escaping, command copy, source/validation messages, digest rendering, progress-message editing, and message splitting. Every command is guarded by configured Telegram user IDs. The Briefing Bot is a third grammY process and owns briefing-specific onboarding and commands.
 
+The News Watcher is a separate grammY process with one bot identity and two persisted editorial profiles, `CZECH` and `GLOBAL`. Operator-configured RSS/Atom feeds and ranking topics remain scoped to their profile, while ingestion, deduplication, analysis, scheduling, and briefing publication are shared.
+
 ## 4. Current database architecture
 
 `packages/database` owns Prisma/PostgreSQL and repository-style stores. Durable identity uses constraints for processed items, canonical stock events, alerts, configuration, schedules, and stock intelligence state. Briefing events use an independent integration table rather than overloading the stock-specific `CanonicalEvent`; settings, subscriptions, run windows, story state, encrypted Calendar credentials, delivery attempts, producer health, coverage, and run metrics are persisted separately.
@@ -52,7 +54,7 @@ Renaming the deployed app/service is deliberately avoided; only the integration 
 
 The shared contract defines a strict Zod schema for `WatcherBotId`, timestamps, scores, URLs, JSON-safe metadata, entities, confidence, status, and registered per-producer categories. Scores are integer percentages from 0 through 100. Unknown fields, unknown watcher IDs, invalid URLs/timestamps, cross-producer categories, and non-JSON metadata are rejected. Ticker syntax is normalized at the producing boundary and must already be uppercase.
 
-The registry exposes exactly `stocks` and `medical`; it maps Medical to the current `PUBLICATIONS` producer kind. A future watcher requires an explicit schema, registry, migration, producer, and UI change.
+The registry includes `stocks`, `medical`, `news`, and `mu-clubs`. News maps to the `NEWS` runtime kind and owns `NEWS_*`; the standalone MU Clubs service owns `CLUB_*` events and reports producer health as `mu-clubs`. Every watcher addition requires an explicit schema, registry, migration, producer, and UI change.
 
 ## 11. Database migrations
 
@@ -92,6 +94,8 @@ Calendar failure produces a short unavailable notice and does not block the rest
 
 Subscriptions are Briefing Bot preferences keyed by Telegram chat and `WatcherBotId`. They do not enable, disable, or schedule producer bots. The UI lists only the registry entries. The retrieval query filters briefing events using enabled subscriptions and the run window. Disabling a subscription preserves old story state so re-enabling does not replay the entire history.
 
+`mu-clubs` is created idempotently for existing and new Briefing settings the next time they are loaded. Its producer publishes semantically classified activities rather than generic “new post” notices and uses the same durable event repository and watcher-health store as Stocks, Medical, and News.
+
 ## 17. Story clustering design
 
 Phase 7 first groups exact identities/dedup keys, then clusters cross-bot events using shared source URLs, normalized entities/tickers, temporal proximity, category compatibility, and conservative semantic similarity. Deterministic evidence must dominate LLM suggestions. One stock catalyst and one medical trial may become one story while retaining both source events and provenance.
@@ -129,9 +133,9 @@ If streaming or concatenation proves unreliable, retain per-chunk hashes and res
 
 ## 22. Telegram delivery design
 
-Phase 10 sends one voice message, then a compact HTML text index with story links, and optionally a split transcript according to settings. Delivery records distinguish generated, voice-sent, index-sent, transcript-sent, and failed. Telegram retries use bounded exponential backoff and respect retry-after. Stable delivery keys prevent duplicate morning messages after a crash.
+Phase 10 sends one voice message with the compact HTML index in its caption and optionally a split transcript according to settings. Delivery records distinguish voice-sent, transcript-sent, text-fallback, and failed attempts; the historical `INDEX` channel remains in the database enum for migration compatibility but is not used for new deliveries. Telegram retries use bounded exponential backoff and respect retry-after. Stable delivery keys prevent duplicate morning messages after a crash.
 
-If voice generation/upload fails, send the text index and transcript fallback. If the index fails after voice succeeds, retry only the missing index.
+If voice generation or upload fails, send the generated briefing text as a fallback. If an optional transcript fails after voice succeeds, retry only the missing transcript.
 
 ## 23. Failure/retry design
 
@@ -184,7 +188,7 @@ Operational inspection uses structured container logs and PostgreSQL run/health 
 7. Phase 7 — deterministic retrieval/clustering/ranking/continuity and suppression metrics.
 8. Phase 8 — typed plan, bounded script, spoken normalization, hallucination/provenance tests.
 9. Phase 9 — pinned Piper, verified models/licenses, chunked synthesis, ffmpeg, benchmark gate.
-10. Phase 10 — idempotent voice/index/transcript delivery, retry, and fallback.
+10. Phase 10 — idempotent voice-caption/transcript delivery, retry, and fallback.
 11. Phase 11 — timezone schedule, durable claims/windows, manual/test isolation.
 12. Phase 12 — health, structured metrics/logging, cleanup, security and production verification.
 
@@ -192,6 +196,6 @@ Every phase must pass targeted tests and root format, lint, typecheck, test, and
 
 ### Critical evaluation
 
-The event-contract approach is a good incremental boundary because it leaves both working producers independent and gives the briefing consumer durable, replayable input. A direct in-process event bus would be wrong across separate containers; adding Redis/BullMQ would be disproportionate. PostgreSQL constraints and advisory locks already solve the required durability and single-server concurrency.
+The event-contract approach is a good incremental boundary because it leaves producers independent and gives the briefing consumer durable, replayable input. A direct in-process event bus would be wrong across separate containers; adding Redis/BullMQ would be disproportionate. PostgreSQL constraints and advisory locks already solve the required durability and single-server concurrency.
 
 The largest unresolved risks are not Phase 1 code: Google OAuth without a public web UI, voice-model redistribution licenses, long local Ollama latency, and CPU contention between Ollama and Piper. Those are explicit phase gates. Calendar and voice setup must not be presented as available until their real authentication, model, benchmark, and fallback paths pass end-to-end tests.
