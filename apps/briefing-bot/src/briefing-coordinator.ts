@@ -401,7 +401,10 @@ export class BriefingCoordinator {
           dateLabel: dateLabel(now, configuration.settings.timezone),
           ...(place ? { location: place } : {}),
           calendar: { status: calendar.status, count: calendar.value.length },
-          topics: selectedStories.map(({ title }) => title),
+          topics: selectedStories.map(({ sourceUrls, title }) => ({
+            title,
+            ...(sourceUrls[0] ? { url: sourceUrls[0] } : {}),
+          })),
         },
         displayScript: script.displayScript,
         sendTranscript: configuration.settings.sendTranscript,

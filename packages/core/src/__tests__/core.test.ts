@@ -65,6 +65,25 @@ describe('core watcher behavior', () => {
     ).toEqual(new Date('2026-01-02T07:00:00.000Z'));
   });
 
+  it('calculates the next occurrence across multiple cron expressions', () => {
+    const schedule = '0 7 * * 1-5; 30 8 * * 1-5; 0 20 * * 1-5';
+
+    expect(
+      computeNextRun(
+        schedule,
+        'America/New_York',
+        new Date('2026-09-07T11:10:00.000Z'),
+      ),
+    ).toEqual(new Date('2026-09-07T12:30:00.000Z'));
+    expect(
+      computeNextRun(
+        schedule,
+        'America/New_York',
+        new Date('2026-09-07T13:00:00.000Z'),
+      ),
+    ).toEqual(new Date('2026-09-08T00:00:00.000Z'));
+  });
+
   it('prevents overlapping work for the same key', async () => {
     const guard = new RunGuard();
     let release: (() => void) | undefined;

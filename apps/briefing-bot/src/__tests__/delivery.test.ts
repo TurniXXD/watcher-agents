@@ -75,7 +75,13 @@ const input = (): BriefingDeliveryInput => ({
     dateLabel: 'Sep 6',
     location: 'Brno',
     calendar: { status: 'AVAILABLE', count: 3 },
-    topics: ['Merck Phase III results', 'Micron catalyst update'],
+    topics: [
+      {
+        title: 'Merck Phase III results',
+        url: 'https://example.com/merck',
+      },
+      { title: 'Micron catalyst update' },
+    ],
   },
   displayScript: 'Good morning. Full readable briefing.',
   sendTranscript: true,
@@ -186,12 +192,15 @@ describe('renderBriefingCaption', () => {
       dateLabel: '<Sep 6>',
       location: 'Brno & okolí',
       calendar: { status: 'UNAVAILABLE', count: 0 },
-      topics: ['A < B'],
+      topics: [{ title: 'A < B', url: 'https://example.com/?q=a&b=c' }],
     });
 
     expect(rendered).toContain('&lt;Sep 6&gt;');
     expect(rendered).toContain('Brno &amp; okolí');
     expect(rendered).toContain('Calendar unavailable');
+    expect(rendered).toContain(
+      '<a href="https://example.com/?q=a&amp;b=c">A &lt; B</a>',
+    );
     expect(rendered).not.toContain('0 events today');
   });
 
@@ -199,10 +208,10 @@ describe('renderBriefingCaption', () => {
     const rendered = renderBriefingCaption({
       dateLabel: 'Sep 6',
       calendar: { status: 'DISABLED', count: 0 },
-      topics: Array.from({ length: 8 }, () => '&'.repeat(500)),
+      topics: Array.from({ length: 8 }, () => ({ title: '&'.repeat(500) })),
     });
 
     expect(rendered.length).toBeLessThanOrEqual(1024);
-    expect(rendered).not.toContain('<b>Topics:</b>');
+    expect(rendered).toContain('<b>Topics:</b>');
   });
 });

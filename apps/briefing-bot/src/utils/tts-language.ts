@@ -3,31 +3,49 @@ import type { TtsLanguage, TtsSegment } from '../tts.js';
 
 const czechCharacters = /[áčďéěíňóřšťúůýž]/iu;
 const czechWords = new Set([
+  'akce',
+  'archiv',
   'bez',
   'bude',
   'budeme',
   'byl',
   'byla',
+  'cesko',
+  'cesky',
+  'konference',
   'dnes',
   'do',
   'doktor',
   'dovolena',
+  'formulare',
+  'formular',
   'jednani',
   'kontrola',
   'lekari',
   'navsteva',
   'narozeniny',
+  'nabor',
+  'nemecko',
+  'norimberk',
   'obed',
   'od',
   'porada',
+  'praha',
+  'praze',
+  'prihlaska',
+  'prihlasovaci',
   'pracovni',
   'pro',
+  'sraz',
   'schuzka',
   'skola',
   'skolka',
+  'turnaj',
+  'turnaje',
   'trenink',
   'tym',
   'tymem',
+  'ukrajina',
   'urad',
   'vyzvednout',
   'zkouska',
@@ -56,6 +74,13 @@ const includesEventTitle = (sentence: string, event: CalendarEvent): boolean =>
     .toLocaleLowerCase('cs-CZ')
     .includes(event.title.toLocaleLowerCase('cs-CZ'));
 
+const calendarSentenceIsCzech = (
+  sentence: string,
+  czechEvents: readonly CalendarEvent[],
+): boolean =>
+  isLikelyCzech(sentence) ||
+  czechEvents.some((event) => includesEventTitle(sentence, event));
+
 const appendSegment = (
   segments: TtsSegment[],
   text: string,
@@ -71,34 +96,52 @@ const appendSegment = (
   segments.push({ text: normalized, language });
 };
 
+const segmentByDetectedLanguage = (
+  text: string,
+  czechEvents: readonly CalendarEvent[],
+): TtsSegment[] => {
+  const segments: TtsSegment[] = [];
+  for (const sentence of sentenceParts(text)) {
+    appendSegment(
+      segments,
+      sentence,
+      calendarSentenceIsCzech(sentence, czechEvents) ? 'cs' : 'en',
+    );
+  }
+  return segments.length > 0 ? segments : [{ text, language: 'en' }];
+};
+
 export const segmentTtsScriptByCalendarLanguage = (
   fullScript: string,
   calendarScript: string | undefined,
   events: readonly CalendarEvent[],
 ): TtsSegment[] => {
-  if (!calendarScript) return [{ text: fullScript, language: 'en' }];
-  const calendarOffset = fullScript.indexOf(calendarScript);
-  if (calendarOffset < 0) return [{ text: fullScript, language: 'en' }];
-
   const czechEvents = events.filter(calendarEventIsCzech);
-  if (czechEvents.length === 0) return [{ text: fullScript, language: 'en' }];
+  if (!calendarScript)
+    return segmentByDetectedLanguage(fullScript, czechEvents);
+  const calendarOffset = fullScript.indexOf(calendarScript);
+  if (calendarOffset < 0)
+    return segmentByDetectedLanguage(fullScript, czechEvents);
 
   const segments: TtsSegment[] = [];
-  appendSegment(segments, fullScript.slice(0, calendarOffset), 'en');
+  for (const segment of segmentByDetectedLanguage(
+    fullScript.slice(0, calendarOffset),
+    czechEvents,
+  )) {
+    appendSegment(segments, segment.text, segment.language);
+  }
   for (const sentence of sentenceParts(calendarScript)) {
     appendSegment(
       segments,
       sentence,
-      isLikelyCzech(sentence) ||
-        czechEvents.some((event) => includesEventTitle(sentence, event))
-        ? 'cs'
-        : 'en',
+      calendarSentenceIsCzech(sentence, czechEvents) ? 'cs' : 'en',
     );
   }
-  appendSegment(
-    segments,
+  for (const segment of segmentByDetectedLanguage(
     fullScript.slice(calendarOffset + calendarScript.length),
-    'en',
-  );
+    czechEvents,
+  )) {
+    appendSegment(segments, segment.text, segment.language);
+  }
   return segments;
 };

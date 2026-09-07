@@ -133,7 +133,7 @@ describe('BriefingScriptGenerator', () => {
     expect(result.ttsScript).toContain('Merck reported positive Phase three');
     expect(result.ttsScript).toContain('Review Merck after the open');
     expect(result.ttsSegments).toEqual([
-      { text: result.ttsScript, language: 'en' },
+      { text: result.ttsScript.replace(/\s+/g, ' ').trim(), language: 'en' },
     ]);
     expect(prompt).toContain('do not independently research or invent facts');
     expect(prompt).not.toContain('https://');
@@ -210,6 +210,20 @@ describe('BriefingScriptGenerator', () => {
     expect(result.displayScript).toContain(
       'no new subscribed watcher developments',
     );
+  });
+
+  it('marks Czech story titles for the Czech Piper voice outside Calendar', () => {
+    const czechStory = story('mu-clubs', 80);
+    czechStory.title = 'Nábor 2026 - přihlašovací formulář';
+    czechStory.summary = 'Student registration announcement.';
+    const result = fallbackBriefingScript(input([czechStory]));
+
+    expect(result.ttsSegments.some(({ language }) => language === 'cs')).toBe(
+      true,
+    );
+    expect(
+      result.ttsSegments.find(({ language }) => language === 'cs')?.text,
+    ).toContain('Nábor 2026');
   });
 });
 

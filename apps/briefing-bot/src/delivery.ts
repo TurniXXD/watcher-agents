@@ -3,9 +3,14 @@ import {
   type BriefingDeliveryChannelId,
 } from '@watcher/database';
 import type { WatcherLogger } from '@watcher/core';
-import { escapeHtml } from '@watcher/telegram';
+import { escapeHtml, optionalSourceLink } from '@watcher/telegram';
 import type { TtsResult } from './tts.js';
 import type { BriefingTelegramTransport } from './telegram-transport.js';
+
+export type BriefingIndexTopic = {
+  title: string;
+  url?: string;
+};
 
 type DeliveryAttempts = {
   successful: (
@@ -31,7 +36,7 @@ export type BriefingIndex = {
   location?: string;
   audioDurationSeconds?: number;
   calendar: { status: 'AVAILABLE' | 'UNAVAILABLE' | 'DISABLED'; count: number };
-  topics: readonly string[];
+  topics: readonly BriefingIndexTopic[];
 };
 
 export type BriefingDeliveryInput = {
@@ -80,7 +85,7 @@ export const renderBriefingCaption = (index: BriefingIndex): string => {
   }
   let topicAdded = false;
   for (const topic of index.topics.slice(0, 8)) {
-    const topicLine = `• ${escapeHtml(topic)}`;
+    const topicLine = `• ${optionalSourceLink(topic.title, topic.url)}`;
     const added = topicAdded
       ? append(topicLine)
       : append('', '<b>Topics:</b>', topicLine);
