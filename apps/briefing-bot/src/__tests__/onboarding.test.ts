@@ -1,6 +1,7 @@
 import type { BriefingConfiguration } from '@watcher/database';
 import { describe, expect, it } from 'vitest';
 import {
+  briefingAbout,
   briefingHelp,
   nextOnboardingStep,
   renderConfiguration,
@@ -81,5 +82,14 @@ describe('briefing onboarding copy and transitions', () => {
       .map((line) => line.split(' ')[0] ?? '');
     expect(commands).toEqual([...commands].sort());
     expect(commands.every((command) => !command.includes('-'))).toBe(true);
+  });
+
+  it('documents the briefing purpose and primary workflow', () => {
+    expect(briefingAbout).toContain('*What it does*');
+    expect(briefingAbout).toContain('*Key advantages*');
+    expect(briefingAbout).toContain('*How to use it*');
+    expect(briefingAbout).toContain('`/briefing`');
+    expect(briefingAbout).toContain('Google Calendar');
+    expect(briefingAbout.length).toBeLessThanOrEqual(4096);
   });
 });

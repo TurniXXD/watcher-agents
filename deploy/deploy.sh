@@ -132,6 +132,16 @@ fi
 interpolated_secret_files=()
 while IFS= read -r runtime_file; do
   while IFS= read -r runtime_line || [[ -n "$runtime_line" ]]; do
+    runtime_value="${runtime_line#*=}"
+    runtime_value="${runtime_value#"${runtime_value%%[![:space:]]*}"}"
+    runtime_value="${runtime_value%"${runtime_value##*[![:space:]]}"}"
+
+    # Compose treats a fully single-quoted env value literally, including every
+    # dollar sign. render-env.sh deliberately uses this form for all values.
+    if [[ ${#runtime_value} -ge 2 && "${runtime_value:0:1}" == "'" && "${runtime_value: -1}" == "'" ]]; then
+      continue
+    fi
+
     without_escaped_dollars="${runtime_line//\$\$/}"
     if [[ "$without_escaped_dollars" =~ \$\{?[A-Za-z_] ]]; then
       interpolated_secret_files+=("$runtime_file")
@@ -143,7 +153,7 @@ done < <(find deploy/runtime -maxdepth 1 -type f -print)
 if ((${#interpolated_secret_files[@]} > 0)); then
   echo "Runtime environment files contain an unescaped Docker Compose variable reference:" >&2
   printf '%s\n' "${interpolated_secret_files[@]}" >&2
-  echo "Regenerate them with deploy/render-env.sh or escape each literal dollar sign as two dollar signs." >&2
+  echo "Regenerate them with deploy/render-env.sh, single-quote the complete value, or escape each literal dollar sign as two dollar signs." >&2
   echo "If an affected database password was already used, rotate the database role password and every DATABASE_URL together." >&2
   exit 1
 fi

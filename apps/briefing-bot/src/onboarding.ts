@@ -52,7 +52,36 @@ export const renderConfiguration = (
   ].join('\n');
 };
 
+export const briefingAbout = `*Personal Morning Briefing*
+
+Personal Morning Briefing is a private, self-hosted Telegram assistant that turns the information collected by your Watcher bots into one prioritized spoken briefing.
+
+*What it does*
+• Combines new stock, medical-publication, news, and club events from the watchers you subscribe to.
+• Adds optional weather and Google Calendar context for the day ahead.
+• Deduplicates related reports, groups them into stories, and preserves continuity with earlier developments.
+• Prioritizes urgent and personally relevant items while respecting priority and muted topics.
+• Generates an audio briefing with Piper and can optionally send a text transcript.
+• Uses feedback on delivered stories to improve later briefings.
+
+*Key advantages*
+• Private by design: Telegram is the interface, PostgreSQL stores state, and local services generate the summary and speech.
+• Signal over noise: already processed events and repeated coverage are not presented as separate new stories.
+• Source-aware: the briefing retains evidence links and reports degraded inputs instead of inventing missing facts.
+• Flexible: Calendar is optional, watcher subscriptions are independent, and delivery can follow daily or weekly schedules.
+
+*How to use it*
+1. Run \`/start\` to complete the short setup for location, voice, subscriptions, and delivery time.
+2. Review or change included watchers with \`/subscriptions\`, \`/subscribe WATCHER\`, and \`/unsubscribe WATCHER\`.
+3. Use \`/priority_add TOPIC\` and \`/mute_add TOPIC\` to tune what receives attention.
+4. Connect Google Calendar with \`/calendar_connect\` if you want today's events included; this step is optional.
+5. Generate an immediate briefing with \`/briefing\`, or a short verification with \`/briefing_test\`.
+6. Use \`/settings\` to review the current configuration and \`/help\` for every command.
+
+_Important:_ The briefing summarizes available data and may be incomplete. Review linked primary sources before making medical, financial, or other consequential decisions.`;
+
 export const briefingHelp = [
+  '/about — what the briefing bot does and how to use it',
   '/briefing — generate a briefing now',
   '/briefing_duration MINUTES — set target length',
   '/briefing_max_duration MINUTES — set hard maximum length',

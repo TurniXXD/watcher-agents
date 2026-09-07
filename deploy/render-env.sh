@@ -30,7 +30,6 @@ write_env() {
 
     escaped="${value//\\/\\\\}"
     escaped="${escaped//\'/\\\'}"
-    escaped="${escaped//\$/\$\$}"
     printf "%s='%s'\n" "$key" "$escaped" >>"$path"
     shift 2
   done

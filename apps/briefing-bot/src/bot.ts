@@ -16,6 +16,7 @@ import {
 import { authorizationMiddleware, commandArgument } from '@watcher/telegram';
 import { Bot, InlineKeyboard, Keyboard, type Context } from 'grammy';
 import {
+  briefingAbout,
   briefingHelp,
   nextOnboardingStep,
   renderConfiguration,
@@ -224,6 +225,13 @@ export const createBriefingBot = (
     await prompt(context, configuration);
   });
   bot.command('help', async (context) => context.reply(briefingHelp));
+  bot.command('about', async (context) => {
+    await store.ensure(BigInt(context.chat.id));
+    await context.reply(briefingAbout, {
+      parse_mode: 'Markdown',
+      link_preview_options: { is_disabled: true },
+    });
+  });
   bot.command(['settings', 'briefing_settings'], async (context) => {
     await context.reply(
       renderConfiguration(await store.ensure(BigInt(context.chat.id))),
