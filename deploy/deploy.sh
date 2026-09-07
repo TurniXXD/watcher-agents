@@ -182,6 +182,35 @@ compose_release() {
     "$@"
 }
 
+verify_briefing_host_gateway() {
+  local compose_function="$1"
+
+  "$compose_function" run \
+    --rm \
+    --no-deps \
+    --entrypoint node \
+    briefing-bot \
+    -e \
+    "require('node:dns').lookup('host.docker.internal',(error,address)=>{if(error){console.error(error);process.exit(1)}console.log('host.docker.internal resolves to '+address)})"
+}
+
+dump_briefing_container_network() {
+  local container_id
+  container_id="$(compose_candidate ps -q briefing-bot 2>/dev/null || true)"
+
+  if [[ -z "$container_id" ]]; then
+    echo "No briefing-bot container exists to inspect." >&2
+    return
+  fi
+
+  echo "Briefing bot container network configuration:" >&2
+  docker inspect \
+    --format 'Image={{.Config.Image}} ExtraHosts={{json .HostConfig.ExtraHosts}}' \
+    "$container_id" >&2 || true
+  docker exec "$container_id" sh -c \
+    'grep -F host.docker.internal /etc/hosts || true' >&2 || true
+}
+
 cleanup() {
   rm -f "$CANDIDATE_FILE"
 }
@@ -251,20 +280,30 @@ if ! compose_candidate exec -T postgres sh -c \
   exit 1
 fi
 
+echo "Verifying Docker host gateway mapping for Ollama..."
+if ! verify_briefing_host_gateway compose_candidate; then
+  echo "The briefing-bot container cannot resolve host.docker.internal." >&2
+  echo "Upgrade Docker Engine and Docker Compose to versions that support the host-gateway mapping." >&2
+  exit 1
+fi
+
 echo "Starting Watcher bots..."
 if ! compose_candidate up \
   -d \
+  --force-recreate \
   --remove-orphans \
   --wait \
   --wait-timeout 180 \
   stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot; then
   echo "Release failed its container health checks." >&2
+  dump_briefing_container_network
 
   if [[ -f "$RELEASE_FILE" ]] && ! cmp -s "$CANDIDATE_FILE" "$RELEASE_FILE"; then
     echo "Restoring the previous healthy application image..."
     compose_release pull stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot
     compose_release up \
       -d \
+      --force-recreate \
       --remove-orphans \
       --wait \
       --wait-timeout 180 \
