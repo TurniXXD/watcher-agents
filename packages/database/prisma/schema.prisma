@@ -441,7 +441,7 @@ model BriefingSettings {
   language               String                    @default("en")
   voice                  BriefingVoice             @default(AMY)
   timezone               String                    @default("Europe/Prague")
-  briefingTime           String                    @default("07:00")
+  briefingTime           String                    @default("07:00;20:00;weekly:MON:07:00;weekly:SUN:20:00")
   targetDurationMinutes  Int                       @default(7)
   maximumDurationMinutes Int                       @default(15)
   sendTranscript         Boolean                   @default(false)

@@ -360,4 +360,40 @@ integration('briefing persistent state', () => {
       }),
     ).toEqual({ nextBriefingAt: null });
   });
+
+  it('claims multiple daily and weekly briefing slots from one schedule spec', async () => {
+    await configuration.updateSettings(111n, {
+      timezone: 'Europe/Prague',
+      briefingTime: '07:00;20:00;weekly:MON:07:00;weekly:SUN:20:00',
+    });
+    await configuration.setOnboardingStep(111n, 'COMPLETE');
+    await schedules.initializeMissing(new Date('2026-09-07T04:30:00.000Z'));
+
+    expect(
+      await schedules.claimDue(new Date('2026-09-07T05:00:01.000Z')),
+    ).toMatchObject([
+      {
+        telegramChatId: 111n,
+        scheduledFor: new Date('2026-09-07T05:00:00.000Z'),
+        scheduleKey: 'weekly:MON:07:00',
+        periodHours: 168,
+      },
+    ]);
+    expect(
+      await database.briefingSettings.findUnique({
+        where: { telegramChatId: 111n },
+        select: { nextBriefingAt: true },
+      }),
+    ).toEqual({ nextBriefingAt: new Date('2026-09-07T18:00:00.000Z') });
+
+    expect(
+      await schedules.claimDue(new Date('2026-09-07T18:00:01.000Z')),
+    ).toMatchObject([
+      {
+        telegramChatId: 111n,
+        scheduledFor: new Date('2026-09-07T18:00:00.000Z'),
+        scheduleKey: 'daily:20:00',
+      },
+    ]);
+  });
 });

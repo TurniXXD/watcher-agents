@@ -52,6 +52,10 @@ type WatcherHealth = Pick<BriefingWatcherHealthStore, 'list'>;
 
 export type BriefingRunTrigger = 'SCHEDULED' | 'MANUAL' | 'TEST';
 export type BriefingProgress = (step: string, percent: number) => Promise<void>;
+export type BriefingScheduleContext = {
+  scheduleKey?: string;
+  periodHours?: number;
+};
 
 export type BriefingCoordinatorResult = {
   run: BriefingRunRecord;
@@ -85,6 +89,7 @@ export class BriefingCoordinator {
     type: BriefingRunTrigger,
     scheduledFor?: Date,
     progress: BriefingProgress = () => Promise.resolve(),
+    scheduleContext: BriefingScheduleContext = {},
   ): Promise<BriefingCoordinatorResult> {
     const runStartedAt = Date.now();
     const now = this.dependencies.now?.() ?? new Date();
@@ -93,6 +98,7 @@ export class BriefingCoordinator {
         telegramChatId: telegramChatId.toString(),
         runType: type,
         scheduledFor: scheduledFor?.toISOString(),
+        scheduleKey: scheduleContext.scheduleKey,
       },
       'Briefing run requested',
     );
@@ -121,9 +127,14 @@ export class BriefingCoordinator {
       type === 'SCHEDULED'
         ? await this.dependencies.runs.lastSuccessfulScheduled(telegramChatId)
         : undefined;
-    const periodStart = previous
-      ? new Date(previous.periodEnd)
-      : new Date(periodEnd.getTime() - 24 * 60 * 60_000);
+    const explicitPeriodHours =
+      type === 'SCHEDULED' ? scheduleContext.periodHours : undefined;
+    const periodStart =
+      explicitPeriodHours === undefined
+        ? previous
+          ? new Date(previous.periodEnd)
+          : new Date(periodEnd.getTime() - 24 * 60 * 60_000)
+        : new Date(periodEnd.getTime() - explicitPeriodHours * 60 * 60_000);
     const scheduleIdentity = scheduledFor ?? now;
     const local = dateParts(now, configuration.settings.timezone);
     const place = configuration.location
@@ -131,7 +142,7 @@ export class BriefingCoordinator {
       : undefined;
     const idempotencyKey =
       type === 'SCHEDULED'
-        ? `briefing:${telegramChatId}:${dateParts(scheduleIdentity, configuration.settings.timezone).date}`
+        ? `briefing:${telegramChatId}:${scheduleContext.scheduleKey ?? 'scheduled'}:${dateParts(scheduleIdentity, configuration.settings.timezone).date}:${dateParts(scheduleIdentity, configuration.settings.timezone).time}`
         : `briefing:${type.toLowerCase()}:${telegramChatId}:${randomUUID()}`;
     const targetMinutes =
       type === 'TEST'

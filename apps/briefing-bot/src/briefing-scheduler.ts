@@ -55,11 +55,14 @@ export class BriefingScheduler {
       this.logger?.info(
         {
           dueCount: due.length,
-          schedules: due.map(({ id, telegramChatId, scheduledFor }) => ({
-            scheduleId: id,
-            telegramChatId: telegramChatId.toString(),
-            scheduledFor: scheduledFor.toISOString(),
-          })),
+          schedules: due.map(
+            ({ id, telegramChatId, scheduledFor, scheduleKey }) => ({
+              scheduleId: id,
+              telegramChatId: telegramChatId.toString(),
+              scheduledFor: scheduledFor.toISOString(),
+              scheduleKey,
+            }),
+          ),
         },
         'Claimed due briefing schedules',
       );

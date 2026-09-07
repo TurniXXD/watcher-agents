@@ -2,6 +2,7 @@ import type {
   BriefingConfiguration,
   BriefingOnboardingStepId,
 } from '@watcher/database';
+import { defaultBriefingScheduleSpec } from '@watcher/database';
 
 const steps: BriefingOnboardingStepId[] = [
   'LOCATION',
@@ -43,7 +44,7 @@ export const renderConfiguration = (
     `Voice: ${settings.voice}`,
     `Calendar: ${settings.calendarEnabled ? 'enabled' : 'not connected'}`,
     `Subscriptions: ${enabled || 'none'}`,
-    `Delivery: ${settings.briefingTime} (${settings.timezone})`,
+    `Delivery schedule: ${settings.briefingTime} (${settings.timezone})`,
     `Duration: target ${settings.targetDurationMinutes} min, max ${settings.maximumDurationMinutes} min`,
     `Transcript: ${settings.sendTranscript ? 'on' : 'off'}`,
   ].join('\n');
@@ -55,7 +56,8 @@ export const briefingHelp = [
   '/briefing_max_duration MINUTES — set hard maximum length',
   '/briefing_settings — show briefing configuration',
   '/briefing_test — generate a short test briefing',
-  '/briefing_time HH:mm — set local delivery time',
+  '/briefing_time HH:mm[;HH:mm|weekly:DAY:HH:mm] — set delivery schedule',
+  `/briefing_time default — morning + 20:00, with 7-day briefings on Monday morning and Sunday evening (${defaultBriefingScheduleSpec})`,
   '/briefing_transcript on|off — configure text transcript',
   '/calendar_connect — connect Google Calendar',
   '/calendar_disconnect — disconnect Google Calendar',

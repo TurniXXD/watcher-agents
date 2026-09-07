@@ -11,6 +11,8 @@ describe('BriefingScheduler', () => {
       id: 'settings-1',
       telegramChatId: 123n,
       scheduledFor: new Date('2026-09-06T05:00:00.000Z'),
+      scheduleKey: 'daily:07:00',
+      scheduleLabel: 'daily 07:00',
     };
     const claimDue = vi.fn(async () => [schedule]);
     const execute = vi.fn(async () => waiting);
@@ -32,11 +34,15 @@ describe('BriefingScheduler', () => {
         id: 'one',
         telegramChatId: 1n,
         scheduledFor: new Date('2026-09-06T05:00:00.000Z'),
+        scheduleKey: 'daily:07:00',
+        scheduleLabel: 'daily 07:00',
       },
       {
         id: 'two',
         telegramChatId: 2n,
         scheduledFor: new Date('2026-09-06T05:00:00.000Z'),
+        scheduleKey: 'daily:07:00',
+        scheduleLabel: 'daily 07:00',
       },
     ];
     const execute = vi.fn(async ({ id }: { id: string }) => {

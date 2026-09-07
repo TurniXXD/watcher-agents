@@ -10,6 +10,7 @@ import {
   BriefingOnboardingStep,
 } from './generated/prisma/enums.js';
 import type { DatabaseClient } from './client.js';
+import { normalizeBriefingScheduleSpec } from './briefing-schedule-spec.js';
 import {
   fromDatabaseVoice,
   fromDatabaseWatcher,
@@ -41,6 +42,26 @@ const validTimezone = (timezone: string): boolean => {
   }
 };
 
+export const briefingScheduleSpecSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(500)
+  .transform((value, context) => {
+    try {
+      return normalizeBriefingScheduleSpec(value);
+    } catch (error) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Expected HH:mm or weekly:DAY:HH:mm entries separated by semicolons',
+      });
+      return z.NEVER;
+    }
+  });
+
 export const briefingPreferencesSchema = z
   .object({
     language: z.literal('en'),
@@ -50,9 +71,7 @@ export const briefingPreferencesSchema = z
       .trim()
       .min(1)
       .refine(validTimezone, 'Invalid timezone'),
-    briefingTime: z
-      .string()
-      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:mm'),
+    briefingTime: briefingScheduleSpecSchema,
     targetDurationMinutes: z.number().int().min(1).max(30),
     maximumDurationMinutes: z.number().int().min(1).max(30),
     sendTranscript: z.boolean(),
@@ -80,10 +99,7 @@ export const briefingPreferencesPatchSchema = z
       .min(1)
       .refine(validTimezone, 'Invalid timezone')
       .optional(),
-    briefingTime: z
-      .string()
-      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:mm')
-      .optional(),
+    briefingTime: briefingScheduleSpecSchema.optional(),
     targetDurationMinutes: z.number().int().min(1).max(30).optional(),
     maximumDurationMinutes: z.number().int().min(1).max(30).optional(),
     sendTranscript: z.boolean().optional(),

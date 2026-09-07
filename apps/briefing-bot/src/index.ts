@@ -174,11 +174,16 @@ runtime.coordinator = new BriefingCoordinator({
 });
 const scheduler = new BriefingScheduler(
   briefingSchedules,
-  async ({ telegramChatId, scheduledFor }) => {
+  async ({ telegramChatId, scheduledFor, scheduleKey, periodHours }) => {
     await runtime.coordinator!.generate(
       telegramChatId,
       'SCHEDULED',
       scheduledFor,
+      undefined,
+      {
+        scheduleKey,
+        ...(periodHours === undefined ? {} : { periodHours }),
+      },
     );
   },
   env.BRIEFING_SCHEDULER_INTERVAL_MS,

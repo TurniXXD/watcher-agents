@@ -11,6 +11,7 @@ import type {
 import {
   briefingVoiceIdSchema,
   briefingOnboardingStepSchema,
+  defaultBriefingScheduleSpec,
 } from '@watcher/database';
 import { authorizationMiddleware, commandArgument } from '@watcher/telegram';
 import { Bot, InlineKeyboard, Keyboard, type Context } from 'grammy';
@@ -123,7 +124,7 @@ const onboardingPrompt = (configuration: BriefingConfiguration): string => {
     return `${subscriptionText(configuration)}\n\nChoose which watchers to include.`;
   }
   if (step === 'BRIEFING_TIME') {
-    return `Choose your local morning briefing time. Use /briefing_time HH:mm, or keep ${configuration.settings.briefingTime}.`;
+    return `Choose your local briefing schedule. Use /briefing_time HH:mm, /briefing_time default, or keep ${configuration.settings.briefingTime}.`;
   }
   return `Setup complete.\n\n${renderConfiguration(configuration)}`;
 };
@@ -347,7 +348,11 @@ export const createBriefingBot = (
     else await context.reply('Voice previews are not installed yet.');
   });
   bot.command('briefing_time', async (context) => {
-    const briefingTime = commandArgument(context.message?.text);
+    const argument = commandArgument(context.message?.text);
+    const briefingTime =
+      argument.toLowerCase() === 'default'
+        ? defaultBriefingScheduleSpec
+        : argument;
     let configuration = await store.updateSettings(BigInt(context.chat.id), {
       briefingTime,
     });

@@ -1,31 +1,17 @@
-import { computeNextRun } from '@watcher/core';
 import type { DatabaseClient } from './client.js';
+import {
+  briefingOccurrenceAt,
+  nextBriefingOccurrence,
+} from './briefing-schedule-spec.js';
 
 export type DueBriefingSchedule = {
   id: string;
   telegramChatId: bigint;
   scheduledFor: Date;
+  scheduleKey: string;
+  scheduleLabel: string;
+  periodHours?: number;
 };
-
-const cronForTime = (briefingTime: string): string => {
-  const [hour, minute] = briefingTime.split(':').map(Number);
-  if (
-    !Number.isInteger(hour) ||
-    !Number.isInteger(minute) ||
-    hour === undefined ||
-    hour < 0 ||
-    hour > 23 ||
-    minute === undefined ||
-    minute < 0 ||
-    minute > 59
-  ) {
-    throw new Error(`Invalid briefing time: ${briefingTime}`);
-  }
-  return `${minute} ${hour} * * *`;
-};
-
-const nextFor = (briefingTime: string, timezone: string, after: Date): Date =>
-  computeNextRun(cronForTime(briefingTime), timezone, after);
 
 export class BriefingScheduleStore {
   public constructor(private readonly db: DatabaseClient) {}
@@ -40,11 +26,11 @@ export class BriefingScheduleStore {
         this.db.briefingSettings.updateMany({
           where: { id: settings.id, nextBriefingAt: null },
           data: {
-            nextBriefingAt: nextFor(
+            nextBriefingAt: nextBriefingOccurrence(
               settings.briefingTime,
               settings.timezone,
               now,
-            ),
+            ).scheduledFor,
           },
         }),
       ),
@@ -71,25 +57,34 @@ export class BriefingScheduleStore {
         await transaction.briefingSettings.update({
           where: { id: settings.id },
           data: {
-            nextBriefingAt: nextFor(
+            nextBriefingAt: nextBriefingOccurrence(
               settings.briefingTime,
               settings.timezone,
               now,
-            ),
+            ).scheduledFor,
           },
         });
       }
-      return due.flatMap((settings) =>
-        settings.nextBriefingAt
-          ? [
-              {
-                id: settings.id,
-                telegramChatId: settings.telegramChatId,
-                scheduledFor: settings.nextBriefingAt,
-              },
-            ]
-          : [],
-      );
+      return due.flatMap((settings) => {
+        if (!settings.nextBriefingAt) return [];
+        const occurrence = briefingOccurrenceAt(
+          settings.briefingTime,
+          settings.timezone,
+          settings.nextBriefingAt,
+        );
+        return [
+          {
+            id: settings.id,
+            telegramChatId: settings.telegramChatId,
+            scheduledFor: settings.nextBriefingAt,
+            scheduleKey: occurrence.entry.key,
+            scheduleLabel: occurrence.entry.label,
+            ...(occurrence.entry.periodHours === undefined
+              ? {}
+              : { periodHours: occurrence.entry.periodHours }),
+          },
+        ];
+      });
     });
   }
 }

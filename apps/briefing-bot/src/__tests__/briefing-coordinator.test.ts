@@ -267,6 +267,47 @@ describe('BriefingCoordinator', () => {
     );
   });
 
+  it('uses the explicit weekly scheduled window and keeps daily slots independent', async () => {
+    const setup = dependencies();
+    setup.runs.lastSuccessfulScheduled.mockResolvedValue({
+      ...runRecord({
+        idempotencyKey: 'previous',
+        type: 'SCHEDULED',
+        periodStart: new Date('2026-09-04T05:00:00.000Z'),
+        periodEnd: new Date('2026-09-05T05:30:00.000Z'),
+        targetDurationSeconds: 420,
+        maximumDurationSeconds: 900,
+      }),
+      status: 'SUCCESS',
+      periodEnd: '2026-09-05T05:30:00.000Z',
+    });
+    const coordinator = new BriefingCoordinator(setup.value);
+
+    await coordinator.generate(
+      123n,
+      'SCHEDULED',
+      new Date('2026-09-06T05:00:00.000Z'),
+      undefined,
+      { scheduleKey: 'weekly:SUN:07:00', periodHours: 168 },
+    );
+    await coordinator.generate(
+      123n,
+      'SCHEDULED',
+      new Date('2026-09-06T18:00:00.000Z'),
+      undefined,
+      { scheduleKey: 'daily:20:00' },
+    );
+
+    expect(setup.starts[0]?.periodStart).toEqual(
+      new Date('2026-08-30T05:00:00.000Z'),
+    );
+    expect(setup.starts.map(({ idempotencyKey }) => idempotencyKey)).toEqual([
+      'briefing:123:weekly:SUN:07:00:2026-09-06:07:00',
+      'briefing:123:daily:20:00:2026-09-06:20:00',
+    ]);
+    expect(setup.delivery.deliver).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps manual windows independent and retries Piper before text fallback', async () => {
     const setup = dependencies({ ttsFails: true });
     const coordinator = new BriefingCoordinator(setup.value);
