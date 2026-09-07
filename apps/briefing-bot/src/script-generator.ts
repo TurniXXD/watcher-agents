@@ -68,6 +68,7 @@ export type ScriptGenerationInput = {
     status: ContextAvailability;
     events: readonly CalendarEvent[];
     spokenSummary?: string;
+    insights?: readonly string[];
   };
   stories: readonly BriefingStoryCluster[];
   targetDurationMinutes: number;
@@ -75,6 +76,8 @@ export type ScriptGenerationInput = {
   wordBudget: number;
   maximumWords: number;
   pronunciations?: Readonly<Record<string, string>>;
+  actionAgenda?: readonly string[];
+  dataQuality?: readonly string[];
 };
 
 export type GeneratedBriefingScript = {
@@ -113,6 +116,7 @@ Write mostly natural English intended to be spoken aloud. Use only the supplied 
 The JSON response fields must be spoken prose only and must follow this exact order when assembled: brief greeting; local weather; today's calendar; a short preview of the prepared developments; detailed stories in descending importance; up to three things to watch today; brief closing.
 Do not mention internal bot or database names. Combine the supplied cross-domain perspectives into one coherent story while preserving medical, investment, news, and student-community interpretations. For major stories explain what happened, why it matters, what changed, and what to watch next. Use previousSummary only for natural continuity.
 If weather or Calendar status is UNAVAILABLE, briefly say it could not be retrieved; never describe it as empty. If DISABLED, omit that section by returning null. If Calendar is AVAILABLE with zero events, it is safe to say the calendar is clear. If there are no stories, explain briefly that there are no new subscribed watcher developments; do not add fake news.
+Use the supplied actionAgenda for concrete preparation, deadlines, conflicts, or follow-up. Mention dataQuality briefly only when it is non-empty, without provider error strings or implementation details. When previousSummary exists, explicitly explain only the meaningful change since the earlier briefing.
 Preserve Calendar event titles and story titles in their original language. Write each Czech Calendar event or Czech story title as its own Czech sentence without translating it; keep surrounding narration and non-Czech events in English. This language boundary is required so the speech engine can select the correct voice.
 Avoid URLs, markdown, raw field names, filler, excessive numbers, repeated conclusions, and difficult ticker-only phrasing. Stay below ${input.wordBudget} words and never exceed ${input.maximumWords} words. The preferred duration is ${input.targetDurationMinutes} minutes and the hard maximum is ${input.maximumDurationMinutes} minutes, but do not add filler.
 
@@ -125,6 +129,8 @@ ${JSON.stringify({
   weather: input.weather,
   calendar: { ...input.calendar, events: calendar },
   stories,
+  actionAgenda: input.actionAgenda ?? [],
+  dataQuality: input.dataQuality ?? [],
 })}`;
 };
 
@@ -235,10 +241,12 @@ export const fallbackBriefingScript = (
       ? 'There are no new subscribed watcher developments to report.'
       : `I found ${input.stories.length} important ${input.stories.length === 1 ? 'development' : 'developments'} worth mentioning.`,
     ...input.stories.map(({ title, summary }) => `${title}. ${summary}`),
-    ...input.stories
-      .flatMap(({ actionItems }) => actionItems)
+    ...(input.actionAgenda ?? [])
       .slice(0, 3)
-      .map((action) => `Watch today: ${action}`),
+      .map((action) => `Today: ${action}`),
+    ...(input.dataQuality ?? [])
+      .slice(0, 2)
+      .map((warning) => `Data note: ${warning}`),
     'That is your morning briefing.',
   ].filter((section): section is string => Boolean(section));
   return finalizeScript(sections.join('\n\n'), calendarSection, input, {

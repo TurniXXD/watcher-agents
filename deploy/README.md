@@ -185,9 +185,9 @@ The workflow then:
 2. Joins the tailnet as an ephemeral `tag:ci` node and pings `DEPLOY_HOST`.
 3. Uses verified OpenSSH to upload the release's Compose definition and deployment script.
 4. Pulls the exact commit-SHA image.
-5. Starts PostgreSQL and waits for readiness.
-6. Creates a compressed pre-deployment database backup when the database already exists.
-7. Applies committed Prisma migrations.
+5. Starts the pinned PostgreSQL 16 image with pgvector and waits for readiness.
+6. Creates a compressed pre-deployment database backup when the database already exists; a running database is backed up before its container image can be replaced.
+7. Applies committed Prisma migrations and verifies that the `vector` extension is installed.
 8. Starts all bots plus the MU Clubs producer and waits for their health checks.
 9. Restores the prior image tag if the new containers fail health checks.
 

@@ -98,7 +98,7 @@ Subscriptions are Briefing Bot preferences keyed by Telegram chat and `WatcherBo
 
 ## 17. Story clustering design
 
-Phase 7 first groups exact identities/dedup keys, then clusters cross-bot events using shared source URLs, normalized entities/tickers, temporal proximity, category compatibility, and conservative semantic similarity. Deterministic evidence must dominate LLM suggestions. One stock catalyst and one medical trial may become one story while retaining both source events and provenance.
+Phase 7 first groups exact identities/dedup keys, then clusters cross-bot events using shared source URLs, normalized entities/tickers, temporal proximity, category compatibility, and conservative semantic similarity. Normalized title, summary, and entities are embedded through Ollama and cached in PostgreSQL `pgvector`; an exact cosine search is restricted to plausible recent candidates. A similarity match can merge events only when a shared entity/ticker, compatible category, or explicit source relationship also supports it. Deterministic evidence remains authoritative, and embedding failure falls back to deterministic clustering without failing the briefing. One stock catalyst and one medical trial may become one story while retaining both source events and provenance.
 
 Story state tracks first/last seen, last briefed, prior summary hash, significance, and open/resolved status. `UNCHANGED` events update evidence but are suppressed unless context materially changed. Clusters must be inspectable; no destructive merge of source events.
 

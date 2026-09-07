@@ -114,6 +114,9 @@ describe('BriefingDeliveryService', () => {
     expect(vi.mocked(telegram.sendVoice).mock.calls[0]?.[1].caption).toContain(
       '🎙 9:42',
     );
+    expect(vi.mocked(telegram.sendVoice).mock.calls[0]?.[1].feedbackRunId).toBe(
+      'run-1',
+    );
   });
 
   it('retries a failed voice upload exponentially and falls back to text', async () => {

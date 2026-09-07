@@ -37,7 +37,7 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
    chmod 600 .env
    ```
 
-3. Make sure Ollama accepts connections from Docker. On Linux and Docker Desktop, the default URL is `http://host.docker.internal:11434`. Pull the configured model first, for example `ollama pull qwen3:8b`.
+3. Make sure Ollama accepts connections from Docker. On Linux and Docker Desktop, the default URL is `http://host.docker.internal:11434`. Pull the configured generation and embedding models first, for example `ollama pull qwen3.5:4b` and `ollama pull nomic-embed-text`.
 
 4. Download the accepted Piper voice models, then build, migrate, and start all bots:
 
@@ -53,9 +53,11 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
    Jirka for Calendar event sentences detected as Czech, then joins every
    segment into one Opus voice message.
 
-PostgreSQL is published only on host loopback as `127.0.0.1:5433`; it is not directly reachable from the public internet. Its data lives in the `watcher-postgres` named volume. The one-shot `migrate` service must complete before either bot starts. For remote administration, use the SSH/Tailscale tunnel documented in `deploy/README.md`.
+PostgreSQL uses the pinned `pgvector/pgvector:0.8.6-pg16-bookworm` image and is published only on host loopback as `127.0.0.1:5433`; it is not directly reachable from the public internet. Its data lives in the `watcher-postgres` named volume. The migration creates the `vector` extension automatically and deployment verifies it before starting applications. Briefing event embeddings are cached in PostgreSQL and used only as a secondary story-clustering signal inside a bounded time window; exact IDs, URLs, entities, categories, and explicit relationships remain authoritative. The one-shot `migrate` service must complete before applications start. For remote administration, use the SSH/Tailscale tunnel documented in `deploy/README.md`.
 
-The bots emit structured JSON logs. At `LOG_LEVEL=info`, watcher runs record start, prepared source count, per-source fetch outcomes, source failures, notification sends, and completion counters. The briefing bot records commands, scheduled run claims, context availability and latency, story-selection metrics, script and audio generation, Telegram delivery channels, and the final run duration. Set `LOG_LEVEL=debug` to also log individual watcher item analysis, cached-analysis reuse, idle briefing scheduler checks, non-command Telegram updates, Piper chunks, and delivery attempts.
+The bots emit structured JSON logs. At `LOG_LEVEL=info`, watcher runs record start, prepared source count, per-source fetch outcomes, source failures, notification sends, and completion counters. The briefing bot records commands, freshness-gate waits, semantic-clustering counts, context availability and latency, story-selection metrics, script and audio generation, Telegram delivery channels, and the final run duration. Each service exposes an internal `/healthz` readiness endpoint used by Compose; it verifies application startup and PostgreSQL, the Ollama-backed bots also verify Ollama, and Briefing additionally checks every Piper model file. Set `LOG_LEVEL=debug` to also log individual watcher item analysis, cached-analysis reuse, idle briefing scheduler checks, non-command Telegram updates, Piper chunks, and delivery attempts.
+
+The Briefing Bot waits a bounded time for subscribed producers before a scheduled morning delivery, ranks fresh cross-source stories, calls out Calendar deadlines, overlaps, short gaps, and likely travel transitions, and ends with a short action agenda. Personal ranking is managed with `/priority_add TOPIC`, `/priority_remove TOPIC`, `/mute_add TOPIC`, and `/mute_remove TOPIC`; urgent stories are never hidden solely by a mute. Every delivered voice briefing has useful, less-useful, and too-long feedback buttons. A too-long rating idempotently reduces future target and maximum duration by one minute.
 
 To stop the application without deleting data:
 
@@ -121,6 +123,12 @@ Every application variable is represented in `.env.example`.
 | `OLLAMA_MAX_ITEMS_PER_RUN`                          | watcher producers    | Maximum new items analyzed in one run; `0` means all new items and is the default             |
 | `OLLAMA_NUM_CTX`                                    | watcher producers    | Per-request context size; defaults to `4096`                                                  |
 | `BRIEFING_OLLAMA_NUM_CTX`                           | briefing bot         | Briefing script context size; defaults to `8192` without increasing producer requests         |
+| `BRIEFING_EMBEDDING_MODEL`                          | briefing bot         | Ollama embedding model for secondary semantic story clustering; empty disables it             |
+| `BRIEFING_EMBEDDING_MIN_SIMILARITY`                 | briefing bot         | Minimum cosine similarity for a semantic candidate; defaults to `0.82`                        |
+| `BRIEFING_EMBEDDING_WINDOW_HOURS`                   | briefing bot         | Maximum time distance between semantic candidates; defaults to `96` hours                     |
+| `BRIEFING_FRESHNESS_MAX_AGE_MINUTES`                | briefing bot         | Maximum accepted age of a producer run before scheduled delivery; defaults to `180` minutes   |
+| `BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES`           | briefing bot         | Maximum wait for stale producers before degraded delivery; defaults to `20` minutes           |
+| `BRIEFING_FRESHNESS_POLL_INTERVAL_MS`               | briefing bot         | Poll interval while waiting for producer freshness; defaults to `30000` milliseconds          |
 | `OLLAMA_NUM_PREDICT`                                | watcher producers    | Maximum generated tokens per analysis; defaults to `768`                                      |
 | `OLLAMA_FULL_ANALYSIS_NUM_PREDICT`                  | stocks bot           | Output-token cap for the larger thesis/scenario response; defaults to `1536`                  |
 | `OLLAMA_RETRIES`                                    | watcher producers    | Retry count after a failed or invalid response; defaults to `1`                               |

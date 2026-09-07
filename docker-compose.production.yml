@@ -2,7 +2,7 @@ name: ${COMPOSE_PROJECT_NAME:-watcher}
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:0.8.6-pg16-bookworm
     env_file:
       - ./deploy/runtime/postgres.env
     ports:
@@ -64,7 +64,13 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'node', '-e', 'process.kill(1, 0)']
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -96,7 +102,13 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'node', '-e', 'process.kill(1, 0)']
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -128,7 +140,13 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'node', '-e', 'process.kill(1, 0)']
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -201,7 +219,13 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'node', '-e', 'process.kill(1, 0)']
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5

@@ -1,10 +1,11 @@
 import { escapeHtml, splitTelegramMessage } from '@watcher/telegram';
-import { InputFile, type Api } from 'grammy';
+import { InlineKeyboard, InputFile, type Api } from 'grammy';
 
 export type TelegramVoiceInput = {
   audio: Uint8Array;
   fileName: string;
   caption: string;
+  feedbackRunId?: string;
 };
 
 export type BriefingTelegramTransport = {
@@ -22,7 +23,18 @@ export class GrammyBriefingTransport implements BriefingTelegramTransport {
     const message = await this.api.sendVoice(
       chatId,
       new InputFile(input.audio, input.fileName),
-      { caption: input.caption, parse_mode: 'HTML' },
+      {
+        caption: input.caption,
+        parse_mode: 'HTML',
+        ...(input.feedbackRunId
+          ? {
+              reply_markup: new InlineKeyboard()
+                .text('👍 Useful', `bf:${input.feedbackRunId}:u`)
+                .text('👎 Less useful', `bf:${input.feedbackRunId}:n`)
+                .text('⏱ Too long', `bf:${input.feedbackRunId}:l`),
+            }
+          : {}),
+      },
     );
     return String(message.message_id);
   }

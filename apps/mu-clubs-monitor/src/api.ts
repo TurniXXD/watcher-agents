@@ -25,13 +25,22 @@ export const createApi = (
   monitor: MuClubsMonitor,
   token: string,
   logger?: WatcherLogger,
+  readinessProbe: () => Promise<void> = () => Promise.resolve(),
 ) => {
   const app = Fastify();
   app.addHook('onError', (_request, _reply, error) => {
     logger?.error({ err: error }, 'MU Clubs API request failed');
     return Promise.resolve();
   });
-  app.get('/healthz', () => ({ status: 'ok' }));
+  app.get('/healthz', async (_request, reply) => {
+    try {
+      await readinessProbe();
+      return { status: 'ok' };
+    } catch (error) {
+      logger?.warn({ err: error }, 'MU Clubs readiness probe failed');
+      return reply.code(503).send({ status: 'unavailable' });
+    }
+  });
   app.addHook('onRequest', async (request, reply) => {
     if (request.url === '/healthz') return;
     if (!authorized(request.headers.authorization, token))

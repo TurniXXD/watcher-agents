@@ -47,6 +47,8 @@ export const renderConfiguration = (
     `Delivery schedule: ${settings.briefingTime} (${settings.timezone})`,
     `Duration: target ${settings.targetDurationMinutes} min, max ${settings.maximumDurationMinutes} min`,
     `Transcript: ${settings.sendTranscript ? 'on' : 'off'}`,
+    `Priority topics: ${settings.priorityKeywords.join(', ') || 'none'}`,
+    `Muted topics: ${settings.mutedKeywords.join(', ') || 'none'}`,
   ].join('\n');
 };
 
@@ -68,6 +70,10 @@ export const briefingHelp = [
   '/location_clear — disable location',
   '/location_set — location setup instructions',
   '/location_status — show saved location',
+  '/mute_add TOPIC — reduce non-urgent coverage of a topic',
+  '/mute_remove TOPIC — remove a muted topic',
+  '/priority_add TOPIC — boost a topic, company, ticker, or subject',
+  '/priority_remove TOPIC — remove a priority topic',
   '/settings — show briefing configuration',
   '/start — start or resume onboarding',
   '/subscribe WATCHER — enable stocks, medical, or news',

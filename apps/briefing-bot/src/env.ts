@@ -12,6 +12,18 @@ const schema = z
     TELEGRAM_ALLOWED_USER_IDS: z.string().min(1),
     OLLAMA_URL: z.url(),
     OLLAMA_MODEL: z.string().min(1),
+    BRIEFING_EMBEDDING_MODEL: optionalString,
+    BRIEFING_EMBEDDING_MIN_SIMILARITY: z.coerce
+      .number()
+      .min(0.5)
+      .max(1)
+      .default(0.82),
+    BRIEFING_EMBEDDING_WINDOW_HOURS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(168)
+      .default(96),
     OLLAMA_KEEP_ALIVE: z.string().min(1).default('5m'),
     OLLAMA_NUM_CTX: z.coerce.number().int().min(512).max(131_072).default(8192),
     OLLAMA_RETRIES: z.coerce.number().int().min(0).max(2).default(1),
@@ -63,6 +75,24 @@ const schema = z
       .number()
       .int()
       .min(5_000)
+      .max(300_000)
+      .default(30_000),
+    BRIEFING_FRESHNESS_MAX_AGE_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1_440)
+      .default(180),
+    BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(120)
+      .default(20),
+    BRIEFING_FRESHNESS_POLL_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
       .max(300_000)
       .default(30_000),
   })

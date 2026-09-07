@@ -86,6 +86,26 @@ const directlyRelated = (left: BriefingEvent, right: BriefingEvent): boolean =>
   left.relatedEventIds?.includes(right.id) === true ||
   right.relatedEventIds?.includes(left.id) === true;
 
+export const semanticPairKey = (leftId: string, rightId: string): string =>
+  [leftId, rightId].sort().join('\u0000');
+
+export const semanticRelationshipSupported = (
+  left: BriefingEvent,
+  right: BriefingEvent,
+): boolean => {
+  const sharesEntity = overlap(entityKeys(left), entityKeys(right)) > 0;
+  const sameCategory = left.category === right.category;
+  const relatedCategory = categoriesRelated(left.category, right.category);
+  const relatedSource =
+    left.watcherBot !== right.watcherBot &&
+    Boolean(
+      left.primarySource &&
+      right.primarySource &&
+      left.primarySource === right.primarySource,
+    );
+  return sharesEntity || sameCategory || relatedCategory || relatedSource;
+};
+
 export const eventsDescribeSameStory = (
   left: BriefingEvent,
   right: BriefingEvent,
@@ -208,6 +228,7 @@ const buildCluster = (events: BriefingEvent[]): BriefingStoryCluster => {
 
 export const clusterBriefingEvents = (
   events: readonly BriefingEvent[],
+  semanticPairs: ReadonlySet<string> = new Set(),
 ): BriefingStoryCluster[] => {
   const parents = events.map((_, index) => index);
   const root = (index: number): number => {
@@ -224,7 +245,10 @@ export const clusterBriefingEvents = (
   };
   events.forEach((left, leftIndex) => {
     events.slice(leftIndex + 1).forEach((right, offset) => {
-      if (eventsDescribeSameStory(left, right)) {
+      if (
+        eventsDescribeSameStory(left, right) ||
+        semanticPairs.has(semanticPairKey(left.id, right.id))
+      ) {
         join(leftIndex, leftIndex + offset + 1);
       }
     });

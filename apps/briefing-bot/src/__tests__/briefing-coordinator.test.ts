@@ -22,6 +22,8 @@ const configuration = (onboardingCompleted = true): BriefingConfiguration => ({
     sendTranscript: false,
     calendarEnabled: false,
     weatherEnabled: true,
+    priorityKeywords: [],
+    mutedKeywords: [],
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   },
@@ -74,6 +76,7 @@ const dependencies = (
   options: {
     ttsFails?: boolean;
     watcherHealth?: 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE';
+    watcherLastRunAt?: string;
     onboardingCompleted?: boolean;
   } = {},
 ) => {
@@ -192,7 +195,7 @@ const dependencies = (
           {
             watcherBot: 'stocks' as const,
             status: options.watcherHealth ?? ('HEALTHY' as const),
-            lastRunAt: now.toISOString(),
+            lastRunAt: options.watcherLastRunAt ?? now.toISOString(),
             eventsEmitted: 0,
             failedEventPublications: 0,
             sourceFailures: 0,
@@ -349,5 +352,28 @@ describe('BriefingCoordinator', () => {
         failedDeliveries: 0,
       },
     });
+  });
+
+  it('marks scheduled output partial when a producer stays stale after the freshness timeout', async () => {
+    const setup = dependencies({
+      watcherLastRunAt: '2026-09-06T01:00:00.000Z',
+    });
+    const coordinator = new BriefingCoordinator({
+      ...setup.value,
+      freshness: {
+        maximumAgeMs: 60 * 60_000,
+        timeoutMs: 0,
+        pollIntervalMs: 1_000,
+      },
+    });
+
+    const result = await coordinator.generate(123n, 'SCHEDULED', now);
+
+    expect(result.run.status).toBe('PARTIAL');
+    expect(setup.value.scripts.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dataQuality: ['stocks data is currently unavailable.'],
+      }),
+    );
   });
 });

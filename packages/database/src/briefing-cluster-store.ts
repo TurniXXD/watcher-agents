@@ -13,6 +13,25 @@ import {
 } from './utils/briefing-mappers.js';
 import { prismaJson } from './utils/json.js';
 
+const embeddingInputSchema = z.object({
+  eventId: z.string().trim().min(1).max(200),
+  model: z.string().trim().min(1).max(200),
+  inputHash: z.string().regex(/^[a-f0-9]{64}$/u),
+  embedding: z.array(z.number().finite()).min(1).max(16_384),
+});
+
+export type BriefingEmbeddingState = {
+  eventId: string;
+  model: string;
+  inputHash: string;
+};
+
+export type BriefingSemanticPair = {
+  leftEventId: string;
+  rightEventId: string;
+  similarity: number;
+};
+
 export const briefingStoryClusterInputSchema = z
   .object({
     id: z.string().trim().min(1).max(200),
@@ -108,6 +127,77 @@ export class BriefingStoryClusterStore {
       throw new Error('Events already belong to conflicting story clusters');
     }
     return memberships[0]?.clusterId;
+  }
+
+  public async listEmbeddingStates(
+    eventIds: readonly string[],
+  ): Promise<BriefingEmbeddingState[]> {
+    if (eventIds.length === 0) return [];
+    return this.db.$queryRaw<BriefingEmbeddingState[]>`
+      SELECT
+        "id" AS "eventId",
+        "embeddingModel" AS "model",
+        "embeddingInputHash" AS "inputHash"
+      FROM "briefing_events"
+      WHERE "id" = ANY(${[...new Set(eventIds)]}::text[])
+        AND "embedding" IS NOT NULL
+        AND "embeddingModel" IS NOT NULL
+        AND "embeddingInputHash" IS NOT NULL
+    `;
+  }
+
+  public async saveEmbedding(rawInput: unknown): Promise<void> {
+    const input = embeddingInputSchema.parse(rawInput);
+    const vector = `[${input.embedding.join(',')}]`;
+    await this.db.$executeRaw`
+      UPDATE "briefing_events"
+      SET
+        "embedding" = ${vector}::vector,
+        "embeddingModel" = ${input.model},
+        "embeddingInputHash" = ${input.inputHash},
+        "embeddingUpdatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${input.eventId}
+    `;
+  }
+
+  public async findSemanticPairs(input: {
+    eventIds: readonly string[];
+    model: string;
+    minimumSimilarity: number;
+    windowHours: number;
+  }): Promise<BriefingSemanticPair[]> {
+    if (input.eventIds.length < 2) return [];
+    const eventIds = [...new Set(input.eventIds)];
+    const rows = await this.db.$queryRaw<
+      Array<{
+        leftEventId: string;
+        rightEventId: string;
+        similarity: number | string;
+      }>
+    >`
+      SELECT
+        left_event."id" AS "leftEventId",
+        right_event."id" AS "rightEventId",
+        1 - (left_event."embedding" <=> right_event."embedding") AS "similarity"
+      FROM "briefing_events" left_event
+      JOIN "briefing_events" right_event ON left_event."id" < right_event."id"
+      WHERE left_event."id" = ANY(${eventIds}::text[])
+        AND right_event."id" = ANY(${eventIds}::text[])
+        AND left_event."embeddingModel" = ${input.model}
+        AND right_event."embeddingModel" = ${input.model}
+        AND vector_dims(left_event."embedding") = vector_dims(right_event."embedding")
+        AND ABS(EXTRACT(EPOCH FROM (
+          COALESCE(left_event."occurredAt", left_event."publishedAt", left_event."detectedAt") -
+          COALESCE(right_event."occurredAt", right_event."publishedAt", right_event."detectedAt")
+        ))) <= ${input.windowHours * 3_600}
+        AND 1 - (left_event."embedding" <=> right_event."embedding") >= ${input.minimumSimilarity}
+      ORDER BY "similarity" DESC
+    `;
+    return rows.map((row) => ({
+      leftEventId: row.leftEventId,
+      rightEventId: row.rightEventId,
+      similarity: Number(row.similarity),
+    }));
   }
 
   public async save(rawInput: unknown): Promise<BriefingStoryClusterRecord> {

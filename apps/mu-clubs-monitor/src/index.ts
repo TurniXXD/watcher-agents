@@ -40,7 +40,15 @@ const monitor = new MuClubsMonitor(
   env.MU_CLUBS_MONITOR_INTERVAL_MINUTES * 60_000,
   logger,
 );
-const api = createApi(store, monitor, env.MU_CLUBS_API_TOKEN, logger);
+const api = createApi(
+  store,
+  monitor,
+  env.MU_CLUBS_API_TOKEN,
+  logger,
+  async () => {
+    await database.$queryRaw`SELECT 1`;
+  },
+);
 let stopping = false;
 const tick = async (): Promise<void> => {
   if (stopping) return;

@@ -1,4 +1,4 @@
-import { createLogger } from '@watcher/core';
+import { ReadinessServer, checkOllamaReady, createLogger } from '@watcher/core';
 import {
   BriefingDeliveryStore,
   BriefingConfigurationStore,
@@ -12,7 +12,7 @@ import {
   createDatabaseClient,
   ResourceLeaseStore,
 } from '@watcher/database';
-import { OllamaProvider } from '@watcher/llm';
+import { OllamaEmbeddingProvider, OllamaProvider } from '@watcher/llm';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { InputFile } from 'grammy';
 import { createBriefingBot, type CalendarCommands } from './bot.js';
@@ -29,6 +29,7 @@ import { OAuthCallbackServer } from './oauth-callback-server.js';
 import { PiperLocalTtsProvider } from './piper-tts.js';
 import { BriefingScriptGenerator } from './script-generator.js';
 import { StoryEngine } from './story-engine.js';
+import { SemanticStoryMatcher } from './semantic-story-matcher.js';
 import { GrammyBriefingTransport } from './telegram-transport.js';
 import { voicePreviewText } from './voice-registry.js';
 import {
@@ -68,6 +69,11 @@ const tts = new PiperLocalTtsProvider({
   keepTemporaryFiles: env.PIPER_KEEP_TEMP === 'true',
   logger,
 });
+const readiness = new ReadinessServer(async () => {
+  await database.$queryRaw`SELECT 1`;
+  await checkOllamaReady(env.OLLAMA_URL);
+  await tts.checkReady();
+}, logger);
 const calendarConfigured = Boolean(env.GOOGLE_CALENDAR_CLIENT_ID);
 const calendarOAuth = calendarConfigured
   ? new GoogleCalendarOAuth(
@@ -144,6 +150,22 @@ const scriptModel = new OllamaProvider({
   think: env.OLLAMA_THINK,
   timeoutMs: env.OLLAMA_TIMEOUT_MS,
 });
+const semanticMatcher = env.BRIEFING_EMBEDDING_MODEL
+  ? new SemanticStoryMatcher(
+      env.BRIEFING_EMBEDDING_MODEL,
+      new OllamaEmbeddingProvider({
+        url: env.OLLAMA_URL,
+        model: env.BRIEFING_EMBEDDING_MODEL,
+        keepAlive: env.OLLAMA_KEEP_ALIVE,
+        timeoutMs: env.OLLAMA_TIMEOUT_MS,
+      }),
+      briefingStoryClusters,
+      resourceLeases,
+      logger,
+      env.BRIEFING_EMBEDDING_MIN_SIMILARITY,
+      env.BRIEFING_EMBEDDING_WINDOW_HOURS,
+    )
+  : undefined;
 const delivery = new BriefingDeliveryService(
   briefingDeliveries,
   new GrammyBriefingTransport(bot.api),
@@ -161,6 +183,8 @@ runtime.coordinator = new BriefingCoordinator({
     briefingEvents,
     briefingStoryStates,
     briefingStoryClusters,
+    semanticMatcher,
+    logger,
   ),
   scripts: new BriefingScriptGenerator(scriptModel),
   tts,
@@ -171,20 +195,40 @@ runtime.coordinator = new BriefingCoordinator({
   ...(calendarProvider ? { calendar: calendarProvider } : {}),
   logger,
   ttsAttempts: env.BRIEFING_TTS_ATTEMPTS,
+  freshness: {
+    maximumAgeMs: env.BRIEFING_FRESHNESS_MAX_AGE_MINUTES * 60_000,
+    timeoutMs: env.BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES * 60_000,
+    pollIntervalMs: env.BRIEFING_FRESHNESS_POLL_INTERVAL_MS,
+  },
 });
 const scheduler = new BriefingScheduler(
   briefingSchedules,
   async ({ telegramChatId, scheduledFor, scheduleKey, periodHours }) => {
-    await runtime.coordinator!.generate(
-      telegramChatId,
-      'SCHEDULED',
-      scheduledFor,
-      undefined,
-      {
-        scheduleKey,
-        ...(periodHours === undefined ? {} : { periodHours }),
-      },
-    );
+    try {
+      await runtime.coordinator!.generate(
+        telegramChatId,
+        'SCHEDULED',
+        scheduledFor,
+        undefined,
+        {
+          scheduleKey,
+          ...(periodHours === undefined ? {} : { periodHours }),
+        },
+      );
+    } catch (error) {
+      try {
+        await bot.api.sendMessage(
+          telegramChatId.toString(),
+          '⚠️ Scheduled morning briefing failed. Check briefing-bot logs; the next scheduled run remains enabled.',
+        );
+      } catch (notificationError) {
+        logger.error(
+          { err: notificationError, telegramChatId: telegramChatId.toString() },
+          'Failed to notify user about scheduled briefing failure',
+        );
+      }
+      throw error;
+    }
   },
   env.BRIEFING_SCHEDULER_INTERVAL_MS,
   (error) => logger.error({ err: error }, 'Briefing scheduler failed'),
@@ -215,9 +259,11 @@ const oauthServer = calendarOAuth
 
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'Shutting down');
+  readiness.markApplicationStopping();
   await scheduler.stop();
   await oauthServer?.stop();
   await bot.stop();
+  await readiness.stop();
   await database.$disconnect();
 };
 
@@ -228,4 +274,10 @@ await oauthServer?.start(
   env.CALENDAR_OAUTH_LISTEN_HOST,
 );
 scheduler.start();
-await bot.start({ onStart: () => logger.info('Briefing bot started') });
+await readiness.start();
+await bot.start({
+  onStart: () => {
+    readiness.markApplicationReady();
+    logger.info('Briefing bot started');
+  },
+});

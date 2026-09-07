@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { briefingVoiceIdSchema } from '@watcher/database';
@@ -31,6 +31,20 @@ export class PiperLocalTtsProvider implements TtsProvider {
   public constructor(private readonly options: PiperTtsOptions) {
     this.run = options.run ?? runProcess;
     this.now = options.now ?? Date.now;
+  }
+
+  public async checkReady(): Promise<void> {
+    const modelIds = [
+      ...Object.values(piperVoices).map(({ modelId }) => modelId),
+      czechCalendarVoice.modelId,
+    ];
+    await Promise.all(
+      modelIds.flatMap((modelId) =>
+        ['.onnx', '.onnx.json'].map((suffix) =>
+          access(join(this.options.dataDirectory, `${modelId}${suffix}`)),
+        ),
+      ),
+    );
   }
 
   public async generateSpeech(input: TtsInput): Promise<TtsResult> {

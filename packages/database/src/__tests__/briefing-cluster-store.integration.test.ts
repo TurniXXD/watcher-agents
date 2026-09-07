@@ -115,4 +115,38 @@ integration('BriefingStoryClusterStore', () => {
       }),
     ).rejects.toThrow(/unknown briefing event/);
   });
+
+  it('stores embeddings and finds recent semantically similar event pairs', async () => {
+    await events.save(event('vector-event-1'));
+    await events.save(event('vector-event-2'));
+    await clusters.saveEmbedding({
+      eventId: 'vector-event-1',
+      model: 'test-embedding',
+      inputHash: 'a'.repeat(64),
+      embedding: [1, 0, 0],
+    });
+    await clusters.saveEmbedding({
+      eventId: 'vector-event-2',
+      model: 'test-embedding',
+      inputHash: 'b'.repeat(64),
+      embedding: [0.99, 0.01, 0],
+    });
+
+    await expect(
+      clusters.listEmbeddingStates(['vector-event-1', 'vector-event-2']),
+    ).resolves.toHaveLength(2);
+    await expect(
+      clusters.findSemanticPairs({
+        eventIds: ['vector-event-1', 'vector-event-2'],
+        model: 'test-embedding',
+        minimumSimilarity: 0.9,
+        windowHours: 96,
+      }),
+    ).resolves.toMatchObject([
+      {
+        leftEventId: 'vector-event-1',
+        rightEventId: 'vector-event-2',
+      },
+    ]);
+  });
 });

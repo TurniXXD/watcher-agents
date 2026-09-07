@@ -11,6 +11,8 @@ import type {
 import { clusterBriefingEvents } from './story-clustering.js';
 import { rankStories } from './story-ranking.js';
 import type { BriefingStoryCluster, StoryEngineResult } from './story-types.js';
+import type { SemanticStoryMatcher } from './semantic-story-matcher.js';
+import type { WatcherLogger } from '@watcher/core';
 
 type StoryStates = Pick<BriefingStoryStore, 'list'>;
 type ClusterPersistence = Pick<
@@ -25,6 +27,8 @@ export type StoryEngineInput = {
   subscriptions: readonly WatcherBotId[];
   periodStart: Date;
   periodEnd: Date;
+  priorityKeywords?: readonly string[];
+  mutedKeywords?: readonly string[];
 };
 
 const comparableSummary = (value: string): string =>
@@ -58,11 +62,52 @@ const shouldSuppress = (
   return undefined;
 };
 
+const normalizedKeywords = (values: readonly string[] = []): string[] =>
+  values.map((value) => value.toLocaleLowerCase()).filter(Boolean);
+
+const applyPersonalPriorities = (
+  stories: readonly BriefingStoryCluster[],
+  priorityKeywords: readonly string[] = [],
+  mutedKeywords: readonly string[] = [],
+): BriefingStoryCluster[] => {
+  const priorities = normalizedKeywords(priorityKeywords);
+  const muted = normalizedKeywords(mutedKeywords);
+  return stories
+    .map((story) => {
+      const searchable = [
+        story.title,
+        story.summary,
+        ...story.entities.flatMap(({ name, ticker }) => [name, ticker ?? '']),
+        ...story.events.flatMap(({ tags }) => tags),
+      ]
+        .join(' ')
+        .toLocaleLowerCase();
+      const priorityMatches = priorities.filter((keyword) =>
+        searchable.includes(keyword),
+      ).length;
+      const mutedMatches = muted.filter((keyword) =>
+        searchable.includes(keyword),
+      ).length;
+      const mutedPenalty =
+        story.urgency >= 90 ? 0 : Math.min(40, mutedMatches * 20);
+      return {
+        ...story,
+        score: story.score + Math.min(30, priorityMatches * 15) - mutedPenalty,
+      };
+    })
+    .sort((left, right) => right.score - left.score);
+};
+
 export class StoryEngine {
   public constructor(
     private readonly events: BriefingEventRepository,
     private readonly states: StoryStates,
     private readonly clusters?: ClusterPersistence,
+    private readonly semanticMatcher?: Pick<
+      SemanticStoryMatcher,
+      'matchingPairs'
+    >,
+    private readonly logger?: WatcherLogger,
   ) {}
 
   public async collect(input: StoryEngineInput): Promise<StoryEngineResult> {
@@ -86,7 +131,18 @@ export class StoryEngine {
             detectedOrder: 'desc',
             limit: MAX_CANDIDATE_EVENTS,
           });
-    let clustered = clusterBriefingEvents(retrieved);
+    let semanticPairs: ReadonlySet<string> = new Set();
+    if (this.semanticMatcher) {
+      try {
+        semanticPairs = await this.semanticMatcher.matchingPairs(retrieved);
+      } catch (error) {
+        this.logger?.warn(
+          { err: error, eventCount: retrieved.length },
+          'Semantic story matching failed; using deterministic clustering',
+        );
+      }
+    }
+    let clustered = clusterBriefingEvents(retrieved, semanticPairs);
     if (this.clusters) {
       clustered = await Promise.all(
         clustered.map((cluster) => this.persistCluster(cluster)),
@@ -114,7 +170,11 @@ export class StoryEngine {
       }
       return [applyContinuity(cluster, prior)];
     });
-    const stories = rankStories(selected);
+    const stories = applyPersonalPriorities(
+      rankStories(selected),
+      input.priorityKeywords,
+      input.mutedKeywords,
+    );
     const eventsByWatcher = Object.fromEntries(
       registeredWatcherBots.map((watcherBot) => [
         watcherBot,

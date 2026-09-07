@@ -397,6 +397,34 @@ export const createBriefingBot = (
     });
     await context.reply(renderConfiguration(configuration));
   });
+  bot.command(
+    ['priority_add', 'priority_remove', 'mute_add', 'mute_remove'],
+    async (context) => {
+      const topic = commandArgument(context.message?.text).trim();
+      if (topic.length < 2) {
+        await context.reply('Usage: /priority_add TOPIC');
+        return;
+      }
+      const chatId = BigInt(context.chat.id);
+      const current = await store.ensure(chatId);
+      const command = commandName(context.message?.text);
+      const field = command.startsWith('priority')
+        ? 'priorityKeywords'
+        : 'mutedKeywords';
+      const adding = command.endsWith('_add');
+      const values = current.settings[field];
+      const comparable = topic.toLocaleLowerCase();
+      const updated = adding
+        ? values.some((value) => value.toLocaleLowerCase() === comparable)
+          ? values
+          : [...values, topic]
+        : values.filter((value) => value.toLocaleLowerCase() !== comparable);
+      const configuration = await store.updateSettings(chatId, {
+        [field]: updated,
+      });
+      await context.reply(renderConfiguration(configuration));
+    },
+  );
 
   const executeBriefing = async (
     context: Context,
@@ -473,6 +501,23 @@ export const createBriefingBot = (
       });
     }
     await context.reply('Google Calendar disconnected.');
+  });
+  bot.callbackQuery(/^bf:([0-9a-f-]{36}):(u|n|l)$/u, async (context) => {
+    const ratings = {
+      u: 'USEFUL',
+      n: 'NOT_USEFUL',
+      l: 'TOO_LONG',
+    } as const;
+    await store.recordFeedback(
+      BigInt(context.chat!.id),
+      context.match[1]!,
+      ratings[context.match[2] as keyof typeof ratings],
+    );
+    await context.answerCallbackQuery(
+      context.match[2] === 'l'
+        ? 'Saved. Future briefings will be one minute shorter.'
+        : 'Feedback saved.',
+    );
   });
 
   bot.callbackQuery('onb:location:share', async (context) => {

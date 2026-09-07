@@ -55,12 +55,36 @@ required_env_values=(
   "deploy/runtime/briefing-bot.env:OLLAMA_MODEL"
 )
 
+required_piper_voice_files=(
+  deploy/piper-voices/en_US-amy-medium.onnx
+  deploy/piper-voices/en_US-amy-medium.onnx.json
+  deploy/piper-voices/en_US-hfc_female-medium.onnx
+  deploy/piper-voices/en_US-hfc_female-medium.onnx.json
+  deploy/piper-voices/en_US-hfc_male-medium.onnx
+  deploy/piper-voices/en_US-hfc_male-medium.onnx.json
+  deploy/piper-voices/cs_CZ-jirka-medium.onnx
+  deploy/piper-voices/cs_CZ-jirka-medium.onnx.json
+)
+
 for required_file in "${required_files[@]}"; do
   if [[ ! -f "$required_file" ]]; then
     echo "Missing required deployment file: $DEPLOY_DIR/$required_file" >&2
     exit 1
   fi
 done
+
+missing_piper_voice_files=()
+for voice_file in "${required_piper_voice_files[@]}"; do
+  if [[ ! -r "$voice_file" ]]; then
+    missing_piper_voice_files+=("$voice_file")
+  fi
+done
+if ((${#missing_piper_voice_files[@]} > 0)); then
+  echo "Required Piper voice files are missing or unreadable:" >&2
+  printf '%s\n' "${missing_piper_voice_files[@]}" >&2
+  echo "Install them once with PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh" >&2
+  exit 1
+fi
 
 chmod 700 deploy/runtime
 while IFS= read -r runtime_file; do
@@ -137,8 +161,30 @@ trap cleanup EXIT
 echo "Validating production Compose configuration..."
 compose_candidate config --quiet
 
+mkdir -p backups
+backup_path="backups/pre-deploy-$(date -u +%Y%m%dT%H%M%SZ)-${IMAGE_TAG:0:12}.sql.gz"
+backup_created=false
+
+database_exists() {
+  compose_candidate exec -T postgres sh -c \
+    'psql -U "$POSTGRES_USER" -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname = '\''$POSTGRES_DB'\''" | grep -q '\''^1$'\'''
+}
+
+create_database_backup() {
+  echo "Creating pre-deploy database backup at $backup_path..."
+  compose_candidate exec -T postgres sh -c \
+    'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip >"$backup_path"
+  find backups -type f -name 'pre-deploy-*.sql.gz' -mtime "+$BACKUP_RETENTION_DAYS" -delete
+  backup_created=true
+}
+
 echo "Pulling release $IMAGE_TAG..."
 compose_candidate pull postgres migrate stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot
+
+if [[ -n "$(compose_candidate ps --status running -q postgres)" ]] && database_exists; then
+  echo "Backing up the running database before changing its container image..."
+  create_database_backup
+fi
 
 echo "Starting PostgreSQL..."
 compose_candidate up -d postgres
@@ -158,21 +204,23 @@ for attempt in {1..30}; do
   sleep 2
 done
 
-mkdir -p backups
-backup_path="backups/pre-deploy-$(date -u +%Y%m%dT%H%M%SZ)-${IMAGE_TAG:0:12}.sql.gz"
-
-if compose_candidate exec -T postgres sh -c \
-  'psql -U "$POSTGRES_USER" -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname = '\''$POSTGRES_DB'\''" | grep -q '\''^1$'\'''; then
-  echo "Creating pre-deploy database backup at $backup_path..."
-  compose_candidate exec -T postgres sh -c \
-    'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip >"$backup_path"
-  find backups -type f -name 'pre-deploy-*.sql.gz' -mtime "+$BACKUP_RETENTION_DAYS" -delete
-else
-  echo "Skipping the pre-deploy backup because the database does not exist yet."
+if [[ "$backup_created" == false ]]; then
+  if database_exists; then
+    create_database_backup
+  else
+    echo "Skipping the pre-deploy backup because the database does not exist yet."
+  fi
 fi
 
 echo "Applying database migrations..."
 compose_candidate run --rm migrate
+
+echo "Verifying pgvector..."
+if ! compose_candidate exec -T postgres sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "SELECT extversion FROM pg_extension WHERE extname = '\''vector'\''" | grep -Eq '\''^[0-9]+'\'''; then
+  echo "The pgvector extension is not installed after migrations." >&2
+  exit 1
+fi
 
 echo "Starting Watcher bots..."
 if ! compose_candidate up \

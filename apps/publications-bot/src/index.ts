@@ -1,4 +1,9 @@
-import { PersistentScheduler, createLogger } from '@watcher/core';
+import {
+  PersistentScheduler,
+  ReadinessServer,
+  checkOllamaReady,
+  createLogger,
+} from '@watcher/core';
 import {
   createDatabaseClient,
   BriefingWatcherHealthStore,
@@ -14,6 +19,10 @@ import { publishMedicalBriefingEvents } from './briefing-publisher.js';
 
 const logger = createLogger('publications-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
+const readiness = new ReadinessServer(async () => {
+  await database.$queryRaw`SELECT 1`;
+  await checkOllamaReady(env.OLLAMA_URL);
+}, logger);
 const briefingEvents = new PostgresBriefingEventRepository(database, logger);
 const briefingWatcherHealth = new BriefingWatcherHealthStore(database);
 const store = new WatcherStore(database, {
@@ -91,11 +100,19 @@ const scheduler = new PersistentScheduler(
 );
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'Shutting down');
+  readiness.markApplicationStopping();
   await scheduler.stop();
   await bot.stop();
+  await readiness.stop();
   await database.$disconnect();
 };
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
 process.once('SIGINT', () => void shutdown('SIGINT'));
 scheduler.start();
-await bot.start({ onStart: () => logger.info('Publications bot started') });
+await readiness.start();
+await bot.start({
+  onStart: () => {
+    readiness.markApplicationReady();
+    logger.info('Publications bot started');
+  },
+});

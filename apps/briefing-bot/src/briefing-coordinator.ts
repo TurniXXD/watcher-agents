@@ -25,7 +25,7 @@ import {
   measured,
   type CalendarProvider,
 } from './briefing-context.js';
-import { renderCalendarSummary } from './calendar.js';
+import { calendarActionInsights, renderCalendarSummary } from './calendar.js';
 import type {
   BriefingDeliveryResult,
   BriefingDeliveryService,
@@ -40,6 +40,7 @@ import type { StoryEngineMetrics } from './story-types.js';
 import type { TtsProvider, TtsResult } from './tts.js';
 import type { WeatherProvider } from './weather.js';
 import { renderSpokenWeather } from './weather.js';
+import { waitForFreshWatcherRuns } from './briefing-freshness.js';
 
 type ConfigurationStore = Pick<BriefingConfigurationStore, 'ensure'>;
 type RunStore = Pick<
@@ -80,6 +81,12 @@ export class BriefingCoordinator {
       calendar?: CalendarProvider;
       logger?: WatcherLogger;
       ttsAttempts?: number;
+      freshness?: {
+        maximumAgeMs: number;
+        timeoutMs: number;
+        pollIntervalMs: number;
+      };
+      sleep?: (milliseconds: number) => Promise<void>;
       now?: () => Date;
     },
   ) {}
@@ -92,7 +99,7 @@ export class BriefingCoordinator {
     scheduleContext: BriefingScheduleContext = {},
   ): Promise<BriefingCoordinatorResult> {
     const runStartedAt = Date.now();
-    const now = this.dependencies.now?.() ?? new Date();
+    let now = this.dependencies.now?.() ?? new Date();
     this.dependencies.logger?.info(
       {
         telegramChatId: telegramChatId.toString(),
@@ -122,6 +129,22 @@ export class BriefingCoordinator {
     const subscriptions = configuration.subscriptions
       .filter(({ enabled }) => enabled)
       .map(({ watcherBot }) => watcherBot);
+    if (type === 'SCHEDULED' && this.dependencies.freshness) {
+      await progress('Waiting for fresh watcher data', 5);
+      await waitForFreshWatcherRuns({
+        watcherHealth: this.dependencies.watcherHealth,
+        subscriptions,
+        referenceTime: scheduledFor ?? now,
+        maximumAgeMs: this.dependencies.freshness.maximumAgeMs,
+        timeoutMs: this.dependencies.freshness.timeoutMs,
+        pollIntervalMs: this.dependencies.freshness.pollIntervalMs,
+        ...(this.dependencies.sleep ? { sleep: this.dependencies.sleep } : {}),
+        ...(this.dependencies.logger
+          ? { logger: this.dependencies.logger }
+          : {}),
+      });
+      now = this.dependencies.now?.() ?? new Date();
+    }
     const periodEnd = now;
     const previous =
       type === 'SCHEDULED'
@@ -242,6 +265,8 @@ export class BriefingCoordinator {
               subscriptions,
               periodStart,
               periodEnd,
+              priorityKeywords: configuration.settings.priorityKeywords,
+              mutedKeywords: configuration.settings.mutedKeywords,
             }),
           ),
           this.dependencies.watcherHealth.list(subscriptions),
@@ -255,6 +280,11 @@ export class BriefingCoordinator {
         weather: weather.status,
         calendar: calendar.status,
         now,
+        ...(type === 'SCHEDULED' && this.dependencies.freshness
+          ? {
+              watcherStaleAfterMs: this.dependencies.freshness.maximumAgeMs,
+            }
+          : {}),
       });
       const duration = planBriefingDuration({
         stories: storyResult.stories,
@@ -268,6 +298,26 @@ export class BriefingCoordinator {
         storyResult.stories,
         duration.wordBudget,
       );
+      const calendarInsights = calendarActionInsights(calendar.value);
+      const actionAgenda = [
+        ...calendarInsights,
+        ...selectedStories.flatMap(({ actionItems }) => actionItems),
+      ].slice(0, 5);
+      const dataQuality = coverage.components.flatMap((component) => {
+        if (
+          component.id === 'weather' ||
+          component.id === 'calendar' ||
+          component.status === 'HEALTHY'
+        ) {
+          return [];
+        }
+        const label = component.id.replace('-', ' ');
+        return [
+          component.status === 'UNAVAILABLE'
+            ? `${label} data is currently unavailable.`
+            : `${label} data is partially available.`,
+        ];
+      });
       this.dependencies.logger?.info(
         {
           briefingRunId: started.run.id,
@@ -305,11 +355,14 @@ export class BriefingCoordinator {
         calendar: {
           status: calendar.status,
           events: calendar.value,
+          insights: calendarInsights,
           ...(calendar.status === 'AVAILABLE'
             ? { spokenSummary: renderCalendarSummary(calendar.value) }
             : {}),
         },
         stories: selectedStories,
+        actionAgenda,
+        dataQuality,
         targetDurationMinutes: duration.plannedMinutes,
         maximumDurationMinutes: maximumMinutes,
         wordBudget: duration.wordBudget,

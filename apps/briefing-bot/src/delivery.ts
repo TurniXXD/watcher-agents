@@ -137,6 +137,7 @@ export class BriefingDeliveryService {
           ...input.index,
           audioDurationSeconds: audio.audioDurationSeconds,
         }),
+        feedbackRunId: input.runId,
       }),
     ]);
     if (!voice.success) {

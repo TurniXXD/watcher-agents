@@ -1,4 +1,10 @@
-import { PersistentScheduler, createLogger, errorMessage } from '@watcher/core';
+import {
+  PersistentScheduler,
+  ReadinessServer,
+  checkOllamaReady,
+  createLogger,
+  errorMessage,
+} from '@watcher/core';
 import {
   CompanyUniverseManager,
   InProcessEventBus,
@@ -36,6 +42,10 @@ import {
 
 const logger = createLogger('stocks-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
+const readiness = new ReadinessServer(async () => {
+  await database.$queryRaw`SELECT 1`;
+  await checkOllamaReady(env.OLLAMA_URL);
+}, logger);
 const briefingEvents = new PostgresBriefingEventRepository(database, logger);
 const briefingWatcherHealth = new BriefingWatcherHealthStore(database);
 const availableStockSourceIds = new Set([
@@ -335,6 +345,7 @@ const reconciliationScheduler = new PersistentScheduler(
 
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'Shutting down');
+  readiness.markApplicationStopping();
   await Promise.all([
     scheduler.stop(),
     discoveryScheduler.stop(),
@@ -342,6 +353,7 @@ const shutdown = async (signal: string): Promise<void> => {
     reconciliationScheduler.stop(),
   ]);
   await bot.stop();
+  await readiness.stop();
   await database.$disconnect();
 };
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
@@ -350,4 +362,10 @@ scheduler.start();
 discoveryScheduler.start();
 highResolutionScheduler.start();
 reconciliationScheduler.start();
-await bot.start({ onStart: () => logger.info('Stocks bot started') });
+await readiness.start();
+await bot.start({
+  onStart: () => {
+    readiness.markApplicationReady();
+    logger.info('Stocks bot started');
+  },
+});

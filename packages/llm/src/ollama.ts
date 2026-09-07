@@ -19,6 +19,10 @@ const responseSchema = z.object({
   done_reason: z.string().optional(),
 });
 
+const embeddingResponseSchema = z.object({
+  embeddings: z.array(z.array(z.number().finite()).min(1)).min(1),
+});
+
 class TruncatedStructuredOutputError extends Error {
   public override readonly name = 'TruncatedStructuredOutputError';
 }
@@ -238,6 +242,69 @@ export type OllamaOptions = {
   fetch?: typeof fetch;
 };
 
+export type OllamaEmbeddingOptions = {
+  url: string;
+  model: string;
+  timeoutMs?: number;
+  keepAlive?: string;
+  fetch?: typeof fetch;
+};
+
+export class OllamaEmbeddingProvider {
+  readonly #fetch: typeof fetch;
+  readonly #timeoutMs: number;
+
+  public constructor(private readonly options: OllamaEmbeddingOptions) {
+    this.#fetch = options.fetch ?? fetch;
+    this.#timeoutMs = options.timeoutMs ?? 120_000;
+  }
+
+  public async embed(
+    input: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
+    if (input.length === 0) return [];
+    const response = await this.#fetch(
+      `${this.options.url.replace(/\/$/, '')}/api/embed`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: this.options.model,
+          input,
+          keep_alive: this.options.keepAlive ?? '5m',
+          truncate: true,
+        }),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(this.#timeoutMs)])
+          : AbortSignal.timeout(this.#timeoutMs),
+      },
+    );
+    if (!response.ok) {
+      const detail = (await response.text())
+        .replaceAll(/\s+/g, ' ')
+        .trim()
+        .slice(0, 500);
+      throw new Error(
+        `Ollama embeddings returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+      );
+    }
+    const { embeddings } = embeddingResponseSchema.parse(await response.json());
+    if (embeddings.length !== input.length) {
+      throw new Error(
+        `Ollama returned ${embeddings.length} embeddings for ${input.length} inputs`,
+      );
+    }
+    const dimensions = embeddings[0]!.length;
+    if (embeddings.some((embedding) => embedding.length !== dimensions)) {
+      throw new Error(
+        'Ollama returned embeddings with inconsistent dimensions',
+      );
+    }
+    return embeddings;
+  }
+}
+
 export type StructuredJsonSchema = Readonly<Record<string, unknown>>;
 export type StructuredGeneration<T> = {
   result: T;
@@ -323,9 +390,14 @@ const normalizePublicationOutput = (value: unknown): unknown => {
         record.why_interesting,
         record.significance,
         record.whyItMatters,
+        record.summary,
+        record.abstract,
       ) ?? record.whyInteresting,
     confidence: boundedConfidence(
-      record.confidence ?? record.confidenceScore ?? record.confidence_score,
+      record.confidence ??
+        record.confidenceScore ??
+        record.confidence_score ??
+        0.35,
     ),
   };
 };

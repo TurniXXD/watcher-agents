@@ -54,6 +54,8 @@ integration('briefing persistent state', () => {
       sendTranscript: false,
       calendarEnabled: false,
       weatherEnabled: true,
+      priorityKeywords: [],
+      mutedKeywords: [],
     });
     expect(first.subscriptions).toMatchObject([
       { watcherBot: 'medical', enabled: true },
@@ -72,6 +74,8 @@ integration('briefing persistent state', () => {
       briefingTime: '06:45',
       targetDurationMinutes: 10,
       maximumDurationMinutes: 12,
+      priorityKeywords: ['Micron', 'CRISPR'],
+      mutedKeywords: ['football'],
     });
     expect(updated.settings).toMatchObject({
       voice: 'hfc_female',
@@ -79,6 +83,8 @@ integration('briefing persistent state', () => {
       briefingTime: '06:45',
       targetDurationMinutes: 10,
       maximumDurationMinutes: 12,
+      priorityKeywords: ['Micron', 'CRISPR'],
+      mutedKeywords: ['football'],
     });
     await expect(
       configuration.updateSettings(102n, {
@@ -89,6 +95,29 @@ integration('briefing persistent state', () => {
     await expect(
       configuration.updateSettings(102n, { timezone: 'Mars/Olympus' }),
     ).rejects.toThrow(/Invalid timezone/);
+  });
+
+  it('records owned-run feedback and shortens future briefings on request', async () => {
+    const run = await runs.start(109n, {
+      idempotencyKey: 'manual:109:feedback',
+      type: 'MANUAL',
+      periodStart: new Date('2026-09-05T05:00:00.000Z'),
+      periodEnd: new Date('2026-09-06T05:00:00.000Z'),
+      subscriptions: ['stocks'],
+      targetDurationSeconds: 420,
+      maximumDurationSeconds: 900,
+    });
+
+    await configuration.recordFeedback(109n, run.run.id, 'TOO_LONG');
+    await configuration.recordFeedback(109n, run.run.id, 'TOO_LONG');
+
+    expect((await configuration.get(109n))?.settings).toMatchObject({
+      targetDurationMinutes: 6,
+      maximumDurationMinutes: 14,
+    });
+    await expect(
+      configuration.recordFeedback(110n, run.run.id, 'USEFUL'),
+    ).rejects.toThrow(/does not belong/);
   });
 
   it('updates subscriptions idempotently and rejects unknown watchers', async () => {

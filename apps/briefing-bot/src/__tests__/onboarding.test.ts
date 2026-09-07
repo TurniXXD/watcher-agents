@@ -20,6 +20,8 @@ const configuration: BriefingConfiguration = {
     sendTranscript: false,
     calendarEnabled: false,
     weatherEnabled: true,
+    priorityKeywords: [],
+    mutedKeywords: [],
     createdAt: '2026-09-06T05:00:00.000Z',
     updatedAt: '2026-09-06T05:00:00.000Z',
   },

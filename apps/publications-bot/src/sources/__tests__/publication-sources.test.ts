@@ -49,6 +49,36 @@ describe('publication source request control', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('retries a transient PubMed transport termination once', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ esearchresult: { idlist: ['123'] } }),
+      )
+      .mockRejectedValueOnce(new TypeError('terminated'))
+      .mockResolvedValueOnce(
+        new Response(`
+        <PubmedArticleSet>
+          <PubmedArticle>
+            <MedlineCitation>
+              <PMID>123</PMID>
+              <Article>
+                <ArticleTitle>Test publication</ArticleTitle>
+                <Abstract><AbstractText>Test abstract</AbstractText></Abstract>
+              </Article>
+            </MedlineCitation>
+          </PubmedArticle>
+        </PubmedArticleSet>
+      `),
+      );
+    const source = new PubMedSource(fetcher);
+
+    await expect(source.fetch({ query: 'test query' })).resolves.toMatchObject([
+      { externalId: '123', title: 'Test publication' },
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
   it('reuses a failed bioRxiv request instead of hammering the provider', async () => {
     const fetcher = vi.fn(async () => {
       throw new Error('The operation was aborted due to timeout');

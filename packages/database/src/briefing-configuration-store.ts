@@ -77,6 +77,8 @@ export const briefingPreferencesSchema = z
     sendTranscript: z.boolean(),
     calendarEnabled: z.boolean(),
     weatherEnabled: z.boolean(),
+    priorityKeywords: z.array(z.string().trim().min(2).max(100)).max(50),
+    mutedKeywords: z.array(z.string().trim().min(2).max(100)).max(50),
   })
   .strict()
   .superRefine((settings, context) => {
@@ -105,6 +107,14 @@ export const briefingPreferencesPatchSchema = z
     sendTranscript: z.boolean().optional(),
     calendarEnabled: z.boolean().optional(),
     weatherEnabled: z.boolean().optional(),
+    priorityKeywords: z
+      .array(z.string().trim().min(2).max(100))
+      .max(50)
+      .optional(),
+    mutedKeywords: z
+      .array(z.string().trim().min(2).max(100))
+      .max(50)
+      .optional(),
   })
   .strict();
 
@@ -205,6 +215,8 @@ const toConfiguration = (row: ConfigurationRow): BriefingConfiguration => ({
     sendTranscript: row.sendTranscript,
     calendarEnabled: row.calendarEnabled,
     weatherEnabled: row.weatherEnabled,
+    priorityKeywords: row.priorityKeywords,
+    mutedKeywords: row.mutedKeywords,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   },
@@ -294,6 +306,8 @@ export class BriefingConfigurationStore {
       sendTranscript: current.settings.sendTranscript,
       calendarEnabled: current.settings.calendarEnabled,
       weatherEnabled: current.settings.weatherEnabled,
+      priorityKeywords: current.settings.priorityKeywords,
+      mutedKeywords: current.settings.mutedKeywords,
       ...patch,
     });
     await this.db.briefingSettings.update({
@@ -308,6 +322,8 @@ export class BriefingConfigurationStore {
         sendTranscript: preferences.sendTranscript,
         calendarEnabled: preferences.calendarEnabled,
         weatherEnabled: preferences.weatherEnabled,
+        priorityKeywords: preferences.priorityKeywords,
+        mutedKeywords: preferences.mutedKeywords,
         ...('briefingTime' in patch || 'timezone' in patch
           ? { nextBriefingAt: null }
           : {}),
@@ -398,6 +414,51 @@ export class BriefingConfigurationStore {
 
   public clearLocation(telegramChatId: bigint) {
     return this.setLocation(telegramChatId, { mode: 'DISABLED' });
+  }
+
+  public async recordFeedback(
+    telegramChatId: bigint,
+    runId: string,
+    rawRating: unknown,
+  ): Promise<void> {
+    const rating = z
+      .enum(['USEFUL', 'NOT_USEFUL', 'TOO_LONG'])
+      .parse(rawRating);
+    const configuration = await this.ensure(telegramChatId);
+    await this.db.$transaction(async (transaction) => {
+      const run = await transaction.briefingRun.findFirst({
+        where: { id: runId, settingsId: configuration.settings.id },
+        select: { id: true },
+      });
+      if (!run) throw new Error('Briefing run does not belong to this chat');
+      const previous = await transaction.briefingFeedback.findUnique({
+        where: { runId },
+        select: { rating: true },
+      });
+      await transaction.briefingFeedback.upsert({
+        where: { runId },
+        create: { settingsId: configuration.settings.id, runId, rating },
+        update: { rating },
+      });
+      if (
+        rating === 'TOO_LONG' &&
+        previous?.rating !== 'TOO_LONG' &&
+        configuration.settings.targetDurationMinutes > 1
+      ) {
+        const targetDurationMinutes =
+          configuration.settings.targetDurationMinutes - 1;
+        await transaction.briefingSettings.update({
+          where: { id: configuration.settings.id },
+          data: {
+            targetDurationMinutes,
+            maximumDurationMinutes: Math.max(
+              targetDurationMinutes,
+              configuration.settings.maximumDurationMinutes - 1,
+            ),
+          },
+        });
+      }
+    });
   }
 
   private async getRequired(

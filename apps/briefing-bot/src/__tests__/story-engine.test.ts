@@ -5,6 +5,7 @@ import {
   eventsDescribeSameStory,
 } from '../story-clustering.js';
 import { StoryEngine } from '../story-engine.js';
+import { SemanticStoryMatcher } from '../semantic-story-matcher.js';
 
 const event = (
   id: string,
@@ -32,6 +33,18 @@ const event = (
   status: 'NEW',
   ...overrides,
 });
+
+const immediateResourceLease = {
+  withExclusiveLease: <T>(
+    resource: string,
+    operation: () => Promise<T>,
+    timeoutMs?: number,
+  ): Promise<T> => {
+    void resource;
+    void timeoutMs;
+    return operation();
+  },
+};
 
 describe('briefing story clustering', () => {
   it('combines one cross-domain event while preserving both perspectives', () => {
@@ -83,6 +96,80 @@ describe('briefing story clustering', () => {
 
     expect(eventsDescribeSameStory(appointment, trial)).toBe(false);
     expect(clusterBriefingEvents([appointment, trial])).toHaveLength(2);
+  });
+});
+
+describe('SemanticStoryMatcher', () => {
+  it('accepts a high-similarity cross-language pair with a shared ticker', async () => {
+    const left = event('english', {
+      title: 'Merck reports successful melanoma trial results',
+    });
+    const right = event('czech', {
+      watcherBot: 'medical',
+      category: 'MEDICAL_TRIAL',
+      title: 'Studie melanomu společnosti Merck uspěla',
+    });
+    const store = {
+      listEmbeddingStates: vi.fn(async () => []),
+      saveEmbedding: vi.fn(async () => undefined),
+      findSemanticPairs: vi.fn(async () => [
+        {
+          leftEventId: left.id,
+          rightEventId: right.id,
+          similarity: 0.91,
+        },
+      ]),
+    };
+    const matcher = new SemanticStoryMatcher(
+      'embed-model',
+      {
+        embed: vi.fn(async () => [
+          [1, 0],
+          [0.9, 0.1],
+        ]),
+      },
+      store,
+      immediateResourceLease,
+    );
+
+    const pairs = await matcher.matchingPairs([left, right]);
+
+    expect(pairs.size).toBe(1);
+    expect(store.saveEmbedding).toHaveBeenCalledTimes(2);
+    expect(clusterBriefingEvents([left, right], pairs)).toHaveLength(1);
+  });
+
+  it('rejects semantic similarity without supporting entities, categories, or sources', async () => {
+    const left = event('left', {
+      category: 'STOCK_MANAGEMENT',
+      entities: [{ type: 'company', name: 'Merck', ticker: 'MRK' }],
+    });
+    const right = event('right', {
+      watcherBot: 'news',
+      category: 'CLIMATE',
+      entities: [{ type: 'place', name: 'Prague' }],
+    });
+    const matcher = new SemanticStoryMatcher(
+      'embed-model',
+      { embed: vi.fn(async () => [[1], [1]]) },
+      {
+        listEmbeddingStates: vi.fn(async () => []),
+        saveEmbedding: vi.fn(async () => undefined),
+        findSemanticPairs: vi.fn(async () => [
+          {
+            leftEventId: left.id,
+            rightEventId: right.id,
+            similarity: 0.99,
+          },
+        ]),
+      },
+      immediateResourceLease,
+    );
+
+    await expect(matcher.matchingPairs([left, right])).resolves.toHaveProperty(
+      'size',
+      0,
+    );
   });
 });
 
@@ -181,5 +268,44 @@ describe('StoryEngine', () => {
 
     expect(list).not.toHaveBeenCalled();
     expect(result.metrics.eventsRetrieved).toBe(0);
+  });
+
+  it('boosts configured priorities and reduces non-urgent muted topics', async () => {
+    const priority = event('priority', {
+      title: 'Micron memory outlook',
+      summary: 'A modest Micron update.',
+      importance: 50,
+      urgency: 40,
+      entities: [{ type: 'company', name: 'Micron', ticker: 'MU' }],
+    });
+    const muted = event('muted', {
+      title: 'Football transfer report',
+      summary: 'A high-scoring sports update.',
+      category: 'NEWS_SPORT',
+      importance: 70,
+      urgency: 40,
+      entities: [{ type: 'team', name: 'Example FC' }],
+    });
+    const repository: BriefingEventRepository = {
+      save: vi.fn(),
+      list: vi.fn(async () => [muted, priority]),
+    };
+    const engine = new StoryEngine(repository, {
+      list: vi.fn(async () => []),
+    });
+
+    const result = await engine.collect({
+      telegramChatId: 42n,
+      subscriptions: ['stocks', 'news'],
+      periodStart: new Date('2026-09-05T05:00:00.000Z'),
+      periodEnd: new Date('2026-09-06T06:00:00.000Z'),
+      priorityKeywords: ['Micron'],
+      mutedKeywords: ['football'],
+    });
+
+    expect(result.stories.map(({ title }) => title)).toEqual([
+      'Micron memory outlook',
+      'Football transfer report',
+    ]);
   });
 });

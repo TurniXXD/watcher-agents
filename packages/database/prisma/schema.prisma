@@ -362,35 +362,45 @@ enum BriefingWatcherHealthStatus {
   UNAVAILABLE
 }
 
+enum BriefingFeedbackRating {
+  USEFUL
+  NOT_USEFUL
+  TOO_LONG
+}
+
 model BriefingEvent {
-  id               String                      @id
-  watcherBot       BriefingWatcherBot
-  externalEventId  String?
-  occurredAt       DateTime?
-  publishedAt      DateTime?
-  detectedAt       DateTime
-  createdAt        DateTime
-  updatedAt        DateTime
-  category         String
-  subcategory      String?
-  title            String
-  summary          String
-  importance       Int
-  novelty          Int
-  relevance        Int
-  urgency          Int
-  actionable       Boolean
-  action           String?
-  entities         Json
-  tags             String[]
-  sourceUrls       String[]
-  primarySource    String?
-  confidence       BriefingConfidence
-  status           BriefingEventStatus
-  deduplicationKey String?
-  relatedEventIds  String[]                    @default([])
-  metadata         Json?
-  storyClusters    BriefingStoryClusterEvent[]
+  id                 String                      @id
+  watcherBot         BriefingWatcherBot
+  externalEventId    String?
+  occurredAt         DateTime?
+  publishedAt        DateTime?
+  detectedAt         DateTime
+  createdAt          DateTime
+  updatedAt          DateTime
+  category           String
+  subcategory        String?
+  title              String
+  summary            String
+  importance         Int
+  novelty            Int
+  relevance          Int
+  urgency            Int
+  actionable         Boolean
+  action             String?
+  entities           Json
+  tags               String[]
+  sourceUrls         String[]
+  primarySource      String?
+  confidence         BriefingConfidence
+  status             BriefingEventStatus
+  deduplicationKey   String?
+  relatedEventIds    String[]                    @default([])
+  metadata           Json?
+  embedding          Unsupported("vector")?
+  embeddingModel     String?
+  embeddingInputHash String?
+  embeddingUpdatedAt DateTime?
+  storyClusters      BriefingStoryClusterEvent[]
 
   @@unique([watcherBot, externalEventId])
   @@unique([watcherBot, deduplicationKey])
@@ -447,6 +457,8 @@ model BriefingSettings {
   sendTranscript         Boolean                   @default(false)
   calendarEnabled        Boolean                   @default(false)
   weatherEnabled         Boolean                   @default(true)
+  priorityKeywords       String[]                  @default([])
+  mutedKeywords          String[]                  @default([])
   nextBriefingAt         DateTime?
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
@@ -456,6 +468,7 @@ model BriefingSettings {
   runs                   BriefingRun[]
   storyStates            BriefingStoryState[]
   calendarIntegration    CalendarIntegrationState?
+  feedback               BriefingFeedback[]
 
   @@index([onboardingComplete, nextBriefingAt])
   @@map("briefing_settings")
@@ -534,10 +547,25 @@ model BriefingRun {
   settings                   BriefingSettings          @relation(fields: [settingsId], references: [id], onDelete: Cascade)
   lastForStoryStates         BriefingStoryState[]      @relation("LastBriefingRun")
   deliveryAttempts           BriefingDeliveryAttempt[]
+  feedback                   BriefingFeedback?
 
   @@index([settingsId, type, status, startedAt])
   @@index([settingsId, periodEnd])
   @@map("briefing_runs")
+}
+
+model BriefingFeedback {
+  id         String                 @id @default(uuid())
+  settingsId String
+  runId      String                 @unique
+  rating     BriefingFeedbackRating
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  settings   BriefingSettings       @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  run        BriefingRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([settingsId, createdAt])
+  @@map("briefing_feedback")
 }
 
 model BriefingWatcherHealth {
@@ -644,7 +672,7 @@ model WatcherConfig {
   reconciliationStartedAt  DateTime?
   lastReconciliationAt     DateTime?
   nextReconciliationAt     DateTime?         @default(now())
-  sourceSettings           Json               @default("{}")
+  sourceSettings           Json              @default("{}")
   createdAt                DateTime          @default(now())
   updatedAt                DateTime          @updatedAt
   chatConfig               TelegramChat      @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
@@ -1351,7 +1379,7 @@ model InstagramAccount {
 }
 
 model InstagramPost {
-  id          String   @id
+  id          String           @id
   username    String
   shortcode   String?
   caption     String?
@@ -1362,8 +1390,8 @@ model InstagramPost {
   contentHash String
   raw         Json?
   fetchedAt   DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
   account     InstagramAccount @relation(fields: [username], references: [username], onDelete: Cascade)
 
   @@unique([username, shortcode])
@@ -1402,12 +1430,12 @@ model MuClubActivity {
 }
 
 model MuMonitorState {
-  id            String   @id
-  runInProgress Boolean  @default(false)
+  id            String    @id
+  runInProgress Boolean   @default(false)
   runStartedAt  DateTime?
   nextRunAt     DateTime
   lastRunAt     DateTime?
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime  @updatedAt
 
   @@map("mu_monitor_state")
 }

@@ -186,3 +186,48 @@ export const renderCalendarSummary = (
     : `at ${first.start.split('T')[1]?.slice(0, 5) ?? first.start}`;
   return `You have ${events.length} calendar ${events.length === 1 ? 'event' : 'events'} today. Your first is ${first.title} ${firstTime}.`;
 };
+
+const timedEvent = (event: CalendarEvent): boolean =>
+  !event.allDay &&
+  Number.isFinite(Date.parse(event.start)) &&
+  Number.isFinite(Date.parse(event.end));
+
+export const calendarActionInsights = (
+  events: readonly CalendarEvent[],
+): string[] => {
+  const timed = events.filter(timedEvent);
+  const insights: string[] = [];
+  for (let index = 0; index < timed.length; index += 1) {
+    const current = timed[index]!;
+    const next = timed[index + 1];
+    if (!next) break;
+    const gapMinutes =
+      (Date.parse(next.start) - Date.parse(current.end)) / 60_000;
+    if (gapMinutes < 0) {
+      insights.push(`${current.title} overlaps with ${next.title}.`);
+    } else if (gapMinutes < 15) {
+      insights.push(
+        `Only ${Math.round(gapMinutes)} minutes separate ${current.title} and ${next.title}.`,
+      );
+    }
+    if (
+      current.location &&
+      next.location &&
+      current.location !== next.location &&
+      gapMinutes < 45
+    ) {
+      insights.push(
+        `Allow travel time from ${current.location} to ${next.location}.`,
+      );
+    }
+  }
+  const deadline = events.find((event) =>
+    /deadline|due|uzávěr|termín/iu.test(event.title),
+  );
+  if (deadline) insights.unshift(`Do not miss ${deadline.title}.`);
+  const firstTimed = timed[0];
+  if (firstTimed) {
+    insights.unshift(`Prepare for ${firstTimed.title} before it starts.`);
+  }
+  return [...new Set(insights)].slice(0, 5);
+};

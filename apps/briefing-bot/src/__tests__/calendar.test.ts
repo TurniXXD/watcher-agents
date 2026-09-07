@@ -5,6 +5,7 @@ import {
   GoogleCalendarOAuth,
 } from '../calendar-oauth.js';
 import {
+  calendarActionInsights,
   calendarDayWindow,
   GoogleCalendarProvider,
   renderCalendarSummary,
@@ -171,5 +172,33 @@ describe('Google Calendar integration', () => {
     expect(requested[0]?.searchParams.get('singleEvents')).toBe('true');
     expect(requested[0]?.searchParams.get('orderBy')).toBe('startTime');
     expect(renderCalendarSummary([])).toBe('Your calendar is clear today.');
+  });
+
+  it('turns calendar pressure into concise preparation actions', () => {
+    expect(
+      calendarActionInsights([
+        {
+          id: 'one',
+          title: 'Project review',
+          start: '2026-09-07T08:00:00+02:00',
+          end: '2026-09-07T09:00:00+02:00',
+          allDay: false,
+          location: 'Office',
+        },
+        {
+          id: 'two',
+          title: 'Submission deadline',
+          start: '2026-09-07T08:55:00+02:00',
+          end: '2026-09-07T10:00:00+02:00',
+          allDay: false,
+          location: 'Campus',
+        },
+      ]),
+    ).toEqual([
+      'Prepare for Project review before it starts.',
+      'Do not miss Submission deadline.',
+      'Project review overlaps with Submission deadline.',
+      'Allow travel time from Office to Campus.',
+    ]);
   });
 });

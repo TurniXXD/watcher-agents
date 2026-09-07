@@ -1,7 +1,11 @@
 import type { WatchItem } from '@watcher/core';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { OllamaProvider, parseStructuredJson } from '../ollama.js';
+import {
+  OllamaEmbeddingProvider,
+  OllamaProvider,
+  parseStructuredJson,
+} from '../ollama.js';
 
 const item: WatchItem = {
   id: 'PUBMED:1',
@@ -251,6 +255,43 @@ describe('OllamaProvider', () => {
     expect(mockFetch).toHaveBeenCalledOnce();
   });
 
+  it('normalizes null publication significance and missing confidence conservatively', async () => {
+    const mockFetch = vi.fn(async () =>
+      Response.json({
+        message: {
+          content: JSON.stringify({
+            title: 'Cold atmospheric plasma-treated bioink',
+            summary:
+              'The paper describes a biocompatible RONS delivery bioink.',
+            importance: 6,
+            relevance: 7,
+            keyFindings: ['The platform delivers RONS in 3D bioprinting.'],
+            methods: [],
+            limitations: [],
+            whyInteresting: null,
+          }),
+        },
+      }),
+    );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      fetch: mockFetch,
+    });
+
+    const outcome = await provider.analyze('PUBLICATIONS', item);
+
+    expect(outcome).toMatchObject({
+      status: 'SUCCESS',
+      result: {
+        whyInteresting:
+          'The paper describes a biocompatible RONS delivery bioink.',
+        confidence: 0.35,
+      },
+    });
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
+
   it('records a persistent incomplete publication response after a bounded repair retry', async () => {
     const mockFetch = vi.fn(async () =>
       Response.json({
@@ -447,5 +488,55 @@ describe('OllamaProvider', () => {
       options: { num_predict: number };
     };
     expect(body.options.num_predict).toBe(1536);
+  });
+});
+
+describe('OllamaEmbeddingProvider', () => {
+  it('requests one embedding for every input and preserves their order', async () => {
+    const mockFetch = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        void input;
+        void init;
+        return Response.json({
+          embeddings: [
+            [0.1, 0.2],
+            [0.3, 0.4],
+          ],
+        });
+      },
+    );
+    const provider = new OllamaEmbeddingProvider({
+      url: 'http://ollama/',
+      model: 'nomic-embed-text',
+      fetch: mockFetch,
+    });
+
+    await expect(provider.embed(['first', 'second'])).resolves.toEqual([
+      [0.1, 0.2],
+      [0.3, 0.4],
+    ]);
+    expect(mockFetch).toHaveBeenCalledOnce();
+    expect(mockFetch.mock.calls[0]?.[0]).toBe('http://ollama/api/embed');
+    const requestBody = mockFetch.mock.calls[0]?.[1]?.body;
+    expect(typeof requestBody).toBe('string');
+    if (typeof requestBody !== 'string') {
+      throw new Error('Expected Ollama embedding request body to be a string');
+    }
+    expect(JSON.parse(requestBody)).toMatchObject({
+      model: 'nomic-embed-text',
+      input: ['first', 'second'],
+      truncate: true,
+    });
+  });
+
+  it('rejects incomplete or inconsistent embedding responses', async () => {
+    const provider = new OllamaEmbeddingProvider({
+      url: 'http://ollama',
+      model: 'test',
+      fetch: vi.fn(async () => Response.json({ embeddings: [[0.1, 0.2]] })),
+    });
+    await expect(provider.embed(['first', 'second'])).rejects.toThrow(
+      /1 embeddings for 2 inputs/,
+    );
   });
 });
