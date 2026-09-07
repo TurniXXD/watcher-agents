@@ -7,10 +7,12 @@ import type {
 } from './story-types.js';
 
 type BriefingWatcherHealthStatus = BriefingWatcherHealthRecord['status'];
+export type BriefingCoverageStatus =
+  BriefingWatcherHealthStatus | ContextAvailability | 'STALE';
 
 export type CoverageComponent = {
   id: WatcherBotId | 'weather' | 'calendar';
-  status: BriefingWatcherHealthStatus | ContextAvailability;
+  status: BriefingCoverageStatus;
   score: number;
 };
 
@@ -19,8 +21,12 @@ export type BriefingCoverage = {
   components: CoverageComponent[];
 };
 
-const healthScore = (status: BriefingWatcherHealthStatus): number =>
-  status === 'HEALTHY' ? 1 : status === 'DEGRADED' ? 0.5 : 0;
+const healthScore = (status: BriefingWatcherHealthStatus | 'STALE'): number =>
+  status === 'HEALTHY'
+    ? 1
+    : status === 'DEGRADED' || status === 'STALE'
+      ? 0.5
+      : 0;
 
 const contextScore = (status: ContextAvailability): number =>
   status === 'AVAILABLE' ? 1 : 0;
@@ -41,10 +47,14 @@ export const calculateBriefingCoverage = (input: {
     (watcherBot) => {
       const health = healthByWatcher.get(watcherBot);
       const stale =
-        !health ||
+        health &&
         input.now.getTime() - new Date(health.lastRunAt).getTime() >
           staleAfterMs;
-      const status = stale ? 'UNAVAILABLE' : health.status;
+      const status = !health
+        ? ('UNAVAILABLE' as const)
+        : stale
+          ? ('STALE' as const)
+          : health.status;
       return { id: watcherBot, status, score: healthScore(status) };
     },
   );
@@ -157,11 +167,21 @@ export const watcherHealthFromCoverage = (
   coverage: BriefingCoverage,
 ): BriefingRunMetrics['watcherHealth'] =>
   Object.fromEntries(
-    registeredWatcherBots.map((watcherBot) => [
-      watcherBot,
-      coverage.components.find(({ id }) => id === watcherBot)?.status ??
-        'UNAVAILABLE',
-    ]),
+    registeredWatcherBots.map((watcherBot) => {
+      const status = coverage.components.find(
+        ({ id }) => id === watcherBot,
+      )?.status;
+      return [
+        watcherBot,
+        status === 'STALE'
+          ? 'DEGRADED'
+          : status === 'HEALTHY' ||
+              status === 'DEGRADED' ||
+              status === 'UNAVAILABLE'
+            ? status
+            : 'UNAVAILABLE',
+      ];
+    }),
   ) as BriefingRunMetrics['watcherHealth'];
 
 export const buildBriefingRunMetrics = (input: {

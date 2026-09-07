@@ -372,8 +372,14 @@ describe('BriefingCoordinator', () => {
     expect(result.run.status).toBe('PARTIAL');
     expect(setup.value.scripts.generate).toHaveBeenCalledWith(
       expect.objectContaining({
-        dataQuality: ['stocks data is currently unavailable.'],
+        dataQuality: [
+          'stocks watcher has not completed a recent scan; older stored events were still considered.',
+        ],
       }),
     );
+    const completion: unknown = setup.runs.complete.mock.calls.at(-1)?.[1];
+    expect(completion).toMatchObject({
+      metrics: { watcherHealth: { stocks: 'DEGRADED' } },
+    });
   });
 });

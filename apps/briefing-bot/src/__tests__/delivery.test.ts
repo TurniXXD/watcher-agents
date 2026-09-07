@@ -73,6 +73,7 @@ const input = (): BriefingDeliveryInput => ({
   },
   index: {
     dateLabel: 'Sep 6',
+    dayPeriod: 'morning',
     location: 'Brno',
     calendar: { status: 'AVAILABLE', count: 3 },
     topics: [
@@ -193,12 +194,14 @@ describe('renderBriefingCaption', () => {
   it('escapes user-facing values and reports unavailable Calendar honestly', () => {
     const rendered = renderBriefingCaption({
       dateLabel: '<Sep 6>',
+      dayPeriod: 'evening',
       location: 'Brno & okolí',
       calendar: { status: 'UNAVAILABLE', count: 0 },
       topics: [{ title: 'A < B', url: 'https://example.com/?q=a&b=c' }],
     });
 
     expect(rendered).toContain('&lt;Sep 6&gt;');
+    expect(rendered).toContain('🌆 <b>Evening Briefing');
     expect(rendered).toContain('Brno &amp; okolí');
     expect(rendered).toContain('Calendar unavailable');
     expect(rendered).toContain(
@@ -210,6 +213,7 @@ describe('renderBriefingCaption', () => {
   it('keeps complete HTML lines within Telegram voice caption limits', () => {
     const rendered = renderBriefingCaption({
       dateLabel: 'Sep 6',
+      dayPeriod: 'night',
       calendar: { status: 'DISABLED', count: 0 },
       topics: Array.from({ length: 8 }, () => ({ title: '&'.repeat(500) })),
     });

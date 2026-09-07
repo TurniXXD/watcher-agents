@@ -38,6 +38,7 @@ import {
 import type { StoryEngine } from './story-engine.js';
 import type { StoryEngineMetrics } from './story-types.js';
 import type { TtsProvider, TtsResult } from './tts.js';
+import { briefingDayPeriodFor } from './utils/day-period.js';
 import type { WeatherProvider } from './weather.js';
 import { renderSpokenWeather } from './weather.js';
 import { waitForFreshWatcherRuns } from './briefing-freshness.js';
@@ -160,6 +161,7 @@ export class BriefingCoordinator {
         : new Date(periodEnd.getTime() - explicitPeriodHours * 60 * 60_000);
     const scheduleIdentity = scheduledFor ?? now;
     const local = dateParts(now, configuration.settings.timezone);
+    const dayPeriod = briefingDayPeriodFor(local.time);
     const place = configuration.location
       ? locationLabel(configuration.location)
       : undefined;
@@ -313,9 +315,11 @@ export class BriefingCoordinator {
         }
         const label = component.id.replace('-', ' ');
         return [
-          component.status === 'UNAVAILABLE'
-            ? `${label} data is currently unavailable.`
-            : `${label} data is partially available.`,
+          component.status === 'STALE'
+            ? `${label} watcher has not completed a recent scan; older stored events were still considered.`
+            : component.status === 'UNAVAILABLE'
+              ? `${label} data is currently unavailable.`
+              : `${label} data is partially available.`,
         ];
       });
       this.dependencies.logger?.info(
@@ -339,6 +343,7 @@ export class BriefingCoordinator {
       const scriptInput = {
         date: dateLabel(now, configuration.settings.timezone),
         localTime: local.time,
+        dayPeriod,
         timezone: configuration.settings.timezone,
         ...(place ? { location: place } : {}),
         weather: {
@@ -463,6 +468,7 @@ export class BriefingCoordinator {
         ...(audio ? { audio } : {}),
         index: {
           dateLabel: dateLabel(now, configuration.settings.timezone),
+          dayPeriod,
           ...(place ? { location: place } : {}),
           calendar: { status: calendar.status, count: calendar.value.length },
           topics: selectedStories.map(({ sourceUrls, title }) => ({

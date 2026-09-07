@@ -4,6 +4,10 @@ import { z } from 'zod';
 import type { CalendarEvent } from './calendar.js';
 import type { BriefingStoryCluster } from './story-types.js';
 import type { TtsSegment } from './tts.js';
+import {
+  briefingDayPeriodPresentation,
+  type BriefingDayPeriod,
+} from './utils/day-period.js';
 import { segmentTtsScriptByCalendarLanguage } from './utils/tts-language.js';
 import { normalizeForSpeech } from './utils/tts-normalization.js';
 
@@ -61,6 +65,7 @@ export type ContextAvailability = 'AVAILABLE' | 'UNAVAILABLE' | 'DISABLED';
 export type ScriptGenerationInput = {
   date: string;
   localTime: string;
+  dayPeriod: BriefingDayPeriod;
   timezone: string;
   location?: string;
   weather: { status: ContextAvailability; spokenSummary?: string };
@@ -111,9 +116,11 @@ const promptFor = (input: ScriptGenerationInput): string => {
     location: event.location,
     calendarName: event.calendarName,
   }));
-  return `You are creating a spoken personal morning intelligence briefing.
+  const period = briefingDayPeriodPresentation(input.dayPeriod);
+  return `You are creating a spoken personal ${input.dayPeriod} intelligence briefing at ${input.localTime} local time.
 Write mostly natural English intended to be spoken aloud. Use only the supplied JSON data and do not independently research or invent facts.
-The JSON response fields must be spoken prose only and must follow this exact order when assembled: brief greeting; local weather; today's calendar; a short preview of the prepared developments; detailed stories in descending importance; up to three things to watch today; brief closing.
+The JSON response fields must be spoken prose only and must follow this exact order when assembled: brief greeting appropriate for ${period.temporalPhrase}; local weather; today's calendar; a short preview of the prepared developments; detailed stories in descending importance; up to three things to watch ${period.watchHorizon}; brief closing.
+The local day period is authoritative. Never call this a morning, afternoon, evening, or night briefing other than ${input.dayPeriod}, and do not use a greeting for another part of the day.
 Do not mention internal bot or database names. Combine the supplied cross-domain perspectives into one coherent story while preserving medical, investment, news, and student-community interpretations. For major stories explain what happened, why it matters, what changed, and what to watch next. Use previousSummary only for natural continuity.
 If weather or Calendar status is UNAVAILABLE, briefly say it could not be retrieved; never describe it as empty. If DISABLED, omit that section by returning null. If Calendar is AVAILABLE with zero events, it is safe to say the calendar is clear. If there are no stories, explain briefly that there are no new subscribed watcher developments; do not add fake news.
 Use the supplied actionAgenda for concrete preparation, deadlines, conflicts, or follow-up. Mention dataQuality briefly only when it is non-empty, without provider error strings or implementation details. When previousSummary exists, explicitly explain only the meaningful change since the earlier briefing.
@@ -124,6 +131,7 @@ SUPPLIED_DATA:
 ${JSON.stringify({
   date: input.date,
   localTime: input.localTime,
+  dayPeriod: input.dayPeriod,
   timezone: input.timezone,
   location: input.location,
   weather: input.weather,
@@ -134,20 +142,27 @@ ${JSON.stringify({
 })}`;
 };
 
-const assemble = (sections: z.infer<typeof generatedSectionsSchema>): string =>
-  [
-    sections.greeting,
+const assemble = (
+  sections: z.infer<typeof generatedSectionsSchema>,
+  input: ScriptGenerationInput,
+): string => {
+  const period = briefingDayPeriodPresentation(input.dayPeriod);
+  return [
+    `${period.greeting}. Here is your ${input.dayPeriod} briefing for ${input.date}.`,
     sections.weather,
     sections.calendar,
     sections.newsPreview,
     ...sections.topStories,
     ...(sections.watchToday.length > 0
-      ? [`Things to watch today. ${sections.watchToday.join(' ')}`]
+      ? [
+          `Things to watch ${period.watchHorizon}. ${sections.watchToday.join(' ')}`,
+        ]
       : []),
-    sections.outro,
+    `That is your ${input.dayPeriod} briefing.`,
   ]
     .filter((section): section is string => Boolean(section))
     .join('\n\n');
+};
 
 const words = (value: string): string[] => value.trim().split(/\s+/);
 
@@ -212,7 +227,7 @@ export class BriefingScriptGenerator {
       { numPredict: Math.min(4_096, Math.ceil(input.wordBudget * 1.6)) },
     );
     return finalizeScript(
-      assemble(generated.result),
+      assemble(generated.result, input),
       generated.result.calendar,
       input,
       generated.metrics,
@@ -223,18 +238,19 @@ export class BriefingScriptGenerator {
 export const fallbackBriefingScript = (
   input: ScriptGenerationInput,
 ): GeneratedBriefingScript => {
+  const period = briefingDayPeriodPresentation(input.dayPeriod);
   const calendarSection =
     input.calendar.status === 'AVAILABLE'
       ? input.calendar.spokenSummary
       : input.calendar.status === 'UNAVAILABLE'
-        ? "I couldn't retrieve your calendar this morning."
+        ? `I couldn't retrieve your calendar ${period.temporalPhrase}.`
         : undefined;
   const sections = [
-    `Good morning. Here is your briefing for ${input.date}.`,
+    `${period.greeting}. Here is your ${input.dayPeriod} briefing for ${input.date}.`,
     input.weather.status === 'AVAILABLE'
       ? input.weather.spokenSummary
       : input.weather.status === 'UNAVAILABLE'
-        ? "I couldn't retrieve the weather this morning."
+        ? `I couldn't retrieve the weather ${period.temporalPhrase}.`
         : undefined,
     calendarSection,
     input.stories.length === 0
@@ -243,11 +259,11 @@ export const fallbackBriefingScript = (
     ...input.stories.map(({ title, summary }) => `${title}. ${summary}`),
     ...(input.actionAgenda ?? [])
       .slice(0, 3)
-      .map((action) => `Today: ${action}`),
+      .map((action) => `Watch ${period.watchHorizon}: ${action}`),
     ...(input.dataQuality ?? [])
       .slice(0, 2)
       .map((warning) => `Data note: ${warning}`),
-    'That is your morning briefing.',
+    `That is your ${input.dayPeriod} briefing.`,
   ].filter((section): section is string => Boolean(section));
   return finalizeScript(sections.join('\n\n'), calendarSection, input, {
     llmCallCount: 0,

@@ -6,6 +6,10 @@ import type { WatcherLogger } from '@watcher/core';
 import { escapeHtml, optionalSourceLink } from '@watcher/telegram';
 import type { TtsResult } from './tts.js';
 import type { BriefingTelegramTransport } from './telegram-transport.js';
+import {
+  briefingDayPeriodPresentation,
+  type BriefingDayPeriod,
+} from './utils/day-period.js';
 
 export type BriefingIndexTopic = {
   title: string;
@@ -33,6 +37,7 @@ type DeliveryAttempts = {
 
 export type BriefingIndex = {
   dateLabel: string;
+  dayPeriod: BriefingDayPeriod;
   location?: string;
   audioDurationSeconds?: number;
   calendar: { status: 'AVAILABLE' | 'UNAVAILABLE' | 'DISABLED'; count: number };
@@ -66,7 +71,10 @@ const durationLabel = (seconds: number): string => {
 const telegramCaptionLimit = 1024;
 
 export const renderBriefingCaption = (index: BriefingIndex): string => {
-  const lines = [`☀️ <b>Morning Briefing — ${escapeHtml(index.dateLabel)}</b>`];
+  const period = briefingDayPeriodPresentation(index.dayPeriod);
+  const lines = [
+    `${period.icon} <b>${period.label} Briefing — ${escapeHtml(index.dateLabel)}</b>`,
+  ];
   const append = (...additionalLines: string[]): boolean => {
     if ([...lines, ...additionalLines].join('\n').length > telegramCaptionLimit)
       return false;

@@ -81,8 +81,8 @@ const schema = z
       .number()
       .int()
       .min(1)
-      .max(1_440)
-      .default(180),
+      .max(2_880)
+      .default(1_560),
     BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES: z.coerce
       .number()
       .int()

@@ -23,7 +23,7 @@ const health = (
 });
 
 describe('briefing observability', () => {
-  it('scores only enabled contexts and treats missing or stale watchers as unavailable', () => {
+  it('distinguishes stale watcher output from missing data', () => {
     expect(
       calculateBriefingCoverage({
         subscriptions: ['stocks', 'medical'],
@@ -36,10 +36,10 @@ describe('briefing observability', () => {
         now: new Date('2026-09-06T06:00:00.000Z'),
       }),
     ).toMatchObject({
-      percentage: 67,
+      percentage: 83,
       components: [
         { id: 'stocks', status: 'HEALTHY' },
-        { id: 'medical', status: 'UNAVAILABLE' },
+        { id: 'medical', status: 'STALE' },
         { id: 'weather', status: 'AVAILABLE' },
       ],
     });

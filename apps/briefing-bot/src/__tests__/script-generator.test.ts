@@ -50,6 +50,7 @@ const story = (
 const input = (stories: BriefingStoryCluster[]): ScriptGenerationInput => ({
   date: 'Sunday, September sixth',
   localTime: '07:00',
+  dayPeriod: 'morning',
   timezone: 'Europe/Prague',
   location: 'Brno',
   weather: { status: 'AVAILABLE', spokenSummary: 'It is mild in Brno.' },
@@ -136,6 +137,7 @@ describe('BriefingScriptGenerator', () => {
       { text: result.ttsScript.replace(/\s+/g, ' ').trim(), language: 'en' },
     ]);
     expect(prompt).toContain('do not independently research or invent facts');
+    expect(prompt).toContain('morning intelligence briefing at 07:00');
     expect(prompt).not.toContain('https://');
   });
 
@@ -210,6 +212,38 @@ describe('BriefingScriptGenerator', () => {
     expect(result.displayScript).toContain(
       'no new subscribed watcher developments',
     );
+  });
+
+  it('enforces a time-appropriate greeting and closing in generated audio', async () => {
+    const evening = input([]);
+    evening.localTime = '20:00';
+    evening.dayPeriod = 'evening';
+    const model = {
+      async generateStructuredWithMetrics<T>(
+        _value: string,
+        _format: StructuredJsonSchema,
+        schema: ZodType<T>,
+      ): Promise<StructuredGeneration<T>> {
+        return {
+          result: schema.parse({
+            greeting: 'Good morning.',
+            weather: null,
+            calendar: null,
+            newsPreview: 'There are no new developments.',
+            topStories: [],
+            watchToday: [],
+            outro: 'That is your morning briefing.',
+          }),
+          metrics: { llmCallCount: 1, estimatedCostUsd: 0 },
+        };
+      },
+    };
+
+    const result = await new BriefingScriptGenerator(model).generate(evening);
+
+    expect(result.displayScript).toContain('Good evening.');
+    expect(result.displayScript).toContain('your evening briefing');
+    expect(result.displayScript).not.toContain('morning');
   });
 
   it('marks Czech story titles for the Czech Piper voice outside Calendar', () => {
