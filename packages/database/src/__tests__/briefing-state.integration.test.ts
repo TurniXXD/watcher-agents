@@ -3,6 +3,7 @@ import { BriefingConfigurationStore } from '../briefing-configuration-store.js';
 import { BriefingDeliveryStore } from '../briefing-delivery-store.js';
 import { BriefingRunStore } from '../briefing-run-store.js';
 import { BriefingScheduleStore } from '../briefing-schedule-store.js';
+import { defaultBriefingScheduleSpec } from '../briefing-schedule-spec.js';
 import { BriefingStoryStore } from '../briefing-story-store.js';
 import { BriefingWatcherHealthStore } from '../briefing-watcher-health-store.js';
 import { CalendarIntegrationStore } from '../calendar-integration-store.js';
@@ -47,7 +48,7 @@ integration('briefing persistent state', () => {
       language: 'en',
       voice: 'amy',
       timezone: 'Europe/Prague',
-      briefingTime: '07:00',
+      briefingTime: defaultBriefingScheduleSpec,
       targetDurationMinutes: 7,
       maximumDurationMinutes: 15,
       sendTranscript: false,
