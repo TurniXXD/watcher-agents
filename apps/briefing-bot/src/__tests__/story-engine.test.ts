@@ -249,6 +249,23 @@ describe('StoryEngine', () => {
       continuityStories: 1,
       selected: 1,
     });
+
+    const recap = await engine.collect({
+      telegramChatId: 42n,
+      subscriptions: ['stocks', 'medical'],
+      periodStart: new Date('2026-09-05T22:00:00.000Z'),
+      periodEnd: new Date('2026-09-06T20:00:00.000Z'),
+      includePreviouslyMentioned: true,
+    });
+
+    expect(recap.stories.map(({ title }) => title)).toContain(
+      'Unchanged earnings date',
+    );
+    expect(recap.metrics).toMatchObject({
+      unchangedSuppressed: 0,
+      resolvedSuppressed: 1,
+      selected: 2,
+    });
   });
 
   it('does not query watcher events when every subscription is disabled', async () => {

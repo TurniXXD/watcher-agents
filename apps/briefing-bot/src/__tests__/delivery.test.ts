@@ -191,6 +191,18 @@ describe('BriefingDeliveryService', () => {
 });
 
 describe('renderBriefingCaption', () => {
+  it('labels evening Calendar events as tomorrow', () => {
+    const rendered = renderBriefingCaption({
+      dateLabel: 'Sep 6',
+      dayPeriod: 'evening',
+      calendar: { status: 'AVAILABLE', count: 2 },
+      topics: [],
+    });
+
+    expect(rendered).toContain('🗓 2 events tomorrow');
+    expect(rendered).not.toContain('events today');
+  });
+
   it('escapes user-facing values and reports unavailable Calendar honestly', () => {
     const rendered = renderBriefingCaption({
       dateLabel: '<Sep 6>',

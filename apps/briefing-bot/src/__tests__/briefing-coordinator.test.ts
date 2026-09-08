@@ -5,6 +5,7 @@ import type {
 import { describe, expect, it, vi } from 'vitest';
 import { BriefingCoordinator } from '../briefing-coordinator.js';
 import type { BriefingDeliveryInput } from '../delivery.js';
+import type { ScriptGenerationInput } from '../script-generator.js';
 
 const now = new Date('2026-09-06T05:00:00.000Z');
 
@@ -78,6 +79,7 @@ const dependencies = (
     watcherHealth?: 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE';
     watcherLastRunAt?: string;
     onboardingCompleted?: boolean;
+    currentTime?: Date;
   } = {},
 ) => {
   const seen = new Map<string, BriefingRunRecord>();
@@ -171,15 +173,18 @@ const dependencies = (
         })),
       },
       scripts: {
-        generate: vi.fn(async () => ({
-          displayScript: 'Good morning. Nothing new.',
-          ttsScript: 'Good morning. Nothing new.',
-          ttsSegments: [
-            { text: 'Good morning. Nothing new.', language: 'en' as const },
-          ],
-          wordCount: 4,
-          metrics: { llmCallCount: 1, estimatedCostUsd: 0 },
-        })),
+        generate: vi.fn(async (scriptInput: ScriptGenerationInput) => {
+          void scriptInput;
+          return {
+            displayScript: 'Good morning. Nothing new.',
+            ttsScript: 'Good morning. Nothing new.',
+            ttsSegments: [
+              { text: 'Good morning. Nothing new.', language: 'en' as const },
+            ],
+            wordCount: 4,
+            metrics: { llmCallCount: 1, estimatedCostUsd: 0 },
+          };
+        }),
       },
       tts,
       delivery,
@@ -203,7 +208,7 @@ const dependencies = (
         ]),
       },
       ttsAttempts: 2,
-      now: () => new Date(now),
+      now: () => new Date(options.currentTime ?? now),
     },
     starts,
     runs,
@@ -324,6 +329,28 @@ describe('BriefingCoordinator', () => {
     expect(setup.runs.lastSuccessfulScheduled).not.toHaveBeenCalled();
     expect(setup.tts.generateSpeech).toHaveBeenCalledTimes(2);
     expect(setup.deliveryInputs[0]).not.toHaveProperty('audio');
+  });
+
+  it('uses the local day for an evening recap and prepares tomorrow', async () => {
+    const evening = new Date('2026-09-06T18:00:00.000Z');
+    const setup = dependencies({ currentTime: evening });
+    const coordinator = new BriefingCoordinator(setup.value);
+
+    await coordinator.generate(123n, 'MANUAL');
+
+    expect(setup.starts[0]?.periodStart).toEqual(
+      new Date('2026-09-05T22:00:00.000Z'),
+    );
+    expect(setup.value.storyEngine.collect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        periodStart: new Date('2026-09-05T22:00:00.000Z'),
+        periodEnd: evening,
+        includePreviouslyMentioned: true,
+      }),
+    );
+    const scriptInput = setup.value.scripts.generate.mock.calls[0]?.[0];
+    expect(scriptInput?.dayPeriod).toBe('evening');
+    expect(scriptInput?.calendar.day).toBe('tomorrow');
   });
 
   it('marks a briefing partial and persists reduced coverage for a degraded watcher', async () => {

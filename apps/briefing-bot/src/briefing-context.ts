@@ -94,13 +94,18 @@ export const loadBriefingCalendar = async (
   calendar: CalendarProvider | undefined,
   logger?: WatcherLogger,
   now = new Date(),
+  dayOffset = 0,
 ): Promise<AvailableContext<CalendarEvent[]>> => {
   if (!configuration.settings.calendarEnabled) {
     return { status: 'DISABLED', value: [] };
   }
   if (!calendar) return { status: 'UNAVAILABLE', value: [] };
   try {
-    const window = calendarDayWindow(now, configuration.settings.timezone);
+    const window = calendarDayWindow(
+      now,
+      configuration.settings.timezone,
+      dayOffset,
+    );
     return {
       status: 'AVAILABLE',
       value: await calendar.listEvents(

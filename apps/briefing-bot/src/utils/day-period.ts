@@ -35,7 +35,7 @@ const presentations: Record<BriefingDayPeriod, DayPeriodPresentation> = {
     label: 'Night',
     icon: '🌙',
     temporalPhrase: 'tonight',
-    watchHorizon: 'next',
+    watchHorizon: 'tomorrow',
   },
 };
 
@@ -54,3 +54,6 @@ export const briefingDayPeriodFor = (localTime: string): BriefingDayPeriod => {
 export const briefingDayPeriodPresentation = (
   dayPeriod: BriefingDayPeriod,
 ): DayPeriodPresentation => presentations[dayPeriod];
+
+export const isEndOfDayBriefing = (dayPeriod: BriefingDayPeriod): boolean =>
+  dayPeriod === 'evening' || dayPeriod === 'night';

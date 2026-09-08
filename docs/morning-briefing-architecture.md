@@ -84,7 +84,7 @@ The current provider is Open-Meteo behind injectable geocoding and forecast adap
 
 ## 15. Google Calendar integration design
 
-The Briefing Bot includes a narrow read-only Google Calendar client and encrypted per-chat refresh-token storage. OAuth uses a short-lived state-bound HTTP callback. The callback server derives its one accepted path from `GOOGLE_CALENDAR_REDIRECT_URI`; the recommended production path is `/briefing-bot/oauth/google/callback`, allowing multiple bots to share an API domain without sharing a callback route. Production should expose the loopback-bound Compose port only through a trusted HTTPS reverse proxy matching the registered redirect URI.
+The Briefing Bot includes a narrow read-only Google Calendar client and encrypted per-chat refresh-token storage. OAuth uses a short-lived state-bound HTTP callback. The callback server derives its one accepted path from `GOOGLE_CALENDAR_REDIRECT_URI`; the recommended production path is `/briefing-bot/oauth/google/callback`, allowing multiple bots to share an API domain without sharing a callback route. Production should expose the loopback-bound Compose port only through a trusted HTTPS reverse proxy matching the registered redirect URI. Morning and afternoon briefings retrieve the current local day's events. Evening and night briefings recap the current local day and retrieve the next local day's events for the forward-looking section, including across daylight-saving transitions.
 
 Refresh tokens never appear in Telegram, logs, or ordinary environment output and are encrypted with AES-256-GCM before persistence. The client requests only Calendar read-only scope, retrieves configured calendars for the local-day window, and excludes event descriptions from logs.
 

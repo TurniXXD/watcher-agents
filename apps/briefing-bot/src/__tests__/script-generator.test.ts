@@ -56,6 +56,7 @@ const input = (stories: BriefingStoryCluster[]): ScriptGenerationInput => ({
   weather: { status: 'AVAILABLE', spokenSummary: 'It is mild in Brno.' },
   calendar: {
     status: 'AVAILABLE',
+    day: 'today',
     events: [],
     spokenSummary: 'Your calendar is clear today.',
   },
@@ -145,6 +146,7 @@ describe('BriefingScriptGenerator', () => {
     const calendarInput = input([]);
     calendarInput.calendar = {
       status: 'AVAILABLE',
+      day: 'today',
       events: [
         {
           id: 'calendar-1',
@@ -202,7 +204,7 @@ describe('BriefingScriptGenerator', () => {
   it('provides an honest deterministic fallback for degraded context', () => {
     const degraded = input([]);
     degraded.weather = { status: 'UNAVAILABLE' };
-    degraded.calendar = { status: 'UNAVAILABLE', events: [] };
+    degraded.calendar = { status: 'UNAVAILABLE', day: 'today', events: [] };
 
     const result = fallbackBriefingScript(degraded);
 
@@ -218,17 +220,25 @@ describe('BriefingScriptGenerator', () => {
     const evening = input([]);
     evening.localTime = '20:00';
     evening.dayPeriod = 'evening';
+    evening.calendar = {
+      status: 'AVAILABLE',
+      day: 'tomorrow',
+      events: [],
+      spokenSummary: 'Your calendar is clear tomorrow.',
+    };
+    let prompt = '';
     const model = {
       async generateStructuredWithMetrics<T>(
-        _value: string,
+        value: string,
         _format: StructuredJsonSchema,
         schema: ZodType<T>,
       ): Promise<StructuredGeneration<T>> {
+        prompt = value;
         return {
           result: schema.parse({
             greeting: 'Good morning.',
             weather: null,
-            calendar: null,
+            calendar: 'Your calendar is clear tomorrow.',
             newsPreview: 'There are no new developments.',
             topStories: [],
             watchToday: [],
@@ -244,6 +254,15 @@ describe('BriefingScriptGenerator', () => {
     expect(result.displayScript).toContain('Good evening.');
     expect(result.displayScript).toContain('your evening briefing');
     expect(result.displayScript).not.toContain('morning');
+    expect(result.displayScript).toContain('Today in review.');
+    expect(result.displayScript).toContain(
+      'Tomorrow. Your calendar is clear tomorrow.',
+    );
+    expect(result.displayScript.indexOf('Today in review.')).toBeLessThan(
+      result.displayScript.indexOf('Tomorrow.'),
+    );
+    expect(prompt).toContain('Summarize what happened today');
+    expect(prompt).toContain('The supplied Calendar window is tomorrow');
   });
 
   it('marks Czech story titles for the Czech Piper voice outside Calendar', () => {

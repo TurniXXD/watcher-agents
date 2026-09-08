@@ -29,6 +29,7 @@ export type StoryEngineInput = {
   periodEnd: Date;
   priorityKeywords?: readonly string[];
   mutedKeywords?: readonly string[];
+  includePreviouslyMentioned?: boolean;
 };
 
 const comparableSummary = (value: string): string =>
@@ -160,7 +161,7 @@ export class StoryEngine {
     const selected = clustered.flatMap((cluster) => {
       const prior = previous.get(cluster.id);
       const suppression = shouldSuppress(cluster, prior);
-      if (suppression === 'UNCHANGED') {
+      if (suppression === 'UNCHANGED' && !input.includePreviouslyMentioned) {
         unchangedSuppressed += 1;
         return [];
       }

@@ -169,9 +169,19 @@ describe('Google Calendar integration', () => {
     ]);
     expect(window.start.toISOString()).toBe('2026-03-28T23:00:00.000Z');
     expect(window.end.toISOString()).toBe('2026-03-29T22:00:00.000Z');
+    const tomorrow = calendarDayWindow(
+      new Date('2026-03-29T10:00:00.000Z'),
+      'Europe/Prague',
+      1,
+    );
+    expect(tomorrow.start.toISOString()).toBe('2026-03-29T22:00:00.000Z');
+    expect(tomorrow.end.toISOString()).toBe('2026-03-30T22:00:00.000Z');
     expect(requested[0]?.searchParams.get('singleEvents')).toBe('true');
     expect(requested[0]?.searchParams.get('orderBy')).toBe('startTime');
     expect(renderCalendarSummary([])).toBe('Your calendar is clear today.');
+    expect(renderCalendarSummary([], 'tomorrow')).toBe(
+      'Your calendar is clear tomorrow.',
+    );
   });
 
   it('turns calendar pressure into concise preparation actions', () => {

@@ -162,11 +162,26 @@ const localMidnightUtc = (
 export const calendarDayWindow = (
   now: Date,
   timezone: string,
+  dayOffset = 0,
 ): { start: Date; end: Date } => {
   const today = zonedParts(now, timezone);
-  const next = new Date(Date.UTC(today.year, today.month - 1, today.day + 1));
+  const target = new Date(
+    Date.UTC(today.year, today.month - 1, today.day + dayOffset),
+  );
+  const next = new Date(
+    Date.UTC(
+      target.getUTCFullYear(),
+      target.getUTCMonth(),
+      target.getUTCDate() + 1,
+    ),
+  );
   return {
-    start: localMidnightUtc(today.year, today.month, today.day, timezone),
+    start: localMidnightUtc(
+      target.getUTCFullYear(),
+      target.getUTCMonth() + 1,
+      target.getUTCDate(),
+      timezone,
+    ),
     end: localMidnightUtc(
       next.getUTCFullYear(),
       next.getUTCMonth() + 1,
@@ -178,13 +193,14 @@ export const calendarDayWindow = (
 
 export const renderCalendarSummary = (
   events: readonly CalendarEvent[],
+  day: 'today' | 'tomorrow' = 'today',
 ): string => {
-  if (events.length === 0) return 'Your calendar is clear today.';
+  if (events.length === 0) return `Your calendar is clear ${day}.`;
   const first = events[0]!;
   const firstTime = first.allDay
     ? 'an all-day event'
     : `at ${first.start.split('T')[1]?.slice(0, 5) ?? first.start}`;
-  return `You have ${events.length} calendar ${events.length === 1 ? 'event' : 'events'} today. Your first is ${first.title} ${firstTime}.`;
+  return `You have ${events.length} calendar ${events.length === 1 ? 'event' : 'events'} ${day}. Your first is ${first.title} ${firstTime}.`;
 };
 
 const timedEvent = (event: CalendarEvent): boolean =>

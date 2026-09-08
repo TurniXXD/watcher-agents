@@ -9,6 +9,7 @@ import type { BriefingTelegramTransport } from './telegram-transport.js';
 import {
   briefingDayPeriodPresentation,
   type BriefingDayPeriod,
+  isEndOfDayBriefing,
 } from './utils/day-period.js';
 
 export type BriefingIndexTopic = {
@@ -87,7 +88,8 @@ export const renderBriefingCaption = (index: BriefingIndex): string => {
     append(`🎙 ${durationLabel(index.audioDurationSeconds)}`);
   }
   if (index.calendar.status === 'AVAILABLE') {
-    append(`🗓 ${index.calendar.count} events today`);
+    const day = isEndOfDayBriefing(index.dayPeriod) ? 'tomorrow' : 'today';
+    append(`🗓 ${index.calendar.count} events ${day}`);
   } else if (index.calendar.status === 'UNAVAILABLE') {
     append('🗓 Calendar unavailable');
   }

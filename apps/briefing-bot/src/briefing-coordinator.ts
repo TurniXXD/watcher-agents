@@ -25,7 +25,11 @@ import {
   measured,
   type CalendarProvider,
 } from './briefing-context.js';
-import { calendarActionInsights, renderCalendarSummary } from './calendar.js';
+import {
+  calendarActionInsights,
+  calendarDayWindow,
+  renderCalendarSummary,
+} from './calendar.js';
 import type {
   BriefingDeliveryResult,
   BriefingDeliveryService,
@@ -38,7 +42,10 @@ import {
 import type { StoryEngine } from './story-engine.js';
 import type { StoryEngineMetrics } from './story-types.js';
 import type { TtsProvider, TtsResult } from './tts.js';
-import { briefingDayPeriodFor } from './utils/day-period.js';
+import {
+  briefingDayPeriodFor,
+  isEndOfDayBriefing,
+} from './utils/day-period.js';
 import type { WeatherProvider } from './weather.js';
 import { renderSpokenWeather } from './weather.js';
 import { waitForFreshWatcherRuns } from './briefing-freshness.js';
@@ -147,6 +154,9 @@ export class BriefingCoordinator {
       now = this.dependencies.now?.() ?? new Date();
     }
     const periodEnd = now;
+    const local = dateParts(now, configuration.settings.timezone);
+    const dayPeriod = briefingDayPeriodFor(local.time);
+    const endOfDay = isEndOfDayBriefing(dayPeriod);
     const previous =
       type === 'SCHEDULED'
         ? await this.dependencies.runs.lastSuccessfulScheduled(telegramChatId)
@@ -155,13 +165,13 @@ export class BriefingCoordinator {
       type === 'SCHEDULED' ? scheduleContext.periodHours : undefined;
     const periodStart =
       explicitPeriodHours === undefined
-        ? previous
-          ? new Date(previous.periodEnd)
-          : new Date(periodEnd.getTime() - 24 * 60 * 60_000)
+        ? endOfDay
+          ? calendarDayWindow(now, configuration.settings.timezone).start
+          : previous
+            ? new Date(previous.periodEnd)
+            : new Date(periodEnd.getTime() - 24 * 60 * 60_000)
         : new Date(periodEnd.getTime() - explicitPeriodHours * 60 * 60_000);
     const scheduleIdentity = scheduledFor ?? now;
-    const local = dateParts(now, configuration.settings.timezone);
-    const dayPeriod = briefingDayPeriodFor(local.time);
     const place = configuration.location
       ? locationLabel(configuration.location)
       : undefined;
@@ -259,6 +269,7 @@ export class BriefingCoordinator {
               this.dependencies.calendar,
               this.dependencies.logger,
               now,
+              endOfDay ? 1 : 0,
             ),
           ),
           measured(() =>
@@ -269,6 +280,7 @@ export class BriefingCoordinator {
               periodEnd,
               priorityKeywords: configuration.settings.priorityKeywords,
               mutedKeywords: configuration.settings.mutedKeywords,
+              includePreviouslyMentioned: endOfDay,
             }),
           ),
           this.dependencies.watcherHealth.list(subscriptions),
@@ -359,10 +371,16 @@ export class BriefingCoordinator {
         },
         calendar: {
           status: calendar.status,
+          day: endOfDay ? 'tomorrow' : 'today',
           events: calendar.value,
           insights: calendarInsights,
           ...(calendar.status === 'AVAILABLE'
-            ? { spokenSummary: renderCalendarSummary(calendar.value) }
+            ? {
+                spokenSummary: renderCalendarSummary(
+                  calendar.value,
+                  endOfDay ? 'tomorrow' : 'today',
+                ),
+              }
             : {}),
         },
         stories: selectedStories,
