@@ -468,9 +468,13 @@ integration('WatcherStore with PostgreSQL', () => {
       promptTokens: 700,
       completionTokens: 300,
     });
+    const pendingAlert = await database.stockAlert.findFirstOrThrow({
+      where: { watcherConfigId: chat.watcherConfig!.id },
+      select: { deliverAfter: true },
+    });
     const [alert] = await store.claimPendingAlerts(
       chat.watcherConfig!.id,
-      new Date(Date.now() + 61 * 60_000),
+      pendingAlert.deliverAfter,
     );
     expect(alert).toMatchObject({
       ticker: 'MU',
