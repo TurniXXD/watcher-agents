@@ -299,7 +299,9 @@ export const createStocksRunner = (
   const notify = async (
     chatId: bigint,
     result: PipelineResult,
+    manual: boolean,
   ): Promise<void> => {
+    if (!manual) return;
     if (!hasReportableStockInformation(result)) return;
     await sendSplitMessage(
       api,

@@ -103,6 +103,7 @@ export const briefingHelp = [
   '/mute_remove TOPIC — remove a muted topic',
   '/priority_add TOPIC — boost a topic, company, ticker, or subject',
   '/priority_remove TOPIC — remove a priority topic',
+  '/schedules — show producer schedules and whether they run before the next briefing',
   '/settings — show briefing configuration',
   '/start — start or resume onboarding',
   '/subscribe WATCHER — enable stocks, medical, or news',

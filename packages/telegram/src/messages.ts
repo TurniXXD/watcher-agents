@@ -181,19 +181,43 @@ const intelligenceSection = (result: PipelineResult): string => {
     }
     return parts.length ? `\n${htmlText(parts.join(' · '), 700)}` : '';
   };
-  const lines = visible
-    .slice(0, 12)
-    .map(
-      (event) =>
-        `${materialityIcon(event.materiality)} <b>${htmlText(event.ticker, 30)}</b> · ${htmlText(event.eventType, 100)} · ${htmlText(event.materiality, 20)}\n${optionalSourceLink(event.title, event.sourceUrl, 500)}${signalDetails(event)}\n<i>${htmlText(event.decision === 'ANALYZE' ? 'Analyzed' : event.decision === 'COOLDOWN' ? 'Stored; ticker cooldown active' : 'Stored without LLM analysis', 100)}</i>`,
-    );
+  const lines = visible.slice(0, 12).map((event) => {
+    const status =
+      event.analysisStatus === 'FAILED'
+        ? 'LLM analysis failed'
+        : event.analysisStatus === 'ANALYZED'
+          ? 'Analyzed'
+          : event.analysisStatus === 'PENDING' ||
+              event.analysisStatus === 'ANALYZING'
+            ? 'Analysis pending'
+            : event.decision === 'COOLDOWN'
+              ? 'Stored; ticker cooldown active'
+              : 'Stored without LLM analysis';
+    return `${materialityIcon(event.materiality)} <b>${htmlText(event.ticker, 30)}</b> · ${htmlText((event.eventTypes ?? [event.eventType]).join(' + '), 180)} · ${htmlText(event.materiality, 20)}\n${optionalSourceLink(event.title, event.sourceUrl, 500)}${signalDetails(event)}\n<i>${htmlText(status, 100)}</i>`;
+  });
   const counters = [
     `${intelligence.newEventCount} new`,
     `${intelligence.duplicateEventCount} duplicates`,
     `${intelligence.storedOnlyCount} stored`,
     `${intelligence.cooldownCount} cooldown`,
   ].join(' · ');
-  return [`🧭 <b>Event processing</b>\n${counters}`, lines.join('\n\n')]
+  const hybridCounters = [
+    intelligence.eventsClustered === undefined
+      ? ''
+      : `${intelligence.eventsClustered} clustered`,
+    intelligence.marketAnomalyTriggered === undefined
+      ? ''
+      : `${intelligence.marketAnomalyTriggered} anomaly-triggered`,
+    intelligence.notificationsQueued === undefined
+      ? ''
+      : `${intelligence.notificationsQueued} notifications queued`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return [
+    `🧭 <b>Event processing</b>\n${counters}${hybridCounters ? `\n${hybridCounters}` : ''}`,
+    lines.join('\n\n'),
+  ]
     .filter(Boolean)
     .join('\n\n');
 };
@@ -326,6 +350,38 @@ export const renderStockAlert = (alert: StockAlertView): string => {
   ]
     .filter(Boolean)
     .join('\n\n');
+};
+
+export const renderStockAlertBatch = (
+  alerts: readonly StockAlertView[],
+): string => {
+  const byEvent = new Map<string, StockAlertView>();
+  for (const alert of alerts) {
+    const snapshot = recordValue(alert.snapshot);
+    const key = metadataText(
+      snapshot.eventId,
+      `${alert.ticker}:${alert.title}`,
+    );
+    const previous = byEvent.get(key);
+    if (!previous || alert.severity === 'EXTREME') byEvent.set(key, alert);
+  }
+  const values = [...byEvent.values()];
+  return [
+    `📈 <b>STOCK WATCHER — ${values.length} important ${values.length === 1 ? 'development' : 'developments'}</b>`,
+    ...values.map((alert) => {
+      const snapshot = recordValue(alert.snapshot);
+      const reasons = jsonStrings(alert.reasons).slice(0, 3);
+      return [
+        `${alert.severity === 'EXTREME' ? '🚨' : alert.severity === 'HIGH' ? '🔴' : '🟠'} <b>${htmlText(alert.ticker, 30)} · ${htmlText(alert.severity, 20)}</b>`,
+        htmlText(metadataText(snapshot.eventTitle, alert.title), MAX_TITLE),
+        reasons.length ? bulletList(reasons) : '',
+        `🔗 ${optionalSourceLink(alert.event.primaryEvidence.source, alert.event.primaryEvidence.sourceUrl ?? alert.event.primaryEvidence.url)}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+    }),
+    '<i>Alerts were grouped to reduce noise. Research signals only; human review is required.</i>',
+  ].join('\n\n');
 };
 
 export type StockDashboardEntry = {

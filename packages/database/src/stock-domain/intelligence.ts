@@ -13,7 +13,13 @@ export const canonicalEventTypeSchema = z.enum([
   'CONTRACT',
   'PATENT',
   'ACQUISITION',
+  'MERGER',
   'DIVESTITURE',
+  'FINANCING',
+  'CAPITAL_RETURN',
+  'PARTNERSHIP',
+  'INDUSTRY',
+  'PRICE_MOVE',
   'CAPITAL_RAISE',
   'BUYBACK',
   'DIVIDEND',
@@ -89,6 +95,7 @@ export type EventDecision = z.infer<typeof eventDecisionSchema>;
 export type CanonicalEventCandidate = {
   ticker: string;
   eventType: CanonicalEventType;
+  eventTypes: CanonicalEventType[];
   title: string;
   occurredAt: Date | null;
   firstPublicAt: Date | null;
@@ -119,7 +126,11 @@ const typePatterns: ReadonlyArray<[CanonicalEventType, RegExp]> = [
   ['GUIDANCE', /\b(guidance|outlook|forecast)\b/i],
   [
     'EARNINGS',
-    /\b(earnings|quarterly results|annual results|form 10-[qk]|10-[qk])\b/i,
+    /\b(earnings|quarterly results|annual results|form 10-[qk]|10-[qk]|q[1-4]\s+(?:results|revenue|sales|eps))\b/i,
+  ],
+  [
+    'ANALYST_REVISION',
+    /\b(price target|target price|analyst (?:upgrade|downgrade|action)|upgrade[sd]?|downgrade[sd]?|raises? (?:its )?target|cuts? (?:its )?target|initiates? coverage)\b/i,
   ],
   [
     'CAPITAL_RAISE',
@@ -156,30 +167,60 @@ const evidencePriority = (observation: NormalizedObservation): number => {
   return Math.round(observation.reliability * 50);
 };
 
-const classifyEventType = (
+const classifyEventTypes = (
   observation: NormalizedObservation,
   text: string,
-): CanonicalEventType => {
-  if (observation.category === 'INSIDER_TRANSACTION')
-    return 'INSIDER_TRANSACTION';
-  if (observation.category === 'ANALYST_SNAPSHOT') return 'ANALYST_REVISION';
-  if (observation.category === 'EARNINGS') return 'EARNINGS';
-  if (observation.category === 'GOVERNMENT_CONTRACT')
-    return 'GOVERNMENT_CONTRACT';
-  if (observation.category === 'PATENT') return 'PATENT';
-  if (observation.category === 'CONGRESSIONAL_TRANSACTION')
-    return 'CONGRESSIONAL_TRANSACTION';
-  if (observation.category === 'CLINICAL_TRIAL') return 'CLINICAL_TRIAL';
-  if (observation.category === 'FDA_DECISION') return 'FDA_DECISION';
-  if (observation.category === 'INSTITUTIONAL_POSITIONING')
-    return 'INSTITUTIONAL_POSITIONING';
-  if (observation.category === 'OPTIONS_SNAPSHOT') return 'OPTIONS_ANOMALY';
-  if (observation.category === 'SHORT_INTEREST_SNAPSHOT')
-    return 'SHORT_INTEREST_CHANGE';
+): CanonicalEventType[] => {
+  const values: CanonicalEventType[] = [];
+  const add = (value: CanonicalEventType): void => {
+    if (!values.includes(value)) values.push(value);
+  };
+  const categories: Record<string, CanonicalEventType> = {
+    INSIDER_TRANSACTION: 'INSIDER_TRANSACTION',
+    ANALYST_SNAPSHOT: 'ANALYST_REVISION',
+    EARNINGS: 'EARNINGS',
+    GOVERNMENT_CONTRACT: 'GOVERNMENT_CONTRACT',
+    PATENT: 'PATENT',
+    CONGRESSIONAL_TRANSACTION: 'CONGRESSIONAL_TRANSACTION',
+    CLINICAL_TRIAL: 'CLINICAL_TRIAL',
+    FDA_DECISION: 'FDA_DECISION',
+    INSTITUTIONAL_POSITIONING: 'INSTITUTIONAL_POSITIONING',
+    OPTIONS_SNAPSHOT: 'OPTIONS_ANOMALY',
+    SHORT_INTEREST_SNAPSHOT: 'SHORT_INTEREST_CHANGE',
+  };
+  const category = categories[observation.category];
+  if (category) add(category);
   for (const [eventType, pattern] of typePatterns) {
-    if (pattern.test(text)) return eventType;
+    if (pattern.test(text)) add(eventType);
   }
-  return observation.sourceType === 'REGULATORY' ? 'REGULATORY' : 'OTHER';
+  if (/\bmerger\b/i.test(text)) add('MERGER');
+  if (
+    /\b(secondary offering|public offering|private placement|capital raise|convertible notes?)\b/i.test(
+      text,
+    )
+  )
+    add('FINANCING');
+  if (/\b(share repurchase|stock repurchase|buyback|dividend)\b/i.test(text))
+    add('CAPITAL_RETURN');
+  if (/\b(partnership|strategic alliance|collaboration)\b/i.test(text))
+    add('PARTNERSHIP');
+  if (/\b(industry|sector|dram|nand|memory pricing)\b/i.test(text))
+    add('INDUSTRY');
+  if (
+    /\b(?:jumps?|surges?|soars?|falls?|drops?|plunges?)\s+\d+(?:\.\d+)?%/i.test(
+      text,
+    )
+  )
+    add('PRICE_MOVE');
+  if (
+    /\b(?:stock|shares?)\b.{0,30}\b(?:jump|surge|soar|fall|drop|plunge)s?\b/i.test(
+      text,
+    )
+  )
+    add('PRICE_MOVE');
+  if (values.length === 0)
+    add(observation.sourceType === 'REGULATORY' ? 'REGULATORY' : 'OTHER');
+  return values;
 };
 
 const materialityFor = (
@@ -209,9 +250,49 @@ const materialityFor = (
     financialImpactUsd !== null && scale && scale > 0
       ? financialImpactUsd / scale
       : null;
+  const fundamentalFactKeys = [
+    'revenueYoYPercent',
+    'revenueSurprise',
+    'revenueSurprisePercent',
+    'latestRevenue',
+    'latestRevenueEstimate',
+    'epsSurprise',
+    'epsSurprisePercent',
+    'latestEps',
+    'latestEstimate',
+    'grossMarginPercent',
+    'priorGrossMarginPercent',
+    'grossMarginChangeBps',
+    'ebitda',
+    'priorEbitda',
+    'ebitdaYoYPercent',
+    'operatingMarginPercent',
+    'operatingMarginChangeBps',
+    'freeCashFlow',
+    'guidancePrevious',
+    'guidanceNew',
+    'guidanceChangePercent',
+    'analystTargetPrevious',
+    'analystTargetNew',
+    'analystRatingPrevious',
+    'analystRatingNew',
+    'debt',
+    'cash',
+  ] as const;
+  const fundamentalDeltas = Object.fromEntries(
+    fundamentalFactKeys.flatMap((key) => {
+      const value = observation.normalizedFacts[key];
+      return typeof value === 'number' || typeof value === 'string'
+        ? [[key, value] as const]
+        : [];
+    }),
+  );
   const magnitude = {
     ...(financialImpactUsd === null ? {} : { financialImpactUsd }),
     ...(relativeImpact === null ? {} : { relativeImpact }),
+    ...(Object.keys(fundamentalDeltas).length === 0
+      ? {}
+      : { fundamentalDeltas }),
   };
   const rawForm = observation.normalizedFacts.form;
   const form =
@@ -328,6 +409,24 @@ const materialityFor = (
       magnitude,
     };
   }
+  if (
+    eventType === 'ANALYST_REVISION' ||
+    (eventType === 'INDUSTRY' &&
+      /\b(tightness|shortage|supply|pricing|prices|record quarter|demand|gains)\b/i.test(
+        text,
+      )) ||
+    eventType === 'PARTNERSHIP'
+  ) {
+    return {
+      materiality: 'MEDIUM',
+      materialityScore: 55,
+      materialityReasons: [
+        'A concrete analyst, industry supply/demand, or partnership development warrants impact analysis.',
+      ],
+      action: 'TARGETED_ANALYSIS',
+      magnitude,
+    };
+  }
   return {
     materiality: 'LOW',
     materialityScore: 20,
@@ -372,7 +471,8 @@ export const extractCanonicalEvent = (
   )
     return null;
   const text = `${observation.headline}\n${observation.rawText}`;
-  const eventType = classifyEventType(observation, text);
+  const eventTypes = classifyEventTypes(observation, text);
+  const eventType = eventTypes[0]!;
   const materiality = materialityFor(observation, eventType, text, context);
   const occurredAt = observation.eventAt ?? observation.publishedAt;
   const accession = secAccession(observation.sourceUrl);
@@ -387,6 +487,7 @@ export const extractCanonicalEvent = (
   return {
     ticker: observation.ticker,
     eventType,
+    eventTypes,
     title: observation.headline,
     occurredAt,
     firstPublicAt: observation.publishedAt,

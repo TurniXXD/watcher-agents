@@ -1,0 +1,21 @@
+{
+  "name": "@watcher/brno-events-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@watcher/core": "workspace:*",
+    "@watcher/database": "workspace:*",
+    "fastify": "5.6.2",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "typescript": "6.0.3"
+  }
+}

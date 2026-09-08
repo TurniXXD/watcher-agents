@@ -228,13 +228,16 @@ export const stockBriefingEvents = (
             ticker: event.ticker,
           },
         ],
-        tags: [event.eventType, ...(event.direction ? [event.direction] : [])],
+        tags: [
+          ...(event.eventTypes ?? [event.eventType]),
+          ...(event.direction ? [event.direction] : []),
+        ],
         sourceUrls: [analyzed.item.url],
         primarySource: analyzed.item.source,
         confidence: briefingConfidenceFromScore(analysis.data.confidence),
         status: 'NEW',
         deduplicationKey: `stocks:${event.eventId}`,
-        relatedEventIds: [],
+        relatedEventIds: [event.eventId],
         metadata: {
           materiality: event.materiality,
           sourceAction: event.action,

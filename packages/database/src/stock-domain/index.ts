@@ -5,6 +5,8 @@ export * from './coverage.js';
 export * from './discovery.js';
 export * from './events.js';
 export * from './intelligence.js';
+export * from './materiality.js';
+export * from './notification.js';
 export * from './specialized.js';
 export * from './universe.js';
 export * from './validation.js';

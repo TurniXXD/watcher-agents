@@ -14,6 +14,7 @@ import {
   type SourceHealthContext,
   type WatcherKind as CoreWatcherKind,
   type WatchItem,
+  type WatcherLogger,
   publicationAnalysisSchema,
   stockAnalysisSchema,
 } from '@watcher/core';
@@ -21,6 +22,11 @@ import {
   defaultMarketAnomalyPolicy,
   type MarketAnomalyPolicy,
 } from './stock-domain/specialized.js';
+import {
+  defaultStockNotificationPolicy,
+  stockAlertDeliverAfter,
+  type StockNotificationPolicy,
+} from './stock-domain/notification.js';
 import {
   defaultAdvancedSignalPolicy,
   type AdvancedSignalPolicy,
@@ -63,6 +69,19 @@ export type WatcherStoreOptions = {
   advancedSignalPolicy?: Partial<AdvancedSignalPolicy>;
   availableStockSourceIds?: ReadonlySet<string>;
   alertAttentionThreshold?: number;
+  notificationPolicy?: Partial<StockNotificationPolicy>;
+  stockEventSemantic?: {
+    model: string;
+    provider: {
+      embed(
+        input: readonly string[],
+        signal?: AbortSignal,
+      ): Promise<number[][]>;
+    };
+    minimumSimilarity: number;
+    windowHours: number;
+  };
+  logger?: WatcherLogger;
 };
 
 export type EarningsReminderCandidate = {
@@ -96,6 +115,7 @@ export class WatcherStore implements PipelineRepository {
   private readonly stockReports: StockReportStore;
   private readonly configuration: ConfigurationStore;
   private readonly alertAttentionThreshold: number;
+  private readonly notificationPolicy: StockNotificationPolicy;
 
   public constructor(
     private readonly db: DatabaseClient,
@@ -115,6 +135,10 @@ export class WatcherStore implements PipelineRepository {
       ...(options.availableStockSourceIds
         ? { availableSourceIds: options.availableStockSourceIds }
         : {}),
+      ...(options.stockEventSemantic
+        ? { semantic: options.stockEventSemantic }
+        : {}),
+      ...(options.logger ? { logger: options.logger } : {}),
     });
     this.sourceHealth = new SourceHealthStore(db, {
       baseBackoffMs: options.sourceBackoffBaseMs ?? 60_000,
@@ -123,6 +147,10 @@ export class WatcherStore implements PipelineRepository {
     this.stockReports = new StockReportStore(db);
     this.configuration = new ConfigurationStore(db);
     this.alertAttentionThreshold = options.alertAttentionThreshold ?? 85;
+    this.notificationPolicy = {
+      ...defaultStockNotificationPolicy,
+      ...options.notificationPolicy,
+    };
   }
 
   public async ensureChat(
@@ -439,7 +467,27 @@ export class WatcherStore implements PipelineRepository {
         persisted.map((item) => [identityKey(item), item]),
       );
       const prepared: PreparedItem[] = [];
-      for (const item of safeItems) {
+      const candidates = new Map<
+        string,
+        {
+          event: NonNullable<
+            Awaited<ReturnType<StockEventStore['recordObservation']>>
+          >;
+          recordId: string;
+          item: WatchItem;
+        }
+      >();
+      // Persist fresh market context before classifying news from the same run.
+      const orderedItems = [...safeItems].sort(
+        (left, right) =>
+          Number(
+            normalizeObservation(kind, right).category === 'PRICE_SNAPSHOT',
+          ) -
+          Number(
+            normalizeObservation(kind, left).category === 'PRICE_SNAPSHOT',
+          ),
+      );
+      for (const item of orderedItems) {
         const key = identityKey(item);
         const processedItem = existingByIdentity.get(key);
         const deliveredToThisWatcher = processedItem?.analyses.some(
@@ -464,9 +512,21 @@ export class WatcherStore implements PipelineRepository {
           record.discoveredAt,
           companyContext.get(record.ticker ?? ''),
         );
-        if (!event?.eligibleForAnalysis || remainingAnalysisSlots <= 0) {
+        if (!event?.eligibleForAnalysis) {
           continue;
         }
+        // Attach every article before claiming once and building the LLM context.
+        const prior = candidates.get(event.eventId);
+        candidates.set(event.eventId, {
+          event,
+          recordId: prior?.recordId ?? record.id,
+          item: prior?.item ?? item,
+        });
+      }
+      for (const { event, recordId, item } of candidates.values()) {
+        const bypassRunLimit =
+          event.materiality === 'HIGH' || event.materiality === 'EXTREME';
+        if (remainingAnalysisSlots <= 0 && !bypassRunLimit) continue;
         if (await this.stockEvents.claimAnalysis(event)) {
           const stockAnalysisContext =
             await this.stockEvents.getAnalysisContext(
@@ -474,13 +534,14 @@ export class WatcherStore implements PipelineRepository {
               run.watcherConfigId,
             );
           prepared.push({
-            recordId: record.id,
+            recordId,
             item: {
               ...item,
+              content: await this.stockEvents.getEvidenceContent(event.eventId),
               metadata: { ...item.metadata, stockAnalysisContext },
             },
           });
-          remainingAnalysisSlots -= 1;
+          if (!bypassRunLimit) remainingAnalysisSlots -= 1;
         }
       }
       return prepared;
@@ -546,7 +607,12 @@ export class WatcherStore implements PipelineRepository {
       if (outcome.status === 'SUCCESS') {
         await transaction.canonicalEvent.updateMany({
           where: { observations: { some: { processedItemId: itemId } } },
-          data: { analysisCompletedAt: completedAt },
+          data: {
+            analysisCompletedAt: completedAt,
+            analysisClaimedAt: null,
+            analysisStatus: 'ANALYZED',
+            analysisError: null,
+          },
         });
         const intelligence =
           'intelligence' in outcome.result
@@ -687,7 +753,10 @@ export class WatcherStore implements PipelineRepository {
             if (alert) {
               const run = await transaction.watcherRun.findUniqueOrThrow({
                 where: { id: runId },
-                select: { watcherConfigId: true },
+                select: {
+                  watcherConfigId: true,
+                  watcherConfig: { select: { timezone: true } },
+                },
               });
               const createdAlert = await transaction.stockAlert.create({
                 data: {
@@ -700,7 +769,9 @@ export class WatcherStore implements PipelineRepository {
                   title: alert.title,
                   reasons: prismaJson(alert.reasons),
                   snapshot: prismaJson({
+                    eventId: event.id,
                     eventType: event.eventType,
+                    eventTypes: event.eventTypes,
                     eventTitle: event.title,
                     materiality: event.materiality,
                     detectedAt: event.firstDetectedAt.toISOString(),
@@ -726,6 +797,12 @@ export class WatcherStore implements PipelineRepository {
                   }),
                   eventDetectedAt: event.firstDetectedAt,
                   analysisCompletedAt: completedAt,
+                  deliverAfter: stockAlertDeliverAfter(
+                    completedAt,
+                    alert.severity,
+                    run.watcherConfig.timezone,
+                    this.notificationPolicy,
+                  ),
                 },
               });
               await transaction.domainEvent.create({
@@ -746,6 +823,15 @@ export class WatcherStore implements PipelineRepository {
             }
           }
         }
+      } else {
+        await transaction.canonicalEvent.updateMany({
+          where: { observations: { some: { processedItemId: itemId } } },
+          data: {
+            analysisClaimedAt: null,
+            analysisStatus: 'FAILED',
+            analysisError: outcome.error.slice(0, 2_000),
+          },
+        });
       }
     });
   }
@@ -756,6 +842,10 @@ export class WatcherStore implements PipelineRepository {
 
   public async claimPendingAlerts(watcherConfigId: string, now = new Date()) {
     return this.stockReports.claimPendingAlerts(watcherConfigId, now);
+  }
+
+  public listDueAlertBatches(now = new Date()) {
+    return this.stockReports.listDueAlertBatches(now);
   }
 
   public async markAlertDelivered(alertId: string, now = new Date()) {

@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { stockIntelligenceResultSchema } from './stock-intelligence.js';
+import {
+  marketImpactAnalysisSchema,
+  stockIntelligenceResultSchema,
+} from './stock-intelligence.js';
 import { removeNullBytesDeep } from './utils/general.js';
 
 export type SourceCapabilities = {
@@ -31,6 +34,7 @@ export type RunEventSummary = {
   eventId: string;
   ticker: string;
   eventType: string;
+  eventTypes?: string[];
   title: string;
   sourceUrl?: string | null;
   materiality: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
@@ -41,6 +45,7 @@ export type RunEventSummary = {
     | 'FULL_ANALYSIS'
     | 'IMMEDIATE_ANALYSIS';
   decision: 'ANALYZE' | 'STORED' | 'DUPLICATE' | 'COOLDOWN';
+  analysisStatus?: 'PENDING' | 'ANALYZING' | 'ANALYZED' | 'SKIPPED' | 'FAILED';
   direction?: 'POSITIVE' | 'NEGATIVE' | 'MIXED' | 'NEUTRAL' | 'UNKNOWN';
   magnitude?: Record<string, unknown>;
 };
@@ -51,6 +56,22 @@ export type RunIntelligenceSummary = {
   duplicateEventCount: number;
   storedOnlyCount: number;
   cooldownCount: number;
+  eventsCreated?: number;
+  eventsUpdated?: number;
+  eventsClustered?: number;
+  eventsAnalyzed?: number;
+  eventsSkipped?: number;
+  analysisFailed?: number;
+  highImportanceAnalyzed?: number;
+  highImportanceSkipped?: number;
+  marketAnomalyTriggered?: number;
+  notificationsQueued?: number;
+  notificationsMerged?: number;
+  notificationsSent?: number;
+  embeddingCalls?: number;
+  semanticCandidatesChecked?: number;
+  semanticClustersMatched?: number;
+  embeddingFailures?: number;
 };
 
 export const watcherKindSchema = z.enum(['STOCKS', 'PUBLICATIONS', 'NEWS']);
@@ -126,6 +147,7 @@ export const stockAnalysisSchema = z.object({
   risks: z.array(z.string()),
   catalysts: z.array(z.string()),
   confidence: z.number().min(0).max(1),
+  marketImpact: marketImpactAnalysisSchema.optional(),
   intelligence: stockIntelligenceResultSchema.optional(),
 });
 

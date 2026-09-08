@@ -183,6 +183,7 @@ const analysisEventSchema = z.object({
   id: z.string().min(1),
   ticker: z.string().min(1),
   eventType: z.string().min(1),
+  eventTypes: z.array(z.string().min(1)).default([]),
   title: z.string().min(1),
   materiality: z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'EXTREME']),
   action: z.enum([
@@ -225,10 +226,44 @@ const priceContextSchema = z.object({
   weeklyReturnPercent: z.number().nullable(),
   monthlyReturnPercent: z.number().nullable(),
   relativeVolume: z.number().nullable(),
+  returnVolatilityRatio: z.number().nullable().default(null),
   gapPercent: z.number().nullable(),
   volatilityPercent: z.number().nullable(),
   unexplained: z.boolean(),
 });
+
+export const marketImpactAnalysisSchema = z.object({
+  ticker: z.string().min(1),
+  direction: z.enum(['bullish', 'bearish', 'mixed', 'neutral']),
+  magnitude: z.enum(['low', 'medium', 'high', 'extreme']),
+  confidence: z.number().min(0).max(1),
+  primaryCatalyst: z.string().min(1),
+  secondaryCatalysts: z.array(z.string()),
+  amplifiers: z.array(z.string()).optional(),
+  fundamentals: z
+    .record(
+      z.string(),
+      z.object({
+        signal: z.enum(['positive', 'negative', 'neutral']),
+        details: z.string().optional(),
+      }),
+    )
+    .optional(),
+  marketReaction: z
+    .object({
+      dailyReturnPct: z.number().optional(),
+      gapPct: z.number().optional(),
+      volumeRatio: z.number().optional(),
+      returnVolatilityRatio: z.number().optional(),
+      abnormalMove: z.boolean(),
+    })
+    .optional(),
+  thesisImpact: z
+    .enum(['strengthens', 'weakens', 'unchanged', 'requires_review'])
+    .optional(),
+  summary: z.string().min(1),
+});
+export type MarketImpactAnalysis = z.infer<typeof marketImpactAnalysisSchema>;
 
 export const stockAnalysisContextSchema = z.object({
   event: analysisEventSchema,

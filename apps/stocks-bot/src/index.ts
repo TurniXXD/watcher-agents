@@ -14,26 +14,29 @@ import {
 import {
   CompanyUniverseStore,
   BriefingWatcherHealthStore,
+  PostgresEventJournal,
   PostgresBriefingEventRepository,
   StockDiscoveryStore,
+  ResourceLeaseStore,
   createDatabaseClient,
   WatcherStore,
   ValidationStore,
 } from '@watcher/database';
-import { OllamaProvider } from '@watcher/llm';
+import { OllamaEmbeddingProvider, OllamaProvider } from '@watcher/llm';
 import {
   AlphaVantageDiscoveryScanner,
   SecEdgarSource,
 } from './sources/index.js';
 import {
   parseAllowedUserIds,
-  renderStockAlert,
+  renderStockAlertBatch,
   sendSplitMessage,
 } from '@watcher/telegram';
 import { createStocksBot } from './bot.js';
 import { StockDiscoveryCoordinator } from './discovery.js';
 import { env } from './env.js';
 import { StockReconciliationCoordinator } from './reconciliation.js';
+import { StockCandidateProcessor } from './stock-candidate-processor.js';
 import { createStocksRunner } from './watcher.js';
 import {
   publishEarningsReminderBriefingEvents,
@@ -42,6 +45,15 @@ import {
 
 const logger = createLogger('stocks-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
+const resourceLeases = new ResourceLeaseStore(database);
+const stockEmbeddingProvider = env.BRIEFING_EMBEDDING_MODEL
+  ? new OllamaEmbeddingProvider({
+      url: env.OLLAMA_URL,
+      model: env.BRIEFING_EMBEDDING_MODEL,
+      keepAlive: env.OLLAMA_KEEP_ALIVE,
+      timeoutMs: env.OLLAMA_TIMEOUT_MS,
+    })
+  : undefined;
 const readiness = new ReadinessServer(async () => {
   await database.$queryRaw`SELECT 1`;
   await checkOllamaReady(env.OLLAMA_URL);
@@ -81,6 +93,28 @@ const store = new WatcherStore(database, {
   sourceBackoffBaseMs: env.SOURCE_BACKOFF_BASE_SECONDS * 1000,
   sourceBackoffMaximumMs: env.SOURCE_BACKOFF_MAX_MINUTES * 60_000,
   alertAttentionThreshold: env.ALERT_ATTENTION_THRESHOLD,
+  notificationPolicy: {
+    batchWindowMinutes: env.STOCK_ALERT_BATCH_WINDOW_MINUTES,
+    notificationStartHour: env.STOCK_NOTIFICATION_START_HOUR,
+    notificationEndHour: env.STOCK_NOTIFICATION_END_HOUR,
+    extremeImmediate: env.STOCK_EXTREME_IMMEDIATE,
+  },
+  ...(stockEmbeddingProvider && env.BRIEFING_EMBEDDING_MODEL
+    ? {
+        stockEventSemantic: {
+          model: env.BRIEFING_EMBEDDING_MODEL,
+          provider: {
+            embed: (input: readonly string[], signal?: AbortSignal) =>
+              resourceLeases.withExclusiveLease('HEAVY_LOCAL_MODEL', () =>
+                stockEmbeddingProvider.embed(input, signal),
+              ),
+          },
+          minimumSimilarity: env.BRIEFING_EMBEDDING_MIN_SIMILARITY,
+          windowHours: env.BRIEFING_EMBEDDING_WINDOW_HOURS,
+        },
+      }
+    : {}),
+  logger,
   availableStockSourceIds,
   marketAnomalyPolicy: {
     priceMovePercent: env.PRICE_ANOMALY_THRESHOLD_PERCENT,
@@ -100,7 +134,7 @@ const store = new WatcherStore(database, {
 });
 const universeStore = new CompanyUniverseStore(database);
 const validationStore = new ValidationStore(database);
-const eventBus = new InProcessEventBus();
+const eventBus = new InProcessEventBus(new PostgresEventJournal(database));
 const universe = new CompanyUniverseManager(universeStore, eventBus);
 const sec = new SecEdgarSource(env.SEC_USER_AGENT);
 const discoveryStore = new StockDiscoveryStore(database, {
@@ -129,6 +163,28 @@ const runtime: {
   discovery?: StockDiscoveryCoordinator;
   reconciliation?: StockReconciliationCoordinator;
 } = {};
+const deliverAlertBatch = async (
+  configId: string,
+  chatId: bigint,
+): Promise<void> => {
+  const alerts = await store.claimPendingAlerts(configId);
+  if (alerts.length === 0) return;
+  try {
+    await sendSplitMessage(bot.api, chatId, renderStockAlertBatch(alerts));
+    await Promise.all(
+      alerts.map((alert) => store.markAlertDelivered(alert.id)),
+    );
+  } catch (error) {
+    const message = errorMessage(error);
+    await Promise.all(
+      alerts.map((alert) => store.markAlertDeliveryFailed(alert.id, message)),
+    );
+    logger.error(
+      { alertIds: alerts.map(({ id }) => id), err: error },
+      'Stock alert batch delivery failed',
+    );
+  }
+};
 const discoveryEnabled = Boolean(env.ALPHA_VANTAGE_API_KEY);
 const bot = createStocksBot(
   env.STOCKS_TELEGRAM_TOKEN,
@@ -202,22 +258,7 @@ const runner = createStocksRunner(
         chatConfig.id,
         result.intelligence,
       );
-      const alerts = await store.claimPendingAlerts(
-        chatConfig.watcherConfig!.id,
-      );
-      for (const alert of alerts) {
-        try {
-          await sendSplitMessage(bot.api, chatId, renderStockAlert(alert));
-          await store.markAlertDelivered(alert.id);
-        } catch (error) {
-          const message = errorMessage(error);
-          await store.markAlertDeliveryFailed(alert.id, message);
-          logger.error(
-            { alertId: alert.id, ticker: alert.ticker, err: error },
-            'Stock alert delivery failed',
-          );
-        }
-      }
+      await deliverAlertBatch(chatConfig.watcherConfig!.id, chatId);
     }
     const publishedEvents =
       publication.published + reminderPublication.published;
@@ -255,6 +296,7 @@ const runner = createStocksRunner(
   },
 );
 runtime.runner = runner;
+const candidateProcessor = new StockCandidateProcessor(eventBus, runner);
 const reconciliationIntervalMs = env.RECONCILIATION_INTERVAL_MINUTES * 60_000;
 runtime.reconciliation = new StockReconciliationCoordinator(
   store,
@@ -272,8 +314,11 @@ if (env.ALPHA_VANTAGE_API_KEY) {
     ),
     (symbol) => sec.lookupCompanyProfile(symbol),
     async (configId, chatId, tickers) => {
-      await runner.execute(configId, chatId, 'SCHEDULED', {
-        targetKeys: new Set(tickers),
+      await candidateProcessor.processStockCandidate({
+        type: 'stock.market_anomaly.detected',
+        configId,
+        chatId,
+        tickers,
       });
     },
     env.DISCOVERY_MARKET_DATA_ENTITLEMENT === 'EOD' ? 'DAILY' : 'INTRADAY',
@@ -342,6 +387,14 @@ const reconciliationScheduler = new PersistentScheduler(
     );
   },
 );
+const alertScheduler = new PersistentScheduler(
+  (now) => store.listDueAlertBatches(now),
+  async (due) => {
+    const entry = due as { id: string; chatConfig: { chatId: bigint } };
+    await deliverAlertBatch(entry.id, entry.chatConfig.chatId);
+  },
+  30_000,
+);
 
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'Shutting down');
@@ -351,8 +404,10 @@ const shutdown = async (signal: string): Promise<void> => {
     discoveryScheduler.stop(),
     highResolutionScheduler.stop(),
     reconciliationScheduler.stop(),
+    alertScheduler.stop(),
   ]);
   await bot.stop();
+  candidateProcessor.stop();
   await readiness.stop();
   await database.$disconnect();
 };
@@ -362,6 +417,7 @@ scheduler.start();
 discoveryScheduler.start();
 highResolutionScheduler.start();
 reconciliationScheduler.start();
+alertScheduler.start();
 await readiness.start();
 await bot.start({
   onStart: () => {

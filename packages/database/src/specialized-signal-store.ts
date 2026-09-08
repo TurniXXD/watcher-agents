@@ -201,6 +201,7 @@ export class StockSpecializedSignalStore {
     return {
       ticker: observation.ticker,
       eventType: 'OPTIONS_ANOMALY',
+      eventTypes: ['OPTIONS_ANOMALY'],
       title: `Unusual options activity for ${observation.ticker}`,
       occurredAt: observedAt,
       firstPublicAt: observation.publishedAt,
@@ -278,6 +279,7 @@ export class StockSpecializedSignalStore {
     return {
       ticker: observation.ticker,
       eventType: 'INSTITUTIONAL_POSITIONING',
+      eventTypes: ['INSTITUTIONAL_POSITIONING'],
       title: `Material institutional positioning change for ${observation.ticker}`,
       occurredAt: reportedAt,
       firstPublicAt: observation.publishedAt,
@@ -358,6 +360,7 @@ export class StockSpecializedSignalStore {
     return {
       ticker: observation.ticker,
       eventType: 'SHORT_INTEREST_CHANGE',
+      eventTypes: ['SHORT_INTEREST_CHANGE'],
       title: `Material short-interest change for ${observation.ticker}`,
       occurredAt: settlementDate,
       firstPublicAt: observation.publishedAt,
@@ -556,6 +559,7 @@ export class StockSpecializedSignalStore {
         monthlyReturnPercent: anomaly?.monthlyReturnPercent ?? null,
         ninetyDayReturnPercent: anomaly?.ninetyDayReturnPercent ?? null,
         relativeVolume: anomaly?.relativeVolume ?? null,
+        returnVolatilityRatio: anomaly?.returnVolatilityRatio ?? null,
         gapPercent: anomaly?.gapPercent ?? null,
         atrPercent: anomaly?.atrPercent ?? null,
         realizedVolatilityPercent: anomaly?.realizedVolatilityPercent ?? null,
@@ -633,6 +637,7 @@ export class StockSpecializedSignalStore {
     return {
       ticker: observation.ticker,
       eventType: 'OFF_EXCHANGE_ANOMALY',
+      eventTypes: ['OFF_EXCHANGE_ANOMALY'],
       title: `Unusual off-exchange activity for ${observation.ticker}`,
       occurredAt: observedAt,
       firstPublicAt: observation.publishedAt,

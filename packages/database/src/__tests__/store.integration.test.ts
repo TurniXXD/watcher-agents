@@ -468,7 +468,10 @@ integration('WatcherStore with PostgreSQL', () => {
       promptTokens: 700,
       completionTokens: 300,
     });
-    const [alert] = await store.claimPendingAlerts(chat.watcherConfig!.id);
+    const [alert] = await store.claimPendingAlerts(
+      chat.watcherConfig!.id,
+      new Date(Date.now() + 61 * 60_000),
+    );
     expect(alert).toMatchObject({
       ticker: 'MU',
       type: 'THESIS_CHANGE',
@@ -602,7 +605,7 @@ integration('WatcherStore with PostgreSQL', () => {
     });
     expect(event).toMatchObject({
       direction: 'UNKNOWN',
-      action: 'STATE_UPDATE',
+      action: 'FULL_ANALYSIS',
       primaryDriverId: null,
     });
     expect(snapshot.unexplained).toBe(true);

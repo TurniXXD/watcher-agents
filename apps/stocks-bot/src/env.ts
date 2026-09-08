@@ -6,6 +6,21 @@ const schema = z.object({
   TELEGRAM_ALLOWED_USER_IDS: z.string().min(1),
   OLLAMA_URL: z.url(),
   OLLAMA_MODEL: z.string().min(1),
+  BRIEFING_EMBEDDING_MODEL: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().trim().min(1).optional(),
+  ),
+  BRIEFING_EMBEDDING_MIN_SIMILARITY: z.coerce
+    .number()
+    .min(0.5)
+    .max(1)
+    .default(0.82),
+  BRIEFING_EMBEDDING_WINDOW_HOURS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(168)
+    .default(96),
   OLLAMA_KEEP_ALIVE: z.string().min(1).default('5m'),
   OLLAMA_MAX_ITEMS_PER_RUN: z.coerce.number().int().min(0).max(1000).default(0),
   OLLAMA_NUM_CTX: z.coerce.number().int().min(512).max(131_072).default(4096),
@@ -60,6 +75,28 @@ const schema = z.object({
     .min(1)
     .max(100)
     .default(85),
+  STOCK_ALERT_BATCH_WINDOW_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(180)
+    .default(60),
+  STOCK_NOTIFICATION_START_HOUR: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(23)
+    .default(7),
+  STOCK_NOTIFICATION_END_HOUR: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24)
+    .default(22),
+  STOCK_EXTREME_IMMEDIATE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
   RECONCILIATION_INTERVAL_MINUTES: z.coerce
     .number()
     .int()

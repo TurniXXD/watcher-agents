@@ -14,7 +14,7 @@ The services share PostgreSQL and an external Ollama instance. There is no web U
 
 Each source normalizes provider data into a common `WatchItem`; the persistence boundary records a richer normalized observation with source provenance and separate publication, discovery, and event timestamps. A run waits for all enabled targets and sources with `Promise.allSettled`, records individual source failures, reserves new items through PostgreSQL uniqueness constraints, analyzes only reserved items with Ollama, and persists the run result. Company and observation changes also produce append-only domain journal events. Already processed SEC filings, RSS/news entries, price snapshots, PubMed articles, bioRxiv papers, clinical trials, and FDA reports are skipped by stable source identity. Manual and scheduled runs use this exact same path.
 
-Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recoverable after two hours. Stock digests are sent only when a run contains a successful analysis or a new non-duplicate stock event; provider backoffs, source failures, and failed analyses remain available in structured logs and `/health` but do not create or clutter a stock digest. Scheduled runs stay silent when nothing useful is new, while a manual `/run` edits its progress message to report that no new content was found.
+Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recoverable after two hours. Stock collectors remain scheduled producers, while market discovery and future internal producers can submit ticker-scoped candidates through the in-process event bus for immediate processing. Articles remain evidence under canonical stock events; event analysis and Telegram delivery are separate. Scheduled runs do not send article-by-article digests. Material alerts accumulate for 60 minutes by default and are sent as one batch, overnight alerts wait for the morning notification window, and only configured EXTREME alerts may bypass batching. A manual `/run` still edits its progress message and returns its diagnostic digest.
 
 ## Requirements
 
@@ -45,7 +45,7 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
    PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh
    docker compose up -d --build
    docker compose ps
-   docker compose logs -f stocks-bot publications-bot news-bot mu-clubs-monitor briefing-bot
+   docker compose logs -f stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot
    ```
 
    The installer includes `cs_CZ-jirka-medium`. The Briefing Bot keeps the
@@ -53,7 +53,7 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
    Jirka for Calendar event sentences detected as Czech, then joins every
    segment into one Opus voice message.
 
-PostgreSQL uses the pinned `pgvector/pgvector:0.8.6-pg16-bookworm` image and is published only on host loopback as `127.0.0.1:5433`; it is not directly reachable from the public internet. Its data lives in the `watcher-postgres` named volume. The migration creates the `vector` extension automatically and deployment verifies it before starting applications. Briefing event embeddings are cached in PostgreSQL and used only as a secondary story-clustering signal inside a bounded time window; exact IDs, URLs, entities, categories, and explicit relationships remain authoritative. The one-shot `migrate` service must complete before applications start. For remote administration, use the SSH/Tailscale tunnel documented in `deploy/README.md`.
+PostgreSQL uses the pinned `pgvector/pgvector:0.8.6-pg16-bookworm` image and is published only on host loopback as `127.0.0.1:5433`; it is not directly reachable from the public internet. Its data lives in the `watcher-postgres` named volume. The migration creates the `vector` extension once and deployment verifies it before starting applications. Briefing and stock events reuse the same configured Ollama embedding model/provider and the same PostgreSQL extension. Embeddings are cached and used only after ticker/time candidate narrowing and deterministic compatibility checks; similarity alone never merges events. No fixed embedding dimension or second vector database is introduced. The one-shot `migrate` service must complete before applications start. For remote administration, use the SSH/Tailscale tunnel documented in `deploy/README.md`.
 
 The bots emit structured JSON logs. At `LOG_LEVEL=info`, watcher runs record start, prepared source count, per-source fetch outcomes, source failures, notification sends, and completion counters. The briefing bot records commands, freshness-gate waits, semantic-clustering counts, context availability and latency, story-selection metrics, script and audio generation, Telegram delivery channels, and the final run duration. Each service exposes an internal `/healthz` readiness endpoint used by Compose; it verifies application startup and PostgreSQL, the Ollama-backed bots also verify Ollama, and Briefing additionally checks every Piper model file. Set `LOG_LEVEL=debug` to also log individual watcher item analysis, cached-analysis reuse, idle briefing scheduler checks, non-command Telegram updates, Piper chunks, and delivery attempts.
 
@@ -82,6 +82,7 @@ pnpm --filter @watcher/stocks-bot dev
 pnpm --filter @watcher/publications-bot dev
 pnpm --filter @watcher/news-bot dev
 pnpm --filter @watcher/mu-clubs-monitor dev
+pnpm --filter @watcher/brno-events-agent dev
 ```
 
 The standard repository checks are:
@@ -123,9 +124,9 @@ Every application variable is represented in `.env.example`.
 | `OLLAMA_MAX_ITEMS_PER_RUN`                          | watcher producers    | Maximum new items analyzed in one run; `0` means all new items and is the default             |
 | `OLLAMA_NUM_CTX`                                    | watcher producers    | Per-request context size; defaults to `4096`                                                  |
 | `BRIEFING_OLLAMA_NUM_CTX`                           | briefing bot         | Briefing script context size; defaults to `8192` without increasing producer requests         |
-| `BRIEFING_EMBEDDING_MODEL`                          | briefing bot         | Ollama embedding model for secondary semantic story clustering; empty disables it             |
-| `BRIEFING_EMBEDDING_MIN_SIMILARITY`                 | briefing bot         | Minimum cosine similarity for a semantic candidate; defaults to `0.82`                        |
-| `BRIEFING_EMBEDDING_WINDOW_HOURS`                   | briefing bot         | Maximum time distance between semantic candidates; defaults to `96` hours                     |
+| `BRIEFING_EMBEDDING_MODEL`                          | stocks, briefing     | Shared Ollama model for bounded stock-event and briefing-story similarity; empty disables it  |
+| `BRIEFING_EMBEDDING_MIN_SIMILARITY`                 | stocks, briefing     | Shared minimum cosine similarity for a semantic candidate; defaults to `0.82`                 |
+| `BRIEFING_EMBEDDING_WINDOW_HOURS`                   | stocks, briefing     | Shared maximum time distance between semantic candidates; defaults to `96` hours              |
 | `BRIEFING_FRESHNESS_MAX_AGE_MINUTES`                | briefing bot         | Maximum accepted age of a producer run before scheduled delivery; defaults to `1560` minutes  |
 | `BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES`           | briefing bot         | Maximum wait for stale producers before degraded delivery; defaults to `20` minutes           |
 | `BRIEFING_FRESHNESS_POLL_INTERVAL_MS`               | briefing bot         | Poll interval while waiting for producer freshness; defaults to `30000` milliseconds          |
@@ -142,6 +143,10 @@ Every application variable is represented in `.env.example`.
 | `SOURCE_BACKOFF_BASE_SECONDS`                       | watcher producers    | Initial source-failure backoff; defaults to 60 seconds                                        |
 | `SOURCE_BACKOFF_MAX_MINUTES`                        | watcher producers    | Maximum exponential source backoff; defaults to 360 minutes                                   |
 | `ALERT_ATTENTION_THRESHOLD`                         | stocks bot           | Attention score that creates a live alert when crossed; defaults to 85                        |
+| `STOCK_ALERT_BATCH_WINDOW_MINUTES`                  | stocks bot           | Accumulation delay for non-extreme alert batches; defaults to 60 minutes                      |
+| `STOCK_NOTIFICATION_START_HOUR`                     | stocks bot           | First local hour when queued stock alerts may be delivered; defaults to 7                     |
+| `STOCK_NOTIFICATION_END_HOUR`                       | stocks bot           | Local hour at which stock alerts begin waiting for morning; defaults to 22                    |
+| `STOCK_EXTREME_IMMEDIATE`                           | stocks bot           | Allows rare EXTREME alerts to bypass the batch window; defaults to true                       |
 | `RECONCILIATION_INTERVAL_MINUTES`                   | stocks bot           | Interval for comprehensive recovery scans; defaults to one day                                |
 | `VALIDATION_MIN_SAMPLE_SIZE`                        | stocks bot           | Completed 30-day samples required to mark signal statistics adequate; defaults to 20          |
 | `ALPHA_VANTAGE_API_KEY`                             | stocks bot           | Optional Alpha Vantage key for discovery and institutional holdings                           |
@@ -231,6 +236,13 @@ MU Clubs monitor:
 - `POST /run` invokes the same source pipeline used by the scheduler
 - These endpoints require `Authorization: Bearer $MU_CLUBS_API_TOKEN`; only `GET /healthz` is unauthenticated
 
+Brno Events Agent:
+
+- Polls Meetup, GoOut, VisitBrno/TIC, MUNI, VUT, JIC, and CEITEC through isolated structured-data adapters
+- Normalizes, scores, and cross-source deduplicates upcoming Brno events while retaining every source link
+- Exposes `/events`, `/events/upcoming`, and structured `/events/briefing` payloads plus manual source runs
+- Requires `Authorization: Bearer $BRNO_EVENTS_API_TOKEN` except for `GET /health`; see [source and API details](docs/brno-events-agent.md)
+
 Personal Morning Briefing bot:
 
 - `/start` to begin or resume persisted onboarding; Google Calendar is an optional integration and does not block setup
@@ -240,6 +252,7 @@ Personal Morning Briefing bot:
 - `/location_set CITY`, `/location_clear`, and `/location_status`
 - `/voice_list`, `/voice_set VOICE`, and `/voice_preview VOICE`
 - `/calendar_connect`, `/calendar_status`, `/calendar_refresh`, and `/calendar_disconnect`
+- `/schedules` to inspect Stocks, Publications, News, MU Clubs, Brno Events, and Briefing timing and verify which producers run before the next briefing
 
 Multiword Telegram command names use underscores. Legacy concatenated stock/publication names remain accepted as aliases, and legacy briefing commands typed with hyphens are normalized to their underscore equivalents.
 
@@ -257,7 +270,7 @@ Each company has an independent monitoring tier (`CORE`, `WATCH`, `DISCOVERY`, o
 
 When `ALPHA_VANTAGE_API_KEY` is configured, a persisted market-wide schedule reads Alpha Vantage's top gainers, losers, and most-active snapshot without using Ollama. Price, current volume, dollar-volume, ticker-format, SEC resolution, supported-exchange, and OTC filters reduce low-quality candidates. Selected names are persisted as `INVESTIGATE/HIGH_RESOLUTION`, receive an immediate run across all enabled sources, and then receive SEC/IR/GDELT/TradingView/price checks at the high-resolution interval. A high/extreme canonical event first observed by that watcher promotes the name to `WATCH/EVENT_MODE`; an unexplained investigation expires back to `DISCOVERY/LOW_RESOLUTION`. Watch expiry is extended only by a newer material event, otherwise the company returns to discovery. Provider snapshot identity and PostgreSQL constraints prevent the same market snapshot from starting the same investigation twice.
 
-Stock observations now pass through Phase 2 event intelligence before Ollama. Watcher creates canonical events, merges cross-source confirmations, records primary evidence and event chains, computes materiality relative to stored company scale when structured amounts are available, and applies persisted event/ticker cooldowns. Routine Form 4/Form 144 observations are retained as low-materiality state updates without an LLM call. Digests show event decisions, duplicate/cooldown counts, and source data coverage.
+Stock observations now pass through event intelligence before Ollama. Watcher creates canonical events with a backwards-compatible primary `eventType` plus multiple `eventTypes`, merges cross-source confirmations, records every evidence item and event chain, and re-evaluates materiality after market enrichment. HIGH/EXTREME is a hard analysis invariant and bypasses the ordinary per-run analysis cap; failures are recorded explicitly rather than displayed as intentional skips. Routine Form 4/Form 144 observations remain low-materiality state updates. See [Hybrid stock events](docs/stock-hybrid-events.md).
 
 Phase 4 adds structured insider classification and conviction scoring, 30-day purchase-cluster detection, a persistent catalyst registry, stored market baselines, price/gap/volume/volatility anomalies, and unknown-cause investigation escalation. Form 4 facts from SEC, FINVIZ, and Quiver share one classifier and fingerprint, so confirmations do not multiply the signal. Market anomalies never receive a bullish/bearish direction merely from price or volume; they are linked to a recent material event when one exists and otherwise remain explicitly unexplained. `/catalysts` exposes the active registry, including timing, impact, direction, and primary evidence.
 
@@ -349,7 +362,10 @@ apps/
     src/sources/           SEC, market, feed, and alternative-data adapters
   publications-bot/       process lifecycle and publication Telegram workflows
     src/sources/           PubMed, bioRxiv, trials, and FDA adapters
+  news-bot/               general-news Telegram workflows and source orchestration
   mu-clubs-monitor/       public club activity monitoring, API, classification, and scheduling
+  brno-events-agent/      Brno event discovery, normalization, deduplication, scoring, and API
+  briefing-bot/           scheduled personalized audio briefings and calendar integration
 packages/
   core/                   cross-bot pipeline, event bus, scheduling, networking, and common types
   database/               Prisma schema, migrations, client, persistence store

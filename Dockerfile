@@ -15,6 +15,7 @@ WORKDIR /app
 FROM base AS manifests
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/brno-events-agent/package.json apps/brno-events-agent/package.json
 COPY apps/briefing-bot/package.json apps/briefing-bot/package.json
 COPY apps/mu-clubs-monitor/package.json apps/mu-clubs-monitor/package.json
 COPY apps/news-bot/package.json apps/news-bot/package.json
@@ -52,6 +53,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --from=production-dependencies --chown=node:node /app/apps/brno-events-agent/node_modules ./apps/brno-events-agent/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/briefing-bot/node_modules ./apps/briefing-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/mu-clubs-monitor/node_modules ./apps/mu-clubs-monitor/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/news-bot/node_modules ./apps/news-bot/node_modules
@@ -59,6 +61,8 @@ COPY --from=production-dependencies --chown=node:node /app/apps/publications-bot
 COPY --from=production-dependencies --chown=node:node /app/apps/stocks-bot/node_modules ./apps/stocks-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/package.json /app/pnpm-workspace.yaml ./
+COPY --from=build --chown=node:node /app/apps/brno-events-agent/package.json ./apps/brno-events-agent/package.json
+COPY --from=build --chown=node:node /app/apps/brno-events-agent/dist ./apps/brno-events-agent/dist
 COPY --from=build --chown=node:node /app/apps/briefing-bot/package.json ./apps/briefing-bot/package.json
 COPY --from=build --chown=node:node /app/apps/briefing-bot/dist ./apps/briefing-bot/dist
 COPY --from=build --chown=node:node /app/apps/mu-clubs-monitor/package.json ./apps/mu-clubs-monitor/package.json

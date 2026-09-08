@@ -91,7 +91,13 @@ enum CanonicalEventType {
   CONTRACT
   PATENT
   ACQUISITION
+  MERGER
   DIVESTITURE
+  FINANCING
+  CAPITAL_RETURN
+  PARTNERSHIP
+  INDUSTRY
+  PRICE_MOVE
   CAPITAL_RAISE
   BUYBACK
   DIVIDEND
@@ -155,6 +161,14 @@ enum EventDecision {
   STORED
   DUPLICATE
   COOLDOWN
+}
+
+enum StockEventAnalysisStatus {
+  PENDING
+  ANALYZING
+  ANALYZED
+  SKIPPED
+  FAILED
 }
 
 enum SourceHealthStatus {
@@ -776,11 +790,13 @@ model CanonicalEvent {
   id                  String             @id @default(uuid())
   ticker              String
   eventType           CanonicalEventType
+  eventTypes          CanonicalEventType[] @default([])
   title               String
   fingerprint         String             @unique
   occurredAt          DateTime?
   firstPublicAt       DateTime?
   firstDetectedAt     DateTime
+  lastSeenAt          DateTime             @default(now())
   direction           EventDirection
   magnitude           Json               @default("{}")
   surprise            EventSurprise
@@ -794,6 +810,12 @@ model CanonicalEvent {
   chainId             String
   analysisClaimedAt   DateTime?
   analysisCompletedAt DateTime?
+  analysisStatus      StockEventAnalysisStatus @default(PENDING)
+  analysisError       String?
+  embedding           Unsupported("vector")?
+  embeddingModel      String?
+  embeddingInputHash  String?
+  embeddingUpdatedAt  DateTime?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
   primaryEvidence     ProcessedItem      @relation("PrimaryEvidence", fields: [primaryEvidenceId], references: [id], onDelete: Restrict)
@@ -805,6 +827,7 @@ model CanonicalEvent {
 
   @@index([ticker, eventType, occurredAt])
   @@index([ticker, firstDetectedAt])
+  @@index([ticker, lastSeenAt])
   @@index([chainId])
 }
 
@@ -875,6 +898,7 @@ model MarketSnapshot {
   monthlyReturnPercent           Decimal?      @db.Decimal(12, 6)
   ninetyDayReturnPercent         Decimal?      @db.Decimal(12, 6)
   relativeVolume                 Decimal?      @db.Decimal(12, 6)
+  returnVolatilityRatio          Decimal?      @db.Decimal(12, 6)
   gapPercent                     Decimal?      @db.Decimal(12, 6)
   atrPercent                     Decimal?      @db.Decimal(12, 6)
   realizedVolatilityPercent      Decimal?      @db.Decimal(12, 6)
@@ -1052,11 +1076,13 @@ model StockAlert {
   snapshot            Json
   eventDetectedAt     DateTime
   analysisCompletedAt DateTime
+  deliverAfter        DateTime       @default(now())
   deliveryClaimedAt   DateTime?
   sentAt              DateTime?
   deliveryAttempts    Int            @default(0)
   deliveryError       String?
   createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
   watcherConfig       WatcherConfig  @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
   run                 WatcherRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
   event               CanonicalEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -1472,4 +1498,83 @@ model MuSourceRun {
   @@index([monitorRunId])
   @@index([sourceId, createdAt])
   @@map("mu_source_runs")
+}
+
+model BrnoEvent {
+  id                   String                @id @default(uuid())
+  fingerprint          String                @unique
+  contentHash          String
+  title                String
+  normalizedTitle      String
+  description          String?
+  startAt              DateTime
+  endAt                DateTime?
+  venueName            String?
+  venueAddress         String?
+  latitude             Float?
+  longitude            Float?
+  city                  String                @default("Brno")
+  organizerName         String?
+  organizerUrl          String?
+  categories            String[]
+  language              String?
+  priceAmount           Float?
+  priceCurrency         String?
+  priceFree             Boolean?
+  priceText             String?
+  registrationRequired Boolean?
+  registrationUrl       String?
+  registrationDeadline DateTime?
+  imageUrl               String?
+  relevanceScore        Int
+  relevanceReasons      String[]
+  recurring             Boolean               @default(false)
+  cancelled             Boolean               @default(false)
+  firstSeenAt           DateTime              @default(now())
+  lastSeenAt            DateTime              @default(now())
+  sourceUpdatedAt       DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  sourceLinks           BrnoEventSourceLink[]
+
+  @@index([startAt, relevanceScore])
+  @@index([firstSeenAt])
+  @@map("brno_events")
+}
+
+model BrnoEventSourceLink {
+  id          String    @id @default(uuid())
+  eventId     String
+  sourceId    String
+  sourceName  String
+  sourceUrl   String
+  eventUrl    String
+  externalId  String?
+  raw         Json?
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  event       BrnoEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, eventUrl])
+  @@index([sourceId, externalId])
+  @@index([eventId])
+  @@map("brno_event_source_links")
+}
+
+model BrnoEventSourceRun {
+  id         String   @id @default(uuid())
+  sourceId   String
+  startedAt  DateTime
+  finishedAt DateTime
+  success    Boolean
+  fetched    Int      @default(0)
+  created    Int      @default(0)
+  updated    Int      @default(0)
+  duplicates Int      @default(0)
+  durationMs Int
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([sourceId, startedAt])
+  @@map("brno_event_source_runs")
 }

@@ -2,6 +2,7 @@ import {
   clamp,
   errorMessage,
   fullStockAnalysisSchema,
+  marketImpactAnalysisSchema,
   signalGroupSchema,
   stockAnalysisContextSchema,
   targetedStockAnalysisSchema,
@@ -9,6 +10,7 @@ import {
   type Analyzer,
   type DataAvailability,
   type FullStockAnalysis,
+  type MarketImpactAnalysis,
   type RedundancyClass,
   type SignalGroupState,
   type StockAnalysisContext,
@@ -511,6 +513,120 @@ const fallbackAnalysis = (
   };
 };
 
+const marketImpactFor = (
+  context: StockAnalysisContext,
+  targeted: TargetedStockAnalysis,
+): MarketImpactAnalysis => {
+  const price = context.currentPriceContext;
+  const rawFundamentals = context.event.magnitude.fundamentalDeltas;
+  const fundamentalDeltas =
+    typeof rawFundamentals === 'object' &&
+    rawFundamentals !== null &&
+    !Array.isArray(rawFundamentals)
+      ? (rawFundamentals as Record<string, unknown>)
+      : {};
+  const fundamentalGroups = {
+    revenue: /^revenue|^latestRevenue/u,
+    eps: /^eps|^latestEps|^latestEstimate/u,
+    margins: /margin/u,
+    guidance: /^guidance/u,
+    cashFlow: /cashFlow|freeCashFlow/u,
+    balanceSheet: /^debt$|^cash$/u,
+  } as const;
+  const fundamentals = Object.fromEntries(
+    Object.entries(fundamentalGroups).flatMap(([group, pattern]) => {
+      const facts = Object.entries(fundamentalDeltas).filter(([key]) =>
+        pattern.test(key),
+      );
+      if (facts.length === 0) return [];
+      const directionalValue = facts.find(
+        ([key, value]) =>
+          /surprise|change|yoy|delta/iu.test(key) &&
+          typeof value === 'number' &&
+          Number.isFinite(value),
+      )?.[1];
+      const signal =
+        typeof directionalValue !== 'number' || directionalValue === 0
+          ? 'neutral'
+          : directionalValue > 0
+            ? 'positive'
+            : 'negative';
+      return [
+        [
+          group,
+          {
+            signal,
+            details: facts
+              .map(([key, value]) => `${key}: ${String(value)}`)
+              .join('; '),
+          },
+        ],
+      ];
+    }),
+  );
+  const direction =
+    targeted.thesisChange === 'IMPROVED' ||
+    targeted.thesisChange === 'STRONGLY_IMPROVED'
+      ? 'bullish'
+      : targeted.thesisChange === 'DETERIORATED' ||
+          targeted.thesisChange === 'STRONGLY_DETERIORATED'
+        ? 'bearish'
+        : targeted.affectedSignalGroups.some(({ score }) => score !== 0)
+          ? 'mixed'
+          : 'neutral';
+  return marketImpactAnalysisSchema.parse({
+    ticker: context.event.ticker,
+    direction,
+    magnitude:
+      context.event.materiality === 'NONE'
+        ? 'low'
+        : (context.event.materiality.toLowerCase() as
+            'low' | 'medium' | 'high' | 'extreme'),
+    confidence: targeted.confidence,
+    primaryCatalyst: targeted.primaryDriver,
+    secondaryCatalysts: context.event.eventTypes
+      .filter((type) => type !== context.event.eventType)
+      .map((type) => type.replaceAll('_', ' ').toLowerCase()),
+    amplifiers: [
+      ...(price?.unexplained ? ['Unexplained market reaction'] : []),
+      ...((price?.relativeVolume ?? 0) >= 3 ? ['Unusual volume'] : []),
+      ...((price?.returnVolatilityRatio ?? 0) >= 2.5
+        ? ['Move large relative to recent volatility']
+        : []),
+    ],
+    ...(Object.keys(fundamentals).length === 0 ? {} : { fundamentals }),
+    ...(price
+      ? {
+          marketReaction: {
+            ...(price.dailyReturnPercent === null
+              ? {}
+              : { dailyReturnPct: price.dailyReturnPercent }),
+            ...(price.gapPercent === null ? {} : { gapPct: price.gapPercent }),
+            ...(price.relativeVolume === null
+              ? {}
+              : { volumeRatio: price.relativeVolume }),
+            ...(price.returnVolatilityRatio === null
+              ? {}
+              : { returnVolatilityRatio: price.returnVolatilityRatio }),
+            abnormalMove:
+              Math.abs(price.dailyReturnPercent ?? 0) >= 5 ||
+              (price.relativeVolume ?? 0) >= 3 ||
+              (price.returnVolatilityRatio ?? 0) >= 2.5,
+          },
+        }
+      : {}),
+    thesisImpact:
+      direction === 'bullish'
+        ? 'strengthens'
+        : direction === 'bearish'
+          ? 'weakens'
+          : direction === 'neutral'
+            ? 'unchanged'
+            : 'requires_review',
+    summary: targeted.explanation,
+  });
+};
+
 export class StockIntelligenceAnalyzer implements Analyzer {
   public constructor(
     private readonly ollama: OllamaProvider,
@@ -592,6 +708,7 @@ export class StockIntelligenceAnalyzer implements Analyzer {
           risks: display.risks,
           catalysts: display.catalysts,
           confidence: display.confidence,
+          marketImpact: marketImpactFor(context, targeted),
           intelligence: {
             eventId: context.event.id,
             targeted,

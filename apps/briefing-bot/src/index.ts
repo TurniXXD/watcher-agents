@@ -1,5 +1,6 @@
 import { ReadinessServer, checkOllamaReady, createLogger } from '@watcher/core';
 import {
+  AgentScheduleStore,
   BriefingDeliveryStore,
   BriefingConfigurationStore,
   BriefingRunStore,
@@ -61,6 +62,7 @@ const briefingStoryClusters = new BriefingStoryClusterStore(database);
 const briefingWatcherHealth = new BriefingWatcherHealthStore(database);
 const briefingEvents = new PostgresBriefingEventRepository(database, logger);
 const briefingDeliveries = new BriefingDeliveryStore(database);
+const agentSchedules = new AgentScheduleStore(database);
 const tts = new PiperLocalTtsProvider({
   dataDirectory: env.PIPER_DATA_DIR,
   pythonExecutable: env.PIPER_PYTHON_PATH,
@@ -140,6 +142,7 @@ const bot = createBriefingBot(
     );
   },
   logger,
+  agentSchedules,
 );
 const scriptModel = new OllamaProvider({
   url: env.OLLAMA_URL,

@@ -137,6 +137,40 @@ services:
     tmpfs:
       - /tmp
 
+  brno-events-agent:
+    image: ${WATCHER_IMAGE:-watcher:local}
+    command: ['node', 'apps/brno-events-agent/dist/index.js']
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    environment:
+      BRNO_EVENTS_HOST: 0.0.0.0
+      TZ: Europe/Prague
+    ports:
+      - '127.0.0.1:4020:4020'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4020/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
   mu-clubs-monitor:
     image: ${WATCHER_IMAGE:-watcher:local}
     command: ['node', 'apps/mu-clubs-monitor/dist/index.js']

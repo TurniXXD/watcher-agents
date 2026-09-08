@@ -18,6 +18,7 @@ const context = (
     id: 'event-1',
     ticker: 'MU',
     eventType: 'EARNINGS',
+    eventTypes: ['EARNINGS'],
     title: 'Micron reports results',
     materiality: 'HIGH',
     action: 'FULL_ANALYSIS',
@@ -182,6 +183,30 @@ describe('Phase 5 stock analysis', () => {
 
   it('runs targeted then full analysis for the initial thesis', async () => {
     let call = 0;
+    const enrichedContext = context({
+      event: {
+        ...context().event,
+        magnitude: {
+          fundamentalDeltas: {
+            revenueSurprisePercent: 12,
+            latestEps: 1.4,
+            latestEstimate: 1.1,
+          },
+        },
+      },
+      currentPriceContext: {
+        observedAt: '2026-09-05T20:00:00.000Z',
+        close: 110,
+        dailyReturnPercent: 8,
+        weeklyReturnPercent: 9,
+        monthlyReturnPercent: 12,
+        relativeVolume: 4,
+        returnVolatilityRatio: 3,
+        gapPercent: 2,
+        volatilityPercent: 40,
+        unexplained: false,
+      },
+    });
     const analyzer = new StockIntelligenceAnalyzer(
       new OllamaProvider({
         url: 'http://ollama',
@@ -197,7 +222,7 @@ describe('Phase 5 stock analysis', () => {
       title: 'Micron reports results',
       url: 'https://www.sec.gov/example',
       content: 'Primary-source earnings evidence.',
-      metadata: { stockAnalysisContext: context() },
+      metadata: { stockAnalysisContext: enrichedContext },
     });
 
     expect(call).toBe(2);
@@ -209,6 +234,20 @@ describe('Phase 5 stock analysis', () => {
     expect(outcome.result.intelligence?.decision?.humanReviewRequired).toBe(
       true,
     );
+    expect(outcome.result.marketImpact).toMatchObject({
+      ticker: 'MU',
+      direction: 'bullish',
+      fundamentals: {
+        revenue: { signal: 'positive' },
+        eps: { signal: 'neutral' },
+      },
+      marketReaction: {
+        dailyReturnPct: 8,
+        volumeRatio: 4,
+        returnVolatilityRatio: 3,
+        abnormalMove: true,
+      },
+    });
   });
 
   it('skips full analysis when targeted comparison finds no meaningful change', async () => {

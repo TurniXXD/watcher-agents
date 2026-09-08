@@ -25,6 +25,10 @@ import type { CalendarEvent } from './calendar.js';
 import { renderCalendarSummary } from './calendar.js';
 import { normalizeHyphenatedBotCommand } from './utils/telegram-command.js';
 import type { GeocodingProvider } from './weather.js';
+import {
+  renderAgentSchedules,
+  type AgentScheduleReader,
+} from './schedule-overview.js';
 
 type VoicePreview = (context: Context, voice: BriefingVoiceId) => Promise<void>;
 export type BriefingCommandRunner = (
@@ -140,6 +144,7 @@ export const createBriefingBot = (
   calendar?: CalendarCommands,
   runBriefing?: BriefingCommandRunner,
   logger?: WatcherLogger,
+  scheduleReader?: AgentScheduleReader,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
@@ -231,6 +236,15 @@ export const createBriefingBot = (
       parse_mode: 'Markdown',
       link_preview_options: { is_disabled: true },
     });
+  });
+  bot.command('schedules', async (context) => {
+    if (!scheduleReader) {
+      await context.reply('Schedule diagnostics are not available.');
+      return;
+    }
+    await context.reply(
+      renderAgentSchedules(await scheduleReader.get(BigInt(context.chat.id))),
+    );
   });
   bot.command(['settings', 'briefing_settings'], async (context) => {
     await context.reply(

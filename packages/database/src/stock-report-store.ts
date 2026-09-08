@@ -32,6 +32,7 @@ export class StockReportStore {
         where: {
           watcherConfigId,
           sentAt: null,
+          deliverAfter: { lte: now },
           OR: [
             { deliveryClaimedAt: null },
             { deliveryClaimedAt: { lt: staleBefore } },
@@ -58,6 +59,16 @@ export class StockReportStore {
         },
       });
       return alerts;
+    });
+  }
+
+  public listDueAlertBatches(now = new Date()) {
+    return this.db.watcherConfig.findMany({
+      where: {
+        enabled: true,
+        alerts: { some: { sentAt: null, deliverAfter: { lte: now } } },
+      },
+      select: { id: true, chatConfig: { select: { chatId: true } } },
     });
   }
 

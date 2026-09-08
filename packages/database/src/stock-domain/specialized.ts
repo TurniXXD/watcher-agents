@@ -229,6 +229,7 @@ export type MarketAnomaly = {
   monthlyReturnPercent: number | null;
   ninetyDayReturnPercent: number | null;
   relativeVolume: number | null;
+  returnVolatilityRatio: number | null;
   gapPercent: number;
   atrPercent: number | null;
   realizedVolatilityPercent: number | null;
@@ -276,12 +277,18 @@ export const detectMarketAnomaly = (
   const dailyReturnPercent = percentChange(current.close, previous.close) ?? 0;
   const gapPercent = percentChange(current.open, previous.close) ?? 0;
   const baseline = history.slice(-20);
-  const averageVolume =
+  const sortedVolumes = baseline
+    .map(({ volume }) => volume)
+    .sort((left, right) => left - right);
+  const middle = Math.floor(sortedVolumes.length / 2);
+  const medianVolume =
     baseline.length >= policy.minimumVolumeBaseline
-      ? average(baseline.map(({ volume }) => volume))
+      ? sortedVolumes.length % 2 === 0
+        ? (sortedVolumes[middle - 1]! + sortedVolumes[middle]!) / 2
+        : sortedVolumes[middle]!
       : null;
   const relativeVolume =
-    averageVolume && averageVolume > 0 ? current.volume / averageVolume : null;
+    medianVolume && medianVolume > 0 ? current.volume / medianVolume : null;
   const closes = [...baseline.map(({ close }) => close), current.close];
   const returns = closes
     .slice(1)
@@ -308,10 +315,13 @@ export const detectMarketAnomaly = (
         : 100 - 100 / (1 + gains / losses);
   const historicalVolatility = standardDeviation(returns.slice(0, -1));
   const currentAbsoluteReturn = Math.abs(returns.at(-1) ?? 0);
+  const returnVolatilityRatio =
+    historicalVolatility !== null && historicalVolatility > 0
+      ? currentAbsoluteReturn / historicalVolatility
+      : null;
   const volatilityExpansion =
-    historicalVolatility !== null &&
-    historicalVolatility > 0 &&
-    currentAbsoluteReturn / historicalVolatility >= policy.volatilityExpansion;
+    returnVolatilityRatio !== null &&
+    returnVolatilityRatio >= policy.volatilityExpansion;
   const priceAnomaly = Math.abs(dailyReturnPercent) >= policy.priceMovePercent;
   const gapAnomaly = Math.abs(gapPercent) >= policy.gapPercent;
   const volumeAnomaly =
@@ -326,6 +336,7 @@ export const detectMarketAnomaly = (
     monthlyReturnPercent: returnAt(current, history, 21),
     ninetyDayReturnPercent: returnAt(current, history, 63),
     relativeVolume,
+    returnVolatilityRatio,
     gapPercent,
     atrPercent: atr === null ? null : (atr / current.close) * 100,
     realizedVolatilityPercent:
@@ -389,6 +400,7 @@ export const marketAnomalyEvent = (
   return {
     ticker: observation.ticker,
     eventType,
+    eventTypes: [eventType, 'PRICE_MOVE'],
     title: `Unexplained ${observation.ticker} ${eventType === 'PRICE_ANOMALY' ? 'price' : 'volume'} anomaly`,
     occurredAt,
     firstPublicAt: observation.publishedAt,

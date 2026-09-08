@@ -105,6 +105,7 @@ describe('specialized stock intelligence', () => {
     const event: CanonicalEventCandidate = {
       ticker: 'MU',
       eventType: 'EARNINGS',
+      eventTypes: ['EARNINGS'],
       title: 'MU earnings date',
       occurredAt: null,
       firstPublicAt: null,

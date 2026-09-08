@@ -69,6 +69,28 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  apps/brno-events-agent:
+    dependencies:
+      '@watcher/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@watcher/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      fastify:
+        specifier: 5.6.2
+        version: 5.6.2
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   apps/mu-clubs-monitor:
     dependencies:
       '@watcher/core':
