@@ -40,6 +40,11 @@ import { registerValidationCommands } from './validation-commands.js';
 import { scheduleExample, stocksAbout, stocksHelp } from './copy.js';
 import { renderStockList, type StockListEntry } from './stock-list.js';
 import { hasReportableStockInformation } from './run-output.js';
+import {
+  appendStockSchedule,
+  removeStockSchedule,
+  renderStockSchedules,
+} from './schedule-management.js';
 
 type StockCompany = {
   symbol: string;
@@ -440,21 +445,88 @@ export const createStocksBot = (
   });
   bot.command('schedule', async (ctx) => {
     const current = await chat(ctx.chat.id);
+    const config = current.watcherConfig!;
     const argument = commandArgument(ctx.message?.text);
     if (!argument)
       return ctx.reply(
-        `Current schedule: ${current.watcherConfig?.schedule} ${current.watcherConfig?.timezone}\nExample: ${scheduleExample}`,
+        `${renderStockSchedules(config.schedule, config.timezone, config.nextRunAt)}\n\nReplace all: ${scheduleExample}`,
       );
     const parts = argument.split(/\s+/);
     const selectedTimezone = parts.at(-1)?.includes('/')
       ? parts.pop()
-      : current.watcherConfig?.timezone;
-    await store.updateSchedule(
-      current.watcherConfig!.id,
-      parts.join(' '),
-      selectedTimezone ?? timezone,
+      : config.timezone;
+    try {
+      const updated = await store.updateSchedule(
+        config.id,
+        parts.join(' '),
+        selectedTimezone ?? timezone,
+      );
+      await ctx.reply(
+        `Schedules replaced.\n\n${renderStockSchedules(updated.schedule, updated.timezone, updated.nextRunAt)}`,
+      );
+    } catch (error) {
+      await ctx.reply(`Could not update schedules: ${errorMessage(error)}`);
+    }
+  });
+  bot.command('schedule_list', async (ctx) => {
+    const current = await chat(ctx.chat.id);
+    const config = current.watcherConfig!;
+    await ctx.reply(
+      renderStockSchedules(config.schedule, config.timezone, config.nextRunAt),
     );
-    await ctx.reply('Schedule updated.');
+  });
+  bot.command('schedule_add', async (ctx) => {
+    const current = await chat(ctx.chat.id);
+    const config = current.watcherConfig!;
+    const argument = commandArgument(ctx.message?.text);
+    if (!argument) {
+      return ctx.reply('Usage: /schedule_add 0 12 * * 1-5');
+    }
+    try {
+      const appended = appendStockSchedule(config.schedule, argument);
+      if (!appended.added) {
+        return ctx.reply(
+          `That schedule already exists.\n\n${renderStockSchedules(config.schedule, config.timezone, config.nextRunAt)}`,
+        );
+      }
+      const updated = await store.updateSchedule(
+        config.id,
+        appended.schedule,
+        config.timezone,
+      );
+      await ctx.reply(
+        `Schedule added.\n\n${renderStockSchedules(updated.schedule, updated.timezone, updated.nextRunAt)}`,
+      );
+    } catch (error) {
+      await ctx.reply(`Could not add schedule: ${errorMessage(error)}`);
+    }
+  });
+  bot.command('schedule_remove', async (ctx) => {
+    const current = await chat(ctx.chat.id);
+    const config = current.watcherConfig!;
+    const parsedIndex = z.coerce
+      .number()
+      .int()
+      .positive()
+      .safeParse(commandArgument(ctx.message?.text));
+    if (!parsedIndex.success) {
+      return ctx.reply(
+        `Usage: /schedule_remove NUMBER\n\n${renderStockSchedules(config.schedule, config.timezone, config.nextRunAt)}`,
+      );
+    }
+    try {
+      const schedule = removeStockSchedule(config.schedule, parsedIndex.data);
+      const updated = await store.updateSchedule(
+        config.id,
+        schedule,
+        config.timezone,
+      );
+      await ctx.reply(
+        `Schedule removed.\n\n${renderStockSchedules(updated.schedule, updated.timezone, updated.nextRunAt)}`,
+      );
+    } catch (error) {
+      await ctx.reply(`Could not remove schedule: ${errorMessage(error)}`);
+    }
   });
   bot.command('run', async (ctx) => {
     const current = await chat(ctx.chat.id);

@@ -1,9 +1,9 @@
 import { Cron } from 'croner';
 
-const scheduleParts = (schedule: string): string[] =>
+export const parseScheduleExpressions = (schedule: string): string[] =>
   schedule
     .split(';')
-    .map((part) => part.trim())
+    .map((part) => part.trim().replace(/\s+/g, ' '))
     .filter(Boolean);
 
 export const computeNextRun = (
@@ -11,7 +11,7 @@ export const computeNextRun = (
   timezone: string,
   after = new Date(),
 ): Date => {
-  const parts = scheduleParts(schedule);
+  const parts = parseScheduleExpressions(schedule);
   if (parts.length === 0) {
     throw new Error('Schedule must include at least one cron expression.');
   }

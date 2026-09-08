@@ -22,7 +22,10 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /resume — resume scheduled runs
 /run — run now
 /run_discovery — run the cheap market-wide discovery scan now
-/schedule [CRON[; CRON...]] [TIMEZONE] — view or update schedule
+/schedule [CRON[; CRON...]] [TIMEZONE] — view or replace all schedules
+/schedule_add CRON — add one schedule without replacing the others
+/schedule_list — list numbered schedules, timezone, and next run
+/schedule_remove NUMBER — remove a schedule by its list number
   Example: ${scheduleExample}
 /set_mode SYMBOL MODE — set LOW_RESOLUTION/NORMAL/HIGH_RESOLUTION/EVENT_MODE
 /set_priority SYMBOL 0-100 — set monitoring priority
