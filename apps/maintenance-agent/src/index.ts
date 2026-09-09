@@ -56,7 +56,10 @@ const scheduler = new MaintenanceScheduler(
     if (important.length === 0) return;
     await Promise.allSettled(
       [...allowedIds].map((chatId) =>
-        bot.api.sendMessage(chatId, renderReport(`${type} maintenance report`, important)),
+        bot.api.sendMessage(
+          chatId,
+          renderReport(`${type} maintenance report`, important),
+        ),
       ),
     );
   },

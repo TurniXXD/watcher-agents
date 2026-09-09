@@ -83,46 +83,16 @@ export class WatcherPipeline {
     const settled = await Promise.allSettled(
       requests.map(({ source, target, config }) => {
         const sourceStartedAt = Date.now();
-        return this.limiterFor(source).run(async () => {
-          const policy = this.providerPolicy(source);
-          const attemptAt = new Date();
-          const attempt = await this.repository.sourceAttemptDecision?.(
-            kind,
-            runId,
-            source.id,
-            target,
-            attemptAt,
-            {
-              ...(policy.providerKey
-                ? { providerKey: policy.providerKey }
-                : {}),
-              sharedRateLimitBackoff: policy.sharedRateLimitBackoff,
-            },
-          );
-          if (attempt && !attempt.allowed) {
-            const retry = attempt.retryAt
-              ? ` until ${attempt.retryAt.toISOString()}`
-              : '';
-            throw new SourceBackoffError(
-              `${attempt.status ?? 'UNAVAILABLE'} backoff active${retry}`,
-              attempt.retryAt,
-            );
-          }
-          this.logger?.debug(
-            { kind, runId, source: source.id, target },
-            'Fetching watcher source',
-          );
-          let items: WatchItem[];
-          try {
-            items = (await source.fetch(config, options.signal)).map((item) =>
-              watchItemSchema.parse(item),
-            );
-            await this.repository.recordSourceSuccess?.(
+        return this.limiterFor(source)
+          .run(async () => {
+            const policy = this.providerPolicy(source);
+            const attemptAt = new Date();
+            const attempt = await this.repository.sourceAttemptDecision?.(
               kind,
               runId,
               source.id,
               target,
-              new Date(),
+              attemptAt,
               {
                 ...(policy.providerKey
                   ? { providerKey: policy.providerKey }
@@ -130,60 +100,92 @@ export class WatcherPipeline {
                 sharedRateLimitBackoff: policy.sharedRateLimitBackoff,
               },
             );
-          } catch (error) {
-            const retryAt = sourceRetryAt(error);
-            await this.repository.recordSourceFailure?.(
-              kind,
-              runId,
-              source.id,
-              target,
-              errorMessage(error),
-              new Date(),
-              {
-                ...(policy.providerKey
-                  ? { providerKey: policy.providerKey }
-                  : {}),
-                sharedRateLimitBackoff: policy.sharedRateLimitBackoff,
-                rateLimited: isSourceRateLimited(error),
-                ...(retryAt ? { retryAt } : {}),
-              },
+            if (attempt && !attempt.allowed) {
+              const retry = attempt.retryAt
+                ? ` until ${attempt.retryAt.toISOString()}`
+                : '';
+              throw new SourceBackoffError(
+                `${attempt.status ?? 'UNAVAILABLE'} backoff active${retry}`,
+                attempt.retryAt,
+              );
+            }
+            this.logger?.debug(
+              { kind, runId, source: source.id, target },
+              'Fetching watcher source',
             );
-            throw error;
-          }
-          this.logger?.info(
-            {
-              kind,
-              runId,
+            let items: WatchItem[];
+            try {
+              items = (await source.fetch(config, options.signal)).map((item) =>
+                watchItemSchema.parse(item),
+              );
+              await this.repository.recordSourceSuccess?.(
+                kind,
+                runId,
+                source.id,
+                target,
+                new Date(),
+                {
+                  ...(policy.providerKey
+                    ? { providerKey: policy.providerKey }
+                    : {}),
+                  sharedRateLimitBackoff: policy.sharedRateLimitBackoff,
+                },
+              );
+            } catch (error) {
+              const retryAt = sourceRetryAt(error);
+              await this.repository.recordSourceFailure?.(
+                kind,
+                runId,
+                source.id,
+                target,
+                errorMessage(error),
+                new Date(),
+                {
+                  ...(policy.providerKey
+                    ? { providerKey: policy.providerKey }
+                    : {}),
+                  sharedRateLimitBackoff: policy.sharedRateLimitBackoff,
+                  rateLimited: isSourceRateLimited(error),
+                  ...(retryAt ? { retryAt } : {}),
+                },
+              );
+              throw error;
+            }
+            this.logger?.info(
+              {
+                kind,
+                runId,
+                source: source.id,
+                target,
+                itemCount: items.length,
+                durationMs: Date.now() - sourceStartedAt,
+              },
+              'Watcher source fetched',
+            );
+            sourceRuns.push({
               source: source.id,
               target,
-              itemCount: items.length,
+              status: 'SUCCESS',
               durationMs: Date.now() - sourceStartedAt,
-            },
-            'Watcher source fetched',
-          );
-          sourceRuns.push({
-            source: source.id,
-            target,
-            status: 'SUCCESS',
-            durationMs: Date.now() - sourceStartedAt,
-            itemCount: items.length,
+              itemCount: items.length,
+            });
+            return {
+              items,
+              source: source.id,
+              target,
+            };
+          })
+          .catch((error: unknown) => {
+            sourceRuns.push({
+              source: source.id,
+              target,
+              status: 'FAILED',
+              durationMs: Date.now() - sourceStartedAt,
+              itemCount: 0,
+              error: errorMessage(error),
+            });
+            throw error;
           });
-          return {
-            items,
-            source: source.id,
-            target,
-          };
-        }).catch((error: unknown) => {
-          sourceRuns.push({
-            source: source.id,
-            target,
-            status: 'FAILED',
-            durationMs: Date.now() - sourceStartedAt,
-            itemCount: 0,
-            error: errorMessage(error),
-          });
-          throw error;
-        });
       }),
     );
 

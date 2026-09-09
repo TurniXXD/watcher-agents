@@ -73,24 +73,65 @@ describe('maintenance evaluation', () => {
       action: 'FILTERED',
       reason: index < 7 ? 'wrong classification: deadline' : 'not relevant',
     }));
-    expect(
-      detectPoorClassification([run(1, { feedback })], now)[0]?.type,
-    ).toBe('POOR_CLASSIFICATION');
+    expect(detectPoorClassification([run(1, { feedback })], now)[0]?.type).toBe(
+      'POOR_CLASSIFICATION',
+    );
   });
 
   it('calculates source health and consecutive failures', () => {
     const runs = [
-      run(1, { sources: [{ sourceId: 'api', status: 'success', itemCount: 3, latencyMs: 100, createdAt: new Date('2026-09-07') }] }),
-      run(2, { sources: [{ sourceId: 'api', status: 'failed', itemCount: 0, latencyMs: 200, createdAt: new Date('2026-09-08') }] }),
-      run(3, { sources: [{ sourceId: 'api', status: 'failed', itemCount: 0, latencyMs: 300, createdAt: new Date('2026-09-09') }] }),
+      run(1, {
+        sources: [
+          {
+            sourceId: 'api',
+            status: 'success',
+            itemCount: 3,
+            latencyMs: 100,
+            createdAt: new Date('2026-09-07'),
+          },
+        ],
+      }),
+      run(2, {
+        sources: [
+          {
+            sourceId: 'api',
+            status: 'failed',
+            itemCount: 0,
+            latencyMs: 200,
+            createdAt: new Date('2026-09-08'),
+          },
+        ],
+      }),
+      run(3, {
+        sources: [
+          {
+            sourceId: 'api',
+            status: 'failed',
+            itemCount: 0,
+            latencyMs: 300,
+            createdAt: new Date('2026-09-09'),
+          },
+        ],
+      }),
     ];
     const health = calculateSourceHealth(runs, now)[0];
-    expect(health).toMatchObject({ totalRuns: 3, successfulRuns: 1, failedRuns: 2, consecutiveFailures: 2, itemsProduced: 3 });
+    expect(health).toMatchObject({
+      totalRuns: 3,
+      successfulRuns: 1,
+      failedRuns: 2,
+      consecutiveFailures: 2,
+      itemsProduced: 3,
+    });
     expect(health?.averageLatencyMs).toBe(200);
   });
 
   it('uses robust rolling baselines', () => {
-    expect(rollingBaseline([1, 2, 2, 3, 100])).toMatchObject({ median: 2, mad: 1, p50: 2, p95: 100 });
+    expect(rollingBaseline([1, 2, 2, 3, 100])).toMatchObject({
+      median: 2,
+      mad: 1,
+      p50: 2,
+      p95: 100,
+    });
   });
 
   it('assigns severity deterministically', () => {
@@ -99,9 +140,13 @@ describe('maintenance evaluation', () => {
   });
 
   it('deduplicates recommendations through stable finding fingerprints', () => {
-    const runs = Array.from({ length: 4 }, (_, index) => run(index, { status: 'FAILED' }));
+    const runs = Array.from({ length: 4 }, (_, index) =>
+      run(index, { status: 'FAILED' }),
+    );
     const findings = detectAll(runs, now);
-    expect(new Set(findings.map((item) => item.fingerprint)).size).toBe(findings.length);
+    expect(new Set(findings.map((item) => item.fingerprint)).size).toBe(
+      findings.length,
+    );
     expect(detectAll(runs, now)[0]?.fingerprint).toBe(findings[0]?.fingerprint);
   });
 
@@ -110,7 +155,10 @@ describe('maintenance evaluation', () => {
   });
 
   it('prioritizes important briefing findings', () => {
-    const finding = (severity: Finding['severity'], confidence: number): Finding => ({
+    const finding = (
+      severity: Finding['severity'],
+      confidence: number,
+    ): Finding => ({
       fingerprint: `${severity}-${confidence}`,
       agentName: 'agent',
       type: 'OTHER',
@@ -128,6 +176,10 @@ describe('maintenance evaluation', () => {
       finding('CRITICAL', 0.5),
       finding('HIGH', 0.9),
     ]);
-    expect(result.map((item) => item.severity)).toEqual(['CRITICAL', 'HIGH', 'MEDIUM']);
+    expect(result.map((item) => item.severity)).toEqual([
+      'CRITICAL',
+      'HIGH',
+      'MEDIUM',
+    ]);
   });
 });

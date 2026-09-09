@@ -215,17 +215,17 @@ export class MaintenanceStore {
     });
   }
 
-  public setRecommendationStatus(
-    id: string,
-    status: 'APPROVED' | 'REJECTED',
-  ) {
+  public setRecommendationStatus(id: string, status: 'APPROVED' | 'REJECTED') {
     return this.db.maintenanceRecommendation.update({
       where: { id },
       data: { status: MaintenanceRecommendationStatus[status] },
     });
   }
 
-  public startRun(type: keyof typeof MaintenanceRunType, lookbackHours: number) {
+  public startRun(
+    type: keyof typeof MaintenanceRunType,
+    lookbackHours: number,
+  ) {
     return this.db.maintenanceRun.create({
       data: { type: MaintenanceRunType[type], lookbackHours },
     });
@@ -234,7 +234,12 @@ export class MaintenanceStore {
   public finishRun(
     id: string,
     input:
-      | { status: 'SUCCESS'; findingCount: number; recommendationCount: number; metrics: Record<string, unknown> }
+      | {
+          status: 'SUCCESS';
+          findingCount: number;
+          recommendationCount: number;
+          metrics: Record<string, unknown>;
+        }
       | { status: 'FAILED'; error: string },
   ) {
     return this.db.maintenanceRun.update({
@@ -258,7 +263,10 @@ export class MaintenanceStore {
 
   public latestRun(type: keyof typeof MaintenanceRunType) {
     return this.db.maintenanceRun.findFirst({
-      where: { type: MaintenanceRunType[type], status: MaintenanceRunStatus.SUCCESS },
+      where: {
+        type: MaintenanceRunType[type],
+        status: MaintenanceRunStatus.SUCCESS,
+      },
       orderBy: { finishedAt: 'desc' },
     });
   }

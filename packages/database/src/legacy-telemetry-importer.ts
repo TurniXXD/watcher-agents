@@ -5,8 +5,13 @@ import { jsonObject } from './utils/json.js';
 const status = (value: string): 'success' | 'partial' | 'failed' =>
   value === 'SUCCESS' ? 'success' : value === 'FAILED' ? 'failed' : 'partial';
 
-const duration = (startedAt: Date, finishedAt: Date | null): number | undefined =>
-  finishedAt ? Math.max(0, finishedAt.getTime() - startedAt.getTime()) : undefined;
+const duration = (
+  startedAt: Date,
+  finishedAt: Date | null,
+): number | undefined =>
+  finishedAt
+    ? Math.max(0, finishedAt.getTime() - startedAt.getTime())
+    : undefined;
 
 export class LegacyTelemetryImporter {
   readonly #telemetry: AgentTelemetryStore;
@@ -37,7 +42,9 @@ export class LegacyTelemetryImporter {
         where: { startedAt: { gte: since }, finishedAt: { not: null } },
         include: { sourceRuns: true },
       }),
-      this.db.brnoEventSourceRun.findMany({ where: { startedAt: { gte: since } } }),
+      this.db.brnoEventSourceRun.findMany({
+        where: { startedAt: { gte: since } },
+      }),
     ]);
 
     for (const run of watcherRuns) {
@@ -113,7 +120,10 @@ export class LegacyTelemetryImporter {
               : undefined,
           itemsFiltered:
             typeof metrics['candidateStoryCount'] === 'number'
-              ? Math.max(0, metrics['candidateStoryCount'] - run.selectedStoryIds.length)
+              ? Math.max(
+                  0,
+                  metrics['candidateStoryCount'] - run.selectedStoryIds.length,
+                )
               : undefined,
         },
         metadata: { type: run.type, ...metrics },
@@ -192,6 +202,8 @@ export class LegacyTelemetryImporter {
         ],
       });
     }
-    return watcherRuns.length + briefingRuns.length + muRuns.length + brnoRuns.length;
+    return (
+      watcherRuns.length + briefingRuns.length + muRuns.length + brnoRuns.length
+    );
   }
 }

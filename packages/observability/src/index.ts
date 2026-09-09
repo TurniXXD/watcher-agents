@@ -101,6 +101,13 @@ export interface AgentTelemetryRecorder {
 }
 
 export class NoopAgentTelemetryRecorder implements AgentTelemetryRecorder {
-  public async recordRun(_run: AgentRun): Promise<void> {}
-  public async recordFeedback(_feedback: AgentOutputFeedback): Promise<void> {}
+  public recordRun(run: AgentRun): Promise<void> {
+    void run;
+    return Promise.resolve();
+  }
+
+  public recordFeedback(feedback: AgentOutputFeedback): Promise<void> {
+    void feedback;
+    return Promise.resolve();
+  }
 }

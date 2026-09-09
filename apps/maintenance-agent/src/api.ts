@@ -15,11 +15,22 @@ const authorized = (header: string | undefined, token: string): boolean => {
 
 const findingQuery = z.object({
   agent: z.string().min(1).optional(),
-  type: z.enum([
-    'RECURRING_FAILURE', 'NOISY_OUTPUT', 'STALE_SOURCE', 'DUPLICATE_OUTPUT',
-    'POOR_CLASSIFICATION', 'HIGH_LATENCY', 'HIGH_COST', 'LOW_VALUE_OUTPUT',
-    'SOURCE_DEGRADATION', 'SCHEDULE_ISSUE', 'CONFIGURATION_ISSUE', 'OTHER',
-  ]).optional(),
+  type: z
+    .enum([
+      'RECURRING_FAILURE',
+      'NOISY_OUTPUT',
+      'STALE_SOURCE',
+      'DUPLICATE_OUTPUT',
+      'POOR_CLASSIFICATION',
+      'HIGH_LATENCY',
+      'HIGH_COST',
+      'LOW_VALUE_OUTPUT',
+      'SOURCE_DEGRADATION',
+      'SCHEDULE_ISSUE',
+      'CONFIGURATION_ISSUE',
+      'OTHER',
+    ])
+    .optional(),
   severity: z.enum(['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
   status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'IGNORED']).optional(),
   since: z.iso.datetime({ offset: true }).optional(),
@@ -27,17 +38,34 @@ const findingQuery = z.object({
 });
 const recommendationQuery = z.object({
   agent: z.string().min(1).optional(),
-  type: z.enum([
-    'PROMPT_CHANGE', 'SOURCE_CHANGE', 'SCRAPER_CHANGE', 'CONFIG_CHANGE',
-    'THRESHOLD_CHANGE', 'SCHEDULE_CHANGE', 'MODEL_CHANGE', 'CODE_CHANGE',
-    'REMOVE_SOURCE', 'ADD_SOURCE', 'OTHER',
-  ]).optional(),
-  status: z.enum(['PROPOSED', 'APPROVED', 'REJECTED', 'IMPLEMENTED']).optional(),
+  type: z
+    .enum([
+      'PROMPT_CHANGE',
+      'SOURCE_CHANGE',
+      'SCRAPER_CHANGE',
+      'CONFIG_CHANGE',
+      'THRESHOLD_CHANGE',
+      'SCHEDULE_CHANGE',
+      'MODEL_CHANGE',
+      'CODE_CHANGE',
+      'REMOVE_SOURCE',
+      'ADD_SOURCE',
+      'OTHER',
+    ])
+    .optional(),
+  status: z
+    .enum(['PROPOSED', 'APPROVED', 'REJECTED', 'IMPLEMENTED'])
+    .optional(),
   minConfidence: z.coerce.number().min(0).max(1).optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
 });
 const manualRunSchema = z.object({
-  lookbackHours: z.coerce.number().int().min(1).max(24 * 365).default(24 * 7),
+  lookbackHours: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 365)
+    .default(24 * 7),
 });
 
 const healthForSeverity = (severity: string | undefined) =>
@@ -89,13 +117,20 @@ export const createMaintenanceApi = (
             : own.some((finding) => finding.severity === 'MEDIUM')
               ? 'MEDIUM'
               : undefined;
-        return { name, health: healthForSeverity(severity), openFindings: own.length };
+        return {
+          name,
+          health: healthForSeverity(severity),
+          openFindings: own.length,
+        };
       }),
     };
   });
   app.get('/maintenance/findings', async (request, reply) => {
     const parsed = findingQuery.safeParse(request.query);
-    if (!parsed.success) return reply.code(400).send({ error: 'Invalid query', issues: parsed.error.issues });
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ error: 'Invalid query', issues: parsed.error.issues });
     return store.listFindings({
       limit: parsed.data.limit,
       ...(parsed.data.agent ? { agent: parsed.data.agent } : {}),
@@ -108,11 +143,17 @@ export const createMaintenanceApi = (
   app.get('/maintenance/findings/:id', async (request, reply) => {
     const id = z.uuid().safeParse((request.params as { id?: unknown }).id);
     if (!id.success) return reply.code(400).send({ error: 'Invalid id' });
-    return (await store.finding(id.data)) ?? reply.code(404).send({ error: 'Not found' });
+    return (
+      (await store.finding(id.data)) ??
+      reply.code(404).send({ error: 'Not found' })
+    );
   });
   app.get('/maintenance/recommendations', async (request, reply) => {
     const parsed = recommendationQuery.safeParse(request.query);
-    if (!parsed.success) return reply.code(400).send({ error: 'Invalid query', issues: parsed.error.issues });
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ error: 'Invalid query', issues: parsed.error.issues });
     return store.listRecommendations({
       limit: parsed.data.limit,
       ...(parsed.data.agent ? { agent: parsed.data.agent } : {}),
@@ -126,11 +167,17 @@ export const createMaintenanceApi = (
   app.get('/maintenance/recommendations/:id', async (request, reply) => {
     const id = z.uuid().safeParse((request.params as { id?: unknown }).id);
     if (!id.success) return reply.code(400).send({ error: 'Invalid id' });
-    return (await store.recommendation(id.data)) ?? reply.code(404).send({ error: 'Not found' });
+    return (
+      (await store.recommendation(id.data)) ??
+      reply.code(404).send({ error: 'Not found' })
+    );
   });
   app.post('/maintenance/run', async (request, reply) => {
     const parsed = manualRunSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.code(400).send({ error: 'Invalid body', issues: parsed.error.issues });
+    if (!parsed.success)
+      return reply
+        .code(400)
+        .send({ error: 'Invalid body', issues: parsed.error.issues });
     return engine.run('MANUAL', parsed.data.lookbackHours);
   });
   for (const [path, status] of [
@@ -149,14 +196,30 @@ export const createMaintenanceApi = (
   }
   app.get('/maintenance/briefing', async () => {
     const findings = await store.listFindings({ status: 'OPEN', limit: 100 });
-    const rank: Record<string, number> = { CRITICAL: 5, HIGH: 4, MEDIUM: 3, LOW: 2, INFO: 1 };
+    const rank: Record<string, number> = {
+      CRITICAL: 5,
+      HIGH: 4,
+      MEDIUM: 3,
+      LOW: 2,
+      INFO: 1,
+    };
     const important = findings
       .filter((finding) => (rank[finding.severity] ?? 0) >= 3)
-      .sort((a, b) => (rank[b.severity] ?? 0) - (rank[a.severity] ?? 0) || b.confidence - a.confidence)
+      .sort(
+        (a, b) =>
+          (rank[b.severity] ?? 0) - (rank[a.severity] ?? 0) ||
+          b.confidence - a.confidence,
+      )
       .slice(0, 10);
     return {
       generatedAt: new Date().toISOString(),
-      health: important.some((finding) => ['CRITICAL', 'HIGH'].includes(finding.severity)) ? 'critical' : important.length ? 'warning' : 'healthy',
+      health: important.some((finding) =>
+        ['CRITICAL', 'HIGH'].includes(finding.severity),
+      )
+        ? 'critical'
+        : important.length
+          ? 'warning'
+          : 'healthy',
       items: important.map((finding) => ({
         agent: finding.agentName,
         severity: finding.severity.toLowerCase(),

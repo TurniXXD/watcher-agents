@@ -123,17 +123,17 @@ The ready-to-copy names also live in `github-variables.production.example` and `
 
 Runtime credentials are intentionally not uploaded by GitHub Actions. Create these files on the VPS:
 
-| Server file                            | Purpose                                        |
-| -------------------------------------- | ---------------------------------------------- |
-| `deploy/runtime/compose.env`           | Non-secret Compose project options             |
-| `deploy/runtime/postgres.env`          | PostgreSQL initialization values               |
-| `deploy/runtime/migrate.env`           | Prisma migration database URL                  |
-| `deploy/runtime/stocks-bot.env`        | Stocks bot runtime and credentials             |
-| `deploy/runtime/publications-bot.env`  | Publications bot runtime values                |
-| `deploy/runtime/news-bot.env`          | Czech and Global news bot values               |
-| `deploy/runtime/mu-clubs-monitor.env`  | MU Clubs API and polling settings              |
-| `deploy/runtime/brno-events-agent.env` | Brno event API and per-source polling settings |
-| `deploy/runtime/briefing-bot.env`      | Morning briefing bot credentials               |
+| Server file                            | Purpose                                         |
+| -------------------------------------- | ----------------------------------------------- |
+| `deploy/runtime/compose.env`           | Non-secret Compose project options              |
+| `deploy/runtime/postgres.env`          | PostgreSQL initialization values                |
+| `deploy/runtime/migrate.env`           | Prisma migration database URL                   |
+| `deploy/runtime/stocks-bot.env`        | Stocks bot runtime and credentials              |
+| `deploy/runtime/publications-bot.env`  | Publications bot runtime values                 |
+| `deploy/runtime/news-bot.env`          | Czech and Global news bot values                |
+| `deploy/runtime/mu-clubs-monitor.env`  | MU Clubs API and polling settings               |
+| `deploy/runtime/brno-events-agent.env` | Brno event API and per-source polling settings  |
+| `deploy/runtime/briefing-bot.env`      | Morning briefing bot credentials                |
 | `deploy/runtime/maintenance-agent.env` | Maintenance API, Telegram, and scheduler values |
 
 You can copy the readable examples from `deploy/presets`, or render all files from environment variables:

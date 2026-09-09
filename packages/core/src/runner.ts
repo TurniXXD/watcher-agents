@@ -190,18 +190,24 @@ export class WatcherRunner {
           itemsFetched: result.fetchedCount,
           itemsProduced: result.newItemCount,
           itemsFiltered: Math.max(0, result.fetchedCount - result.newItemCount),
-          duplicatesRemoved: Math.max(0, result.fetchedCount - result.newItemCount),
+          duplicatesRemoved: Math.max(
+            0,
+            result.fetchedCount - result.newItemCount,
+          ),
           llm: {
             inputTokens: result.analyses.reduce(
-              (sum, analysis) => sum + (analysis.outcome.metrics?.promptTokens ?? 0),
+              (sum, analysis) =>
+                sum + (analysis.outcome.metrics?.promptTokens ?? 0),
               0,
             ),
             outputTokens: result.analyses.reduce(
-              (sum, analysis) => sum + (analysis.outcome.metrics?.completionTokens ?? 0),
+              (sum, analysis) =>
+                sum + (analysis.outcome.metrics?.completionTokens ?? 0),
               0,
             ),
             costUsd: result.analyses.reduce(
-              (sum, analysis) => sum + (analysis.outcome.metrics?.estimatedCostUsd ?? 0),
+              (sum, analysis) =>
+                sum + (analysis.outcome.metrics?.estimatedCostUsd ?? 0),
               0,
             ),
           },
@@ -218,7 +224,8 @@ export class WatcherRunner {
           configId,
           failedAnalysisCount: result.failedAnalysisCount,
           llmRequestCount: result.analyses.reduce(
-            (sum, analysis) => sum + (analysis.outcome.metrics?.llmCallCount ?? 0),
+            (sum, analysis) =>
+              sum + (analysis.outcome.metrics?.llmCallCount ?? 0),
             0,
           ),
           llmErrorCount: result.failedAnalysisCount,

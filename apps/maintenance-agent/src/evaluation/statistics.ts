@@ -7,10 +7,16 @@ export const median = (values: number[]): number | undefined => {
     : sorted[middle];
 };
 
-export const percentile = (values: number[], quantile: number): number | undefined => {
+export const percentile = (
+  values: number[],
+  quantile: number,
+): number | undefined => {
   if (values.length === 0) return undefined;
   const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.ceil(quantile * sorted.length) - 1);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.ceil(quantile * sorted.length) - 1,
+  );
   return sorted[Math.max(0, index)];
 };
 

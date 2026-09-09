@@ -42,7 +42,11 @@ export class MaintenanceEngine {
     return this.#active;
   }
 
-  private async execute(type: EvaluationType, lookbackHours: number, now: Date) {
+  private async execute(
+    type: EvaluationType,
+    lookbackHours: number,
+    now: Date,
+  ) {
     const maintenanceRun = await this.#store.startRun(type, lookbackHours);
     const startedAt = new Date();
     try {
@@ -50,7 +54,10 @@ export class MaintenanceEngine {
       const importedRuns = await this.#importer.importSince(since);
       const rows = await this.#store.listRuns(since);
       const runs: RunObservation[] = rows
-        .filter((row) => this.selfReviewEnabled || row.agentName !== 'maintenance-agent')
+        .filter(
+          (row) =>
+            this.selfReviewEnabled || row.agentName !== 'maintenance-agent',
+        )
         .map((row) => ({
           id: row.id,
           agentName: row.agentName,
@@ -87,7 +94,8 @@ export class MaintenanceEngine {
             ...health,
             uniqueItemsProduced: Math.max(
               0,
-              health.itemsProduced - Math.round((health.duplicateRate ?? 0) * health.itemsProduced),
+              health.itemsProduced -
+                Math.round((health.duplicateRate ?? 0) * health.itemsProduced),
             ),
           }),
         ),
@@ -107,7 +115,9 @@ export class MaintenanceEngine {
           ...(finding.recommendation.expectedImpact
             ? { expectedImpact: finding.recommendation.expectedImpact }
             : {}),
-          ...(finding.recommendation.risk ? { risk: finding.recommendation.risk } : {}),
+          ...(finding.recommendation.risk
+            ? { risk: finding.recommendation.risk }
+            : {}),
           ...(finding.recommendation.proposal
             ? { proposal: finding.recommendation.proposal }
             : {}),
@@ -138,16 +148,29 @@ export class MaintenanceEngine {
           itemsFetched: runs.length,
           itemsProduced: findings.length,
         },
-        metadata: { type, lookbackHours, recommendationCount, correlationId: randomUUID() },
+        metadata: {
+          type,
+          lookbackHours,
+          recommendationCount,
+          correlationId: randomUUID(),
+        },
       });
       this.logger.info(
-        { maintenanceRunId: maintenanceRun.id, type, ...metrics, findingCount: findings.length },
+        {
+          maintenanceRunId: maintenanceRun.id,
+          type,
+          ...metrics,
+          findingCount: findings.length,
+        },
         'Maintenance evaluation completed',
       );
       return { findings, runId: maintenanceRun.id };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await this.#store.finishRun(maintenanceRun.id, { status: 'FAILED', error: message });
+      await this.#store.finishRun(maintenanceRun.id, {
+        status: 'FAILED',
+        error: message,
+      });
       await this.#telemetry.recordRun({
         id: `maintenance:${maintenanceRun.id}`,
         agentName: 'maintenance-agent',
@@ -158,7 +181,10 @@ export class MaintenanceEngine {
         metrics: { latencyMs: Date.now() - startedAt.getTime() },
         metadata: { type, lookbackHours },
       });
-      this.logger.error({ err: error, type, maintenanceRunId: maintenanceRun.id }, 'Maintenance evaluation failed');
+      this.logger.error(
+        { err: error, type, maintenanceRunId: maintenanceRun.id },
+        'Maintenance evaluation failed',
+      );
       throw error;
     }
   }

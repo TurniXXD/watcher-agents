@@ -40,7 +40,9 @@ const schema = z.object({
     .max(3600)
     .default(300),
   MAINTENANCE_SELF_REVIEW_ENABLED: z.stringbool().default(false),
-  MAINTENANCE_CHANGELOG_PATH: z.string().default('/app/docs/maintenance-changelog.md'),
+  MAINTENANCE_CHANGELOG_PATH: z
+    .string()
+    .default('/app/docs/maintenance-changelog.md'),
   LOG_LEVEL: z.string().default('info'),
 });
 

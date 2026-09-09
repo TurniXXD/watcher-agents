@@ -21,17 +21,24 @@ export class MaintenanceScheduler {
       weeklyMinutes: number;
       jitterMaxSeconds: number;
     },
-    private readonly onReport: (type: ScheduledType, findings: Finding[]) => Promise<void>,
+    private readonly onReport: (
+      type: ScheduledType,
+      findings: Finding[],
+    ) => Promise<void>,
     private readonly logger: WatcherLogger,
   ) {}
 
   public start(): void {
     if (!this.settings.enabled || this.#timer) return;
-    const initialJitter = Math.floor(Math.random() * (this.settings.jitterMaxSeconds + 1)) * 1000;
+    const initialJitter =
+      Math.floor(Math.random() * (this.settings.jitterMaxSeconds + 1)) * 1000;
     this.#timer = setInterval(() => void this.tick(), this.settings.tickMs);
     this.#timer.unref();
     setTimeout(() => void this.tick(), initialJitter).unref();
-    this.logger.info({ ...this.settings, initialJitter }, 'Maintenance scheduler started');
+    this.logger.info(
+      { ...this.settings, initialJitter },
+      'Maintenance scheduler started',
+    );
   }
 
   public async stop(): Promise<void> {
@@ -42,7 +49,10 @@ export class MaintenanceScheduler {
 
   private async due(type: ScheduledType, intervalMinutes: number, now: Date) {
     const latest = await this.store.latestRun(type);
-    return !latest?.finishedAt || now.getTime() - latest.finishedAt.getTime() >= intervalMinutes * 60_000;
+    return (
+      !latest?.finishedAt ||
+      now.getTime() - latest.finishedAt.getTime() >= intervalMinutes * 60_000
+    );
   }
 
   private tick(): Promise<void> {
