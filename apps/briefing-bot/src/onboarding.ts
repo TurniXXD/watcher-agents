@@ -82,6 +82,7 @@ _Important:_ The briefing summarizes available data and may be incomplete. Revie
 
 export const briefingHelp = [
   '/about — what the briefing bot does and how to use it',
+  '/agents — list producers that can be triggered',
   '/briefing — generate a briefing now',
   '/briefing_duration MINUTES — set target length',
   '/briefing_max_duration MINUTES — set hard maximum length',
@@ -109,6 +110,7 @@ export const briefingHelp = [
   '/subscribe WATCHER — enable stocks, medical, or news',
   '/subscribe_all — enable all watchers',
   '/subscriptions — show watcher subscriptions',
+  '/trigger AGENT [SOURCE] — run a producer now; Brno Events accepts an optional source',
   '/unsubscribe WATCHER — disable stocks, medical, or news',
   '/unsubscribe_all — disable all watchers',
   '/voice — show selected voice',

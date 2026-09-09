@@ -79,11 +79,12 @@ export class WatcherPipeline {
       { kind, runId, sourceRequestCount: requests.length },
       'Fetching watcher sources',
     );
+    const sourceRuns: NonNullable<PipelineResult['sourceRuns']> = [];
     const settled = await Promise.allSettled(
-      requests.map(({ source, target, config }) =>
-        this.limiterFor(source).run(async () => {
+      requests.map(({ source, target, config }) => {
+        const sourceStartedAt = Date.now();
+        return this.limiterFor(source).run(async () => {
           const policy = this.providerPolicy(source);
-          const sourceStartedAt = Date.now();
           const attemptAt = new Date();
           const attempt = await this.repository.sourceAttemptDecision?.(
             kind,
@@ -160,13 +161,30 @@ export class WatcherPipeline {
             },
             'Watcher source fetched',
           );
+          sourceRuns.push({
+            source: source.id,
+            target,
+            status: 'SUCCESS',
+            durationMs: Date.now() - sourceStartedAt,
+            itemCount: items.length,
+          });
           return {
             items,
             source: source.id,
             target,
           };
-        }),
-      ),
+        }).catch((error: unknown) => {
+          sourceRuns.push({
+            source: source.id,
+            target,
+            status: 'FAILED',
+            durationMs: Date.now() - sourceStartedAt,
+            itemCount: 0,
+            error: errorMessage(error),
+          });
+          throw error;
+        });
+      }),
     );
 
     const fetchedItems: WatchItem[] = [];
@@ -366,6 +384,7 @@ export class WatcherPipeline {
       ).length,
       analyses,
       sourceFailures,
+      sourceRuns,
       dataCoverage,
       ...(intelligence ? { intelligence } : {}),
     };

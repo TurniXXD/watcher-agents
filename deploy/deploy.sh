@@ -24,6 +24,7 @@ required_files=(
   deploy/runtime/mu-clubs-monitor.env
   deploy/runtime/brno-events-agent.env
   deploy/runtime/briefing-bot.env
+  deploy/runtime/maintenance-agent.env
 )
 
 required_env_values=(
@@ -54,8 +55,16 @@ required_env_values=(
   "deploy/runtime/briefing-bot.env:DATABASE_URL"
   "deploy/runtime/briefing-bot.env:BRIEFING_TELEGRAM_TOKEN"
   "deploy/runtime/briefing-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/briefing-bot.env:BRNO_EVENTS_API_TOKEN"
+  "deploy/runtime/briefing-bot.env:MU_CLUBS_API_TOKEN"
+  "deploy/runtime/briefing-bot.env:BRIEFING_BRNO_EVENTS_URL"
+  "deploy/runtime/briefing-bot.env:BRIEFING_MU_CLUBS_URL"
   "deploy/runtime/briefing-bot.env:OLLAMA_URL"
   "deploy/runtime/briefing-bot.env:OLLAMA_MODEL"
+  "deploy/runtime/maintenance-agent.env:DATABASE_URL"
+  "deploy/runtime/maintenance-agent.env:MAINTENANCE_API_TOKEN"
+  "deploy/runtime/maintenance-agent.env:MAINTENANCE_TELEGRAM_TOKEN"
+  "deploy/runtime/maintenance-agent.env:TELEGRAM_ALLOWED_USER_IDS"
 )
 
 required_piper_voice_files=(
@@ -240,7 +249,7 @@ create_database_backup() {
 }
 
 echo "Pulling release $IMAGE_TAG..."
-compose_candidate pull postgres migrate stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot
+compose_candidate pull postgres migrate stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent
 
 if [[ -n "$(compose_candidate ps --status running -q postgres)" ]] && database_exists; then
   echo "Backing up the running database before changing its container image..."
@@ -297,20 +306,20 @@ if ! compose_candidate up \
   --remove-orphans \
   --wait \
   --wait-timeout 180 \
-  stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot; then
+  stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent; then
   echo "Release failed its container health checks." >&2
   dump_briefing_container_network
 
   if [[ -f "$RELEASE_FILE" ]] && ! cmp -s "$CANDIDATE_FILE" "$RELEASE_FILE"; then
     echo "Restoring the previous healthy application image..."
-    compose_release pull stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot
+    compose_release pull stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent
     compose_release up \
       -d \
       --force-recreate \
       --remove-orphans \
       --wait \
       --wait-timeout 180 \
-      stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot
+      stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent
   elif [[ -f "$RELEASE_FILE" ]]; then
     echo "Previous release matches the failed candidate; skipping an ineffective rollback." >&2
   fi

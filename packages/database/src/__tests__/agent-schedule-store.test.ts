@@ -3,6 +3,67 @@ import type { DatabaseClient } from '../client.js';
 import { AgentScheduleStore } from '../agent-schedule-store.js';
 
 describe('AgentScheduleStore', () => {
+  it('queues an enabled watcher for its existing scheduler', async () => {
+    const nextRunAt = new Date('2026-09-09T10:00:00Z');
+    const findUnique = vi.fn(async () => ({
+      watcherConfig: {
+        id: 'config-1',
+        enabled: true,
+        runInProgress: false,
+      },
+    }));
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const database = {
+      telegramChat: { findUnique },
+      watcherConfig: { updateMany },
+    } as unknown as DatabaseClient;
+
+    await expect(
+      new AgentScheduleStore(database).requestWatcherRun(
+        42n,
+        'news',
+        nextRunAt,
+      ),
+    ).resolves.toEqual({ status: 'QUEUED' });
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { kind_chatId: { kind: 'NEWS', chatId: 42n } },
+      select: {
+        watcherConfig: {
+          select: { id: true, enabled: true, runInProgress: true },
+        },
+      },
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'config-1', enabled: true, runInProgress: false },
+      data: { nextRunAt },
+    });
+  });
+
+  it.each([
+    [null, 'NOT_CONFIGURED'],
+    [
+      {
+        watcherConfig: { id: 'config-1', enabled: false, runInProgress: false },
+      },
+      'DISABLED',
+    ],
+    [
+      { watcherConfig: { id: 'config-1', enabled: true, runInProgress: true } },
+      'BUSY',
+    ],
+  ] as const)('does not queue an unavailable watcher', async (chat, status) => {
+    const updateMany = vi.fn();
+    const database = {
+      telegramChat: { findUnique: vi.fn(async () => chat) },
+      watcherConfig: { updateMany },
+    } as unknown as DatabaseClient;
+
+    await expect(
+      new AgentScheduleStore(database).requestWatcherRun(42n, 'stocks'),
+    ).resolves.toEqual({ status });
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
   it('combines per-chat watcher schedules with global agent state', async () => {
     const database = {
       briefingSettings: {

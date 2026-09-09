@@ -26,6 +26,7 @@ describe('stocks bot command copy', () => {
       'health',
       'help',
       'list_sources',
+      'news',
       'opportunities',
       'pause',
       'reconcile',

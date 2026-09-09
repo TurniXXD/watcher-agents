@@ -10,6 +10,16 @@ const schema = z
     DATABASE_URL: z.string().min(1),
     BRIEFING_TELEGRAM_TOKEN: z.string().min(1),
     TELEGRAM_ALLOWED_USER_IDS: z.string().min(1),
+    BRIEFING_BRNO_EVENTS_URL: z.url().default('http://brno-events-agent:4020'),
+    BRIEFING_MU_CLUBS_URL: z.url().default('http://mu-clubs-monitor:4010'),
+    BRIEFING_AGENT_TRIGGER_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(10_000)
+      .max(600_000)
+      .default(180_000),
+    BRNO_EVENTS_API_TOKEN: optionalString,
+    MU_CLUBS_API_TOKEN: optionalString,
     OLLAMA_URL: z.url(),
     OLLAMA_MODEL: z.string().min(1),
     BRIEFING_EMBEDDING_MODEL: optionalString,

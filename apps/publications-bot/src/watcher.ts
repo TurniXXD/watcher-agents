@@ -19,6 +19,7 @@ import {
   sendSplitMessage,
 } from '@watcher/telegram';
 import type { Api } from 'grammy';
+import type { AgentTelemetryRecorder } from '@watcher/observability';
 
 export const createPublicationsRunner = (
   store: WatcherStore,
@@ -36,6 +37,7 @@ export const createPublicationsRunner = (
     error: string,
     runId: string,
   ) => Promise<void>,
+  telemetry?: AgentTelemetryRecorder,
 ): WatcherRunner => {
   const sources = {
     [PublicationSourceType.PUBMED]: new PubMedSource(),
@@ -91,5 +93,6 @@ export const createPublicationsRunner = (
     logger,
     afterRun,
     afterFailure,
+    telemetry,
   );
 };

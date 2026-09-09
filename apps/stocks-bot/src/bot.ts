@@ -6,6 +6,7 @@ import {
 import {
   StockSourceType,
   type DiscoveryStatus,
+  type StockNewsStore,
   type WatcherStore,
   type ValidationStore,
 } from '@watcher/database';
@@ -27,7 +28,7 @@ import {
   sendSplitMessage,
   stockSymbolSchema,
 } from '@watcher/telegram';
-import { Bot } from 'grammy';
+import { Bot, InputFile } from 'grammy';
 import { z } from 'zod';
 import {
   errorMessage,
@@ -40,6 +41,13 @@ import { registerValidationCommands } from './validation-commands.js';
 import { scheduleExample, stocksAbout, stocksHelp } from './copy.js';
 import { renderStockList, type StockListEntry } from './stock-list.js';
 import { hasReportableStockInformation } from './run-output.js';
+import {
+  parseStockNewsRequest,
+  renderStoredStockNews,
+  storedStockNewsJson,
+  storedStockNewsJsonFilename,
+  stockNewsUsage,
+} from './stock-news.js';
 import {
   appendStockSchedule,
   removeStockSchedule,
@@ -85,6 +93,7 @@ export const createStocksBot = (
   token: string,
   allowedIds: ReadonlySet<number>,
   store: WatcherStore,
+  stockNews: Pick<StockNewsStore, 'list'>,
   validation: ValidationStore,
   validationMinimumSampleSize: number,
   universe: CompanyUniverseManager,
@@ -392,6 +401,35 @@ export const createStocksBot = (
       parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },
     });
+  });
+  bot.command('news', async (ctx) => {
+    const current = await chat(ctx.chat.id);
+    let request;
+    try {
+      request = parseStockNewsRequest(commandArgument(ctx.message?.text));
+    } catch (error) {
+      await ctx.reply(error instanceof Error ? error.message : stockNewsUsage);
+      return;
+    }
+    const { json, ...query } = request;
+    const articles = await stockNews.list({
+      chatConfigId: current.id,
+      ...query,
+    });
+    if (json) {
+      await ctx.replyWithDocument(
+        new InputFile(
+          Buffer.from(storedStockNewsJson(request, articles), 'utf8'),
+          storedStockNewsJsonFilename(request),
+        ),
+      );
+      return;
+    }
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderStoredStockNews(request, articles),
+    );
   });
   bot.command('catalysts', async (ctx) => {
     const current = await chat(ctx.chat.id);

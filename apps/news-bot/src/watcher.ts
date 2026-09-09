@@ -21,6 +21,7 @@ import {
 } from '@watcher/sources/news';
 import { sendSplitMessage } from '@watcher/telegram';
 import type { Api } from 'grammy';
+import type { AgentTelemetryRecorder } from '@watcher/observability';
 import { renderNewsDigest } from './digest.js';
 
 export const buildNewsSourceRequests = (
@@ -115,6 +116,7 @@ export const createNewsRunner = (
     error: string,
     runId: string,
   ) => Promise<void>,
+  telemetry?: AgentTelemetryRecorder,
 ): WatcherRunner => {
   const rssSource = new RssNewsSource();
   const gdeltSource = new GdeltNewsSource();
@@ -173,5 +175,6 @@ export const createNewsRunner = (
     logger,
     afterRun,
     afterFailure,
+    telemetry,
   );
 };

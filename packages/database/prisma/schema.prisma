@@ -382,6 +382,94 @@ enum BriefingFeedbackRating {
   TOO_LONG
 }
 
+enum AgentRunStatus {
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum AgentFeedbackConsumer {
+  BRIEFING_AGENT
+  TELEGRAM
+  USER
+  OTHER
+}
+
+enum AgentFeedbackAction {
+  INCLUDED
+  FILTERED
+  OPENED
+  IGNORED
+  DISMISSED
+  ACTED_ON
+  MARKED_USEFUL
+  MARKED_NOT_USEFUL
+}
+
+enum MaintenanceFindingType {
+  RECURRING_FAILURE
+  NOISY_OUTPUT
+  STALE_SOURCE
+  DUPLICATE_OUTPUT
+  POOR_CLASSIFICATION
+  HIGH_LATENCY
+  HIGH_COST
+  LOW_VALUE_OUTPUT
+  SOURCE_DEGRADATION
+  SCHEDULE_ISSUE
+  CONFIGURATION_ISSUE
+  OTHER
+}
+
+enum MaintenanceSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MaintenanceFindingStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  IGNORED
+}
+
+enum MaintenanceRecommendationType {
+  PROMPT_CHANGE
+  SOURCE_CHANGE
+  SCRAPER_CHANGE
+  CONFIG_CHANGE
+  THRESHOLD_CHANGE
+  SCHEDULE_CHANGE
+  MODEL_CHANGE
+  CODE_CHANGE
+  REMOVE_SOURCE
+  ADD_SOURCE
+  OTHER
+}
+
+enum MaintenanceRecommendationStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+  IMPLEMENTED
+}
+
+enum MaintenanceRunType {
+  HEALTH
+  DAILY
+  WEEKLY
+  MANUAL
+}
+
+enum MaintenanceRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
 model BriefingEvent {
   id                 String                      @id
   watcherBot         BriefingWatcherBot
@@ -772,6 +860,7 @@ model ProcessedItem {
 
   @@unique([watcherKind, source, externalId])
   @@index([watcherKind, contentHash])
+  @@index([watcherKind, ticker, sourceType, publishedAt])
   @@index([url])
 }
 
@@ -1579,4 +1668,168 @@ model BrnoEventSourceRun {
 
   @@index([sourceId, startedAt])
   @@map("brno_event_source_runs")
+}
+
+model AgentRun {
+  id                String         @id
+  agentName         String
+  agentVersion      String?
+  startedAt         DateTime
+  finishedAt        DateTime?
+  status            AgentRunStatus
+  input             Json?
+  output            Json?
+  error             Json?
+  latencyMs         Int?
+  llmProvider       String?
+  llmModel          String?
+  llmInputTokens    Int?
+  llmOutputTokens   Int?
+  llmCostUsd        Decimal?       @db.Decimal(18, 8)
+  itemsFetched      Int?
+  itemsProduced     Int?
+  itemsFiltered     Int?
+  duplicatesRemoved Int?
+  metadata          Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  sources           AgentSourceRun[]
+  feedback          AgentOutputFeedback[]
+
+  @@index([agentName, startedAt])
+  @@index([status, startedAt])
+  @@map("agent_runs")
+}
+
+model AgentSourceRun {
+  id          String   @id @default(uuid())
+  agentRunId  String
+  sourceId    String
+  url         String?
+  status      String
+  latencyMs   Int?
+  itemCount   Int?
+  error       String?
+  createdAt   DateTime @default(now())
+  agentRun    AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@index([agentRunId])
+  @@index([sourceId, createdAt])
+  @@map("agent_source_runs")
+}
+
+model AgentOutputFeedback {
+  id           String                @id @default(uuid())
+  agentRunId   String
+  outputItemId String?
+  consumer     AgentFeedbackConsumer
+  action       AgentFeedbackAction
+  reason       String?
+  createdAt    DateTime              @default(now())
+  agentRun     AgentRun              @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@index([agentRunId, createdAt])
+  @@index([consumer, action, createdAt])
+  @@map("agent_output_feedback")
+}
+
+model MaintenanceSourceHealth {
+  id                    String   @id @default(uuid())
+  agentName             String
+  sourceId              String
+  windowStartedAt       DateTime
+  windowEndedAt         DateTime
+  totalRuns             Int
+  successfulRuns        Int
+  failedRuns            Int
+  successRate           Float
+  lastSuccessfulAt      DateTime?
+  lastNewItemAt         DateTime?
+  averageLatencyMs      Float?
+  consecutiveFailures   Int
+  itemsProduced         Int
+  uniqueItemsProduced   Int
+  duplicateRate         Float?
+  staleDays             Float?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([agentName, sourceId])
+  @@index([sourceId, updatedAt])
+  @@index([agentName, successRate])
+  @@map("maintenance_source_health")
+}
+
+model MaintenanceFinding {
+  id          String                   @id @default(uuid())
+  fingerprint String                   @unique
+  agentName   String
+  type        MaintenanceFindingType
+  severity    MaintenanceSeverity
+  title       String
+  description String
+  evidence    Json
+  confidence  Float
+  detectedAt  DateTime
+  lastSeenAt  DateTime
+  occurrenceCount Int                  @default(1)
+  status      MaintenanceFindingStatus @default(OPEN)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  recommendations MaintenanceRecommendation[]
+
+  @@index([agentName, detectedAt])
+  @@index([type, severity, status])
+  @@map("maintenance_findings")
+}
+
+model MaintenanceRecommendation {
+  id             String                          @id @default(uuid())
+  fingerprint    String                          @unique
+  findingId      String
+  agentName      String
+  type           MaintenanceRecommendationType
+  title          String
+  rationale      String
+  confidence     Float
+  expectedImpact String?
+  risk           String?
+  proposal       Json?
+  status         MaintenanceRecommendationStatus @default(PROPOSED)
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+  finding        MaintenanceFinding              @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([agentName, createdAt])
+  @@index([type, status])
+  @@map("maintenance_recommendations")
+}
+
+model MaintenanceRun {
+  id             String               @id @default(uuid())
+  type           MaintenanceRunType
+  status         MaintenanceRunStatus @default(RUNNING)
+  startedAt      DateTime             @default(now())
+  finishedAt     DateTime?
+  lookbackHours  Int
+  findingCount   Int                  @default(0)
+  recommendationCount Int             @default(0)
+  error          String?
+  metrics        Json?
+
+  @@index([type, startedAt])
+  @@index([status, startedAt])
+  @@map("maintenance_runs")
+}
+
+model MaintenanceChangeAnnouncement {
+  id          String   @id @default(uuid())
+  contentHash String
+  chatId      BigInt
+  title       String
+  announcedAt DateTime @default(now())
+
+  @@unique([contentHash, chatId])
+  @@index([announcedAt])
+  @@map("maintenance_change_announcements")
 }

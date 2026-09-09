@@ -6,6 +6,7 @@ import {
 } from '@watcher/core';
 import {
   BriefingWatcherHealthStore,
+  AgentTelemetryStore,
   NewsConfigurationStore,
   PostgresBriefingEventRepository,
   WatcherStore,
@@ -31,6 +32,7 @@ const store = new WatcherStore(database, {
   sourceBackoffBaseMs: env.SOURCE_BACKOFF_BASE_SECONDS * 1000,
   sourceBackoffMaximumMs: env.SOURCE_BACKOFF_MAX_MINUTES * 60_000,
 });
+const telemetry = new AgentTelemetryStore(database);
 const analyzer = new OllamaProvider({
   url: env.OLLAMA_URL,
   model: env.OLLAMA_MODEL,
@@ -93,6 +95,7 @@ const runner = createNewsRunner(
       'Briefing producer marked unavailable',
     );
   },
+  telemetry,
 );
 runtime.runner = runner;
 const scheduler = new PersistentScheduler(

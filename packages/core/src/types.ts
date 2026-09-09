@@ -116,6 +116,15 @@ export type SourceFailure = {
   message: string;
 };
 
+export type SourceRunResult = {
+  source: string;
+  target: string;
+  status: 'SUCCESS' | 'FAILED';
+  durationMs: number;
+  itemCount: number;
+  error?: string;
+};
+
 export type SourceRequest<TConfig = unknown> = {
   source: Source<TConfig>;
   target: string;
@@ -288,6 +297,7 @@ export type PipelineResult = {
   failedAnalysisCount: number;
   analyses: AnalyzedItem[];
   sourceFailures: SourceFailure[];
+  sourceRuns?: SourceRunResult[];
   dataCoverage?: {
     expectedSources: number;
     successfulSources: number;

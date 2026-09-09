@@ -7,6 +7,7 @@ import { WatcherStore } from '../store.js';
 import { CompanyUniverseStore } from '../universe-store.js';
 import { StockDiscoveryStore } from '../discovery-store.js';
 import { ResourceLeaseStore } from '../resource-lease-store.js';
+import { StockNewsStore } from '../stock-news-store.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -32,6 +33,7 @@ integration('WatcherStore with PostgreSQL', () => {
   const store = new WatcherStore(database);
   const universe = new CompanyUniverseStore(database);
   const eventJournal = new PostgresEventJournal(database);
+  const stockNews = new StockNewsStore(database);
   const discovery = new StockDiscoveryStore(database, {
     investigationMs: 90 * 60_000,
     highResolutionIntervalMs: 5 * 60_000,
@@ -256,6 +258,159 @@ integration('WatcherStore with PostgreSQL', () => {
       type: 'observation.discovered',
       aggregateType: 'OBSERVATION',
       aggregateId: observation.id,
+    });
+  });
+
+  it('lists only this chat stock news by publication time and removes duplicate coverage', async () => {
+    const chat = await store.ensureChat('STOCKS', 779n);
+    const run = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
+    if (!run) throw new Error('Expected run');
+    const newsItem = (
+      externalId: string,
+      ticker: string,
+      headline: string,
+      url: string,
+      publishedAt?: string,
+    ): WatchItem => ({
+      id: `NEWS:${externalId}`,
+      source: 'NEWS',
+      externalId,
+      title: headline,
+      url,
+      ...(publishedAt
+        ? {
+            publishedAt: new Date(publishedAt),
+            eventAt: new Date(publishedAt),
+          }
+        : {}),
+      content: `${headline}\nStored article context for ${ticker}.`,
+      sourceType: 'NEWS',
+      category: 'NEWS',
+      normalizedFacts: { publisherDomain: 'reuters.com' },
+      entities: [ticker],
+      reliability: 0.7,
+      metadata: { symbol: ticker },
+    });
+    await store.prepareItemsForRun(
+      'STOCKS',
+      run.id,
+      [
+        newsItem(
+          'recent',
+          'MU',
+          'Micron expands advanced memory production',
+          'https://example.com/recent?utm_source=gdelt',
+          '2026-09-04T18:00:00Z',
+        ),
+        newsItem(
+          'recent-duplicate',
+          'MU',
+          'Micron expands advanced memory production',
+          'https://example.com/recent',
+          '2026-09-04T17:00:00Z',
+        ),
+        newsItem(
+          'distinct',
+          'MU',
+          'Micron raises its quarterly revenue outlook',
+          'https://example.com/outlook',
+          '2026-09-03T12:00:00Z',
+        ),
+        newsItem(
+          'outside-range',
+          'MU',
+          'Old Micron story',
+          'https://example.com/old',
+          '2026-08-31T23:59:59Z',
+        ),
+        newsItem(
+          'other-ticker',
+          'NVDA',
+          'Nvidia product update',
+          'https://example.com/nvidia',
+          '2026-09-04T19:00:00Z',
+        ),
+        newsItem(
+          'missing-publication-time',
+          'MU',
+          'Undated Micron report',
+          'https://example.com/undated',
+        ),
+      ],
+      0,
+    );
+    const recent = await database.processedItem.findUniqueOrThrow({
+      where: {
+        watcherKind_source_externalId: {
+          watcherKind: 'STOCKS',
+          source: 'NEWS',
+          externalId: 'recent',
+        },
+      },
+    });
+    await database.analysis.create({
+      data: {
+        runId: run.id,
+        processedItemId: recent.id,
+        status: 'SUCCESS',
+        result: {
+          title: 'Analyzed title',
+          summary: 'Micron is adding advanced memory production capacity.',
+          importance: 8,
+          sentiment: 'positive',
+          eventType: 'CAPACITY_EXPANSION',
+          positives: [],
+          negatives: [],
+          risks: [],
+          catalysts: [],
+          confidence: 0.9,
+        },
+      },
+    });
+
+    const otherChat = await store.ensureChat('STOCKS', 780n);
+    const otherRun = await store.claimRun(
+      otherChat.watcherConfig!.id,
+      'MANUAL',
+    );
+    if (!otherRun) throw new Error('Expected other chat run');
+    await store.prepareItemsForRun(
+      'STOCKS',
+      otherRun.id,
+      [
+        newsItem(
+          'other-chat',
+          'MU',
+          'Micron story saved only for another chat',
+          'https://example.com/other-chat',
+          '2026-09-04T20:00:00Z',
+        ),
+      ],
+      0,
+    );
+
+    const articles = await stockNews.list({
+      chatConfigId: chat.id,
+      ticker: 'mu',
+      from: new Date('2026-09-01T00:00:00Z'),
+      to: new Date('2026-09-05T00:00:00Z'),
+    });
+
+    expect(articles).toHaveLength(2);
+    expect(articles.map(({ headline }) => headline)).toEqual([
+      'Micron expands advanced memory production',
+      'Micron raises its quarterly revenue outlook',
+    ]);
+    expect(articles[0]).toMatchObject({
+      publishedAt: new Date('2026-09-04T18:00:00Z'),
+      tickers: ['MU'],
+      summary: 'Micron is adding advanced memory production capacity.',
+      description:
+        'Micron expands advanced memory production\nStored article context for MU.',
+      source: 'reuters.com',
+      url: 'https://example.com/recent?utm_source=gdelt',
+      sentiment: 'positive',
+      importance: 8,
     });
   });
 

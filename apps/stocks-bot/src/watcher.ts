@@ -25,6 +25,7 @@ import {
 } from './sources/index.js';
 import { renderStockDigest, sendSplitMessage } from '@watcher/telegram';
 import type { Api } from 'grammy';
+import type { AgentTelemetryRecorder } from '@watcher/observability';
 import {
   hasReportableStockInformation,
   reportableStockResult,
@@ -62,6 +63,7 @@ export const createStocksRunner = (
     error: string,
     runId: string,
   ) => Promise<void>,
+  telemetry?: AgentTelemetryRecorder,
 ): WatcherRunner => {
   const price = new StooqPriceSource();
   const investorRelations = new InvestorRelationsSource();
@@ -318,5 +320,6 @@ export const createStocksRunner = (
     logger,
     afterRun,
     afterFailure,
+    telemetry,
   );
 };

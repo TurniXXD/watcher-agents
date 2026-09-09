@@ -29,6 +29,10 @@ import {
   renderAgentSchedules,
   type AgentScheduleReader,
 } from './schedule-overview.js';
+import {
+  AgentTriggerError,
+  type AgentTriggerRunner,
+} from './agent-triggers.js';
 
 type VoicePreview = (context: Context, voice: BriefingVoiceId) => Promise<void>;
 export type BriefingCommandRunner = (
@@ -145,6 +149,7 @@ export const createBriefingBot = (
   runBriefing?: BriefingCommandRunner,
   logger?: WatcherLogger,
   scheduleReader?: AgentScheduleReader,
+  agentTriggers?: AgentTriggerRunner,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
@@ -245,6 +250,50 @@ export const createBriefingBot = (
     await context.reply(
       renderAgentSchedules(await scheduleReader.get(BigInt(context.chat.id))),
     );
+  });
+  bot.command('agents', async (context) => {
+    await context.reply(
+      agentTriggers
+        ? agentTriggers.describe()
+        : 'Producer triggers are not configured.',
+    );
+  });
+  bot.command('trigger', async (context) => {
+    if (!agentTriggers) {
+      await context.reply('Producer triggers are not configured.');
+      return;
+    }
+    const parts = commandArgument(context.message?.text)
+      .trim()
+      .split(/\s+/u)
+      .filter(Boolean);
+    const agent = parts[0];
+    if (!agent || parts.length > 2) {
+      await context.reply(agentTriggers.describe());
+      return;
+    }
+    const status = await context.reply(`⏳ Triggering ${agent}…`);
+    try {
+      const result = await agentTriggers.trigger(
+        BigInt(context.chat.id),
+        agent,
+        parts[1],
+      );
+      await context.api.editMessageText(
+        context.chat.id,
+        status.message_id,
+        result.message,
+      );
+    } catch (error) {
+      if (!(error instanceof AgentTriggerError)) reportError(error);
+      await context.api.editMessageText(
+        context.chat.id,
+        status.message_id,
+        error instanceof AgentTriggerError
+          ? `❌ ${error.message}`
+          : `❌ ${agent} trigger failed. Check Briefing Bot logs.`,
+      );
+    }
   });
   bot.command(['settings', 'briefing_settings'], async (context) => {
     await context.reply(

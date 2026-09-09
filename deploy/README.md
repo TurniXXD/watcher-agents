@@ -2,7 +2,7 @@
 
 Production deployment uses GitHub Actions, GitHub Container Registry (GHCR), Tailscale, OpenSSH, Docker Compose, and a server-managed runtime configuration. The `deploy-vps` workflow runs after `watcher-ci` succeeds on `main`; it can also be started manually from the Actions page.
 
-GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, and the one-shot `migrate` service. Ollama remains outside this Compose stack.
+GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `maintenance-agent`, and the one-shot `migrate` service. Ollama remains outside this Compose stack.
 
 ## Security model
 
@@ -134,6 +134,7 @@ Runtime credentials are intentionally not uploaded by GitHub Actions. Create the
 | `deploy/runtime/mu-clubs-monitor.env`  | MU Clubs API and polling settings              |
 | `deploy/runtime/brno-events-agent.env` | Brno event API and per-source polling settings |
 | `deploy/runtime/briefing-bot.env`      | Morning briefing bot credentials               |
+| `deploy/runtime/maintenance-agent.env` | Maintenance API, Telegram, and scheduler values |
 
 You can copy the readable examples from `deploy/presets`, or render all files from environment variables:
 
@@ -149,6 +150,7 @@ cp deploy/presets/news-bot.env.example deploy/runtime/news-bot.env
 cp deploy/presets/mu-clubs-monitor.env.example deploy/runtime/mu-clubs-monitor.env
 cp deploy/presets/brno-events-agent.env.example deploy/runtime/brno-events-agent.env
 cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
+cp deploy/presets/maintenance-agent.env.example deploy/runtime/maintenance-agent.env
 chmod 600 deploy/runtime/*.env
 ```
 

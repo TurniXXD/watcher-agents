@@ -14,9 +14,11 @@ import {
 import {
   CompanyUniverseStore,
   BriefingWatcherHealthStore,
+  AgentTelemetryStore,
   PostgresEventJournal,
   PostgresBriefingEventRepository,
   StockDiscoveryStore,
+  StockNewsStore,
   ResourceLeaseStore,
   createDatabaseClient,
   WatcherStore,
@@ -132,8 +134,10 @@ const store = new WatcherStore(database, {
     shortInterestDaysToCover: env.SHORT_INTEREST_DAYS_TO_COVER_THRESHOLD,
   },
 });
+const telemetry = new AgentTelemetryStore(database);
 const universeStore = new CompanyUniverseStore(database);
 const validationStore = new ValidationStore(database);
+const stockNews = new StockNewsStore(database);
 const eventBus = new InProcessEventBus(new PostgresEventJournal(database));
 const universe = new CompanyUniverseManager(universeStore, eventBus);
 const sec = new SecEdgarSource(env.SEC_USER_AGENT);
@@ -190,6 +194,7 @@ const bot = createStocksBot(
   env.STOCKS_TELEGRAM_TOKEN,
   parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS),
   store,
+  stockNews,
   validationStore,
   env.VALIDATION_MIN_SAMPLE_SIZE,
   universe,
@@ -294,6 +299,7 @@ const runner = createStocksRunner(
       'Briefing producer marked unavailable',
     );
   },
+  telemetry,
 );
 runtime.runner = runner;
 const candidateProcessor = new StockCandidateProcessor(eventBus, runner);

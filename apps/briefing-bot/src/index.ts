@@ -17,6 +17,7 @@ import { OllamaEmbeddingProvider, OllamaProvider } from '@watcher/llm';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { InputFile } from 'grammy';
 import { createBriefingBot, type CalendarCommands } from './bot.js';
+import { AgentTriggerService } from './agent-triggers.js';
 import {
   CalendarCredentialCipher,
   GoogleCalendarOAuth,
@@ -63,6 +64,26 @@ const briefingWatcherHealth = new BriefingWatcherHealthStore(database);
 const briefingEvents = new PostgresBriefingEventRepository(database, logger);
 const briefingDeliveries = new BriefingDeliveryStore(database);
 const agentSchedules = new AgentScheduleStore(database);
+const agentTriggers = new AgentTriggerService({
+  watchers: agentSchedules,
+  ...(env.BRNO_EVENTS_API_TOKEN
+    ? {
+        brnoEvents: {
+          baseUrl: env.BRIEFING_BRNO_EVENTS_URL,
+          token: env.BRNO_EVENTS_API_TOKEN,
+        },
+      }
+    : {}),
+  ...(env.MU_CLUBS_API_TOKEN
+    ? {
+        muClubs: {
+          baseUrl: env.BRIEFING_MU_CLUBS_URL,
+          token: env.MU_CLUBS_API_TOKEN,
+        },
+      }
+    : {}),
+  timeoutMs: env.BRIEFING_AGENT_TRIGGER_TIMEOUT_MS,
+});
 const tts = new PiperLocalTtsProvider({
   dataDirectory: env.PIPER_DATA_DIR,
   pythonExecutable: env.PIPER_PYTHON_PATH,
@@ -143,6 +164,7 @@ const bot = createBriefingBot(
   },
   logger,
   agentSchedules,
+  agentTriggers,
 );
 const scriptModel = new OllamaProvider({
   url: env.OLLAMA_URL,

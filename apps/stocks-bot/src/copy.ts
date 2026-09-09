@@ -14,6 +14,7 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /health — runs, reconciliation, LLM metrics, and source health
 /help — show this command list
 /list_sources — list available sources and provider links
+/news SYMBOL RANGE [--json] — saved stock news by publication time; JSON exports full stored details
 /opportunities — stocks with elevated attention or favorable asymmetry
 /pause — pause scheduled runs
 /reconcile — run the comprehensive daily reconciliation now

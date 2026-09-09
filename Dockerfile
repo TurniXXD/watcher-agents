@@ -18,6 +18,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/brno-events-agent/package.json apps/brno-events-agent/package.json
 COPY apps/briefing-bot/package.json apps/briefing-bot/package.json
 COPY apps/mu-clubs-monitor/package.json apps/mu-clubs-monitor/package.json
+COPY apps/maintenance-agent/package.json apps/maintenance-agent/package.json
 COPY apps/news-bot/package.json apps/news-bot/package.json
 COPY apps/publications-bot/package.json apps/publications-bot/package.json
 COPY apps/stocks-bot/package.json apps/stocks-bot/package.json
@@ -26,6 +27,7 @@ COPY packages/database/package.json packages/database/package.json
 COPY packages/sources/package.json packages/sources/package.json
 COPY packages/llm/package.json packages/llm/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
+COPY packages/observability/package.json packages/observability/package.json
 
 FROM manifests AS dependencies
 
@@ -56,6 +58,7 @@ COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_m
 COPY --from=production-dependencies --chown=node:node /app/apps/brno-events-agent/node_modules ./apps/brno-events-agent/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/briefing-bot/node_modules ./apps/briefing-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/mu-clubs-monitor/node_modules ./apps/mu-clubs-monitor/node_modules
+COPY --from=production-dependencies --chown=node:node /app/apps/maintenance-agent/node_modules ./apps/maintenance-agent/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/news-bot/node_modules ./apps/news-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/publications-bot/node_modules ./apps/publications-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/stocks-bot/node_modules ./apps/stocks-bot/node_modules
@@ -67,6 +70,8 @@ COPY --from=build --chown=node:node /app/apps/briefing-bot/package.json ./apps/b
 COPY --from=build --chown=node:node /app/apps/briefing-bot/dist ./apps/briefing-bot/dist
 COPY --from=build --chown=node:node /app/apps/mu-clubs-monitor/package.json ./apps/mu-clubs-monitor/package.json
 COPY --from=build --chown=node:node /app/apps/mu-clubs-monitor/dist ./apps/mu-clubs-monitor/dist
+COPY --from=build --chown=node:node /app/apps/maintenance-agent/package.json ./apps/maintenance-agent/package.json
+COPY --from=build --chown=node:node /app/apps/maintenance-agent/dist ./apps/maintenance-agent/dist
 COPY --from=build --chown=node:node /app/apps/news-bot/package.json ./apps/news-bot/package.json
 COPY --from=build --chown=node:node /app/apps/news-bot/dist ./apps/news-bot/dist
 COPY --from=build --chown=node:node /app/apps/publications-bot/package.json ./apps/publications-bot/package.json
@@ -80,6 +85,8 @@ COPY --from=build --chown=node:node /app/packages/database/prisma.config.ts ./pa
 COPY --from=build --chown=node:node /app/packages/sources/dist ./packages/sources/dist
 COPY --from=build --chown=node:node /app/packages/llm/dist ./packages/llm/dist
 COPY --from=build --chown=node:node /app/packages/telegram/dist ./packages/telegram/dist
+COPY --from=build --chown=node:node /app/packages/observability/dist ./packages/observability/dist
+COPY --from=build --chown=node:node /app/docs/maintenance-changelog.md ./docs/maintenance-changelog.md
 
 USER node
 

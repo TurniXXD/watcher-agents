@@ -37,6 +37,12 @@ export type AgentScheduleOverview = {
   }>;
 };
 
+export type WatcherRunRequestResult =
+  | { status: 'QUEUED' }
+  | { status: 'BUSY' }
+  | { status: 'DISABLED' }
+  | { status: 'NOT_CONFIGURED' };
+
 const watcherDefinitions = [
   { id: 'stocks', kind: 'STOCKS', healthKind: 'STOCKS' },
   { id: 'medical', kind: 'PUBLICATIONS', healthKind: 'MEDICAL' },
@@ -45,6 +51,34 @@ const watcherDefinitions = [
 
 export class AgentScheduleStore {
   public constructor(private readonly db: DatabaseClient) {}
+
+  public async requestWatcherRun(
+    telegramChatId: bigint,
+    watcherId: WatcherScheduleOverview['id'],
+    requestedAt = new Date(),
+  ): Promise<WatcherRunRequestResult> {
+    const definition = watcherDefinitions.find(({ id }) => id === watcherId);
+    if (!definition) return { status: 'NOT_CONFIGURED' };
+    const chat = await this.db.telegramChat.findUnique({
+      where: {
+        kind_chatId: { kind: definition.kind, chatId: telegramChatId },
+      },
+      select: {
+        watcherConfig: {
+          select: { id: true, enabled: true, runInProgress: true },
+        },
+      },
+    });
+    const config = chat?.watcherConfig;
+    if (!config) return { status: 'NOT_CONFIGURED' };
+    if (!config.enabled) return { status: 'DISABLED' };
+    if (config.runInProgress) return { status: 'BUSY' };
+    const claimed = await this.db.watcherConfig.updateMany({
+      where: { id: config.id, enabled: true, runInProgress: false },
+      data: { nextRunAt: requestedAt },
+    });
+    return claimed.count === 1 ? { status: 'QUEUED' } : { status: 'BUSY' };
+  }
 
   public async get(telegramChatId: bigint): Promise<AgentScheduleOverview> {
     const [briefing, chats, muState, muRun, health, brnoRuns] =
