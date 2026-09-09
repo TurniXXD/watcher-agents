@@ -11,6 +11,10 @@
       "types": "./dist/instagram/index.d.ts",
       "default": "./dist/instagram/index.js"
     },
+    "./news": {
+      "types": "./dist/news/index.d.ts",
+      "default": "./dist/news/index.js"
+    },
     "./web": {
       "types": "./dist/web/index.d.ts",
       "default": "./dist/web/index.js"
@@ -22,7 +26,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@watcher/core": "workspace:*"
+    "@watcher/core": "workspace:*",
+    "fast-xml-parser": "5.11.1",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

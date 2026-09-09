@@ -3,8 +3,8 @@ import { isIP } from 'node:net';
 
 const privateIpv4 = (host: string): boolean => {
   const parts = host.split('.').map(Number);
-  const [a, b] = parts;
-  if (a === undefined || b === undefined) return true;
+  const [a, b, c] = parts;
+  if (a === undefined || b === undefined || c === undefined) return true;
   return (
     a === 0 ||
     a === 10 ||
@@ -12,8 +12,12 @@ const privateIpv4 = (host: string): boolean => {
     (a === 100 && b >= 64 && b <= 127) ||
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && (b === 0 || b === 168)) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 192 && b === 88 && c === 99) ||
+    (a === 192 && b === 168) ||
     (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
     a >= 224
   );
 };

@@ -14,7 +14,7 @@ There is no separate application named Medical Bot. The existing `apps/publicati
 
 Each app owns its commands and callbacks. `packages/telegram` shares authorization, input parsing, HTML escaping, command copy, source/validation messages, digest rendering, progress-message editing, and message splitting. Every command is guarded by configured Telegram user IDs. The Briefing Bot is a third grammY process and owns briefing-specific onboarding and commands.
 
-The News Watcher is a separate grammY process with one bot identity and two persisted editorial profiles, `CZECH` and `GLOBAL`. Operator-configured RSS/Atom feeds and ranking topics remain scoped to their profile, while ingestion, deduplication, analysis, scheduling, and briefing publication are shared.
+The News Watcher is a separate grammY process with one bot identity and two persisted editorial profiles, `CZECH` and `GLOBAL`. A hardcoded, automatically enabled catalog combines official RSS/Atom feeds with shared GDELT discovery adapters; operators can pause individual built-in sources and add optional custom feeds. Ranking topics remain scoped to their profile, while ingestion, deduplication, analysis, scheduling, and briefing publication are shared.
 
 ## 4. Current database architecture
 
@@ -98,7 +98,7 @@ Subscriptions are Briefing Bot preferences keyed by Telegram chat and `WatcherBo
 
 ## 17. Story clustering design
 
-Phase 7 first groups exact identities/dedup keys, then clusters cross-bot events using shared source URLs, normalized entities/tickers, temporal proximity, category compatibility, and conservative semantic similarity. Normalized title, summary, and entities are embedded through Ollama and cached in PostgreSQL `pgvector`; an exact cosine search is restricted to plausible recent candidates. A similarity match can merge events only when a shared entity/ticker, compatible category, or explicit source relationship also supports it. Deterministic evidence remains authoritative, and embedding failure falls back to deterministic clustering without failing the briefing. One stock catalyst and one medical trial may become one story while retaining both source events and provenance.
+Phase 7 first groups exact identities/dedup keys, then clusters cross-bot events using shared source URLs, normalized entities/tickers, temporal proximity, category compatibility, and conservative semantic similarity. Normalized title, summary, and entities from every producer, including News, are embedded through Ollama and cached in the existing PostgreSQL `briefing_events` pgvector columns; an exact cosine search is restricted to plausible recent candidates. A similarity match can merge events only when a shared entity/ticker, compatible category, or explicit source relationship also supports it. Broad News profile/category tags alone are not deterministic duplicate evidence, so cross-publisher and cross-language News coverage relies on the same conservative semantic path. Deterministic evidence remains authoritative, and embedding failure falls back to deterministic clustering without failing the briefing. One stock catalyst and one medical trial may become one story while retaining both source events and provenance.
 
 Story state tracks first/last seen, last briefed, prior summary hash, significance, and open/resolved status. `UNCHANGED` events update evidence but are suppressed unless context materially changed. Clusters must be inspectable; no destructive merge of source events.
 

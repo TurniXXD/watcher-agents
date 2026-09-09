@@ -12,8 +12,8 @@
     "@watcher/core": "workspace:*",
     "@watcher/database": "workspace:*",
     "@watcher/llm": "workspace:*",
+    "@watcher/sources": "workspace:*",
     "@watcher/telegram": "workspace:*",
-    "fast-xml-parser": "5.11.1",
     "grammy": "1.46.0",
     "zod": "4.4.3"
   },

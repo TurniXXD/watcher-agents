@@ -1,10 +1,20 @@
 # Brno Events Agent
 
-`brno-events-agent` is a private Fastify service that polls public Brno event listings, extracts schema.org Event JSON-LD, normalizes and scores events, deduplicates cross-source copies, and stores source provenance in PostgreSQL. It is not a Telegram bot.
+`brno-events-agent` is a private Fastify service that polls public Brno event listings, normalizes and scores events, deduplicates cross-source copies, and stores source provenance in PostgreSQL. It is not a Telegram bot and does not use Ollama.
 
-The first registry covers Meetup, GoOut, VisitBrno/TIC, MUNI, VUT, JIC, and CEITEC. Public pages differ and can change; adapters deliberately return no events when a listing exposes no Event JSON-LD rather than relying on brittle CSS selectors. Override any listing with `<SOURCE>_URL` and disable it with `<SOURCE>_ENABLED=false`. Facebook and Instagram are intentionally not scraped.
+The registry covers Meetup, GoOut, VisitBrno/TIC, MUNI, VUT, JIC, and CEITEC. Each provider has an isolated adapter and schema.org `Event` JSON-LD remains a shared fallback rather than the only input. Override any listing with `<SOURCE>_URL` and disable it with `<SOURCE>_ENABLED=false`. Facebook and Instagram are intentionally not scraped.
 
-Each v1 adapter uses public schema.org `Event` JSON-LD and has fixture-based normalization coverage. GoOut currently exposes usable event records. Other providers may return zero events when their listing page does not expose structured events; this is an explicit degraded capability, not fabricated data. Impact Hub, VIDA!, Hvězdárna, Eventbrite, Brno Expat Centre, KAM, individual venues, Facebook, and Instagram remain deferred until a stable public structured endpoint or an existing reusable authenticated integration is available.
+Provider strategies are deliberately different:
+
+- Meetup reads the public Next.js event payload and falls back to Event JSON-LD. Its authenticated GraphQL API is not required.
+- GoOut reads server-rendered event cards and Event JSON-LD.
+- VisitBrno/TIC reads and follows the public calendar's bounded pagination, including titles, date ranges, links, and images.
+- MUNI reads and follows the official calendar pagination, including descriptions and date ranges.
+- VUT reads its server-rendered official event calendar. The available RSS feed contains publication dates rather than event dates, so it is not used as event timing authority.
+- JIC reads event cards with Czech date/time, description, venue, and event URL.
+- CEITEC uses its public event JSON endpoint with Zod validation and falls back to Event JSON-LD if the endpoint is unavailable.
+
+All adapters have provider-specific fixture tests. A source may still return zero events when the upstream page is empty or no valid future event can be parsed; invalid data is never fabricated. Impact Hub, VIDA!, Hvězdárna, Eventbrite, Brno Expat Centre, KAM, individual venues, Facebook, and Instagram remain deferred until a stable public endpoint or reusable authenticated integration is available.
 
 `GET /health` is public. All other endpoints require `Authorization: Bearer $BRNO_EVENTS_API_TOKEN`: `GET /events`, `/events/:id`, `/events/upcoming`, `/events/briefing`, `POST /run`, and `POST /run/:source`. The briefing endpoint returns structured JSON only.
 

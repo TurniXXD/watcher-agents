@@ -233,9 +233,9 @@ write_env "$RUNTIME_DIR/brno-events-agent.env" \
   CEITEC_ENABLED "${CEITEC_ENABLED:-true}" \
   MEETUP_URL "${MEETUP_URL:-https://www.meetup.com/find/cz--brno/}" \
   GOOUT_URL "${GOOUT_URL:-https://goout.net/en/brno/events/lezjyvlkkzqo/}" \
-  VISITBRNO_URL "${VISITBRNO_URL:-https://www.gotobrno.cz/en/events/}" \
+  VISITBRNO_URL "${VISITBRNO_URL:-https://www.gotobrno.cz/en/events-in-brno/}" \
   MUNI_URL "${MUNI_URL:-https://www.muni.cz/en/events-calendar}" \
-  VUT_URL "${VUT_URL:-https://www.vut.cz/en/but/events/kalendar-akci-f71225}" \
+  VUT_URL "${VUT_URL:-https://www.vut.cz/en/but/events}" \
   JIC_URL "${JIC_URL:-https://www.jic.cz/cz/akce}" \
   CEITEC_URL "${CEITEC_URL:-https://www.ceitec.eu/events/}" \
   LOG_LEVEL "${LOG_LEVEL:-info}"

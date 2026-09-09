@@ -132,6 +132,13 @@ export const eventsDescribeSameStory = (
       titleOverlap >= 0.6
     );
   }
+  if (left.watcherBot === 'news') {
+    // News tags describe broad editorial buckets (for example CZECH/POLITICS),
+    // so tag overlap is not evidence that two articles cover the same event.
+    // Cross-language and paraphrased reports are handled conservatively by the
+    // shared semantic matcher after its category/entity compatibility check.
+    return sharesEntity && titleOverlap >= 0.45;
+  }
   return sharesEntity && (titleOverlap >= 0.45 || tagOverlap >= 0.5);
 };
 

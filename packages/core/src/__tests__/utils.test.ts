@@ -7,6 +7,7 @@ import {
   parseDate,
   recordValue,
 } from '../utils/general.js';
+import { assertPublicHttpUrl } from '../utils/network.js';
 
 describe('shared utilities', () => {
   it('parses supported date representations consistently', () => {
@@ -48,5 +49,16 @@ describe('shared utilities', () => {
     expect(isRecord(['value'])).toBe(false);
     expect(recordValue({ key: 'value' })).toEqual({ key: 'value' });
     expect(recordValue(null)).toEqual({});
+  });
+
+  it('allows public 192.0.x addresses without allowing reserved ranges', () => {
+    expect(() =>
+      assertPublicHttpUrl('https://192.0.66.184/feed'),
+    ).not.toThrow();
+    expect(() => assertPublicHttpUrl('https://192.0.0.1/feed')).toThrow();
+    expect(() => assertPublicHttpUrl('https://192.0.2.1/feed')).toThrow();
+    expect(() => assertPublicHttpUrl('https://192.168.1.1/feed')).toThrow();
+    expect(() => assertPublicHttpUrl('https://198.51.100.1/feed')).toThrow();
+    expect(() => assertPublicHttpUrl('https://203.0.113.1/feed')).toThrow();
   });
 });

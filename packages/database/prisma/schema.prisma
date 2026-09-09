@@ -1330,6 +1330,7 @@ model PublicationSourceConfig {
 model NewsFeed {
   id           String       @id @default(uuid())
   chatConfigId String
+  builtInKey   String?
   scope        NewsScope
   name         String
   url          String
@@ -1339,6 +1340,7 @@ model NewsFeed {
   chatConfig   TelegramChat @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
 
   @@unique([chatConfigId, scope, url])
+  @@unique([chatConfigId, builtInKey])
   @@index([chatConfigId, scope, enabled])
 }
 

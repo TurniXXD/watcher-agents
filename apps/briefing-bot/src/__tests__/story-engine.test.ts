@@ -171,6 +171,62 @@ describe('SemanticStoryMatcher', () => {
       0,
     );
   });
+
+  it('uses semantic evidence instead of broad News profile tags for cross-publisher reports', async () => {
+    const left = event('irozhlas-energy-package', {
+      watcherBot: 'news',
+      category: 'NEWS_POLITICS',
+      title: 'Cabinet approves a new energy security package',
+      summary: 'The Czech cabinet approved measures for energy security.',
+      entities: [
+        { type: 'news_entity', name: 'Czechia' },
+        { type: 'news_entity', name: 'Czech cabinet' },
+      ],
+      tags: ['CZECH', 'POLITICS'],
+      primarySource: 'iROZHLAS',
+    });
+    const right = event('ct24-energy-package', {
+      watcherBot: 'news',
+      category: 'NEWS_POLITICS',
+      title: 'Vlada schvalila soubor opatreni pro energetickou bezpecnost',
+      summary: 'Opatreni maji posilit energetickou bezpecnost Ceska.',
+      entities: [
+        { type: 'news_entity', name: 'Czechia' },
+        { type: 'news_entity', name: 'Czech government' },
+      ],
+      tags: ['CZECH', 'POLITICS'],
+      primarySource: 'CT24',
+    });
+
+    expect(eventsDescribeSameStory(left, right)).toBe(false);
+
+    const matcher = new SemanticStoryMatcher(
+      'embed-model',
+      {
+        embed: vi.fn(async () => [
+          [1, 0],
+          [0.95, 0.05],
+        ]),
+      },
+      {
+        listEmbeddingStates: vi.fn(async () => []),
+        saveEmbedding: vi.fn(async () => undefined),
+        findSemanticPairs: vi.fn(async () => [
+          {
+            leftEventId: left.id,
+            rightEventId: right.id,
+            similarity: 0.95,
+          },
+        ]),
+      },
+      immediateResourceLease,
+    );
+
+    const pairs = await matcher.matchingPairs([left, right]);
+
+    expect(pairs.size).toBe(1);
+    expect(clusterBriefingEvents([left, right], pairs)).toHaveLength(1);
+  });
 });
 
 describe('StoryEngine', () => {

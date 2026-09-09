@@ -53,7 +53,7 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
    Jirka for Calendar event sentences detected as Czech, then joins every
    segment into one Opus voice message.
 
-PostgreSQL uses the pinned `pgvector/pgvector:0.8.6-pg16-bookworm` image and is published only on host loopback as `127.0.0.1:5433`; it is not directly reachable from the public internet. Its data lives in the `watcher-postgres` named volume. The migration creates the `vector` extension once and deployment verifies it before starting applications. Briefing and stock events reuse the same configured Ollama embedding model/provider and the same PostgreSQL extension. Embeddings are cached and used only after ticker/time candidate narrowing and deterministic compatibility checks; similarity alone never merges events. No fixed embedding dimension or second vector database is introduced. The one-shot `migrate` service must complete before applications start. For remote administration, use the SSH/Tailscale tunnel documented in `deploy/README.md`.
+PostgreSQL uses the pinned `pgvector/pgvector:0.8.6-pg16-bookworm` image and is published only on host loopback as `127.0.0.1:5433`; it is not directly reachable from the public internet. Its data lives in the `watcher-postgres` named volume. The migration creates the `vector` extension once and deployment verifies it before starting applications. Briefing events from News and every other producer, plus stock events in the immediate intelligence pipeline, reuse the same configured Ollama embedding provider and PostgreSQL extension. Embeddings are cached and used only after bounded candidate narrowing and deterministic compatibility checks; similarity alone never merges events. No News-specific vector table, fixed embedding dimension, or second vector database is introduced. The one-shot `migrate` service must complete before applications start. For remote administration, use the SSH/Tailscale tunnel documented in `deploy/README.md`.
 
 The bots emit structured JSON logs. At `LOG_LEVEL=info`, watcher runs record start, prepared source count, per-source fetch outcomes, source failures, notification sends, and completion counters. The briefing bot records commands, freshness-gate waits, semantic-clustering counts, context availability and latency, story-selection metrics, script and audio generation, Telegram delivery channels, and the final run duration. Each service exposes an internal `/healthz` readiness endpoint used by Compose; it verifies application startup and PostgreSQL, the Ollama-backed bots also verify Ollama, and Briefing additionally checks every Piper model file. Set `LOG_LEVEL=debug` to also log individual watcher item analysis, cached-analysis reuse, idle briefing scheduler checks, non-command Telegram updates, Piper chunks, and delivery attempts.
 
@@ -222,8 +222,9 @@ Publications bot:
 
 News bot:
 
-- `/feed_add PROFILE URL [NAME]`, `/feed_remove ID`, `/feed_enable ID`, and `/feed_disable ID`
-- `/feeds` to list Czech and Global feeds with their stable IDs
+- `/feeds` to list the automatically configured Czech and Global sources with their stable IDs
+- `/feed_enable ID` and `/feed_disable ID` to control built-in or custom sources
+- `/feed_add PROFILE URL [NAME]` and `/feed_remove ID` for optional custom RSS/Atom feeds; built-in sources cannot be removed
 - `/topic_add PROFILE TOPIC`, `/topic_remove PROFILE TOPIC`, and `/topics`
 - `/run` to process both profiles, or `/run czech` / `/run global` for one profile
 - `/schedule`, `/status`, `/pause`, and `/resume` for the shared persisted runner
@@ -238,7 +239,7 @@ MU Clubs monitor:
 
 Brno Events Agent:
 
-- Polls Meetup, GoOut, VisitBrno/TIC, MUNI, VUT, JIC, and CEITEC through isolated structured-data adapters
+- Polls Meetup, GoOut, VisitBrno/TIC, MUNI, VUT, JIC, and CEITEC through isolated provider-specific API, embedded-data, paginated HTML, and JSON-LD fallback adapters
 - Normalizes, scores, and cross-source deduplicates upcoming Brno events while retaining every source link
 - Exposes `/events`, `/events/upcoming`, and structured `/events/briefing` payloads plus manual source runs
 - Requires `Authorization: Bearer $BRNO_EVENTS_API_TOKEN` except for `GET /health`; see [source and API details](docs/brno-events-agent.md)
@@ -290,7 +291,9 @@ The query list also starts empty. Add a topic such as `/add_query mycorrhizal fu
 
 ### News
 
-News feeds and topics start empty; no editorial source list is imposed. Add public RSS or Atom URLs to either the `czech` or `global` profile. Topics steer relevance ranking within that profile; if a profile has no topics, Ollama assesses general public significance. Feed responses are normalized and deduplicated through the shared watcher pipeline, while important and relevant stories are published to the Briefing Bot as durable `news` events. Enable or disable the `news` subscription from the Briefing Bot independently of the News Watcher's own schedule.
+The News Bot automatically provisions and enables a built-in source catalog for every existing and new chat. The Czech profile includes iROZHLAS, ČT24, ČTK, Seznam Zprávy, Hospodářské noviny, Deník N, Respekt, Aktuálně.cz, Novinky.cz, ČNB, ČSÚ, and Vláda ČR. The Global profile includes Reuters, AP, BBC News, The Guardian, Al Jazeera English, NPR, Financial Times, Bloomberg, The Economist, Politico Europe, Euractiv, Nature News, Science, MIT Technology Review, Ars Technica, WHO, European Commission, ECB, NASA, ESA, IEA, and GDELT. Sources with an official public RSS/Atom feed use it directly; Reuters, AP, Euractiv, IEA, and the broad GDELT profile use GDELT DOC 2.0 discovery. Built-in sources can be disabled and re-enabled but not removed. Optional custom feeds remain supported.
+
+Topics still start empty and steer relevance ranking within their profile; with no topics, Ollama assesses general public significance. Source responses are normalized and deduplicated through the shared watcher pipeline, while important and relevant stories are published to the Briefing Bot as durable `news` events. The Briefing Bot embeds those events in its existing `briefing_events` pgvector columns and uses semantic similarity as secondary evidence when grouping cross-publisher or cross-language coverage; broad News profile/category tags alone never merge stories. Enable or disable the `news` subscription from the Briefing Bot independently of the News Watcher's own schedule.
 
 ## Source support and limitations
 
@@ -311,7 +314,8 @@ News feeds and topics start empty; no editorial source list is imposed. Add publ
 - **bioRxiv:** queries the official API over a recent date window and filters matching title/abstract text.
 - **ClinicalTrials.gov:** uses the v2 structured API.
 - **openFDA:** searches drug adverse-event reports by generic drug name; a provider 404 is treated as no results.
-- **News RSS/Atom:** reads only operator-configured public feed URLs. Initial URLs and every redirect are checked against private, loopback, link-local, and special-purpose network targets. Analysis uses the feed-provided title and summary; it does not scrape arbitrary linked article pages.
+- **News RSS/Atom:** reads the built-in official feeds and optional operator-configured public feed URLs. Initial URLs and every redirect are checked against private, loopback, link-local, and special-purpose network targets. Analysis uses the feed-provided title and summary; it does not scrape arbitrary linked article pages.
+- **News GDELT:** provides article discovery for built-in publishers without a stable public RSS feed and for the broad GDELT source. Enabled GDELT-backed sources are combined into one bounded request per run to respect provider limits. It contributes headlines and discovery metadata, not licensed full article text; failures are isolated from RSS sources.
 
 External APIs can change, throttle, or return incomplete data. One source failure does not cancel other source results and is included in the run record and digest. Requests are coordinated by a shared limiter for each provider: GDELT is queried serially with at least five seconds between starts, PubMed serializes every NCBI E-utilities request at no more than one per second, bioRxiv reuses one provider response across all queries for 30 minutes, and all Alpha Vantage or Quiver adapters share their provider's queue. The first rate-limit response pauses queued calls for that provider, honors `Retry-After` when supplied, and persists the provider-wide backoff so later runs and other Telegram users do not immediately retry it. Other source failures retain bounded target-specific exponential backoff; a later successful check restores healthy status. The system does not invent fallback content.
 

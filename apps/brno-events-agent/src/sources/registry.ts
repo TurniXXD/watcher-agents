@@ -1,59 +1,116 @@
 import type { EventSource } from '../domain/types.js';
-import { JsonLdEventSource } from './json-ld.js';
+import { CeitecEventSource } from './ceitec.js';
+import { HtmlEventSource, PaginatedHtmlEventSource } from './html-source.js';
+import { parseMeetupHtml } from './meetup.js';
+import {
+  parseGoOutHtml,
+  parseJicHtml,
+  parseMuniHtml,
+  parseVisitBrnoHtml,
+  parseVutHtml,
+} from './site-html.js';
 
 export type SourceSettings = Record<
   string,
   { interval: number; enabled: boolean; url?: string }
 >;
-const definitions = [
-  [
-    'meetup',
-    'Meetup Brno',
-    'https://www.meetup.com/find/cz--brno/',
-    ['networking'],
-  ],
-  [
-    'goout',
-    'GoOut Brno',
-    'https://goout.net/en/brno/events/lezjyvlkkzqo/',
-    ['culture'],
-  ],
-  [
-    'visitbrno',
-    'VisitBrno / TIC Brno',
-    'https://www.gotobrno.cz/en/events/',
-    ['culture'],
-  ],
-  [
-    'muni',
-    'Masaryk University',
-    'https://www.muni.cz/en/events-calendar',
-    ['university', 'lecture'],
-  ],
-  [
-    'vut',
-    'Brno University of Technology',
-    'https://www.vut.cz/en/but/events/kalendar-akci-f71225',
-    ['university', 'engineering'],
-  ],
-  ['jic', 'JIC', 'https://www.jic.cz/cz/akce', ['startup', 'entrepreneurship']],
-  [
-    'ceitec',
-    'CEITEC',
-    'https://www.ceitec.eu/events/',
-    ['science', 'biology', 'biotech'],
-  ],
-] as const;
+const config = (
+  settings: SourceSettings,
+  id: string,
+  defaultUrl: string,
+): { url: string; interval: number; enabled: boolean } => ({
+  ...settings[id]!,
+  url: settings[id]?.url ?? defaultUrl,
+});
 
-export const createSources = (settings: SourceSettings): EventSource[] =>
-  definitions.map(([id, name, defaultUrl, categories]) => {
-    const config = settings[id]!;
-    return new JsonLdEventSource(
-      id,
-      name,
-      config.url ?? defaultUrl,
-      config.interval,
-      config.enabled,
-      [...categories],
-    );
-  });
+export const createSources = (settings: SourceSettings): EventSource[] => {
+  const meetup = config(
+    settings,
+    'meetup',
+    'https://www.meetup.com/find/cz--brno/',
+  );
+  const goout = config(
+    settings,
+    'goout',
+    'https://goout.net/en/brno/events/lezjyvlkkzqo/',
+  );
+  const visitBrno = config(
+    settings,
+    'visitbrno',
+    'https://www.gotobrno.cz/en/events-in-brno/',
+  );
+  const muni = config(
+    settings,
+    'muni',
+    'https://www.muni.cz/en/events-calendar',
+  );
+  const vut = config(settings, 'vut', 'https://www.vut.cz/en/but/events');
+  const jic = config(settings, 'jic', 'https://www.jic.cz/cz/akce');
+  const ceitec = config(settings, 'ceitec', 'https://www.ceitec.eu/events/');
+  return [
+    new HtmlEventSource(
+      'meetup',
+      'Meetup Brno',
+      meetup.url,
+      meetup.interval,
+      meetup.enabled,
+      ['networking'],
+      [parseMeetupHtml],
+    ),
+    new HtmlEventSource(
+      'goout',
+      'GoOut Brno',
+      goout.url,
+      goout.interval,
+      goout.enabled,
+      ['culture'],
+      [parseGoOutHtml],
+    ),
+    new PaginatedHtmlEventSource(
+      'visitbrno',
+      'VisitBrno / TIC Brno',
+      visitBrno.url,
+      visitBrno.interval,
+      visitBrno.enabled,
+      ['culture'],
+      parseVisitBrnoHtml,
+      '#more-actions-grid[href]',
+    ),
+    new PaginatedHtmlEventSource(
+      'muni',
+      'Masaryk University',
+      muni.url,
+      muni.interval,
+      muni.enabled,
+      ['university', 'lecture'],
+      parseMuniHtml,
+      'link[rel="next"][href], a.paging__pages__next[href]',
+    ),
+    new HtmlEventSource(
+      'vut',
+      'Brno University of Technology',
+      vut.url,
+      vut.interval,
+      vut.enabled,
+      ['university', 'engineering'],
+      [parseVutHtml],
+    ),
+    new HtmlEventSource(
+      'jic',
+      'JIC',
+      jic.url,
+      jic.interval,
+      jic.enabled,
+      ['startup', 'entrepreneurship'],
+      [parseJicHtml],
+    ),
+    new CeitecEventSource(
+      'ceitec',
+      'CEITEC',
+      ceitec.url,
+      ceitec.interval,
+      ceitec.enabled,
+      ['science', 'biology', 'biotech'],
+    ),
+  ];
+};

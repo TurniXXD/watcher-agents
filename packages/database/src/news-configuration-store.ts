@@ -22,11 +22,26 @@ const feedUrlSchema = z.url().transform((value, context) => {
 
 export type NewsFeedRecord = {
   id: string;
+  builtInKey: string | null;
   scope: NewsScopeId;
   name: string;
   url: string;
   enabled: boolean;
 };
+
+const builtInFeedSchema = z.object({
+  key: z
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u)
+    .max(100),
+  scope: newsScopeSchema,
+  name: feedNameSchema,
+  url: feedUrlSchema,
+});
+
+export type BuiltInNewsFeed = z.input<typeof builtInFeedSchema>;
+
+export type RemoveNewsFeedResult = 'REMOVED' | 'BUILT_IN' | 'NOT_FOUND';
 
 export type NewsTopicRecord = {
   id: string;
@@ -49,6 +64,20 @@ export class NewsConfigurationStore {
     const scope = newsScopeSchema.parse(rawScope);
     const url = feedUrlSchema.parse(rawUrl);
     const name = feedNameSchema.parse(rawName);
+    const existing = await this.db.newsFeed.findUnique({
+      where: { chatConfigId_scope_url: { chatConfigId, scope, url } },
+    });
+    if (existing?.builtInKey) {
+      const enabled = await this.db.newsFeed.update({
+        where: { id: existing.id },
+        data: { enabled: true },
+      });
+      return {
+        ...enabled,
+        builtInKey: enabled.builtInKey,
+        scope: enabled.scope,
+      };
+    }
     const feed = await this.db.newsFeed.upsert({
       where: { chatConfigId_scope_url: { chatConfigId, scope, url } },
       create: { chatConfigId, scope: NewsScope[scope], url, name },
@@ -58,22 +87,108 @@ export class NewsConfigurationStore {
       { newsFeedId: feed.id, scope: feed.scope },
       'News feed configured',
     );
-    return { ...feed, scope: feed.scope };
+    return { ...feed, builtInKey: feed.builtInKey, scope: feed.scope };
+  }
+
+  public async syncBuiltInFeeds(
+    chatConfigId: string,
+    rawFeeds: readonly BuiltInNewsFeed[],
+  ): Promise<void> {
+    const feeds = z.array(builtInFeedSchema).parse(rawFeeds);
+    const existing = await this.db.newsFeed.findMany({
+      where: { chatConfigId },
+      select: {
+        id: true,
+        builtInKey: true,
+        scope: true,
+        name: true,
+        url: true,
+      },
+    });
+    const byKey = new Map(
+      existing.flatMap((feed) =>
+        feed.builtInKey ? [[feed.builtInKey, feed] as const] : [],
+      ),
+    );
+    const unclaimedByScopeAndUrl = new Map(
+      existing.flatMap((feed) =>
+        feed.builtInKey ? [] : [[`${feed.scope}:${feed.url}`, feed] as const],
+      ),
+    );
+
+    for (const feed of feeds) {
+      const current =
+        byKey.get(feed.key) ??
+        unclaimedByScopeAndUrl.get(`${feed.scope}:${feed.url}`);
+      if (!current) {
+        await this.db.newsFeed.upsert({
+          where: {
+            chatConfigId_scope_url: {
+              chatConfigId,
+              scope: NewsScope[feed.scope],
+              url: feed.url,
+            },
+          },
+          create: {
+            chatConfigId,
+            builtInKey: feed.key,
+            scope: NewsScope[feed.scope],
+            name: feed.name,
+            url: feed.url,
+            enabled: true,
+          },
+          update: { builtInKey: feed.key, name: feed.name },
+        });
+        continue;
+      }
+      if (
+        current.builtInKey !== feed.key ||
+        current.scope !== feed.scope ||
+        current.name !== feed.name ||
+        current.url !== feed.url
+      ) {
+        await this.db.newsFeed.update({
+          where: { id: current.id },
+          data: {
+            builtInKey: feed.key,
+            scope: NewsScope[feed.scope],
+            name: feed.name,
+            url: feed.url,
+          },
+        });
+      }
+    }
   }
 
   public listFeeds(chatConfigId: string): Promise<NewsFeedRecord[]> {
     return this.db.newsFeed.findMany({
       where: { chatConfigId },
       orderBy: [{ scope: 'asc' }, { name: 'asc' }],
-      select: { id: true, scope: true, name: true, url: true, enabled: true },
+      select: {
+        id: true,
+        builtInKey: true,
+        scope: true,
+        name: true,
+        url: true,
+        enabled: true,
+      },
     });
   }
 
-  public async removeFeed(chatConfigId: string, id: string): Promise<boolean> {
+  public async removeFeed(
+    chatConfigId: string,
+    id: string,
+  ): Promise<RemoveNewsFeedResult> {
+    const feed = await this.db.newsFeed.findFirst({
+      where: { id, chatConfigId },
+      select: { builtInKey: true },
+    });
+    if (!feed) return 'NOT_FOUND';
+    if (feed.builtInKey) return 'BUILT_IN';
     const result = await this.db.newsFeed.deleteMany({
       where: { id, chatConfigId },
     });
-    return result.count > 0;
+    return result.count > 0 ? 'REMOVED' : 'NOT_FOUND';
   }
 
   public async setFeedEnabled(

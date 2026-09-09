@@ -11,6 +11,7 @@
   "dependencies": {
     "@watcher/core": "workspace:*",
     "@watcher/database": "workspace:*",
+    "cheerio": "1.2.0",
     "fastify": "5.6.2",
     "zod": "4.4.3"
   },

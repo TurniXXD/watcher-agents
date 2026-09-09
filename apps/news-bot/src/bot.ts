@@ -5,10 +5,15 @@ import {
   type WatcherStore,
 } from '@watcher/database';
 import {
+  builtInNewsSources,
+  builtInNewsSourceUrl,
+} from '@watcher/sources/news';
+import {
   authorizationMiddleware,
   commandArgument,
   formatRunDuration,
   renderRunProgress,
+  splitTelegramMessage,
 } from '@watcher/telegram';
 import { Bot } from 'grammy';
 import { newsAbout, newsHelp } from './copy.js';
@@ -42,8 +47,19 @@ export const createNewsBot = (
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
-  const chat = async (chatId: number) =>
-    store.ensureChat('NEWS', BigInt(chatId), timezone);
+  const chat = async (chatId: number) => {
+    const current = await store.ensureChat('NEWS', BigInt(chatId), timezone);
+    await newsConfiguration.syncBuiltInFeeds(
+      current.id,
+      builtInNewsSources.map((source) => ({
+        key: source.key,
+        scope: source.scope,
+        name: source.name,
+        url: builtInNewsSourceUrl(source),
+      })),
+    );
+    return current;
+  };
 
   bot.command(['start', 'help'], async (context) => {
     await chat(context.chat.id);
@@ -81,19 +97,21 @@ export const createNewsBot = (
   bot.command('feeds', async (context) => {
     const current = await chat(context.chat.id);
     const feeds = await newsConfiguration.listFeeds(current.id);
-    await context.reply(
-      feeds.length
-        ? [
-            'Configured news feeds:',
-            '',
-            ...feeds.map(
-              (feed) =>
-                `${feed.enabled ? '✅' : '⏸'} ${scopeName(feed.scope)} · ${feed.name}\nID: ${feed.id}\n${feed.url}`,
-            ),
-          ].join('\n\n')
-        : 'No feeds configured. Use /feed_add PROFILE URL [NAME].',
-      { link_preview_options: { is_disabled: true } },
-    );
+    const message = feeds.length
+      ? [
+          'News sources (built-in sources are configured automatically):',
+          '',
+          ...feeds.map(
+            (feed) =>
+              `${feed.enabled ? '✅' : '⏸'} ${scopeName(feed.scope)} · ${feed.name}${feed.builtInKey ? ' · built-in' : ' · custom'}\nID: ${feed.id}\n${feed.url}`,
+          ),
+        ].join('\n\n')
+      : 'No news sources are available.';
+    for (const part of splitTelegramMessage(message)) {
+      await context.reply(part, {
+        link_preview_options: { is_disabled: true },
+      });
+    }
   });
   bot.command('feed_add', async (context) => {
     const parts = (commandArgument(context.message?.text) ?? '')
@@ -130,8 +148,14 @@ export const createNewsBot = (
       return;
     }
     const current = await chat(context.chat.id);
-    const removed = await newsConfiguration.removeFeed(current.id, id);
-    await context.reply(removed ? 'Feed removed.' : 'Feed was not found.');
+    const result = await newsConfiguration.removeFeed(current.id, id);
+    await context.reply(
+      result === 'REMOVED'
+        ? 'Feed removed.'
+        : result === 'BUILT_IN'
+          ? 'Built-in sources cannot be removed. Use /feed_disable ID instead.'
+          : 'Feed was not found.',
+    );
   });
   bot.command(['feed_enable', 'feed_disable'], async (context) => {
     const id = commandArgument(context.message?.text);
