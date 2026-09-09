@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { WatcherLogger } from '@watcher/core';
 import type { MaintenanceStore } from '@watcher/database';
-import { authorizationMiddleware } from '@watcher/telegram';
+import { authorizationMiddleware, isAuthorized } from '@watcher/telegram';
 import { Bot } from 'grammy';
 import type { MaintenanceEngine } from './evaluation/engine.js';
 import type { Finding } from './evaluation/types.js';
@@ -60,7 +60,20 @@ export const createMaintenanceBot = (
   changelogPath: string,
 ) => {
   const bot = new Bot(token);
-  bot.use(authorizationMiddleware(allowedIds));
+  const authorize = authorizationMiddleware(allowedIds);
+  bot.use(async (context, next) => {
+    if (!isAuthorized(allowedIds, context.from?.id)) {
+      logger.warn(
+        {
+          telegramUserId: context.from?.id,
+          telegramChatId: context.chat?.id,
+          allowedUserCount: allowedIds.size,
+        },
+        'Unauthorized Maintenance Telegram update rejected',
+      );
+    }
+    await authorize(context, next);
+  });
   const summary = async () => {
     const findings = await store.listFindings({ status: 'OPEN', limit: 100 });
     const lines = findings

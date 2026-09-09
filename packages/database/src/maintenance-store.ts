@@ -104,10 +104,15 @@ export class MaintenanceStore {
     return this.db.maintenanceFinding.upsert({
       where: { fingerprint: input.fingerprint },
       create: {
-        ...input,
+        fingerprint: input.fingerprint,
+        agentName: input.agentName,
         type: MaintenanceFindingType[input.type],
         severity: MaintenanceSeverity[input.severity],
+        title: input.title,
+        description: input.description,
         evidence: prismaJson(input.evidence),
+        confidence: input.confidence,
+        detectedAt: input.detectedAt,
         lastSeenAt: input.detectedAt,
       },
       update: {
