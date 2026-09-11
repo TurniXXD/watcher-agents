@@ -91,7 +91,17 @@ export class GdeltNewsSource implements Source<GdeltNewsConfig> {
         `GDELT rate limit: ${responseText.replaceAll(/\s+/gu, ' ').trim().slice(0, 500)}`,
       );
     }
-    const parsed = responseSchema.parse(JSON.parse(responseText));
+    let responseJson: unknown;
+    try {
+      responseJson = JSON.parse(responseText) as unknown;
+    } catch (error) {
+      const detail = responseText.replaceAll(/\s+/gu, ' ').trim().slice(0, 500);
+      throw new Error(
+        `GDELT returned a non-JSON response${detail ? `: ${detail}` : ''}`,
+        { cause: error },
+      );
+    }
+    const parsed = responseSchema.parse(responseJson);
     const source =
       config.sourceId ??
       (config.scope ? `NEWS_GDELT_${config.scope}` : this.id);

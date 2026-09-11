@@ -20,6 +20,7 @@ import {
 } from '@watcher/telegram';
 import type { Api } from 'grammy';
 import type { AgentTelemetryRecorder } from '@watcher/observability';
+import { fairlyOrderPublicationItems } from './utils/fair-items.js';
 
 export const createPublicationsRunner = (
   store: WatcherStore,
@@ -54,6 +55,7 @@ export const createPublicationsRunner = (
     leasedAnalyzer,
     maxItemsPerRun,
     logger,
+    fairlyOrderPublicationItems,
   );
   const requestsForChat = async (chatId: bigint): Promise<SourceRequest[]> => {
     const chat = await store.getChat('PUBLICATIONS', chatId);

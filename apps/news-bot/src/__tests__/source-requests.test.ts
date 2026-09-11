@@ -42,6 +42,10 @@ describe('built-in news source requests', () => {
     expect(config.query).toContain('domain:reuters.com');
     expect(config.query).toContain('domain:apnews.com');
     expect(config.query).toContain('sourcelang:english');
+    expect(config.query).toBe(
+      '(domain:reuters.com OR domain:apnews.com OR domain:euractiv.com OR domain:iea.org OR conflict OR economy OR politics OR climate OR health OR science OR technology) sourcelang:english',
+    );
+    expect(config.query).not.toContain('((');
     expect(config.metadata?.sourceKeys).toHaveLength(5);
     expect(config.topics).toEqual(['energy']);
   });

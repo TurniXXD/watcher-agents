@@ -46,8 +46,26 @@ export class LegacyTelemetryImporter {
         where: { startedAt: { gte: since } },
       }),
     ]);
+    const existingRunIds = new Set(
+      (
+        await this.db.agentRun.findMany({
+          where: {
+            id: {
+              in: [
+                ...watcherRuns.map((run) => run.id),
+                ...briefingRuns.map((run) => run.id),
+                ...muRuns.map((run) => run.id),
+                ...brnoRuns.map((run) => `brno:${run.id}`),
+              ],
+            },
+          },
+          select: { id: true },
+        })
+      ).map((run) => run.id),
+    );
 
     for (const run of watcherRuns) {
+      if (existingRunIds.has(run.id)) continue;
       const promptTokens = run.analyses.reduce(
         (sum, item) => sum + (item.promptTokens ?? 0),
         0,
@@ -104,30 +122,33 @@ export class LegacyTelemetryImporter {
 
     for (const run of briefingRuns) {
       const metrics = run.metrics ? jsonObject(run.metrics) : {};
-      await this.#telemetry.recordRun({
-        id: run.id,
-        agentName: 'briefing-bot',
-        startedAt: run.startedAt,
-        finishedAt: run.completedAt ?? undefined,
-        status: status(run.status),
-        error: run.failureReason ? { message: run.failureReason } : undefined,
-        metrics: {
-          latencyMs: duration(run.startedAt, run.completedAt),
-          itemsProduced: run.selectedStoryIds.length,
-          itemsFetched:
-            typeof metrics['candidateStoryCount'] === 'number'
-              ? metrics['candidateStoryCount']
-              : undefined,
-          itemsFiltered:
-            typeof metrics['candidateStoryCount'] === 'number'
-              ? Math.max(
-                  0,
-                  metrics['candidateStoryCount'] - run.selectedStoryIds.length,
-                )
-              : undefined,
-        },
-        metadata: { type: run.type, ...metrics },
-      });
+      if (!existingRunIds.has(run.id)) {
+        await this.#telemetry.recordRun({
+          id: run.id,
+          agentName: 'briefing-bot',
+          startedAt: run.startedAt,
+          finishedAt: run.completedAt ?? undefined,
+          status: status(run.status),
+          error: run.failureReason ? { message: run.failureReason } : undefined,
+          metrics: {
+            latencyMs: duration(run.startedAt, run.completedAt),
+            itemsProduced: run.selectedStoryIds.length,
+            itemsFetched:
+              typeof metrics['candidateStoryCount'] === 'number'
+                ? metrics['candidateStoryCount']
+                : undefined,
+            itemsFiltered:
+              typeof metrics['candidateStoryCount'] === 'number'
+                ? Math.max(
+                    0,
+                    metrics['candidateStoryCount'] -
+                      run.selectedStoryIds.length,
+                  )
+                : undefined,
+          },
+          metadata: { type: run.type, ...metrics },
+        });
+      }
       if (run.feedback) {
         const existing = await this.db.agentOutputFeedback.findFirst({
           where: {
@@ -154,6 +175,7 @@ export class LegacyTelemetryImporter {
     }
 
     for (const run of muRuns) {
+      if (existingRunIds.has(run.id)) continue;
       await this.#telemetry.recordRun({
         id: run.id,
         agentName: 'mu-clubs-monitor',
@@ -178,6 +200,7 @@ export class LegacyTelemetryImporter {
     }
 
     for (const run of brnoRuns) {
+      if (existingRunIds.has(`brno:${run.id}`)) continue;
       await this.#telemetry.recordRun({
         id: `brno:${run.id}`,
         agentName: 'brno-events-agent',

@@ -1695,6 +1695,7 @@ model AgentRun {
   updatedAt         DateTime       @updatedAt
   sources           AgentSourceRun[]
   feedback          AgentOutputFeedback[]
+  maintenanceDebugDeliveries MaintenanceDebugDelivery[]
 
   @@index([agentName, startedAt])
   @@index([status, startedAt])
@@ -1832,4 +1833,29 @@ model MaintenanceChangeAnnouncement {
   @@unique([contentHash, chatId])
   @@index([announcedAt])
   @@map("maintenance_change_announcements")
+}
+
+model MaintenanceDebugSubscription {
+  chatId      BigInt   @id
+  enabled     Boolean  @default(false)
+  enabledAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deliveries  MaintenanceDebugDelivery[]
+
+  @@index([enabled, updatedAt])
+  @@map("maintenance_debug_subscriptions")
+}
+
+model MaintenanceDebugDelivery {
+  chatId      BigInt
+  agentRunId  String
+  deliveredAt DateTime @default(now())
+  subscription MaintenanceDebugSubscription @relation(fields: [chatId], references: [chatId], onDelete: Cascade)
+  agentRun     AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@id([chatId, agentRunId])
+  @@index([agentRunId])
+  @@index([deliveredAt])
+  @@map("maintenance_debug_deliveries")
 }

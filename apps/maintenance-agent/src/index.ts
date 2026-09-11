@@ -6,6 +6,11 @@ import { env } from './env.js';
 import { MaintenanceEngine } from './evaluation/engine.js';
 import { MaintenanceScheduler } from './scheduler.js';
 import {
+  CapacityEvaluator,
+  MaintenanceRuntimeMonitor,
+  SystemMetricsSampler,
+} from './runtime-monitor.js';
+import {
   announceChangelog,
   createMaintenanceBot,
   renderReport,
@@ -20,6 +25,7 @@ const engine = new MaintenanceEngine(
 );
 const store = engine.store();
 const allowedIds = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
+const systemMetrics = new SystemMetricsSampler(env.MAINTENANCE_NVIDIA_SMI_PATH);
 const { bot } = createMaintenanceBot(
   env.MAINTENANCE_TELEGRAM_TOKEN,
   allowedIds,
@@ -27,6 +33,7 @@ const { bot } = createMaintenanceBot(
   store,
   logger,
   env.MAINTENANCE_CHANGELOG_PATH,
+  systemMetrics,
 );
 const api = createMaintenanceApi(
   store,
@@ -65,6 +72,29 @@ const scheduler = new MaintenanceScheduler(
   },
   logger,
 );
+const runtimeMonitor = new MaintenanceRuntimeMonitor(
+  store,
+  systemMetrics,
+  new CapacityEvaluator(
+    {
+      CPU: env.MAINTENANCE_CPU_WARNING_PERCENT,
+      memory: env.MAINTENANCE_MEMORY_WARNING_PERCENT,
+      GPU: env.MAINTENANCE_GPU_WARNING_PERCENT,
+    },
+    env.MAINTENANCE_CAPACITY_SUSTAINED_SAMPLES,
+    env.MAINTENANCE_CAPACITY_ALERT_COOLDOWN_MINUTES * 60_000,
+  ),
+  env.MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS,
+  async (message) => {
+    await Promise.allSettled(
+      [...allowedIds].map((chatId) => bot.api.sendMessage(chatId, message)),
+    );
+  },
+  async (chatId, message) => {
+    await bot.api.sendMessage(chatId.toString(), message);
+  },
+  logger,
+);
 
 let stopping = false;
 await api.listen({ host: env.MAINTENANCE_HOST, port: env.MAINTENANCE_PORT });
@@ -84,13 +114,15 @@ void bot.start({
   },
 });
 scheduler.start();
+if (env.MAINTENANCE_RESOURCE_MONITOR_ENABLED) runtimeMonitor.start();
 
 const shutdown = async (signal: string): Promise<void> => {
   if (stopping) return;
   stopping = true;
   logger.info({ signal }, 'Shutting down maintenance agent');
+  await runtimeMonitor.stop();
   await scheduler.stop();
-  await bot.stop();
+  if (bot.isRunning()) await bot.stop();
   await api.close();
   await database.$disconnect();
 };

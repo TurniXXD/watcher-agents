@@ -6,7 +6,11 @@ import {
   type DatabaseClient,
 } from '@watcher/database';
 import type { WatcherLogger } from '@watcher/core';
-import { detectAll } from './detectors.js';
+import {
+  detectAll,
+  detectPerformance,
+  detectRecurringFailures,
+} from './detectors.js';
 import { calculateSourceHealth } from './source-health.js';
 import type { Finding, RunObservation } from './types.js';
 
@@ -53,40 +57,38 @@ export class MaintenanceEngine {
       const since = new Date(now.getTime() - lookbackHours * 3_600_000);
       const importedRuns = await this.#importer.importSince(since);
       const rows = await this.#store.listRuns(since);
-      const runs: RunObservation[] = rows
-        .filter(
-          (row) =>
-            this.selfReviewEnabled || row.agentName !== 'maintenance-agent',
-        )
-        .map((row) => ({
-          id: row.id,
-          agentName: row.agentName,
-          startedAt: row.startedAt,
-          finishedAt: row.finishedAt,
-          status: row.status,
-          latencyMs: row.latencyMs,
-          llmInputTokens: row.llmInputTokens,
-          llmOutputTokens: row.llmOutputTokens,
-          llmCostUsd: row.llmCostUsd === null ? null : Number(row.llmCostUsd),
-          itemsFetched: row.itemsFetched,
-          itemsProduced: row.itemsProduced,
-          itemsFiltered: row.itemsFiltered,
-          duplicatesRemoved: row.duplicatesRemoved,
-          error: errorObject(row.error),
-          metadata: row.metadata,
-          sources: row.sources.map((source) => ({
-            sourceId: source.sourceId,
-            status: source.status,
-            latencyMs: source.latencyMs,
-            itemCount: source.itemCount,
-            error: source.error,
-            createdAt: source.createdAt,
-          })),
-          feedback: row.feedback.map((feedback) => ({
-            action: feedback.action,
-            reason: feedback.reason,
-          })),
-        }));
+      const observations: RunObservation[] = rows.map((row) => ({
+        id: row.id,
+        agentName: row.agentName,
+        startedAt: row.startedAt,
+        finishedAt: row.finishedAt,
+        status: row.status,
+        latencyMs: row.latencyMs,
+        llmInputTokens: row.llmInputTokens,
+        llmOutputTokens: row.llmOutputTokens,
+        llmCostUsd: row.llmCostUsd === null ? null : Number(row.llmCostUsd),
+        itemsFetched: row.itemsFetched,
+        itemsProduced: row.itemsProduced,
+        itemsFiltered: row.itemsFiltered,
+        duplicatesRemoved: row.duplicatesRemoved,
+        error: errorObject(row.error),
+        metadata: row.metadata,
+        sources: row.sources.map((source) => ({
+          sourceId: source.sourceId,
+          status: source.status,
+          latencyMs: source.latencyMs,
+          itemCount: source.itemCount,
+          error: source.error,
+          createdAt: source.createdAt,
+        })),
+        feedback: row.feedback.map((feedback) => ({
+          action: feedback.action,
+          reason: feedback.reason,
+        })),
+      }));
+      const runs = observations.filter(
+        (row) => row.agentName !== 'maintenance-agent',
+      );
       const sourceHealth = calculateSourceHealth(runs, now);
       await Promise.all(
         sourceHealth.map((health) =>
@@ -101,6 +103,15 @@ export class MaintenanceEngine {
         ),
       );
       const findings = detectAll(runs, now);
+      if (this.selfReviewEnabled) {
+        const selfRuns = observations.filter(
+          (row) => row.agentName === 'maintenance-agent',
+        );
+        findings.push(
+          ...detectRecurringFailures(selfRuns, now),
+          ...detectPerformance(selfRuns, now),
+        );
+      }
       let recommendationCount = 0;
       for (const finding of findings) {
         const saved = await this.#store.upsertFinding(finding);

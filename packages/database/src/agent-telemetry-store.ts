@@ -41,6 +41,7 @@ export class AgentTelemetryStore implements AgentTelemetryRecorder {
   public async recordRun(rawRun: unknown): Promise<void> {
     const run = agentRunSchema.parse(rawRun);
     const metrics = run.metrics;
+    const sourceObservedAt = run.finishedAt ?? run.startedAt;
     await this.db.agentRun.upsert({
       where: { id: run.id },
       create: {
@@ -74,6 +75,7 @@ export class AgentTelemetryStore implements AgentTelemetryRecorder {
             latencyMs: source.latencyMs ?? null,
             itemCount: source.itemCount ?? null,
             error: source.error ?? null,
+            createdAt: sourceObservedAt,
           })),
         },
       },
@@ -106,6 +108,7 @@ export class AgentTelemetryStore implements AgentTelemetryRecorder {
             latencyMs: source.latencyMs ?? null,
             itemCount: source.itemCount ?? null,
             error: source.error ?? null,
+            createdAt: sourceObservedAt,
           })),
         },
       },

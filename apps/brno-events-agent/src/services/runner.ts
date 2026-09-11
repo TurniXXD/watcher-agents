@@ -1,4 +1,8 @@
 import type { WatcherLogger } from '@watcher/core';
+import {
+  ProcessResourceTracker,
+  type AgentTelemetryRecorder,
+} from '@watcher/observability';
 import type { EventSource } from '../domain/types.js';
 import type { EventRepository } from '../repositories/event-repository.js';
 import { scoreEvent } from './relevance.js';
@@ -15,6 +19,7 @@ export class EventRunner {
     private readonly sources: EventSource[],
     private readonly logger: WatcherLogger,
     private readonly publisher: BrnoEventPublisher = noOpEventPublisher,
+    private readonly telemetry?: AgentTelemetryRecorder,
   ) {}
   public sourceIds(): string[] {
     return this.sources.map((source) => source.id);
@@ -26,7 +31,7 @@ export class EventRunner {
     if (sourceId && selected.length === 0)
       throw new Error(`Unknown source: ${sourceId}`);
     const settled = await Promise.allSettled(
-      selected.map((source) => this.runSource(source)),
+      selected.map((source) => this.runSource(source, 'MANUAL')),
     );
     const results = settled.map((outcome, index) =>
       outcome.status === 'fulfilled'
@@ -54,13 +59,67 @@ export class EventRunner {
         now.getTime() - (lastRuns.get(source.id)?.getTime() ?? 0) >=
           source.intervalMinutes * 60_000,
     );
-    return Promise.allSettled(due.map((source) => this.runSource(source)));
+    return Promise.allSettled(
+      due.map((source) => this.runSource(source, 'SCHEDULED')),
+    );
   }
-  private async runSource(source: EventSource) {
+
+  private async recordSourceTelemetry(
+    id: string,
+    sourceId: string,
+    startedAt: Date,
+    trigger: 'MANUAL' | 'SCHEDULED',
+    status: 'success' | 'failed',
+    counts: {
+      fetched: number;
+      produced: number;
+      duplicates: number;
+    },
+    resources: ProcessResourceTracker,
+    error?: string,
+  ): Promise<void> {
+    const resourceUsage = resources.finish();
+    try {
+      await this.telemetry?.recordRun({
+        id: `brno:${id}`,
+        agentName: 'brno-events-agent',
+        startedAt,
+        finishedAt: new Date(),
+        status,
+        ...(error ? { error: { message: error } } : {}),
+        metrics: {
+          latencyMs: Date.now() - startedAt.getTime(),
+          itemsFetched: counts.fetched,
+          itemsProduced: counts.produced,
+          duplicatesRemoved: counts.duplicates,
+        },
+        sources: [
+          {
+            sourceId,
+            status,
+            latencyMs: Date.now() - startedAt.getTime(),
+            itemCount: counts.fetched,
+            ...(error ? { error } : {}),
+          },
+        ],
+        metadata: { trigger, resourceUsage },
+      });
+    } catch (error) {
+      this.logger.warn(
+        { err: error },
+        'Brno events telemetry recording failed',
+      );
+    }
+  }
+  private async runSource(
+    source: EventSource,
+    trigger: 'MANUAL' | 'SCHEDULED',
+  ) {
     if (this.#running.has(source.id))
       return { source: source.id, status: 'busy' as const };
     this.#running.add(source.id);
     const startedAt = new Date();
+    const resources = new ProcessResourceTracker();
     let fetched = 0,
       created = 0,
       updated = 0,
@@ -77,7 +136,7 @@ export class EventRunner {
           await this.publishEventUpdates(source.id, event, result, startedAt);
         }
       }
-      await this.repository.recordRun(source.id, {
+      const persisted = await this.repository.recordRun(source.id, {
         startedAt,
         success: true,
         fetched,
@@ -94,11 +153,20 @@ export class EventRunner {
         duplicates,
         durationMs: Date.now() - startedAt.getTime(),
       };
+      await this.recordSourceTelemetry(
+        persisted.id,
+        source.id,
+        startedAt,
+        trigger,
+        'success',
+        { fetched, produced: created + updated, duplicates },
+        resources,
+      );
       this.logger.info(result, 'Brno event source completed');
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await this.repository.recordRun(source.id, {
+      const persisted = await this.repository.recordRun(source.id, {
         startedAt,
         success: false,
         fetched,
@@ -107,6 +175,16 @@ export class EventRunner {
         duplicates,
         error: message.slice(0, 5000),
       });
+      await this.recordSourceTelemetry(
+        persisted.id,
+        source.id,
+        startedAt,
+        trigger,
+        'failed',
+        { fetched, produced: created + updated, duplicates },
+        resources,
+        message,
+      );
       this.logger.warn(
         { source: source.id, err: error },
         'Brno event source failed',

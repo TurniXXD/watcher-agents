@@ -12,6 +12,7 @@
     "@watcher/core": "workspace:*",
     "@watcher/database": "workspace:*",
     "@watcher/llm": "workspace:*",
+    "@watcher/observability": "workspace:*",
     "@watcher/telegram": "workspace:*",
     "grammy": "1.46.0",
     "zod": "4.4.3"

@@ -347,6 +347,7 @@ describe('core watcher behavior', () => {
 
     expect(result.fetchedCount).toBe(3);
     expect(result.newItemCount).toBe(2);
+    expect(result.duplicatesRemoved).toBe(0);
     expect(reservedCount).toBe(2);
     expect(maximumActive).toBe(1);
   });

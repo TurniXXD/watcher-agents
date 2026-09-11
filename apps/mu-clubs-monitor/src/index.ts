@@ -1,6 +1,7 @@
 import { createLogger } from '@watcher/core';
 import {
   BriefingWatcherHealthStore,
+  AgentTelemetryStore,
   PostgresBriefingEventRepository,
   createDatabaseClient,
 } from '@watcher/database';
@@ -39,6 +40,7 @@ const monitor = new MuClubsMonitor(
   new BriefingWatcherHealthStore(database),
   env.MU_CLUBS_MONITOR_INTERVAL_MINUTES * 60_000,
   logger,
+  new AgentTelemetryStore(database),
 );
 const api = createApi(
   store,

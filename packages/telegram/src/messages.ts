@@ -113,15 +113,37 @@ export const sendSplitMessage = async (
     });
 };
 
-const failureSection = (result: PipelineResult): string =>
-  result.sourceFailures.length === 0
-    ? ''
-    : `\n\n⚠️ <b>Source errors</b>\n${result.sourceFailures
-        .map(
-          (failure) =>
-            `• <b>${htmlText(failure.source, 100)}</b> · ${htmlText(failure.target, 200)}\n  ${htmlText(failure.message, 600)}`,
-        )
-        .join('\n\n')}`;
+const failureSection = (result: PipelineResult): string => {
+  if (result.sourceFailures.length === 0) return '';
+  const grouped = new Map<
+    string,
+    { source: string; message: string; targets: string[] }
+  >();
+  for (const failure of result.sourceFailures) {
+    const key = `${failure.source}\u0000${failure.message}`;
+    const group = grouped.get(key) ?? {
+      source: failure.source,
+      message: failure.message,
+      targets: [],
+    };
+    if (!group.targets.includes(failure.target))
+      group.targets.push(failure.target);
+    grouped.set(key, group);
+  }
+  const groups = [...grouped.values()];
+  const visible = groups.slice(0, 10).map((failure) => {
+    const target =
+      failure.targets.length === 1
+        ? failure.targets[0]!
+        : `${failure.targets.length} queries (${failure.targets.slice(0, 3).join(', ')}${failure.targets.length > 3 ? ', …' : ''})`;
+    return `• <b>${htmlText(failure.source, 100)}</b> · ${htmlText(target, 240)}\n  ${htmlText(failure.message, 600)}`;
+  });
+  if (groups.length > visible.length)
+    visible.push(
+      `• …and ${groups.length - visible.length} more distinct errors`,
+    );
+  return `\n\n⚠️ <b>Source errors</b>\n${visible.join('\n\n')}`;
+};
 
 const analysisFailureSection = (result: PipelineResult): string => {
   const failures = result.analyses.filter(

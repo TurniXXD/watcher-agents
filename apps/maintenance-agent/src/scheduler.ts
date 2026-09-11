@@ -7,6 +7,7 @@ type ScheduledType = Exclude<EvaluationType, 'MANUAL'>;
 
 export class MaintenanceScheduler {
   #timer: NodeJS.Timeout | undefined;
+  #initialTimer: NodeJS.Timeout | undefined;
   #running: Promise<void> | undefined;
 
   public constructor(
@@ -34,7 +35,11 @@ export class MaintenanceScheduler {
       Math.floor(Math.random() * (this.settings.jitterMaxSeconds + 1)) * 1000;
     this.#timer = setInterval(() => void this.tick(), this.settings.tickMs);
     this.#timer.unref();
-    setTimeout(() => void this.tick(), initialJitter).unref();
+    this.#initialTimer = setTimeout(() => {
+      this.#initialTimer = undefined;
+      void this.tick();
+    }, initialJitter);
+    this.#initialTimer.unref();
     this.logger.info(
       { ...this.settings, initialJitter },
       'Maintenance scheduler started',
@@ -43,7 +48,9 @@ export class MaintenanceScheduler {
 
   public async stop(): Promise<void> {
     if (this.#timer) clearInterval(this.#timer);
+    if (this.#initialTimer) clearTimeout(this.#initialTimer);
     this.#timer = undefined;
+    this.#initialTimer = undefined;
     await this.#running;
   }
 

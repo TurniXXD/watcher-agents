@@ -27,7 +27,7 @@ const source = (
 
 describe('Brno event runner', () => {
   it('isolates a failed source and persists successful source results', async () => {
-    const recordRun = vi.fn(async () => undefined);
+    const recordRun = vi.fn(async () => ({ id: 'source-run' }));
     const repository = {
       save: vi.fn(async () => 'created' as const),
       recordRun,
@@ -66,7 +66,7 @@ describe('Brno event runner', () => {
   it('publishes newly discovered high-relevance events without failing the run', async () => {
     const repository = {
       save: vi.fn(async () => 'created' as const),
-      recordRun: vi.fn(async () => undefined),
+      recordRun: vi.fn(async () => ({ id: 'source-run' })),
     } as unknown as EventRepository;
     const logger = {
       info: vi.fn(),

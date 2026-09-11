@@ -54,4 +54,40 @@ describe('MaintenanceStore', () => {
     expect(input.create).not.toHaveProperty('recommendation');
     expect(input.create).not.toHaveProperty('recommendations');
   });
+
+  it('can release a failed changelog announcement for retry', async () => {
+    const deleteMany = vi.fn(async () => ({ count: 1 }));
+    const database = {
+      maintenanceChangeAnnouncement: { deleteMany },
+    } as unknown as DatabaseClient;
+
+    await new MaintenanceStore(database).releaseChangeAnnouncement(
+      'content-hash',
+      42n,
+    );
+
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { contentHash: 'content-hash', chatId: 42n },
+    });
+  });
+
+  it('starts a fresh persistent debug reporting window', async () => {
+    const upsert = vi.fn(async () => ({ chatId: 42n, enabled: true }));
+    const database = {
+      maintenanceDebugSubscription: { upsert },
+    } as unknown as DatabaseClient;
+    const now = new Date('2026-09-10T12:00:00Z');
+
+    await new MaintenanceStore(database).setDebugEnabled(42n, true, now);
+
+    expect(upsert).toHaveBeenCalledWith({
+      where: { chatId: 42n },
+      create: { chatId: 42n, enabled: true, enabledAt: now },
+      update: {
+        enabled: true,
+        enabledAt: now,
+        deliveries: { deleteMany: {} },
+      },
+    });
+  });
 });

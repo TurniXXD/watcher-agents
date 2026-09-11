@@ -385,8 +385,13 @@ describe('BriefingCoordinator', () => {
     const setup = dependencies({
       watcherLastRunAt: '2026-09-06T01:00:00.000Z',
     });
+    const trigger = vi.fn(async () => ({
+      status: 'QUEUED' as const,
+      message: 'queued',
+    }));
     const coordinator = new BriefingCoordinator({
       ...setup.value,
+      watcherTrigger: { trigger },
       freshness: {
         maximumAgeMs: 60 * 60_000,
         timeoutMs: 0,
@@ -397,6 +402,7 @@ describe('BriefingCoordinator', () => {
     const result = await coordinator.generate(123n, 'SCHEDULED', now);
 
     expect(result.run.status).toBe('PARTIAL');
+    expect(trigger).toHaveBeenCalledWith(123n, 'stocks');
     expect(setup.value.scripts.generate).toHaveBeenCalledWith(
       expect.objectContaining({
         dataQuality: [

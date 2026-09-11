@@ -1,4 +1,62 @@
+import { availableParallelism } from 'node:os';
 import { z } from 'zod';
+
+export type ProcessResourceUsage = {
+  cpuTimeMs: number;
+  cpuAveragePercent: number;
+  cpuNormalizedPercent: number;
+  logicalCpuCount: number;
+  rssStartBytes: number;
+  rssEndBytes: number;
+  rssPeakBytes: number;
+  heapUsedPeakBytes: number;
+};
+
+/** Measures the current Node process only; it does not inspect sibling containers. */
+export class ProcessResourceTracker {
+  readonly #startedAt = performance.now();
+  readonly #startedCpu = process.cpuUsage();
+  readonly #rssStartBytes = process.memoryUsage.rss();
+  readonly #logicalCpuCount = Math.max(1, availableParallelism());
+  #rssPeakBytes = this.#rssStartBytes;
+  #heapUsedPeakBytes = process.memoryUsage().heapUsed;
+  #timer: NodeJS.Timeout | undefined;
+
+  public constructor(sampleIntervalMs = 250) {
+    this.#timer = setInterval(() => this.sampleMemory(), sampleIntervalMs);
+    this.#timer.unref();
+  }
+
+  private sampleMemory(): void {
+    const memory = process.memoryUsage();
+    this.#rssPeakBytes = Math.max(this.#rssPeakBytes, memory.rss);
+    this.#heapUsedPeakBytes = Math.max(
+      this.#heapUsedPeakBytes,
+      memory.heapUsed,
+    );
+  }
+
+  public finish(): ProcessResourceUsage {
+    if (this.#timer) clearInterval(this.#timer);
+    this.#timer = undefined;
+    this.sampleMemory();
+    const elapsedMs = Math.max(1, performance.now() - this.#startedAt);
+    const cpu = process.cpuUsage(this.#startedCpu);
+    const cpuTimeMs = (cpu.user + cpu.system) / 1000;
+    const cpuAveragePercent = (cpuTimeMs / elapsedMs) * 100;
+    return {
+      cpuTimeMs: Math.round(cpuTimeMs),
+      cpuAveragePercent: Math.round(cpuAveragePercent * 10) / 10,
+      cpuNormalizedPercent:
+        Math.round((cpuAveragePercent / this.#logicalCpuCount) * 10) / 10,
+      logicalCpuCount: this.#logicalCpuCount,
+      rssStartBytes: this.#rssStartBytes,
+      rssEndBytes: process.memoryUsage.rss(),
+      rssPeakBytes: this.#rssPeakBytes,
+      heapUsedPeakBytes: this.#heapUsedPeakBytes,
+    };
+  }
+}
 
 export const agentRunStatusSchema = z.enum(['success', 'partial', 'failed']);
 export const feedbackConsumerSchema = z.enum([

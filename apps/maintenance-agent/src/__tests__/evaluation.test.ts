@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   detectAll,
+  detectBriefingUsageMismatch,
   detectDuplicateOutput,
+  detectLowValueOutput,
   detectNoisyOutput,
   detectPoorClassification,
   detectRecurringFailures,
@@ -61,6 +63,45 @@ describe('maintenance evaluation', () => {
       run(index, { itemsProduced: 18, itemsFiltered: 82 }),
     );
     expect(detectNoisyOutput(runs, now)[0]?.type).toBe('NOISY_OUTPUT');
+  });
+
+  it('detects direct low-value consumer feedback', () => {
+    const feedback = Array.from({ length: 10 }, (_, index) => ({
+      action: index < 8 ? 'MARKED_NOT_USEFUL' : 'MARKED_USEFUL',
+      reason: index < 8 ? 'not actionable' : 'useful',
+    }));
+    expect(detectLowValueOutput([run(1, { feedback })], now)[0]).toMatchObject({
+      type: 'LOW_VALUE_OUTPUT',
+      severity: 'HIGH',
+      agentName: 'fixture-agent',
+    });
+  });
+
+  it('detects a mismatch between producer output and briefing usage', () => {
+    const briefingRun = run(1, {
+      agentName: 'briefing-bot',
+      metadata: {
+        noise: {
+          stocks: { eventsEmitted: 100, eventsSelected: 4 },
+        },
+      },
+    });
+    expect(detectBriefingUsageMismatch([briefingRun], now)[0]).toMatchObject({
+      type: 'LOW_VALUE_OUTPUT',
+      agentName: 'stocks-bot',
+      evidence: { emittedCount: 100, selectedCount: 4 },
+    });
+  });
+
+  it('detects an output-volume regression without feedback data', () => {
+    const runs = [2, 3, 2, 30, 32, 31].map((itemsProduced, index) =>
+      run(index, { itemsProduced }),
+    );
+    expect(
+      detectNoisyOutput(runs, now).some(
+        (finding) => finding.evidence['observedValue'] === 31,
+      ),
+    ).toBe(true);
   });
 
   it('detects a high duplicate rate', () => {

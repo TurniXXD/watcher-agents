@@ -11,6 +11,29 @@ import type { Finding, RunObservation, Severity } from './types.js';
 const fingerprint = (agent: string, type: string, scope = 'agent'): string =>
   createHash('sha256').update(`${agent}:${type}:${scope}`).digest('hex');
 
+const recordValue = (value: unknown): Record<string, unknown> | undefined =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+const finiteNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const runErrorMessage = (error: unknown): string | undefined => {
+  if (typeof error === 'string') return error;
+  const record = recordValue(error);
+  return typeof record?.['message'] === 'string'
+    ? record['message']
+    : undefined;
+};
+
+const producerAgentNames: Record<string, string> = {
+  stocks: 'stocks-bot',
+  medical: 'publications-bot',
+  news: 'news-bot',
+  'mu-clubs': 'mu-clubs-monitor',
+};
+
 export const severityForFailureRate = (
   failureRate: number,
   consecutiveFailures: number,
@@ -65,7 +88,7 @@ export const detectRecurringFailures = (
         expectedValue: '< 0.25',
         examples: failures.slice(-3).map((run) => ({
           runId: run.id,
-          description: 'Run failed',
+          description: runErrorMessage(run.error) ?? 'Run failed',
         })),
       },
       confidence: Math.min(0.99, 0.65 + recent.length / 100),
@@ -84,6 +107,22 @@ export const detectRecurringFailures = (
     const rate = 1 - health.successRate;
     if (health.totalRuns < 3 || (health.consecutiveFailures < 3 && rate < 0.25))
       continue;
+    const examples = runs
+      .filter((run) => run.agentName === health.agentName)
+      .flatMap((run) =>
+        run.sources
+          .filter(
+            (source) =>
+              source.sourceId === health.sourceId &&
+              source.status.toLowerCase() !== 'success',
+          )
+          .map((source) => ({
+            runId: run.id,
+            sourceId: source.sourceId,
+            description: source.error ?? 'Source request failed',
+          })),
+      )
+      .slice(-3);
     findings.push({
       ...base(health.agentName, 'RECURRING_FAILURE', health.sourceId, now),
       severity: severityForFailureRate(rate, health.consecutiveFailures),
@@ -96,6 +135,7 @@ export const detectRecurringFailures = (
         consecutiveFailures: health.consecutiveFailures,
         observedValue: rate,
         expectedValue: '< 0.25',
+        examples,
       },
       confidence: Math.min(0.98, 0.65 + health.totalRuns / 100),
       recommendation: {
@@ -132,31 +172,167 @@ export const detectNoisyOutput = (
     );
     const denominator = Math.max(feedback.length, produced + filtered);
     const rate = denominator === 0 ? 0 : filtered / denominator;
-    if (denominator < 10 || rate <= 0.7) continue;
+    if (denominator >= 10 && rate > 0.7) {
+      findings.push({
+        ...base(agentName, 'NOISY_OUTPUT', 'downstream-filtering', now),
+        severity: rate >= 0.9 ? 'HIGH' : 'MEDIUM',
+        title: `${agentName} outputs are frequently filtered`,
+        description: `${Math.round(rate * 100)}% of observed outputs were filtered or ignored.`,
+        evidence: {
+          runCount: selected.length,
+          observedValue: rate,
+          expectedValue: '<= 0.7',
+        },
+        confidence: Math.min(0.98, 0.7 + denominator / 500),
+        recommendation: {
+          type: 'THRESHOLD_CHANGE',
+          title: 'Tighten upstream relevance filtering',
+          rationale: 'Downstream consumers discard most produced items.',
+          proposal: {
+            configDiff: {
+              minimumRelevance: configDiff('current', 'increase by 1'),
+            },
+          },
+        },
+      });
+    }
+
+    const volumes = selected.flatMap((run) =>
+      run.itemsProduced == null ? [] : [run.itemsProduced],
+    );
+    const middle = Math.floor(volumes.length / 2);
+    const prior = median(volumes.slice(0, middle));
+    const current = median(volumes.slice(middle));
+    if (
+      volumes.length >= 6 &&
+      prior !== undefined &&
+      current !== undefined &&
+      current > prior * 2 &&
+      current - prior >= 10
+    ) {
+      findings.push({
+        ...base(agentName, 'NOISY_OUTPUT', 'volume-regression', now),
+        severity: current > prior * 4 ? 'HIGH' : 'MEDIUM',
+        title: `${agentName} output volume increased sharply`,
+        description: `Recent median output volume is ${current} items per run versus ${prior}.`,
+        evidence: {
+          runCount: volumes.length,
+          observedValue: current,
+          expectedValue: prior,
+          baseline: rollingBaseline(volumes),
+        },
+        confidence: 0.84,
+        recommendation: {
+          type: 'THRESHOLD_CHANGE',
+          title: 'Review upstream filtering after the output-volume change',
+          rationale:
+            'Output volume more than doubled relative to the agent’s own baseline.',
+        },
+      });
+    }
+  }
+  return findings;
+};
+
+export const detectLowValueOutput = (
+  runs: RunObservation[],
+  now: Date,
+): Finding[] => {
+  const findings: Finding[] = [];
+  for (const agentName of new Set(runs.map((run) => run.agentName))) {
+    const feedback = runs
+      .filter((run) => run.agentName === agentName)
+      .flatMap((run) => run.feedback);
+    const negative = feedback.filter((item) =>
+      ['IGNORED', 'DISMISSED', 'MARKED_NOT_USEFUL'].includes(item.action),
+    );
+    const rate = feedback.length === 0 ? 0 : negative.length / feedback.length;
+    if (feedback.length < 10 || rate < 0.6) continue;
     findings.push({
-      ...base(agentName, 'NOISY_OUTPUT', 'downstream-filtering', now),
-      severity: rate >= 0.9 ? 'HIGH' : 'MEDIUM',
-      title: `${agentName} outputs are frequently filtered`,
-      description: `${Math.round(rate * 100)}% of observed outputs were filtered or ignored.`,
+      ...base(agentName, 'LOW_VALUE_OUTPUT', 'consumer-feedback', now),
+      severity: rate >= 0.8 ? 'HIGH' : 'MEDIUM',
+      title: `${agentName} outputs receive low-value feedback`,
+      description: `${negative.length} of ${feedback.length} feedback records were ignored, dismissed, or marked not useful.`,
       evidence: {
-        runCount: selected.length,
         observedValue: rate,
-        expectedValue: '<= 0.7',
+        expectedValue: '< 0.6',
+        examples: negative.slice(0, 3).map((item) => ({
+          description: item.reason ?? item.action,
+        })),
       },
-      confidence: Math.min(0.98, 0.7 + denominator / 500),
+      confidence: Math.min(0.98, 0.7 + feedback.length / 500),
       recommendation: {
         type: 'THRESHOLD_CHANGE',
-        title: 'Tighten upstream relevance filtering',
-        rationale: 'Downstream consumers discard most produced items.',
+        title: 'Raise the minimum usefulness threshold',
+        rationale:
+          'Direct consumer feedback indicates that most observed outputs have low value.',
         proposal: {
           configDiff: {
-            minimumRelevance: configDiff('current', 'increase by 1'),
+            minimumImportance: configDiff('current', 'increase by 1'),
           },
         },
       },
     });
   }
   return findings;
+};
+
+export const detectBriefingUsageMismatch = (
+  runs: RunObservation[],
+  now: Date,
+): Finding[] => {
+  const usage = new Map<string, { emitted: number; selected: number }>();
+  for (const run of runs.filter((item) => item.agentName === 'briefing-bot')) {
+    const noise = recordValue(recordValue(run.metadata)?.['noise']);
+    if (!noise) continue;
+    for (const [watcherBot, rawMetrics] of Object.entries(noise)) {
+      const agentName = producerAgentNames[watcherBot];
+      const metrics = recordValue(rawMetrics);
+      const emitted = finiteNumber(metrics?.['eventsEmitted']);
+      const selected = finiteNumber(metrics?.['eventsSelected']);
+      if (!agentName || emitted === undefined || selected === undefined)
+        continue;
+      const aggregate = usage.get(agentName) ?? { emitted: 0, selected: 0 };
+      aggregate.emitted += emitted;
+      aggregate.selected += selected;
+      usage.set(agentName, aggregate);
+    }
+  }
+  return [...usage.entries()].flatMap(([agentName, metrics]): Finding[] => {
+    const selectionRate =
+      metrics.emitted === 0 ? 1 : metrics.selected / metrics.emitted;
+    if (metrics.emitted < 20 || selectionRate >= 0.1) return [];
+    return [
+      {
+        ...base(agentName, 'LOW_VALUE_OUTPUT', 'briefing-usage', now),
+        severity: selectionRate < 0.03 ? 'HIGH' : 'MEDIUM',
+        title: `${agentName} rarely contributes to briefings`,
+        description: `Briefing selected ${metrics.selected} of ${metrics.emitted} emitted events.`,
+        evidence: {
+          metric: 'briefing selection rate',
+          observedValue: selectionRate,
+          expectedValue: '>= 0.1',
+          emittedCount: metrics.emitted,
+          selectedCount: metrics.selected,
+        },
+        confidence: Math.min(0.98, 0.75 + metrics.emitted / 1000),
+        recommendation: {
+          type: 'THRESHOLD_CHANGE',
+          title: 'Align producer ranking with briefing selection criteria',
+          rationale:
+            'The downstream briefing repeatedly rejects more than 90% of this producer’s events.',
+          proposal: {
+            configDiff: {
+              minimumBriefingRelevance: configDiff(
+                'current',
+                'increase after reviewing rejected examples',
+              ),
+            },
+          },
+        },
+      },
+    ];
+  });
 };
 
 export const detectDuplicateOutput = (
@@ -440,6 +616,8 @@ export const detectAll = (
   const all = [
     ...detectRecurringFailures(runs, now),
     ...detectNoisyOutput(runs, now),
+    ...detectLowValueOutput(runs, now),
+    ...detectBriefingUsageMismatch(runs, now),
     ...detectDuplicateOutput(runs, now),
     ...detectPoorClassification(runs, now),
     ...detectStaleSources(runs, now),

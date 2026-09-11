@@ -57,4 +57,22 @@ describe('shared GdeltNewsSource', () => {
       'domain:reuters.com sourcelang:english',
     );
   });
+
+  it('reports a bounded diagnostic when GDELT returns text with HTTP 200', async () => {
+    const source = new GdeltNewsSource(
+      vi.fn(
+        async () => new Response(`Parentheses are invalid ${'x'.repeat(600)}`),
+      ),
+    );
+
+    const error = await source
+      .fetch({ query: 'invalid query' })
+      .catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(
+      /^GDELT returned a non-JSON response: Parentheses are invalid/,
+    );
+    expect((error as Error).message).toMatch(/^.{1,540}$/u);
+  });
 });

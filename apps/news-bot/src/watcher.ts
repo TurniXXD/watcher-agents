@@ -78,6 +78,14 @@ export const buildNewsSourceRequests = (
       : [];
   });
   const sourceKeys = gdeltSources.map(({ key }) => key);
+  const gdeltTerms = gdeltSources.flatMap(({ query }) => {
+    const trimmed = query.trim();
+    const unwrapped = trimmed.match(/^\(([^()]*)\)$/u)?.[1] ?? trimmed;
+    return unwrapped
+      .split(/\s+OR\s+/iu)
+      .map((term) => term.trim())
+      .filter(Boolean);
+  });
   return [
     ...rssRequests,
     {
@@ -85,9 +93,7 @@ export const buildNewsSourceRequests = (
       target: 'GLOBAL:built-in-gdelt',
       targetKey: 'GLOBAL',
       config: {
-        query: `${gdeltSources
-          .map(({ query }) => `(${query})`)
-          .join(' OR ')} sourcelang:english`,
+        query: `(${gdeltTerms.join(' OR ')}) sourcelang:english`,
         sourceName: 'GDELT',
         scope: 'GLOBAL',
         topics: topicsFor('GLOBAL'),

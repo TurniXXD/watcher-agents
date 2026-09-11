@@ -44,6 +44,10 @@ export class WatcherPipeline {
     private readonly analyzer: Analyzer,
     private readonly maxItemsPerRun = 0,
     private readonly logger?: WatcherLogger,
+    private readonly orderItems: (
+      items: WatchItem[],
+      runId: string,
+    ) => WatchItem[] = (items) => items,
   ) {}
 
   private providerPolicy(source: Source): ProviderRequestPolicy {
@@ -225,13 +229,15 @@ export class WatcherPipeline {
     });
 
     await options.onProgress?.({ percent: 45, step: 'Preparing new items' });
-    const uniqueItems = deduplicateItems(fetchedItems);
+    const uniqueItems = this.orderItems(deduplicateItems(fetchedItems), runId);
+    const duplicatesRemoved = fetchedItems.length - uniqueItems.length;
     this.logger?.info(
       {
         kind,
         runId,
         fetchedCount: fetchedItems.length,
         uniqueItemCount: uniqueItems.length,
+        duplicatesRemoved,
         sourceFailureCount: sourceFailures.length,
         maxItemsPerRun: this.maxItemsPerRun,
       },
@@ -377,6 +383,7 @@ export class WatcherPipeline {
     );
     return {
       fetchedCount: fetchedItems.length,
+      duplicatesRemoved,
       newItemCount,
       analyzedCount: analyses.filter(
         ({ outcome }) => outcome.status === 'SUCCESS',

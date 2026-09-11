@@ -49,6 +49,12 @@ import {
 import type { WeatherProvider } from './weather.js';
 import { renderSpokenWeather } from './weather.js';
 import { waitForFreshWatcherRuns } from './briefing-freshness.js';
+import type { AgentTriggerRunner } from './agent-triggers.js';
+import {
+  ProcessResourceTracker,
+  type AgentRun,
+  type AgentTelemetryRecorder,
+} from '@watcher/observability';
 
 type ConfigurationStore = Pick<BriefingConfigurationStore, 'ensure'>;
 type RunStore = Pick<
@@ -86,6 +92,8 @@ export class BriefingCoordinator {
       resources: ResourceLeases;
       weather: WeatherProvider;
       watcherHealth: WatcherHealth;
+      watcherTrigger?: Pick<AgentTriggerRunner, 'trigger'>;
+      telemetry?: AgentTelemetryRecorder;
       calendar?: CalendarProvider;
       logger?: WatcherLogger;
       ttsAttempts?: number;
@@ -138,6 +146,7 @@ export class BriefingCoordinator {
       .filter(({ enabled }) => enabled)
       .map(({ watcherBot }) => watcherBot);
     if (type === 'SCHEDULED' && this.dependencies.freshness) {
+      const watcherTrigger = this.dependencies.watcherTrigger;
       await progress('Waiting for fresh watcher data', 5);
       await waitForFreshWatcherRuns({
         watcherHealth: this.dependencies.watcherHealth,
@@ -146,6 +155,12 @@ export class BriefingCoordinator {
         maximumAgeMs: this.dependencies.freshness.maximumAgeMs,
         timeoutMs: this.dependencies.freshness.timeoutMs,
         pollIntervalMs: this.dependencies.freshness.pollIntervalMs,
+        ...(watcherTrigger
+          ? {
+              trigger: (watcherBot) =>
+                watcherTrigger.trigger(telegramChatId, watcherBot),
+            }
+          : {}),
         ...(this.dependencies.sleep ? { sleep: this.dependencies.sleep } : {}),
         ...(this.dependencies.logger
           ? { logger: this.dependencies.logger }
@@ -228,6 +243,7 @@ export class BriefingCoordinator {
       );
       return { run: started.run, duplicate: true };
     }
+    const resources = new ProcessResourceTracker();
 
     this.dependencies.logger?.info(
       {
@@ -610,6 +626,34 @@ export class BriefingCoordinator {
         },
         'Briefing run completed',
       );
+      await this.recordTelemetry({
+        id: completed.id,
+        agentName: 'briefing-bot',
+        startedAt: new Date(runStartedAt),
+        finishedAt: new Date(),
+        status:
+          status === 'SUCCESS'
+            ? 'success'
+            : status === 'PARTIAL'
+              ? 'partial'
+              : 'failed',
+        metrics: {
+          latencyMs: Date.now() - runStartedAt,
+          itemsFetched: storyResult.metrics.eventsRetrieved,
+          itemsProduced: selectedStories.length,
+          itemsFiltered: Math.max(
+            0,
+            storyResult.metrics.eventsRetrieved - selectedStories.length,
+          ),
+          duplicatesRemoved: storyResult.metrics.duplicateReduction,
+        },
+        metadata: {
+          trigger: type,
+          dataCoverage: coverage.percentage,
+          failedDeliveries: delivery.failedChannels.length,
+          resourceUsage: resources.finish(),
+        },
+      });
       return {
         run: completed,
         duplicate: false,
@@ -630,7 +674,30 @@ export class BriefingCoordinator {
         },
         'Briefing run failed',
       );
+      await this.recordTelemetry({
+        id: started.run.id,
+        agentName: 'briefing-bot',
+        startedAt: new Date(runStartedAt),
+        finishedAt: new Date(),
+        status: 'failed',
+        error: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+        metrics: { latencyMs: Date.now() - runStartedAt },
+        metadata: { trigger: type, resourceUsage: resources.finish() },
+      });
       throw error;
+    }
+  }
+
+  private async recordTelemetry(run: AgentRun): Promise<void> {
+    try {
+      await this.dependencies.telemetry?.recordRun(run);
+    } catch (error) {
+      this.dependencies.logger?.warn(
+        { err: error, runId: run.id },
+        'Briefing telemetry recording failed',
+      );
     }
   }
 

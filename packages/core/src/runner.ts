@@ -8,7 +8,11 @@ import type {
 import type { WatcherLogger } from './logger.js';
 import type { WatcherPipeline } from './pipeline.js';
 import { errorMessage } from './utils/general.js';
-import type { AgentRun, AgentTelemetryRecorder } from '@watcher/observability';
+import {
+  ProcessResourceTracker,
+  type AgentRun,
+  type AgentTelemetryRecorder,
+} from '@watcher/observability';
 
 export interface RunStore {
   claimRun(
@@ -109,6 +113,7 @@ export class WatcherRunner {
       return { status: 'BUSY' };
     }
     const startedAt = Date.now();
+    const resources = new ProcessResourceTracker();
     this.logger?.info(
       { kind: this.kind, configId, runId: run.id, trigger },
       'Watcher run started',
@@ -190,10 +195,9 @@ export class WatcherRunner {
           itemsFetched: result.fetchedCount,
           itemsProduced: result.newItemCount,
           itemsFiltered: Math.max(0, result.fetchedCount - result.newItemCount),
-          duplicatesRemoved: Math.max(
-            0,
-            result.fetchedCount - result.newItemCount,
-          ),
+          duplicatesRemoved:
+            (result.duplicatesRemoved ?? 0) +
+            (result.intelligence?.duplicateEventCount ?? 0),
           llm: {
             inputTokens: result.analyses.reduce(
               (sum, analysis) =>
@@ -222,6 +226,7 @@ export class WatcherRunner {
         metadata: {
           trigger,
           configId,
+          resourceUsage: resources.finish(),
           failedAnalysisCount: result.failedAnalysisCount,
           llmRequestCount: result.analyses.reduce(
             (sum, analysis) =>
@@ -315,7 +320,7 @@ export class WatcherRunner {
         status: 'failed',
         error: { message },
         metrics: { latencyMs: durationMs },
-        metadata: { trigger, configId },
+        metadata: { trigger, configId, resourceUsage: resources.finish() },
       });
       try {
         await this.afterFailure?.(chatId, message, run.id);

@@ -292,6 +292,7 @@ export type AnalyzedItem = {
 export type PipelineResult = {
   durationMs?: number;
   fetchedCount: number;
+  duplicatesRemoved?: number;
   newItemCount: number;
   analyzedCount: number;
   failedAnalysisCount: number;

@@ -1,5 +1,10 @@
 import type { BriefingEventRepository, WatcherLogger } from '@watcher/core';
 import type { BriefingWatcherHealthStore } from '@watcher/database';
+import {
+  ProcessResourceTracker,
+  type AgentRun,
+  type AgentTelemetryRecorder,
+} from '@watcher/observability';
 import { publishClubBriefingEvents } from './briefing-publisher.js';
 import { HeuristicActivityClassifier } from './classifier.js';
 import type {
@@ -32,6 +37,7 @@ export class MuClubsMonitor {
     private readonly health: BriefingWatcherHealthStore,
     private readonly intervalMs: number,
     private readonly logger?: WatcherLogger,
+    private readonly telemetry?: AgentTelemetryRecorder,
   ) {
     this.#sources = new Map(
       Object.entries(sources) as Array<[ClubSourceType, MonitorSource]>,
@@ -53,6 +59,8 @@ export class MuClubsMonitor {
         briefingPublished: 0,
       };
     const classifier = new HeuristicActivityClassifier();
+    const startedAt = new Date();
+    const resources = new ProcessResourceTracker();
     let sources: Awaited<ReturnType<MuClubsStore['listSources']>> = [];
     const sourceFailures: MuMonitorResult['sourceFailures'] = [];
     const briefingEntries: Array<{
@@ -146,6 +154,33 @@ export class MuClubsMonitor {
         sourceFailures: sourceFailures.length,
         nextRunAt: new Date(Date.now() + this.intervalMs),
       });
+      await this.recordTelemetry({
+        id: run.id,
+        agentName: 'mu-clubs-monitor',
+        startedAt,
+        finishedAt: new Date(),
+        status: status === 'SUCCESS' ? 'success' : 'partial',
+        metrics: {
+          latencyMs: Date.now() - startedAt.getTime(),
+          itemsFetched: fetchedCount,
+          itemsProduced: briefingEntries.length,
+        },
+        sources: sources.map((source) => {
+          const failure = sourceFailures.find(
+            (item) => item.sourceId === source.id,
+          );
+          return {
+            sourceId: source.id,
+            status: failure ? 'failed' : 'success',
+            ...(failure ? { error: failure.message } : {}),
+          };
+        }),
+        metadata: {
+          trigger,
+          briefingPublished: publication.published,
+          resourceUsage: resources.finish(),
+        },
+      });
       this.logger?.info(
         {
           runId: run.id,
@@ -181,6 +216,20 @@ export class MuClubsMonitor {
         watcherBot: 'mu-clubs',
         error: message.slice(0, 5_000),
       });
+      await this.recordTelemetry({
+        id: run.id,
+        agentName: 'mu-clubs-monitor',
+        startedAt,
+        finishedAt: new Date(),
+        status: 'failed',
+        error: { message },
+        metrics: {
+          latencyMs: Date.now() - startedAt.getTime(),
+          itemsFetched: fetchedCount,
+          itemsProduced: briefingEntries.length,
+        },
+        metadata: { trigger, resourceUsage: resources.finish() },
+      });
       this.logger?.error(
         { runId: run.id, err: error },
         'MU Clubs monitor run failed',
@@ -194,6 +243,17 @@ export class MuClubsMonitor {
         sourceFailures,
         briefingPublished: 0,
       };
+    }
+  }
+
+  private async recordTelemetry(run: AgentRun): Promise<void> {
+    try {
+      await this.telemetry?.recordRun(run);
+    } catch (error) {
+      this.logger?.warn(
+        { err: error, runId: run.id },
+        'MU Clubs telemetry recording failed',
+      );
     }
   }
 }

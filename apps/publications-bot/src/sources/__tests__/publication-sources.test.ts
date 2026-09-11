@@ -128,4 +128,35 @@ describe('publication source request control', () => {
 
     expect(fetcher).toHaveBeenCalledOnce();
   });
+
+  it('retries an empty bioRxiv JSON response once', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response('', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          collection: [
+            {
+              doi: '10.1101/retried',
+              title: 'Aging intervention',
+              abstract: 'Aging result',
+              date: '2026-09-10',
+              authors: 'A. Researcher',
+              category: 'aging',
+            },
+          ],
+        }),
+      );
+    const source = new BioRxivSource(fetcher);
+
+    await expect(source.fetch({ query: 'aging' })).resolves.toMatchObject([
+      { externalId: '10.1101/retried' },
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
 });

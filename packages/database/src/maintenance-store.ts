@@ -304,4 +304,60 @@ export class MaintenanceStore {
       throw error;
     }
   }
+
+  public releaseChangeAnnouncement(contentHash: string, chatId: bigint) {
+    return this.db.maintenanceChangeAnnouncement.deleteMany({
+      where: { contentHash, chatId },
+    });
+  }
+
+  public setDebugEnabled(chatId: bigint, enabled: boolean, now = new Date()) {
+    return this.db.maintenanceDebugSubscription.upsert({
+      where: { chatId },
+      create: {
+        chatId,
+        enabled,
+        enabledAt: enabled ? now : null,
+      },
+      update: {
+        enabled,
+        enabledAt: enabled ? now : null,
+        ...(enabled ? { deliveries: { deleteMany: {} } } : {}),
+      },
+    });
+  }
+
+  public debugSubscription(chatId: bigint) {
+    return this.db.maintenanceDebugSubscription.findUnique({
+      where: { chatId },
+    });
+  }
+
+  public listDebugSubscriptions() {
+    return this.db.maintenanceDebugSubscription.findMany({
+      where: { enabled: true, enabledAt: { not: null } },
+      orderBy: { chatId: 'asc' },
+    });
+  }
+
+  public listUndeliveredDebugRuns(chatId: bigint, enabledAt: Date, limit = 20) {
+    return this.db.agentRun.findMany({
+      where: {
+        agentName: { not: 'maintenance-agent' },
+        finishedAt: { not: null, gte: enabledAt },
+        maintenanceDebugDeliveries: { none: { chatId } },
+      },
+      include: { sources: true },
+      orderBy: [{ finishedAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+  }
+
+  public markDebugRunDelivered(chatId: bigint, agentRunId: string) {
+    return this.db.maintenanceDebugDelivery.upsert({
+      where: { chatId_agentRunId: { chatId, agentRunId } },
+      create: { chatId, agentRunId },
+      update: { deliveredAt: new Date() },
+    });
+  }
 }

@@ -6,6 +6,10 @@ import { authorizationMiddleware, isAuthorized } from '@watcher/telegram';
 import { Bot } from 'grammy';
 import type { MaintenanceEngine } from './evaluation/engine.js';
 import type { Finding } from './evaluation/types.js';
+import {
+  renderSystemSnapshot,
+  type SystemMetricsSampler,
+} from './runtime-monitor.js';
 
 const severityEmoji: Record<string, string> = {
   CRITICAL: '🚨',
@@ -58,6 +62,7 @@ export const createMaintenanceBot = (
   store: MaintenanceStore,
   logger: WatcherLogger,
   changelogPath: string,
+  systemMetrics: SystemMetricsSampler,
 ) => {
   const bot = new Bot(token);
   const authorize = authorizationMiddleware(allowedIds);
@@ -90,12 +95,12 @@ export const createMaintenanceBot = (
   };
   bot.command('start', async (context) =>
     context.reply(
-      'Maintenance Agent monitors agent health and only proposes changes.\n\n/help — commands\n/summary — open findings\n/run — evaluate the last 7 days\n/recommendations — proposed changes',
+      'Maintenance Agent monitors agent health, server capacity, and only proposes changes.\n\n/help — commands\n/summary — open findings\n/run — evaluate the last 7 days\n/debug — enable detailed bot run reports\n/recommendations — proposed changes',
     ),
   );
   bot.command('help', async (context) =>
     context.reply(
-      '/summary — current findings\n/run — run maintenance evaluation\n/recommendations — top proposals\n/updates — recent project changes\n\nThe bot cannot deploy or apply a recommendation.',
+      '/summary — current findings\n/run — run maintenance evaluation\n/debug [on|off|status] — detailed reports for completed bot runs\n/recommendations — top proposals\n/updates — recent project changes\n\nCapacity warnings are always active. The bot cannot deploy or apply a recommendation.',
     ),
   );
   bot.command('summary', async (context) => context.reply(await summary()));
@@ -146,6 +151,47 @@ export const createMaintenanceBot = (
       await context.reply('Project changelog is unavailable.');
     }
   });
+  bot.command('debug', async (context) => {
+    if (!context.chat) return;
+    const chatId = BigInt(context.chat.id);
+    const argument = context.match.trim().toLowerCase();
+    if (!argument || argument === 'on') {
+      await store.setDebugEnabled(chatId, true);
+      const snapshot = await systemMetrics.sample();
+      await context.reply(
+        [
+          '🔬 Debug run reporting enabled.',
+          'I will report newly completed runs from other bots. Use /debug off to stop.',
+          '',
+          renderSystemSnapshot(snapshot),
+        ].join('\n'),
+      );
+      return;
+    }
+    if (argument === 'off') {
+      await store.setDebugEnabled(chatId, false);
+      await context.reply('🔕 Debug run reporting disabled.');
+      return;
+    }
+    if (argument === 'status') {
+      const [subscription, snapshot] = await Promise.all([
+        store.debugSubscription(chatId),
+        systemMetrics.sample(),
+      ]);
+      await context.reply(
+        [
+          `🔬 Debug run reporting: ${subscription?.enabled ? 'enabled' : 'disabled'}`,
+          subscription?.enabledAt
+            ? `Since: ${subscription.enabledAt.toISOString()}`
+            : 'No active reporting window.',
+          '',
+          renderSystemSnapshot(snapshot),
+        ].join('\n'),
+      );
+      return;
+    }
+    await context.reply('Usage: /debug [on|off|status]');
+  });
   bot.catch((error) =>
     logger.error({ err: error.error }, 'Maintenance Telegram update failed'),
   );
@@ -179,10 +225,18 @@ export const announceChangelog = async (
         ))
       )
         continue;
-      await bot.api.sendMessage(
-        chatId,
-        `🆕 Project update: ${entry.title}\n\n${entry.body}`,
-      );
+      try {
+        await bot.api.sendMessage(
+          chatId,
+          `🆕 Project update: ${entry.title}\n\n${entry.body}`,
+        );
+      } catch (error) {
+        await store.releaseChangeAnnouncement(entry.hash, BigInt(chatId));
+        logger.warn(
+          { err: error, chatId, title: entry.title },
+          'Maintenance changelog announcement failed',
+        );
+      }
     }
   }
 };

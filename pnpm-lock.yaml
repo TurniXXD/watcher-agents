@@ -55,6 +55,9 @@ importers:
       '@watcher/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@watcher/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@watcher/telegram':
         specifier: workspace:*
         version: link:../../packages/telegram
@@ -77,6 +80,9 @@ importers:
       '@watcher/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@watcher/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       cheerio:
         specifier: 1.2.0
         version: 1.2.0
@@ -133,6 +139,9 @@ importers:
       '@watcher/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@watcher/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@watcher/sources':
         specifier: workspace:*
         version: link:../../packages/sources
@@ -318,6 +327,9 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
       typescript:
         specifier: 6.0.3
         version: 6.0.3

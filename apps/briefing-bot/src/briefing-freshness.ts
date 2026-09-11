@@ -5,6 +5,7 @@ import type {
 } from '@watcher/database';
 
 type WatcherHealth = Pick<BriefingWatcherHealthStore, 'list'>;
+type WatcherTriggerResult = { status: string };
 
 export type BriefingFreshnessResult = {
   health: BriefingWatcherHealthRecord[];
@@ -37,6 +38,7 @@ export const waitForFreshWatcherRuns = async (input: {
   maximumAgeMs: number;
   timeoutMs: number;
   pollIntervalMs: number;
+  trigger?: (watcherBot: WatcherBotId) => Promise<WatcherTriggerResult>;
   sleep?: (milliseconds: number) => Promise<void>;
   clock?: () => number;
   logger?: WatcherLogger;
@@ -45,6 +47,35 @@ export const waitForFreshWatcherRuns = async (input: {
   const cutoff = new Date(input.referenceTime.getTime() - input.maximumAgeMs);
   let health = await input.watcherHealth.list(input.subscriptions);
   let staleWatchers = staleWatcherIds(input.subscriptions, health, cutoff);
+  const trigger = input.trigger;
+  if (staleWatchers.length > 0 && trigger) {
+    const triggerResults = await Promise.allSettled(
+      staleWatchers.map(async (watcherBot) => ({
+        watcherBot,
+        result: await trigger(watcherBot),
+      })),
+    );
+    input.logger?.info(
+      {
+        triggers: triggerResults.map((result, index) =>
+          result.status === 'fulfilled'
+            ? {
+                watcherBot: result.value.watcherBot,
+                status: result.value.result.status,
+              }
+            : {
+                watcherBot: staleWatchers[index],
+                status: 'FAILED',
+                error:
+                  result.reason instanceof Error
+                    ? result.reason.message
+                    : String(result.reason),
+              },
+        ),
+      },
+      'Requested stale watcher runs before scheduled briefing',
+    );
+  }
   while (staleWatchers.length > 0) {
     const elapsed = (input.clock?.() ?? Date.now()) - startedAt;
     if (elapsed >= input.timeoutMs) {

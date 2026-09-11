@@ -180,6 +180,122 @@ describe('OllamaProvider', () => {
     if (typeof requestBody !== 'string') throw new Error('Expected body');
     expect(requestBody).toContain('Configured topics');
     expect(requestBody).toContain('energy');
+    expect(requestBody).toContain(
+      'importance and relevance must be whole integers from 1 through 10',
+    );
+  });
+
+  it('normalizes repairable news schema deviations', async () => {
+    const mockFetch = vi.fn(async () =>
+      Response.json({
+        message: {
+          content: JSON.stringify({
+            analysis: {
+              headline: 'Energy policy update',
+              overview: 'The government changed its energy policy.',
+              importance_score: '80%',
+              relevanceScore: 90,
+              category: 'politics',
+              facts: [{ fact: 'Policy changed' }],
+              impact: 'It affects energy investment.',
+              entities: [{ name: 'Czech government' }],
+              confidence_score: 85,
+            },
+          }),
+        },
+      }),
+    );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      fetch: mockFetch,
+    });
+
+    await expect(provider.analyze('NEWS', item)).resolves.toMatchObject({
+      status: 'SUCCESS',
+      result: {
+        title: 'Energy policy update',
+        summary: 'The government changed its energy policy.',
+        importance: 8,
+        relevance: 9,
+        category: 'POLITICS',
+        keyFacts: ['Policy changed'],
+        whyItMatters: 'It affects energy investment.',
+        entities: ['Czech government'],
+        confidence: 0.85,
+      },
+    });
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
+
+  it('fills omitted news details from conservative defaults', async () => {
+    const mockFetch = vi.fn(async () =>
+      Response.json({
+        message: {
+          content: JSON.stringify({
+            title: 'Short report',
+            summary: 'Only the basic facts were available.',
+            importance: 4,
+            relevance: 3,
+            category: 'other',
+          }),
+        },
+      }),
+    );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      fetch: mockFetch,
+    });
+
+    await expect(provider.analyze('NEWS', item)).resolves.toMatchObject({
+      status: 'SUCCESS',
+      result: {
+        keyFacts: [],
+        whyItMatters: 'Only the basic facts were available.',
+        entities: [],
+        confidence: 0.35,
+      },
+    });
+  });
+
+  it('retries transient fetch failures and includes their root cause', async () => {
+    const socketError = Object.assign(new Error('socket closed'), {
+      code: 'UND_ERR_SOCKET',
+    });
+    const fetchError = new TypeError('fetch failed', { cause: socketError });
+    const mockFetch = vi
+      .fn()
+      .mockRejectedValueOnce(fetchError)
+      .mockResolvedValueOnce(
+        Response.json({ message: { content: '{"ok":true}' } }),
+      );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      retries: 1,
+      fetch: mockFetch,
+    });
+
+    await expect(
+      provider.generateStructured(
+        'Return an object.',
+        { type: 'object' },
+        z.object({ ok: z.boolean() }),
+      ),
+    ).resolves.toEqual({ ok: true });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    const failingProvider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      retries: 0,
+      fetch: vi.fn(async () => Promise.reject(fetchError)),
+    });
+    await expect(failingProvider.analyze('NEWS', item)).resolves.toMatchObject({
+      status: 'FAILED',
+      error: 'fetch failed — socket closed — UND_ERR_SOCKET',
+    });
   });
 
   it('retries invalid output then records failure', async () => {

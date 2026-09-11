@@ -1,5 +1,5 @@
 import { createLogger } from '@watcher/core';
-import { createDatabaseClient } from '@watcher/database';
+import { AgentTelemetryStore, createDatabaseClient } from '@watcher/database';
 import { createApi } from './api/server.js';
 import { env, sourceSettings } from './env.js';
 import { EventRepository } from './repositories/event-repository.js';
@@ -14,6 +14,8 @@ const runner = new EventRunner(
   repository,
   createSources(sourceSettings),
   logger,
+  undefined,
+  new AgentTelemetryStore(database),
 );
 const api = createApi(
   repository,

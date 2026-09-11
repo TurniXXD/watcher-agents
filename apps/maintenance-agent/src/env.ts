@@ -43,6 +43,41 @@ const schema = z.object({
   MAINTENANCE_CHANGELOG_PATH: z
     .string()
     .default('/app/docs/maintenance-changelog.md'),
+  MAINTENANCE_RESOURCE_MONITOR_ENABLED: z.stringbool().default(true),
+  MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(5_000)
+    .max(300_000)
+    .default(30_000),
+  MAINTENANCE_CPU_WARNING_PERCENT: z.coerce
+    .number()
+    .min(1)
+    .max(100)
+    .default(90),
+  MAINTENANCE_MEMORY_WARNING_PERCENT: z.coerce
+    .number()
+    .min(1)
+    .max(100)
+    .default(90),
+  MAINTENANCE_GPU_WARNING_PERCENT: z.coerce
+    .number()
+    .min(1)
+    .max(100)
+    .default(90),
+  MAINTENANCE_CAPACITY_SUSTAINED_SAMPLES: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(120)
+    .default(3),
+  MAINTENANCE_CAPACITY_ALERT_COOLDOWN_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_080)
+    .default(30),
+  MAINTENANCE_NVIDIA_SMI_PATH: z.string().min(1).default('nvidia-smi'),
   LOG_LEVEL: z.string().default('info'),
 });
 

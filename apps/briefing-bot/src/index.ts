@@ -1,6 +1,7 @@
 import { ReadinessServer, checkOllamaReady, createLogger } from '@watcher/core';
 import {
   AgentScheduleStore,
+  AgentTelemetryStore,
   BriefingDeliveryStore,
   BriefingConfigurationStore,
   BriefingRunStore,
@@ -217,6 +218,8 @@ runtime.coordinator = new BriefingCoordinator({
   resources: resourceLeases,
   weather: new OpenMeteoWeatherProvider(),
   watcherHealth: briefingWatcherHealth,
+  watcherTrigger: agentTriggers,
+  telemetry: new AgentTelemetryStore(database),
   ...(calendarProvider ? { calendar: calendarProvider } : {}),
   logger,
   ttsAttempts: env.BRIEFING_TTS_ATTEMPTS,

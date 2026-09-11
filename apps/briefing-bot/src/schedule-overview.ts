@@ -25,10 +25,11 @@ const timing = (
   if (nextRunAt && nextRunAt.getTime() < now.getTime() - 120_000)
     return '⚠️ Scheduled run is overdue';
   if (!nextBriefingAt) return undefined;
-  if (!nextRunAt) return '⚠️ No run is scheduled before the next briefing';
+  if (!nextRunAt)
+    return 'ℹ️ No run is scheduled before the next briefing; Briefing requests one if data is stale';
   return nextRunAt <= nextBriefingAt
     ? '✅ Runs before the next briefing'
-    : '⚠️ Next run is after the next briefing';
+    : 'ℹ️ Next scheduled run is after the next briefing; Briefing requests one if data is stale';
 };
 
 const stateIcon = (input: {

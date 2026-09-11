@@ -351,6 +351,26 @@ describe('Telegram utilities', () => {
     expect(text).toContain('bad &lt;schema&gt;');
   });
 
+  it('groups one provider failure shared by many publication queries', () => {
+    const text = renderPublicationDigest({
+      fetchedCount: 0,
+      newItemCount: 0,
+      analyzedCount: 0,
+      failedAnalysisCount: 0,
+      analyses: [],
+      sourceFailures: ['aging', 'genomics', 'microbiome'].map((target) => ({
+        source: 'BIORXIV',
+        target,
+        message: 'Invalid JSON response from api.biorxiv.org',
+      })),
+    });
+
+    expect(text).toContain(
+      '<b>BIORXIV</b> · 3 queries (aging, genomics, microbiome)',
+    );
+    expect(text.match(/Invalid JSON response/g)).toHaveLength(1);
+  });
+
   it('renders live alerts with evidence and a safety qualification', () => {
     const text = renderStockAlert({
       ticker: 'MU',

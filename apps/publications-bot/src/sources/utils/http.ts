@@ -12,6 +12,7 @@ const transientTransportError = (error: unknown): boolean => {
   }
   const message = error.message.toLowerCase();
   return (
+    message.includes('invalid json response') ||
     message.includes('terminated') ||
     message.includes('fetch failed') ||
     message.includes('socket') ||
@@ -40,7 +41,16 @@ export const fetchJson = async (
       signal: signalFor(signal),
     });
     if (!response.ok) throw sourceHttpError(response, url);
-    return (await response.json()) as unknown;
+    try {
+      const body = await response.text();
+      if (!body.trim()) throw new SyntaxError('Empty response body');
+      return JSON.parse(body) as unknown;
+    } catch (error) {
+      throw new Error(
+        `Invalid JSON response from ${new URL(url).hostname}; response body was empty, malformed, or truncated`,
+        { cause: error },
+      );
+    }
   });
 
 export const fetchText = async (

@@ -49,7 +49,9 @@ describe('agent schedule overview', () => {
     expect(rendered).toContain('🗓 Agent schedules');
     expect(rendered).toContain('🟢 Stocks bot');
     expect(rendered).toContain('✅ Runs before the next briefing');
-    expect(rendered).toContain('⚠️ Next run is after the next briefing');
+    expect(rendered).toContain(
+      'Next scheduled run is after the next briefing; Briefing requests one if data is stale',
+    );
     expect(rendered).toContain('⚪ News bot');
     expect(rendered).toContain('Producer is not configured for this chat');
     expect(rendered).toContain('⚪ MU Clubs monitor');
