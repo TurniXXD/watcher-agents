@@ -1,5 +1,6 @@
 import type { DatabaseClient } from './client.js';
 import {
+  AgentRunStatus,
   MaintenanceFindingStatus,
   MaintenanceFindingType,
   MaintenanceRecommendationStatus,
@@ -52,6 +53,38 @@ export class MaintenanceStore {
       select: { agentName: true },
     });
     return rows.map((row) => row.agentName).sort();
+  }
+
+  public agentStatuses(agentNames: readonly string[], errorsSince: Date) {
+    return Promise.all(
+      agentNames.map(async (agentName) => {
+        const [latestRun, recentErrorRuns] = await Promise.all([
+          this.db.agentRun.findFirst({
+            where: { agentName },
+            include: { sources: true },
+            orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+          }),
+          this.db.agentRun.findMany({
+            where: {
+              agentName,
+              startedAt: { gte: errorsSince },
+              OR: [
+                {
+                  status: {
+                    in: [AgentRunStatus.PARTIAL, AgentRunStatus.FAILED],
+                  },
+                },
+                { sources: { some: { error: { not: null } } } },
+              ],
+            },
+            include: { sources: { where: { error: { not: null } } } },
+            orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+            take: 3,
+          }),
+        ]);
+        return { agentName, latestRun, recentErrorRuns };
+      }),
+    );
   }
 
   public upsertSourceHealth(input: {

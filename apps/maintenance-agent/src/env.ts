@@ -50,6 +50,18 @@ const schema = z.object({
     .min(5_000)
     .max(300_000)
     .default(30_000),
+  MAINTENANCE_AGENT_STATUS_STALE_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_080)
+    .default(1560),
+  MAINTENANCE_AGENT_STATUS_ERROR_LOOKBACK_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_080)
+    .default(1440),
   MAINTENANCE_CPU_WARNING_PERCENT: z.coerce
     .number()
     .min(1)

@@ -6,6 +6,7 @@ import { authorizationMiddleware, isAuthorized } from '@watcher/telegram';
 import { Bot } from 'grammy';
 import type { MaintenanceEngine } from './evaluation/engine.js';
 import type { Finding } from './evaluation/types.js';
+import type { AgentStatusService } from './agent-status.js';
 import {
   renderSystemSnapshot,
   type SystemMetricsSampler,
@@ -18,6 +19,16 @@ const severityEmoji: Record<string, string> = {
   LOW: '🟡',
   INFO: '🔵',
 };
+
+export const maintenanceAbout = [
+  '🛠 Maintenance Agent',
+  '',
+  'A private operational observer for the Watcher services.',
+  '',
+  'It probes live service health, checks run freshness and recent failures, monitors server CPU, RAM, and GPU capacity, and evaluates normalized telemetry for reliability, quality, latency, and cost regressions.',
+  '',
+  'It stores findings and proposes evidence-backed maintenance actions. It never edits configuration, restarts services, deploys code, or applies a recommendation. Approval through the authenticated API records a human decision only.',
+].join('\n');
 
 export const renderReport = (title: string, findings: Finding[]): string => {
   const important = findings
@@ -63,6 +74,7 @@ export const createMaintenanceBot = (
   logger: WatcherLogger,
   changelogPath: string,
   systemMetrics: SystemMetricsSampler,
+  agentStatus: AgentStatusService,
 ) => {
   const bot = new Bot(token);
   const authorize = authorizationMiddleware(allowedIds);
@@ -95,15 +107,19 @@ export const createMaintenanceBot = (
   };
   bot.command('start', async (context) =>
     context.reply(
-      'Maintenance Agent monitors agent health, server capacity, and only proposes changes.\n\n/help — commands\n/summary — open findings\n/run — evaluate the last 7 days\n/debug — enable detailed bot run reports\n/recommendations — proposed changes',
+      'Maintenance Agent monitors agent health, server capacity, and only proposes changes.\n\n/about — purpose and safety boundaries\n/help — commands\n/status — live status and recent errors\n/summary — open findings\n/run — evaluate the last 7 days\n/debug — enable detailed bot run reports\n/recommendations — proposed changes',
     ),
   );
+  bot.command('about', async (context) => context.reply(maintenanceAbout));
   bot.command('help', async (context) =>
     context.reply(
-      '/summary — current findings\n/run — run maintenance evaluation\n/debug [on|off|status] — detailed reports for completed bot runs\n/recommendations — top proposals\n/updates — recent project changes\n\nCapacity warnings are always active. The bot cannot deploy or apply a recommendation.',
+      '/about — purpose, workflow, and safety boundaries\n/debug [on|off|status] — detailed reports for completed bot runs\n/recommendations — top proposals\n/run — run maintenance evaluation\n/status — live status, stale runs, and recent errors for every bot\n/summary — current findings\n/updates — recent project changes\n\nCapacity warnings are always active. The bot cannot deploy or apply a recommendation.',
     ),
   );
   bot.command('summary', async (context) => context.reply(await summary()));
+  bot.command('status', async (context) =>
+    context.reply(await agentStatus.report()),
+  );
   bot.command('run', async (context) => {
     await context.reply('⏳ Running maintenance evaluation…');
     const result = await engine.run('MANUAL', 24 * 7);

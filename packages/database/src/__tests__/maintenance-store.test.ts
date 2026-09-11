@@ -90,4 +90,40 @@ describe('MaintenanceStore', () => {
       },
     });
   });
+
+  it('loads the latest run and recent errors for each requested agent', async () => {
+    const findFirst = vi.fn(async () => null);
+    const findMany = vi.fn(async () => []);
+    const database = {
+      agentRun: { findFirst, findMany },
+    } as unknown as DatabaseClient;
+    const errorsSince = new Date('2026-09-10T12:00:00Z');
+
+    const statuses = await new MaintenanceStore(database).agentStatuses(
+      ['stocks-bot'],
+      errorsSince,
+    );
+
+    expect(statuses).toEqual([
+      { agentName: 'stocks-bot', latestRun: null, recentErrorRuns: [] },
+    ]);
+    expect(findFirst).toHaveBeenCalledWith({
+      where: { agentName: 'stocks-bot' },
+      include: { sources: true },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+    });
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        agentName: 'stocks-bot',
+        startedAt: { gte: errorsSince },
+        OR: [
+          { status: { in: ['PARTIAL', 'FAILED'] } },
+          { sources: { some: { error: { not: null } } } },
+        ],
+      },
+      include: { sources: { where: { error: { not: null } } } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      take: 3,
+    });
+  });
 });

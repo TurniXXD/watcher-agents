@@ -31,3 +31,11 @@ Each code update that changes runtime behavior must add a concise entry here. Th
 - Added persistent `/debug on|off|status` controls and deduplicated Telegram reports for newly completed bot runs.
 - Added per-run process CPU time, average CPU use, peak RSS, and peak heap telemetry to Stocks, Publications, News, MU Clubs, Brno Events, and Briefing runs.
 - GPU readings use NVIDIA or AMD host interfaces when exposed and are clearly marked unavailable otherwise.
+
+## 2026-09-11 — Live agent status command
+
+- Added `/about` with the Maintenance Agent's purpose, workflow, and safety boundaries.
+- Added `/status` to probe every other bot's internal health endpoint on demand.
+- Combined live readiness with latest-run freshness and recent normalized run/source errors.
+- Added configurable stale and error lookback windows and redacted sensitive error details from Telegram output.
+- Corrected host RAM measurement through `/proc/meminfo`, exposed read-only host process and DRM views, and added the top CPU/RAM/GPU processes to capacity alerts.

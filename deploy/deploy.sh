@@ -11,10 +11,12 @@ ENV_FILE="${ENV_FILE:-deploy/runtime/compose.env}"
 RELEASE_FILE=".release.env"
 CANDIDATE_FILE=".release.env.candidate"
 COMPOSE_FILE="docker-compose.production.yml"
+NVIDIA_COMPOSE_FILE="docker-compose.nvidia.yml"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
 
 required_files=(
   "$COMPOSE_FILE"
+  "$NVIDIA_COMPOSE_FILE"
   "$ENV_FILE"
   deploy/runtime/postgres.env
   deploy/runtime/migrate.env
@@ -178,11 +180,21 @@ IMAGE_NAMESPACE=$IMAGE_NAMESPACE
 IMAGE_TAG=$IMAGE_TAG
 EOF
 
+compose_files=(-f "$COMPOSE_FILE")
+if command -v nvidia-smi >/dev/null 2>&1; then
+  if docker info --format '{{json .Runtimes}}' | grep -q '"nvidia"'; then
+    compose_files+=(-f "$NVIDIA_COMPOSE_FILE")
+    echo "NVIDIA runtime detected; exposing GPU utility metrics to maintenance-agent."
+  else
+    echo "Host NVIDIA GPU detected, but Docker's NVIDIA runtime is unavailable; GPU utilization will be limited to DRM sysfs." >&2
+  fi
+fi
+
 compose_candidate() {
   docker compose \
     --env-file "$ENV_FILE" \
     --env-file "$CANDIDATE_FILE" \
-    -f "$COMPOSE_FILE" \
+    "${compose_files[@]}" \
     "$@"
 }
 
@@ -190,7 +202,7 @@ compose_release() {
   docker compose \
     --env-file "$ENV_FILE" \
     --env-file "$RELEASE_FILE" \
-    -f "$COMPOSE_FILE" \
+    "${compose_files[@]}" \
     "$@"
 }
 

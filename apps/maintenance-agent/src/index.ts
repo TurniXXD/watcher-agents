@@ -2,6 +2,7 @@ import { createLogger } from '@watcher/core';
 import { createDatabaseClient } from '@watcher/database';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { createMaintenanceApi } from './api.js';
+import { AgentStatusService } from './agent-status.js';
 import { env } from './env.js';
 import { MaintenanceEngine } from './evaluation/engine.js';
 import { MaintenanceScheduler } from './scheduler.js';
@@ -26,6 +27,11 @@ const engine = new MaintenanceEngine(
 const store = engine.store();
 const allowedIds = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
 const systemMetrics = new SystemMetricsSampler(env.MAINTENANCE_NVIDIA_SMI_PATH);
+const agentStatus = new AgentStatusService(
+  store,
+  env.MAINTENANCE_AGENT_STATUS_STALE_MINUTES * 60_000,
+  env.MAINTENANCE_AGENT_STATUS_ERROR_LOOKBACK_MINUTES * 60_000,
+);
 const { bot } = createMaintenanceBot(
   env.MAINTENANCE_TELEGRAM_TOKEN,
   allowedIds,
@@ -34,6 +40,7 @@ const { bot } = createMaintenanceBot(
   logger,
   env.MAINTENANCE_CHANGELOG_PATH,
   systemMetrics,
+  agentStatus,
 );
 const api = createMaintenanceApi(
   store,

@@ -196,6 +196,8 @@ The workflow then:
 8. Starts all bots plus the MU Clubs producer and waits for their health checks.
 9. Restores the prior image tag if the new containers fail health checks.
 
+When the VPS has `nvidia-smi` and Docker reports the NVIDIA runtime, deployment automatically layers `docker-compose.nvidia.yml` onto the production definition. This grants only GPU utility access to the maintenance container, allowing utilization, VRAM, and NVIDIA compute-process reporting. Install and configure NVIDIA Container Toolkit on an NVIDIA host if the deployment warns that the runtime is unavailable. AMD and Intel detection uses the read-only host DRM sysfs mount and does not require this overlay.
+
 Migrations must remain backward-compatible with the previous application image because container rollback does not reverse a database migration.
 
 ## Operations

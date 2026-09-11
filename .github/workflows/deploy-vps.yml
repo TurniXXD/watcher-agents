@@ -67,6 +67,7 @@ jobs:
 
           test -f Dockerfile
           test -f docker-compose.production.yml
+          test -f docker-compose.nvidia.yml
           test -x deploy/deploy.sh
           echo "deploy-ready=true" >> "$GITHUB_OUTPUT"
 
@@ -181,6 +182,9 @@ jobs:
             docker-compose.production.yml \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.production.yml.next"
           scp -P "$DEPLOY_PORT" \
+            docker-compose.nvidia.yml \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.nvidia.yml.next"
+          scp -P "$DEPLOY_PORT" \
             deploy/deploy.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy.sh.next"
 
@@ -236,6 +240,7 @@ jobs:
 
             install -d -m 700 deploy/runtime
             mv docker-compose.production.yml.next docker-compose.production.yml
+            mv docker-compose.nvidia.yml.next docker-compose.nvidia.yml
             mv deploy.sh.next deploy/deploy.sh
             chmod 700 deploy/deploy.sh
             test -f '$DEPLOY_ENV_FILE'

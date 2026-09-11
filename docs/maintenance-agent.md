@@ -29,9 +29,11 @@ The schedule is persisted through completed maintenance runs and cannot overlap 
 
 ## Capacity alerts and run debugging
 
-The runtime monitor samples CPU and memory every 30 seconds and sends an authorized Telegram warning after three consecutive samples at or above the configured threshold. CPU, memory, and GPU default to 90%; repeated warnings are limited to one every 30 minutes and a recovery message is sent after utilization drops at least ten percentage points below the threshold. GPU monitoring uses `nvidia-smi` when it is available or Linux AMD DRM counters as a fallback. If the container cannot see either interface, GPU is reported as unavailable rather than estimated.
+The runtime monitor samples CPU and memory every 30 seconds and sends an authorized Telegram warning after three consecutive samples at or above the configured threshold. CPU, memory, and GPU default to 90%; repeated warnings are limited to one every 30 minutes and a recovery message is sent after utilization drops at least ten percentage points below the threshold. Host `/proc` and `/sys` are mounted read-only into the maintenance container. Memory comes from host `MemTotal`/`MemAvailable`, avoiding container-runtime unit and availability inconsistencies, and each capacity warning includes the five largest relevant processes without reading process environments. GPU monitoring uses `nvidia-smi` when NVIDIA Container Toolkit exposes it or DRM sysfs for AMD/Intel/NVIDIA detection and available utilization/VRAM counters. Production deployment automatically applies the NVIDIA Compose overlay when both the host utility and Docker runtime are present. Unsupported counters are reported as unavailable rather than estimated.
 
 `/debug` or `/debug on` persistently enables detailed reports for newly completed runs. `/debug off` disables them and `/debug status` shows the current server snapshot. Reports include duration, item/source counts, failures, process CPU time and average, peak RSS/heap, and a current server CPU/RAM/GPU snapshot. The debug subscription and delivery deduplication are stored in PostgreSQL, so restarts do not replay completed runs.
+
+`/status` probes every other service's private Compose health endpoint on demand and combines that live result with its latest normalized run telemetry. It reports `RUNNING`, `DEGRADED`, `STALE`, `UNHEALTHY`, or `DOWN`, plus up to two deduplicated run/source errors from the configured lookback. Error text is truncated and URLs and credential-like values are redacted. The default stale threshold is 26 hours and the error lookback is 24 hours.
 
 ## API
 
@@ -49,7 +51,7 @@ Acknowledgement changes a proposal to approved but does not apply it. There are 
 
 ## Telegram and code updates
 
-The private Telegram bot supports `/summary`, `/run`, `/debug`, `/recommendations`, and `/updates` (help text). Runtime changes must be appended to `docs/maintenance-changelog.md`. On startup, entries are announced once per authorized chat and deduplicated in PostgreSQL.
+The private Telegram bot supports `/about`, `/status`, `/summary`, `/run`, `/debug`, `/recommendations`, and `/updates` (help text). `/about` explains its operational-observer role, inputs, outputs, and non-mutating safety boundary. Runtime changes must be appended to `docs/maintenance-changelog.md`. On startup, entries are announced once per authorized chat and deduplicated in PostgreSQL.
 
 ## Limitations
 

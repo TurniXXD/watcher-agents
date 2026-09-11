@@ -296,6 +296,9 @@ services:
       MAINTENANCE_HOST: 0.0.0.0
     ports:
       - '127.0.0.1:4030:4030'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
     depends_on:
       postgres:
         condition: service_healthy
