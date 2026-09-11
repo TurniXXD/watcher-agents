@@ -22,7 +22,7 @@ import {
 import { sendSplitMessage } from '@watcher/telegram';
 import type { Api } from 'grammy';
 import type { AgentTelemetryRecorder } from '@watcher/observability';
-import { renderNewsDigest } from './digest.js';
+import { hasScheduledNewsDigest, renderNewsDigest } from './digest.js';
 
 export const buildNewsSourceRequests = (
   feeds: readonly NewsFeedRecord[],
@@ -170,7 +170,8 @@ export const createNewsRunner = (
         await api.sendMessage(chatId.toString(), 'Nothing new found.');
       return;
     }
-    await sendSplitMessage(api, chatId, renderNewsDigest(result));
+    if (!manual && !hasScheduledNewsDigest(result)) return;
+    await sendSplitMessage(api, chatId, renderNewsDigest(result, manual));
   };
   return new WatcherRunner(
     'NEWS',

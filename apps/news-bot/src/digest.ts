@@ -1,5 +1,48 @@
-import { newsAnalysisSchema, type PipelineResult } from '@watcher/core';
+import {
+  newsAnalysisSchema,
+  type NewsAnalysis,
+  type PipelineResult,
+  type WatchItem,
+} from '@watcher/core';
 import { formatRunDuration, htmlText, sourceLink } from '@watcher/telegram';
+
+const maximumDeliveredStories = 10;
+const scheduledMinimumImportance = 7;
+const scheduledMinimumRelevance = 6;
+
+type DigestStory = { item: WatchItem; analysis: NewsAnalysis };
+
+export const selectNewsDigestStories = (
+  result: PipelineResult,
+  manual: boolean,
+): DigestStory[] =>
+  result.analyses
+    .flatMap(({ item, outcome }): DigestStory[] => {
+      if (outcome.status !== 'SUCCESS') return [];
+      const analysis = newsAnalysisSchema.safeParse(outcome.result);
+      if (!analysis.success) return [];
+      if (
+        !manual &&
+        (analysis.data.importance < scheduledMinimumImportance ||
+          analysis.data.relevance < scheduledMinimumRelevance)
+      ) {
+        return [];
+      }
+      return [{ item, analysis: analysis.data }];
+    })
+    .sort(
+      (left, right) =>
+        right.analysis.importance +
+          right.analysis.relevance -
+          (left.analysis.importance + left.analysis.relevance) ||
+        right.analysis.importance - left.analysis.importance ||
+        (right.item.publishedAt?.getTime() ?? 0) -
+          (left.item.publishedAt?.getTime() ?? 0),
+    )
+    .slice(0, maximumDeliveredStories);
+
+export const hasScheduledNewsDigest = (result: PipelineResult): boolean =>
+  selectNewsDigestStories(result, false).length > 0;
 
 const scopeLabel = (scope: unknown): string =>
   scope === 'CZECH' ? '🇨🇿 Czech' : '🌍 Global';
@@ -29,33 +72,32 @@ const analysisFailures = (result: PipelineResult): string => {
         .join('\n\n')}`;
 };
 
-export const renderNewsDigest = (result: PipelineResult): string => {
-  const sections = result.analyses.flatMap(({ item, outcome }) => {
-    if (outcome.status !== 'SUCCESS') return [];
-    const analysis = newsAnalysisSchema.safeParse(outcome.result);
-    if (!analysis.success) return [];
+export const renderNewsDigest = (
+  result: PipelineResult,
+  manual = false,
+): string => {
+  const stories = selectNewsDigestStories(result, manual);
+  const sections = stories.map(({ item, analysis }) => {
     const feedName =
       typeof item.metadata.feedName === 'string'
         ? item.metadata.feedName
         : item.source;
     return [
-      [
-        `${scopeLabel(item.metadata.scope)} · <b>${htmlText(analysis.data.category, 50)}</b>`,
-        `<b>${htmlText(analysis.data.title, 500)}</b>`,
-        `⭐ <b>Importance:</b> ${analysis.data.importance}/10 · 🎯 <b>Relevance:</b> ${analysis.data.relevance}/10`,
-        `📝 ${htmlText(analysis.data.summary, 1_500)}`,
-        analysis.data.keyFacts.length
-          ? `🔑 <b>Key facts</b>\n${analysis.data.keyFacts
-              .slice(0, 6)
-              .map((fact) => `• ${htmlText(fact, 400)}`)
-              .join('\n')}`
-          : '',
-        `💡 <b>Why it matters</b>\n${htmlText(analysis.data.whyItMatters, 800)}`,
-        `🔗 <b>Source:</b> ${sourceLink(feedName, item.url)}`,
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
-    ];
+      `${scopeLabel(item.metadata.scope)} · <b>${htmlText(analysis.category, 50)}</b>`,
+      `<b>${htmlText(analysis.title, 500)}</b>`,
+      `⭐ <b>Importance:</b> ${analysis.importance}/10 · 🎯 <b>Relevance:</b> ${analysis.relevance}/10`,
+      `📝 ${htmlText(analysis.summary, 1_500)}`,
+      analysis.keyFacts.length
+        ? `🔑 <b>Key facts</b>\n${analysis.keyFacts
+            .slice(0, 6)
+            .map((fact) => `• ${htmlText(fact, 400)}`)
+            .join('\n')}`
+        : '',
+      `💡 <b>Why it matters</b>\n${htmlText(analysis.whyItMatters, 800)}`,
+      `🔗 <b>Source:</b> ${sourceLink(feedName, item.url)}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
   });
   const coverage = result.dataCoverage
     ? `📡 <b>Data coverage:</b> ${result.dataCoverage.percentage}% (${result.dataCoverage.successfulSources}/${result.dataCoverage.expectedSources} feeds)`
@@ -64,6 +106,7 @@ export const renderNewsDigest = (result: PipelineResult): string => {
     '🗞 <b>NEWS WATCHER</b>',
     `⏱ <b>Run time:</b> ${formatRunDuration(result.durationMs ?? 0)}`,
     coverage,
+    `📰 <b>Selected:</b> ${stories.length} of ${result.newItemCount} new articles${manual ? '' : ` (importance ≥ ${scheduledMinimumImportance}, relevance ≥ ${scheduledMinimumRelevance})`}`,
     sections.join('\n\n──────────\n\n'),
   ]
     .filter(Boolean)
