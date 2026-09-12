@@ -1702,6 +1702,32 @@ model AgentRun {
   @@map("agent_runs")
 }
 
+model OllamaRequest {
+  id             String   @id @default(uuid())
+  caller         String
+  model          String
+  operation      String
+  priority       Int
+  status         String
+  queuedAt       DateTime @default(now())
+  queueExpiresAt DateTime
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  leaseExpiresAt DateTime?
+  timeoutMs      Int
+  queueWaitMs    Int?
+  durationMs     Int?
+  inputSize      Int?
+  outputSize     Int?
+  error          String?
+  createdAt      DateTime @default(now())
+
+  @@index([status, priority, queuedAt])
+  @@index([status, leaseExpiresAt])
+  @@index([finishedAt])
+  @@map("ollama_requests")
+}
+
 model AgentSourceRun {
   id          String   @id @default(uuid())
   agentRunId  String

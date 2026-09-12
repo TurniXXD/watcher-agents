@@ -9,6 +9,7 @@ import {
   AgentTelemetryStore,
   NewsConfigurationStore,
   PostgresBriefingEventRepository,
+  PostgresOllamaCoordinator,
   WatcherStore,
   createDatabaseClient,
 } from '@watcher/database';
@@ -21,6 +22,7 @@ import { createNewsRunner } from './watcher.js';
 
 const logger = createLogger('news-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
+const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);
 const readiness = new ReadinessServer(async () => {
   await database.$queryRaw`SELECT 1`;
   await checkOllamaReady(env.OLLAMA_URL);
@@ -42,6 +44,9 @@ const analyzer = new OllamaProvider({
   retries: env.OLLAMA_RETRIES,
   think: env.OLLAMA_THINK,
   timeoutMs: env.OLLAMA_TIMEOUT_MS,
+  caller: 'news-bot',
+  priority: 'normal',
+  coordinator: ollamaCoordinator,
 });
 const runtime: { runner?: ReturnType<typeof createNewsRunner> } = {};
 const bot = createNewsBot(
@@ -104,6 +109,8 @@ const scheduler = new PersistentScheduler(
     const entry = due as { id: string; chatConfig: { chatId: bigint } };
     await runner.execute(entry.id, entry.chatConfig.chatId, 'SCHEDULED');
   },
+  undefined,
+  logger,
 );
 
 const shutdown = async (signal: string): Promise<void> => {

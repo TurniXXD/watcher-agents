@@ -126,16 +126,7 @@ export const createNewsRunner = (
 ): WatcherRunner => {
   const rssSource = new RssNewsSource();
   const gdeltSource = new GdeltNewsSource();
-  const leasedAnalyzer: Analyzer = {
-    analyze: (kind, item, signal) =>
-      store.withOllamaLease(() => analyzer.analyze(kind, item, signal)),
-  };
-  const pipeline = new WatcherPipeline(
-    store,
-    leasedAnalyzer,
-    maxItemsPerRun,
-    logger,
-  );
+  const pipeline = new WatcherPipeline(store, analyzer, maxItemsPerRun, logger);
   const requestsForChat = async (chatId: bigint): Promise<SourceRequest[]> => {
     const chat = await store.getChat('NEWS', chatId);
     if (!chat) return [];

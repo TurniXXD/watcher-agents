@@ -37,7 +37,13 @@ export class BriefingScheduler {
   }
 
   public tick(now = new Date()): Promise<void> {
-    if (this.#activeTick) return this.#activeTick;
+    if (this.#activeTick) {
+      this.logger?.info(
+        { now: now.toISOString() },
+        'Briefing scheduler tick skipped because the previous tick is active',
+      );
+      return this.#activeTick;
+    }
     const active = (async () => {
       const startedAt = Date.now();
       this.logger?.debug(

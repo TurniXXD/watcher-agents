@@ -17,9 +17,9 @@ import {
   AgentTelemetryStore,
   PostgresEventJournal,
   PostgresBriefingEventRepository,
+  PostgresOllamaCoordinator,
   StockDiscoveryStore,
   StockNewsStore,
-  ResourceLeaseStore,
   createDatabaseClient,
   WatcherStore,
   ValidationStore,
@@ -47,13 +47,16 @@ import {
 
 const logger = createLogger('stocks-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
-const resourceLeases = new ResourceLeaseStore(database);
+const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);
 const stockEmbeddingProvider = env.BRIEFING_EMBEDDING_MODEL
   ? new OllamaEmbeddingProvider({
       url: env.OLLAMA_URL,
       model: env.BRIEFING_EMBEDDING_MODEL,
       keepAlive: env.OLLAMA_KEEP_ALIVE,
       timeoutMs: env.OLLAMA_TIMEOUT_MS,
+      caller: 'stocks-bot',
+      priority: 'normal',
+      coordinator: ollamaCoordinator,
     })
   : undefined;
 const readiness = new ReadinessServer(async () => {
@@ -107,9 +110,7 @@ const store = new WatcherStore(database, {
           model: env.BRIEFING_EMBEDDING_MODEL,
           provider: {
             embed: (input: readonly string[], signal?: AbortSignal) =>
-              resourceLeases.withExclusiveLease('HEAVY_LOCAL_MODEL', () =>
-                stockEmbeddingProvider.embed(input, signal),
-              ),
+              stockEmbeddingProvider.embed(input, signal),
           },
           minimumSimilarity: env.BRIEFING_EMBEDDING_MIN_SIMILARITY,
           windowHours: env.BRIEFING_EMBEDDING_WINDOW_HOURS,
@@ -157,6 +158,9 @@ const ollama = new OllamaProvider({
   retries: env.OLLAMA_RETRIES,
   think: env.OLLAMA_THINK,
   timeoutMs: env.OLLAMA_TIMEOUT_MS,
+  caller: 'stocks-bot',
+  priority: 'normal',
+  coordinator: ollamaCoordinator,
 });
 const analyzer = new StockIntelligenceAnalyzer(
   ollama,
@@ -351,6 +355,8 @@ const scheduler = new PersistentScheduler(
     const entry = due as { id: string; chatConfig: { chatId: bigint } };
     await runner.execute(entry.id, entry.chatConfig.chatId, 'SCHEDULED');
   },
+  undefined,
+  logger,
 );
 const discoveryScheduler = new PersistentScheduler(
   (now) =>
@@ -359,6 +365,8 @@ const discoveryScheduler = new PersistentScheduler(
     const entry = due as { id: string; chatId: bigint };
     await runtime.discovery?.execute(entry.id, entry.chatId, 'SCHEDULED');
   },
+  undefined,
+  logger,
 );
 const fastSourceIds = new Set([
   'SEC',
@@ -381,6 +389,8 @@ const highResolutionScheduler = new PersistentScheduler(
       sourceIds: fastSourceIds,
     });
   },
+  undefined,
+  logger,
 );
 const reconciliationScheduler = new PersistentScheduler(
   (now) => store.listDueReconciliations('STOCKS', now),
@@ -392,6 +402,8 @@ const reconciliationScheduler = new PersistentScheduler(
       'SCHEDULED',
     );
   },
+  undefined,
+  logger,
 );
 const alertScheduler = new PersistentScheduler(
   (now) => store.listDueAlertBatches(now),
@@ -400,6 +412,7 @@ const alertScheduler = new PersistentScheduler(
     await deliverAlertBatch(entry.id, entry.chatConfig.chatId);
   },
   30_000,
+  logger,
 );
 
 const shutdown = async (signal: string): Promise<void> => {

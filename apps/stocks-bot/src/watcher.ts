@@ -99,16 +99,7 @@ export const createStocksRunner = (
           ]),
         )
       : new Map<StockSourceType, QuiverSource>();
-  const leasedAnalyzer: Analyzer = {
-    analyze: (kind, item, signal) =>
-      store.withOllamaLease(() => analyzer.analyze(kind, item, signal)),
-  };
-  const pipeline = new WatcherPipeline(
-    store,
-    leasedAnalyzer,
-    maxItemsPerRun,
-    logger,
-  );
+  const pipeline = new WatcherPipeline(store, analyzer, maxItemsPerRun, logger);
   const withCompany = async (stock: StockEntry): Promise<StockEntry> => {
     if (stock.companyName && stock.cik) {
       return stock;

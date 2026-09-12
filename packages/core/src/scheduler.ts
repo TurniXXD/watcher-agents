@@ -1,4 +1,5 @@
 import { Cron } from 'croner';
+import type { WatcherLogger } from './logger.js';
 
 export const parseScheduleExpressions = (schedule: string): string[] =>
   schedule
@@ -53,6 +54,7 @@ export class PersistentScheduler {
     private readonly listDue: (now: Date) => Promise<DueSchedule[]>,
     private readonly execute: (schedule: DueSchedule) => Promise<void>,
     private readonly intervalMs = 30_000,
+    private readonly logger?: WatcherLogger,
   ) {}
 
   public start(): void {
@@ -69,7 +71,13 @@ export class PersistentScheduler {
   }
 
   public tick(now = new Date()): Promise<void> {
-    if (this.#activeTick) return this.#activeTick;
+    if (this.#activeTick) {
+      this.logger?.info(
+        { now: now.toISOString() },
+        'Scheduler tick skipped because the previous tick is active',
+      );
+      return this.#activeTick;
+    }
 
     const activeTick = (async () => {
       const due = await this.listDue(now);

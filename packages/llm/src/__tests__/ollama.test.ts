@@ -1,4 +1,8 @@
 import type { WatchItem } from '@watcher/core';
+import type {
+  OllamaRequestContext,
+  OllamaRequestCoordinator,
+} from '@watcher/observability';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
@@ -18,6 +22,43 @@ const item: WatchItem = {
 };
 
 describe('OllamaProvider', () => {
+  it('queues each chat attempt with its caller, priority, model, and timeout', async () => {
+    const contexts: OllamaRequestContext[] = [];
+    const coordinator: OllamaRequestCoordinator = {
+      run: async <T>(context: OllamaRequestContext, task: () => Promise<T>) => {
+        contexts.push(context);
+        return task();
+      },
+      snapshot: vi.fn(),
+    };
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'qwen3',
+      caller: 'briefing-bot',
+      priority: 'high',
+      timeoutMs: 45_000,
+      coordinator,
+      fetch: vi.fn(async () =>
+        Response.json({ message: { content: '{"ok":true}' } }),
+      ),
+    });
+
+    await provider.generateStructured(
+      'hello',
+      { type: 'object' },
+      z.object({ ok: z.boolean() }),
+    );
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]).toMatchObject({
+      caller: 'briefing-bot',
+      model: 'qwen3',
+      operation: 'chat',
+      priority: 'high',
+      timeoutMs: 45_000,
+    });
+  });
+
   it('extracts JSON from Markdown fences and leading commentary', () => {
     expect(parseStructuredJson('```json\n{"ok":true}\n```')).toEqual({
       ok: true,
@@ -608,6 +649,37 @@ describe('OllamaProvider', () => {
 });
 
 describe('OllamaEmbeddingProvider', () => {
+  it('queues embedding requests through the same coordinator', async () => {
+    const contexts: OllamaRequestContext[] = [];
+    const coordinator: OllamaRequestCoordinator = {
+      run: async <T>(context: OllamaRequestContext, task: () => Promise<T>) => {
+        contexts.push(context);
+        return task();
+      },
+      snapshot: vi.fn(),
+    };
+    const provider = new OllamaEmbeddingProvider({
+      url: 'http://ollama',
+      model: 'nomic-embed-text',
+      caller: 'stocks-bot',
+      priority: 'normal',
+      timeoutMs: 30_000,
+      coordinator,
+      fetch: vi.fn(async () => Response.json({ embeddings: [[0.1]] })),
+    });
+
+    await provider.embed(['abc']);
+
+    expect(contexts[0]).toMatchObject({
+      caller: 'stocks-bot',
+      model: 'nomic-embed-text',
+      operation: 'embedding',
+      priority: 'normal',
+      timeoutMs: 30_000,
+      inputSize: 3,
+    });
+  });
+
   it('requests one embedding for every input and preserves their order', async () => {
     const mockFetch = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {

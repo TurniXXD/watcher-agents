@@ -248,6 +248,8 @@ services:
       - ${WATCHER_ENV_FILE:-.env.example}
     environment:
       MAINTENANCE_HOST: 0.0.0.0
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports:
       - '127.0.0.1:4030:4030'
     volumes:

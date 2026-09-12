@@ -1,6 +1,8 @@
 import { availableParallelism } from 'node:os';
 import { z } from 'zod';
 
+export * from './ollama.js';
+
 export type ProcessResourceUsage = {
   cpuTimeMs: number;
   cpuAveragePercent: number;

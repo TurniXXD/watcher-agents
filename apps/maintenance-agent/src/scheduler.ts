@@ -63,7 +63,12 @@ export class MaintenanceScheduler {
   }
 
   private tick(): Promise<void> {
-    if (this.#running) return this.#running;
+    if (this.#running) {
+      this.logger.info(
+        'Maintenance scheduler tick skipped because the previous tick is active',
+      );
+      return this.#running;
+    }
     this.#running = this.executeTick().finally(() => {
       this.#running = undefined;
     });

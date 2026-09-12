@@ -1,5 +1,7 @@
 import type { DatabaseClient } from './client.js';
 
+export const HEAVY_LOCAL_MODEL_RESOURCE = 'HEAVY_LOCAL_MODEL';
+
 export class ResourceLeaseStore {
   public constructor(private readonly db: DatabaseClient) {}
 

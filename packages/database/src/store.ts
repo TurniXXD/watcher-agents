@@ -55,7 +55,6 @@ import { ConfigurationStore } from './configuration-store.js';
 
 const DEFAULT_SCHEDULE = '0 8 * * *';
 const DEFAULT_TIMEZONE = 'Europe/Prague';
-const LOCAL_MODEL_RESOURCE = 'HEAVY_LOCAL_MODEL';
 const kindValue = (kind: CoreWatcherKind): WatcherKind => WatcherKind[kind];
 const identityKey = (item: { source: string; externalId: string }): string =>
   `${item.source}\u0000${item.externalId}`;
@@ -183,16 +182,6 @@ export class WatcherStore implements PipelineRepository {
       where: { kind_chatId: { kind: kindValue(kind), chatId } },
       include: { watcherConfig: true },
     });
-  }
-
-  public withOllamaLease<T>(task: () => Promise<T>): Promise<T> {
-    return this.db.$transaction(
-      async (transaction) => {
-        await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${LOCAL_MODEL_RESOURCE}))`;
-        return task();
-      },
-      { maxWait: 600_000, timeout: 600_000 },
-    );
   }
 
   public async updateSchedule(

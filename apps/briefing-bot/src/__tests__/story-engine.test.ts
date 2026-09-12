@@ -34,18 +34,6 @@ const event = (
   ...overrides,
 });
 
-const immediateResourceLease = {
-  withExclusiveLease: <T>(
-    resource: string,
-    operation: () => Promise<T>,
-    timeoutMs?: number,
-  ): Promise<T> => {
-    void resource;
-    void timeoutMs;
-    return operation();
-  },
-};
-
 describe('briefing story clustering', () => {
   it('combines one cross-domain event while preserving both perspectives', () => {
     const stock = event('stock-merck');
@@ -129,7 +117,6 @@ describe('SemanticStoryMatcher', () => {
         ]),
       },
       store,
-      immediateResourceLease,
     );
 
     const pairs = await matcher.matchingPairs([left, right]);
@@ -163,7 +150,6 @@ describe('SemanticStoryMatcher', () => {
           },
         ]),
       },
-      immediateResourceLease,
     );
 
     await expect(matcher.matchingPairs([left, right])).resolves.toHaveProperty(
@@ -219,7 +205,6 @@ describe('SemanticStoryMatcher', () => {
           },
         ]),
       },
-      immediateResourceLease,
     );
 
     const pairs = await matcher.matchingPairs([left, right]);

@@ -1,5 +1,8 @@
 import { createLogger } from '@watcher/core';
-import { createDatabaseClient } from '@watcher/database';
+import {
+  PostgresOllamaCoordinator,
+  createDatabaseClient,
+} from '@watcher/database';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { createMaintenanceApi } from './api.js';
 import { AgentStatusService } from './agent-status.js';
@@ -8,6 +11,8 @@ import { MaintenanceEngine } from './evaluation/engine.js';
 import { MaintenanceScheduler } from './scheduler.js';
 import {
   CapacityEvaluator,
+  OllamaAnomalyEvaluator,
+  OllamaRuntimeSampler,
   MaintenanceRuntimeMonitor,
   SystemMetricsSampler,
 } from './runtime-monitor.js';
@@ -19,6 +24,7 @@ import {
 
 const logger = createLogger('maintenance-agent', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
+const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);
 const engine = new MaintenanceEngine(
   database,
   logger,
@@ -91,6 +97,20 @@ const runtimeMonitor = new MaintenanceRuntimeMonitor(
     env.MAINTENANCE_CAPACITY_SUSTAINED_SAMPLES,
     env.MAINTENANCE_CAPACITY_ALERT_COOLDOWN_MINUTES * 60_000,
   ),
+  ollamaCoordinator,
+  new OllamaRuntimeSampler(env.OLLAMA_URL),
+  new OllamaAnomalyEvaluator({
+    cpuAlertPercent: env.OLLAMA_CPU_ALERT_PERCENT,
+    highUsageDurationMs: env.OLLAMA_HIGH_USAGE_DURATION_SECONDS * 1_000,
+    imbalanceEnabled: env.OLLAMA_CPU_GPU_IMBALANCE_ENABLED,
+    imbalanceDurationMs: env.OLLAMA_CPU_GPU_IMBALANCE_DURATION_SECONDS * 1_000,
+    cpuGpuShareMarginPercent: env.OLLAMA_CPU_GPU_SHARE_MARGIN_PERCENT,
+    gpuLowUtilPercent: env.OLLAMA_GPU_LOW_UTIL_PERCENT,
+    requestTimeoutMs: env.OLLAMA_REQUEST_TIMEOUT_SECONDS * 1_000,
+    queueAlertSize: env.OLLAMA_QUEUE_ALERT_SIZE,
+    queueWaitAlertMs: env.OLLAMA_QUEUE_WAIT_ALERT_SECONDS * 1_000,
+    cooldownMs: env.OLLAMA_ALERT_COOLDOWN_SECONDS * 1_000,
+  }),
   env.MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS,
   async (message) => {
     await Promise.allSettled(

@@ -11,6 +11,7 @@ import {
   BriefingWatcherHealthStore,
   CalendarIntegrationStore,
   PostgresBriefingEventRepository,
+  PostgresOllamaCoordinator,
   createDatabaseClient,
   ResourceLeaseStore,
 } from '@watcher/database';
@@ -54,6 +55,7 @@ logger.info(
   'Briefing bot configuration loaded',
 );
 const database = createDatabaseClient(env.DATABASE_URL);
+const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);
 const configuration = new BriefingConfigurationStore(database);
 const calendarStore = new CalendarIntegrationStore(database);
 const resourceLeases = new ResourceLeaseStore(database);
@@ -175,6 +177,9 @@ const scriptModel = new OllamaProvider({
   retries: env.OLLAMA_RETRIES,
   think: env.OLLAMA_THINK,
   timeoutMs: env.OLLAMA_TIMEOUT_MS,
+  caller: 'briefing-bot',
+  priority: 'high',
+  coordinator: ollamaCoordinator,
 });
 const semanticMatcher = env.BRIEFING_EMBEDDING_MODEL
   ? new SemanticStoryMatcher(
@@ -184,9 +189,11 @@ const semanticMatcher = env.BRIEFING_EMBEDDING_MODEL
         model: env.BRIEFING_EMBEDDING_MODEL,
         keepAlive: env.OLLAMA_KEEP_ALIVE,
         timeoutMs: env.OLLAMA_TIMEOUT_MS,
+        caller: 'briefing-bot',
+        priority: 'high',
+        coordinator: ollamaCoordinator,
       }),
       briefingStoryClusters,
-      resourceLeases,
       logger,
       env.BRIEFING_EMBEDDING_MIN_SIMILARITY,
       env.BRIEFING_EMBEDDING_WINDOW_HOURS,

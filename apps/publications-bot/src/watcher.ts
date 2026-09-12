@@ -46,13 +46,9 @@ export const createPublicationsRunner = (
     [PublicationSourceType.CLINICAL_TRIALS]: new ClinicalTrialsSource(),
     [PublicationSourceType.FDA]: new FdaSource(),
   };
-  const leasedAnalyzer: Analyzer = {
-    analyze: (kind, item, signal) =>
-      store.withOllamaLease(() => analyzer.analyze(kind, item, signal)),
-  };
   const pipeline = new WatcherPipeline(
     store,
-    leasedAnalyzer,
+    analyzer,
     maxItemsPerRun,
     logger,
     fairlyOrderPublicationItems,

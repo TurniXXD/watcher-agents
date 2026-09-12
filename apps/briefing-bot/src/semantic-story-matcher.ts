@@ -4,7 +4,6 @@ import type {
   BriefingEmbeddingState,
   BriefingSemanticPair,
   BriefingStoryClusterStore,
-  ResourceLeaseStore,
 } from '@watcher/database';
 import {
   semanticPairKey,
@@ -19,8 +18,6 @@ type EmbeddingStore = Pick<
   BriefingStoryClusterStore,
   'listEmbeddingStates' | 'saveEmbedding' | 'findSemanticPairs'
 >;
-
-type ResourceLeases = Pick<ResourceLeaseStore, 'withExclusiveLease'>;
 
 const BATCH_SIZE = 32;
 
@@ -47,7 +44,6 @@ export class SemanticStoryMatcher {
     private readonly model: string,
     private readonly embeddings: EmbeddingProvider,
     private readonly store: EmbeddingStore,
-    private readonly resources: ResourceLeases,
     private readonly logger?: WatcherLogger,
     private readonly minimumSimilarity = 0.82,
     private readonly windowHours = 96,
@@ -72,24 +68,22 @@ export class SemanticStoryMatcher {
       return state?.model !== this.model || state.inputHash !== hash;
     });
     if (missing.length > 0) {
-      await this.resources.withExclusiveLease('HEAVY_LOCAL_MODEL', async () => {
-        for (let start = 0; start < missing.length; start += BATCH_SIZE) {
-          const batch = missing.slice(start, start + BATCH_SIZE);
-          const vectors = await this.embeddings.embed(
-            batch.map(({ text }) => text),
-          );
-          await Promise.all(
-            batch.map(({ event, hash }, index) =>
-              this.store.saveEmbedding({
-                eventId: event.id,
-                model: this.model,
-                inputHash: hash,
-                embedding: vectors[index],
-              }),
-            ),
-          );
-        }
-      });
+      for (let start = 0; start < missing.length; start += BATCH_SIZE) {
+        const batch = missing.slice(start, start + BATCH_SIZE);
+        const vectors = await this.embeddings.embed(
+          batch.map(({ text }) => text),
+        );
+        await Promise.all(
+          batch.map(({ event, hash }, index) =>
+            this.store.saveEmbedding({
+              eventId: event.id,
+              model: this.model,
+              inputHash: hash,
+              embedding: vectors[index],
+            }),
+          ),
+        );
+      }
     }
     const candidates = await this.store.findSemanticPairs({
       eventIds: events.map(({ id }) => id),

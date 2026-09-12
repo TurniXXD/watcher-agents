@@ -11,6 +11,11 @@ import {
 import { readFile, readdir } from 'node:fs/promises';
 import type { WatcherLogger } from '@watcher/core';
 import type { MaintenanceStore } from '@watcher/database';
+import type {
+  OllamaQueueSnapshot,
+  OllamaRequestCoordinator,
+} from '@watcher/observability';
+import { z } from 'zod';
 
 type CpuTimes = { idle: number; total: number };
 
@@ -409,6 +414,298 @@ export class CapacityEvaluator {
   }
 }
 
+const ollamaPsSchema = z.object({
+  models: z
+    .array(
+      z.object({
+        name: z.string().optional(),
+        model: z.string().optional(),
+        size: z.number().nonnegative(),
+        size_vram: z.number().nonnegative().default(0),
+      }),
+    )
+    .default([]),
+});
+
+export type OllamaModelSnapshot = {
+  model: string;
+  sizeBytes: number;
+  vramBytes: number;
+  cpuSharePercent?: number;
+  gpuSharePercent?: number;
+};
+
+export class OllamaRuntimeSampler {
+  readonly #fetch: typeof fetch;
+
+  public constructor(
+    private readonly baseUrl: string,
+    fetcher: typeof fetch = fetch,
+  ) {
+    this.#fetch = fetcher;
+  }
+
+  public async sample(signal?: AbortSignal): Promise<OllamaModelSnapshot[]> {
+    const response = await this.#fetch(
+      `${this.baseUrl.replace(/\/$/u, '')}/api/ps`,
+      {
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(3_000)])
+          : AbortSignal.timeout(3_000),
+      },
+    );
+    if (!response.ok) throw new Error(`Ollama ps HTTP ${response.status}`);
+    return ollamaPsSchema.parse(await response.json()).models.map((entry) => {
+      const vramBytes = Math.min(entry.size, entry.size_vram);
+      return {
+        model: entry.name ?? entry.model ?? 'unknown',
+        sizeBytes: entry.size,
+        vramBytes,
+        ...(entry.size > 0
+          ? {
+              cpuSharePercent:
+                Math.round(((entry.size - vramBytes) / entry.size) * 1_000) /
+                10,
+              gpuSharePercent:
+                Math.round((vramBytes / entry.size) * 1_000) / 10,
+            }
+          : {}),
+      };
+    });
+  }
+}
+
+export type OllamaUsageSnapshot = {
+  observedAt: Date;
+  queue: OllamaQueueSnapshot;
+  models: OllamaModelSnapshot[];
+  cpuPercent?: number;
+  gpuUtilizationPercent?: number;
+  cpuSharePercent?: number;
+  gpuSharePercent?: number;
+};
+
+export type OllamaAnomalySettings = {
+  cpuAlertPercent: number;
+  highUsageDurationMs: number;
+  imbalanceEnabled: boolean;
+  imbalanceDurationMs: number;
+  cpuGpuShareMarginPercent: number;
+  gpuLowUtilPercent: number;
+  requestTimeoutMs: number;
+  queueAlertSize: number;
+  queueWaitAlertMs: number;
+  cooldownMs: number;
+};
+
+type OllamaAnomalyKind =
+  | 'multiple-active'
+  | 'high-cpu'
+  | 'cpu-gpu-imbalance'
+  | 'stuck-request'
+  | 'queue-backlog';
+
+export type OllamaAnomalyEvent = {
+  recovered: boolean;
+  reasons: OllamaAnomalyKind[];
+};
+
+export class OllamaAnomalyEvaluator {
+  readonly #candidateSince = new Map<OllamaAnomalyKind, Date>();
+  #active = false;
+  #lastAlertAt: Date | undefined;
+
+  public constructor(private readonly settings: OllamaAnomalySettings) {}
+
+  public evaluate(snapshot: OllamaUsageSnapshot): OllamaAnomalyEvent[] {
+    const now = snapshot.observedAt;
+    const oldestActiveMs = snapshot.queue.active.length
+      ? Math.max(
+          ...snapshot.queue.active.map(
+            ({ startedAt }) => now.getTime() - startedAt.getTime(),
+          ),
+        )
+      : 0;
+    const oldestQueuedMs = snapshot.queue.queued.length
+      ? Math.max(
+          ...snapshot.queue.queued.map(
+            ({ queuedAt }) => now.getTime() - queuedAt.getTime(),
+          ),
+        )
+      : 0;
+    const active = snapshot.queue.active.length > 0;
+    const cpuHeavyBySplit =
+      snapshot.cpuSharePercent !== undefined &&
+      snapshot.gpuSharePercent !== undefined &&
+      snapshot.cpuSharePercent - snapshot.gpuSharePercent >=
+        this.settings.cpuGpuShareMarginPercent;
+    const cpuHeavyByUtilization =
+      snapshot.cpuPercent !== undefined &&
+      snapshot.gpuUtilizationPercent !== undefined &&
+      snapshot.cpuPercent >= this.settings.cpuAlertPercent &&
+      snapshot.gpuUtilizationPercent <= this.settings.gpuLowUtilPercent;
+    const conditions: Array<[OllamaAnomalyKind, boolean, number]> = [
+      ['multiple-active', snapshot.queue.active.length > 1, 0],
+      [
+        'high-cpu',
+        active &&
+          snapshot.cpuPercent !== undefined &&
+          snapshot.cpuPercent >= this.settings.cpuAlertPercent,
+        this.settings.highUsageDurationMs,
+      ],
+      [
+        'cpu-gpu-imbalance',
+        this.settings.imbalanceEnabled &&
+          active &&
+          (cpuHeavyBySplit || cpuHeavyByUtilization),
+        this.settings.imbalanceDurationMs,
+      ],
+      [
+        'stuck-request',
+        active && oldestActiveMs >= this.settings.requestTimeoutMs,
+        0,
+      ],
+      [
+        'queue-backlog',
+        snapshot.queue.queued.length > this.settings.queueAlertSize ||
+          oldestQueuedMs >= this.settings.queueWaitAlertMs,
+        0,
+      ],
+    ];
+    const matured: OllamaAnomalyKind[] = [];
+    for (const [kind, condition, durationMs] of conditions) {
+      if (!condition) {
+        this.#candidateSince.delete(kind);
+        continue;
+      }
+      const since = this.#candidateSince.get(kind) ?? now;
+      this.#candidateSince.set(kind, since);
+      if (now.getTime() - since.getTime() >= durationMs) matured.push(kind);
+    }
+
+    if (matured.length > 0) {
+      const cooldownElapsed =
+        !this.#lastAlertAt ||
+        now.getTime() - this.#lastAlertAt.getTime() >= this.settings.cooldownMs;
+      if (!this.#active || cooldownElapsed) {
+        this.#active = true;
+        this.#lastAlertAt = now;
+        return [{ recovered: false, reasons: matured }];
+      }
+      return [];
+    }
+    if (this.#active) {
+      this.#active = false;
+      return [{ recovered: true, reasons: [] }];
+    }
+    return [];
+  }
+}
+
+export const ollamaUsageSnapshot = (
+  queue: OllamaQueueSnapshot,
+  system: SystemSnapshot,
+  models: OllamaModelSnapshot[],
+): OllamaUsageSnapshot => {
+  const ollamaCpu = system.processes
+    .filter(({ name }) => /(^|[/ ])ollama(?:$|[ /])/iu.test(name))
+    .flatMap(({ cpuPercent }) =>
+      cpuPercent === undefined ? [] : [cpuPercent],
+    );
+  const gpuUtilization = system.gpus.flatMap(({ utilizationPercent }) =>
+    utilizationPercent === undefined ? [] : [utilizationPercent],
+  );
+  const totalModelSize = models.reduce(
+    (sum, model) => sum + model.sizeBytes,
+    0,
+  );
+  const totalVram = models.reduce((sum, model) => sum + model.vramBytes, 0);
+  return {
+    observedAt: system.observedAt,
+    queue,
+    models,
+    ...(ollamaCpu.length
+      ? { cpuPercent: ollamaCpu.reduce((sum, value) => sum + value, 0) }
+      : {}),
+    ...(gpuUtilization.length
+      ? { gpuUtilizationPercent: Math.max(...gpuUtilization) }
+      : {}),
+    ...(totalModelSize > 0
+      ? {
+          cpuSharePercent:
+            Math.round(
+              ((totalModelSize - Math.min(totalModelSize, totalVram)) /
+                totalModelSize) *
+                1_000,
+            ) / 10,
+          gpuSharePercent:
+            Math.round(
+              (Math.min(totalModelSize, totalVram) / totalModelSize) * 1_000,
+            ) / 10,
+        }
+      : {}),
+  };
+};
+
+const formatDuration = (durationMs: number): string => {
+  const seconds = Math.max(0, Math.round(durationMs / 1_000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${seconds % 60}s`;
+};
+
+const ollamaReason = (reason: OllamaAnomalyKind): string => {
+  if (reason === 'multiple-active') return 'more than one active inference';
+  if (reason === 'high-cpu') return 'sustained high Ollama CPU';
+  if (reason === 'cpu-gpu-imbalance') return 'CPU/GPU execution imbalance';
+  if (reason === 'stuck-request') return 'request exceeded its timeout';
+  return 'queue backlog';
+};
+
+export const renderOllamaAnomaly = (
+  snapshot: OllamaUsageSnapshot,
+  event: OllamaAnomalyEvent,
+): string => {
+  if (event.recovered) return '✅ Ollama usage returned to normal.';
+  const now = snapshot.observedAt.getTime();
+  const active = snapshot.queue.active.length
+    ? snapshot.queue.active
+        .map(
+          (request) =>
+            `${request.caller}/${request.operation}/${request.model} (${formatDuration(now - request.startedAt.getTime())})`,
+        )
+        .join(', ')
+    : 'none';
+  const oldestWaitMs = snapshot.queue.queued.length
+    ? Math.max(
+        ...snapshot.queue.queued.map(
+          (request) => now - request.queuedAt.getTime(),
+        ),
+      )
+    : 0;
+  const models = snapshot.models.length
+    ? snapshot.models.map(({ model }) => model).join(', ')
+    : 'unavailable';
+  const advice = event.reasons.includes('cpu-gpu-imbalance')
+    ? 'Check Ollama GPU support, model offload, and host driver visibility.'
+    : event.reasons.includes('queue-backlog')
+      ? 'Inspect the active caller and reduce schedule overlap or model latency.'
+      : event.reasons.includes('stuck-request')
+        ? 'Inspect the active caller and Ollama logs; its request should be cancelled at timeout.'
+        : 'Inspect the active caller and Ollama host resource usage.';
+  return [
+    '🚨 Ollama resource warning',
+    `Reason: ${event.reasons.map(ollamaReason).join(', ')}`,
+    `Models loaded: ${models}`,
+    `Active requests: ${snapshot.queue.active.length} · ${active}`,
+    `Queued requests: ${snapshot.queue.queued.length} · oldest wait ${formatDuration(oldestWaitMs)}`,
+    `Ollama CPU: ${percent(snapshot.cpuPercent)}`,
+    `GPU utilization: ${percent(snapshot.gpuUtilizationPercent)}`,
+    `Model processor split: CPU ${percent(snapshot.cpuSharePercent)} / GPU ${percent(snapshot.gpuSharePercent)}`,
+    advice,
+  ].join('\n');
+};
+
 const formatBytes = (bytes: number): string => {
   const gib = bytes / 1024 ** 3;
   return `${gib.toFixed(gib >= 10 ? 1 : 2)} GiB`;
@@ -524,6 +821,9 @@ export class MaintenanceRuntimeMonitor {
     private readonly store: MaintenanceStore,
     private readonly sampler: SystemMetricsSampler,
     private readonly evaluator: CapacityEvaluator,
+    private readonly ollamaQueue: Pick<OllamaRequestCoordinator, 'snapshot'>,
+    private readonly ollamaSampler: OllamaRuntimeSampler,
+    private readonly ollamaEvaluator: OllamaAnomalyEvaluator,
     private readonly intervalMs: number,
     private readonly notifyCapacity: (message: string) => Promise<void>,
     private readonly notifyChat: (
@@ -566,6 +866,20 @@ export class MaintenanceRuntimeMonitor {
           ? `✅ Server ${event.resource} recovered to ${event.value.toFixed(1)}%.`
           : `🚨 Server capacity warning: ${event.resource} is at ${event.value.toFixed(1)}%.\n\n${renderSystemSnapshot(snapshot)}\n\n${renderTopProcesses(snapshot, event.resource)}`;
         await this.notifyCapacity(message);
+      }
+      const [queue, models] = await Promise.all([
+        this.ollamaQueue.snapshot(snapshot.observedAt),
+        this.ollamaSampler.sample().catch((error: unknown) => {
+          this.logger.warn(
+            { err: error },
+            'Ollama runtime metrics are temporarily unavailable',
+          );
+          return [];
+        }),
+      ]);
+      const ollamaSnapshot = ollamaUsageSnapshot(queue, snapshot, models);
+      for (const event of this.ollamaEvaluator.evaluate(ollamaSnapshot)) {
+        await this.notifyCapacity(renderOllamaAnomaly(ollamaSnapshot, event));
       }
       for (const subscription of await this.store.listDebugSubscriptions()) {
         if (!subscription.enabledAt) continue;

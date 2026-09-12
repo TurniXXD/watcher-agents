@@ -90,6 +90,51 @@ const schema = z.object({
     .max(10_080)
     .default(30),
   MAINTENANCE_NVIDIA_SMI_PATH: z.string().min(1).default('nvidia-smi'),
+  OLLAMA_URL: z.url().default('http://host.docker.internal:11434'),
+  OLLAMA_CPU_ALERT_PERCENT: z.coerce.number().min(1).max(10_000).default(150),
+  OLLAMA_HIGH_USAGE_DURATION_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(3_600)
+    .default(180),
+  OLLAMA_CPU_GPU_IMBALANCE_ENABLED: z.stringbool().default(true),
+  OLLAMA_CPU_GPU_IMBALANCE_DURATION_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(3_600)
+    .default(120),
+  OLLAMA_CPU_GPU_SHARE_MARGIN_PERCENT: z.coerce
+    .number()
+    .min(1)
+    .max(100)
+    .default(20),
+  OLLAMA_GPU_LOW_UTIL_PERCENT: z.coerce.number().min(0).max(100).default(20),
+  OLLAMA_REQUEST_TIMEOUT_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(3_600)
+    .default(300),
+  OLLAMA_QUEUE_ALERT_SIZE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1_000)
+    .default(10),
+  OLLAMA_QUEUE_WAIT_ALERT_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(3_600)
+    .default(180),
+  OLLAMA_ALERT_COOLDOWN_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(10)
+    .max(86_400)
+    .default(900),
   LOG_LEVEL: z.string().default('info'),
 });
 

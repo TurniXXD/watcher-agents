@@ -421,10 +421,7 @@ export class BriefingCoordinator {
       let scriptDegraded = false;
       let script: GeneratedBriefingScript;
       try {
-        script = await this.dependencies.resources.withExclusiveLease(
-          'HEAVY_LOCAL_MODEL',
-          () => this.dependencies.scripts.generate(scriptInput),
-        );
+        script = await this.dependencies.scripts.generate(scriptInput);
       } catch (error) {
         scriptDegraded = true;
         this.dependencies.logger?.warn(

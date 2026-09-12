@@ -206,6 +206,8 @@ Every application variable is represented in `.env.example`.
 
 Infrastructure secrets cannot be edited through Telegram. Telegram-editable schedules, watchlists, query lists, news feeds/topics, and source switches are persisted in PostgreSQL.
 
+Maintenance Ollama anomaly settings are `OLLAMA_CPU_ALERT_PERCENT=150`, `OLLAMA_HIGH_USAGE_DURATION_SECONDS=180`, `OLLAMA_CPU_GPU_IMBALANCE_ENABLED=true`, `OLLAMA_CPU_GPU_IMBALANCE_DURATION_SECONDS=120`, `OLLAMA_CPU_GPU_SHARE_MARGIN_PERCENT=20`, `OLLAMA_GPU_LOW_UTIL_PERCENT=20`, `OLLAMA_REQUEST_TIMEOUT_SECONDS=300`, `OLLAMA_QUEUE_ALERT_SIZE=10`, `OLLAMA_QUEUE_WAIT_ALERT_SECONDS=180`, and `OLLAMA_ALERT_COOLDOWN_SECONDS=900`. The per-request hard timeout remains `OLLAMA_TIMEOUT_MS` in each Ollama caller.
+
 ## Telegram commands
 
 Stocks and Publications support `/about`, `/start`, `/help`, `/status`, `/list_sources`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. News supports the common lifecycle commands plus profile-aware feed and topic configuration. `/help` prints an alphabetized command list, while `/about` explains each bot's purpose and workflow.
@@ -354,10 +356,10 @@ Ollama responses are requested as structured JSON and validated with Zod. The pa
 
 ## Ollama resource protection
 
-Watcher intentionally does not use Redis for Ollama coordination. PostgreSQL already belongs to the system and provides one global advisory lock shared by both bot containers. Analysis therefore has five layers of protection:
+Watcher intentionally does not add Redis for Ollama coordination. PostgreSQL already belongs to the system and provides a persisted priority queue plus one global transaction-scoped advisory lock shared by every bot container. Every chat generation and embedding request uses that coordinator, so the default global inference concurrency is one. Briefing requests have high priority; stocks, news, and publications use normal priority. Analysis therefore has five layers of protection:
 
 1. Sources may fetch concurrently, but expensive LLM analyses are sequential inside each run.
-2. The PostgreSQL advisory lock permits only one Ollama analysis across watcher producers at a time.
+2. The PostgreSQL queue and advisory lock permit only one Ollama request across watcher producers at a time. Queue wait, caller, model, timeout, input/output size, duration, and outcome are logged as structured events. Transaction release and a hard request timeout prevent a failed worker from permanently owning the slot; stale persisted telemetry is expired automatically.
 3. Canonical event deduplication, materiality, and persisted cooldowns reject redundant or low-value stock work before Ollama.
 4. `OLLAMA_MAX_ITEMS_PER_RUN` caps eligible analyses after the stock materiality gate. The default `0` processes every eligible event (and every new publication item). With a positive publication limit, candidate papers are selected round-robin across query topics with a run-specific rotation and newest-first ordering within each topic, preventing alphabetical topics from monopolizing successive runs.
 5. Context, output length, timeout, retry count, thinking, and model keep-alive are bounded by environment variables.
@@ -377,6 +379,8 @@ Environment="OLLAMA_CONTEXT_LENGTH=4096"
 Then run `sudo systemctl daemon-reload && sudo systemctl restart ollama`. These settings ensure another local client cannot silently increase model parallelism or load several models. The request-specific `OLLAMA_NUM_CTX` remains the Watcher-side limit. See the [official Ollama concurrency and queue documentation](https://docs.ollama.com/faq#how-does-ollama-handle-concurrent-requests).
 
 Use `ollama ps`, `journalctl -u ollama --follow`, and host RAM/VRAM metrics during the first few runs. If Ollama shares the VPS with important services, additionally set systemd `MemoryHigh`, `MemoryMax`, or `CPUQuota` based on the server's actual capacity, always leaving headroom for PostgreSQL, Docker, and the operating system.
+
+The maintenance agent reads host CPU/process data through the existing read-only `/proc` and `/sys` mounts and queries host Ollama `/api/ps` through `host.docker.internal`. It does not need privileged mode or the Docker socket. Alerts use application-level active/queued request state, not TCP connection counts: several `ESTABLISHED` keep-alive sockets are therefore not considered concurrent inference. It warns on multiple active jobs, sustained Ollama CPU, sustained CPU-heavy model placement or low GPU use, stuck requests, and queue backlog. A single cooldown deduplicates repeated warnings and one recovery message is sent when usage returns to normal.
 
 To add a source, implement the shared `Source<TConfig>` contract in the appropriate source package, validate the provider response at the HTTP boundary, normalize it into `WatchItem[]`, and keep the HTTP client injectable. Add the new database enum/config row, wire it into the relevant app's `watcher.ts`, expose its switch through `/sources`, and add normalization and failure-path tests. Commit a Prisma migration for schema changes.
 

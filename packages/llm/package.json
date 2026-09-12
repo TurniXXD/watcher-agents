@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@watcher/core": "workspace:*",
+    "@watcher/observability": "workspace:*",
     "zod": "4.4.3"
   },
   "devDependencies": {

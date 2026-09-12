@@ -11,6 +11,7 @@ export * from './agent-schedule-store.js';
 export * from './agent-telemetry-store.js';
 export * from './legacy-telemetry-importer.js';
 export * from './maintenance-store.js';
+export * from './ollama-coordinator-store.js';
 export * from './news-configuration-store.js';
 export * from './client.js';
 export * from './calendar-integration-store.js';

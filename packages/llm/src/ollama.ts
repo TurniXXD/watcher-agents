@@ -9,6 +9,10 @@ import {
   type WatcherKind,
   type WatchItem,
 } from '@watcher/core';
+import type {
+  OllamaRequestCoordinator,
+  OllamaRequestPriority,
+} from '@watcher/observability';
 import { z } from 'zod';
 
 const responseSchema = z.object({
@@ -274,6 +278,9 @@ export type OllamaOptions = {
   numPredict?: number;
   think?: boolean;
   fetch?: typeof fetch;
+  caller?: string;
+  priority?: OllamaRequestPriority;
+  coordinator?: OllamaRequestCoordinator;
 };
 
 export type OllamaEmbeddingOptions = {
@@ -282,6 +289,9 @@ export type OllamaEmbeddingOptions = {
   timeoutMs?: number;
   keepAlive?: string;
   fetch?: typeof fetch;
+  caller?: string;
+  priority?: OllamaRequestPriority;
+  coordinator?: OllamaRequestCoordinator;
 };
 
 export class OllamaEmbeddingProvider {
@@ -298,32 +308,49 @@ export class OllamaEmbeddingProvider {
     signal?: AbortSignal,
   ): Promise<number[][]> {
     if (input.length === 0) return [];
-    const response = await this.#fetch(
-      `${this.options.url.replace(/\/$/, '')}/api/embed`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          model: this.options.model,
-          input,
-          keep_alive: this.options.keepAlive ?? '5m',
-          truncate: true,
-        }),
-        signal: signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(this.#timeoutMs)])
-          : AbortSignal.timeout(this.#timeoutMs),
-      },
-    );
-    if (!response.ok) {
-      const detail = (await response.text())
-        .replaceAll(/\s+/g, ' ')
-        .trim()
-        .slice(0, 500);
-      throw new Error(
-        `Ollama embeddings returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+    const execute = async () => {
+      const response = await this.#fetch(
+        `${this.options.url.replace(/\/$/, '')}/api/embed`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: this.options.model,
+            input,
+            keep_alive: this.options.keepAlive ?? '5m',
+            truncate: true,
+          }),
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(this.#timeoutMs)])
+            : AbortSignal.timeout(this.#timeoutMs),
+        },
       );
-    }
-    const { embeddings } = embeddingResponseSchema.parse(await response.json());
+      if (!response.ok) {
+        const detail = (await response.text())
+          .replaceAll(/\s+/g, ' ')
+          .trim()
+          .slice(0, 500);
+        throw new Error(
+          `Ollama embeddings returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+        );
+      }
+      return embeddingResponseSchema.parse(await response.json());
+    };
+    const payload = this.options.coordinator
+      ? await this.options.coordinator.run(
+          {
+            caller: this.options.caller ?? 'unknown',
+            model: this.options.model,
+            operation: 'embedding',
+            priority: this.options.priority ?? 'normal',
+            timeoutMs: this.#timeoutMs,
+            inputSize: input.reduce((sum, value) => sum + value.length, 0),
+            ...(signal ? { signal } : {}),
+          },
+          execute,
+        )
+      : await execute();
+    const { embeddings } = payload;
     if (embeddings.length !== input.length) {
       throw new Error(
         `Ollama returned ${embeddings.length} embeddings for ${input.length} inputs`,
@@ -689,40 +716,62 @@ export class OllamaProvider implements Analyzer {
               ]
             : []),
         ];
-        const response = await this.#fetch(
-          `${this.options.url.replace(/\/$/, '')}/api/chat`,
-          {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              model: this.options.model,
-              stream: false,
-              keep_alive: this.options.keepAlive ?? '5m',
-              think: this.options.think ?? false,
-              format,
-              messages,
-              options: {
-                temperature: 0.1,
-                num_ctx: this.options.numCtx ?? 4096,
-                num_predict: numPredict,
-              },
-            }),
-            signal: signal
-              ? AbortSignal.any([signal, AbortSignal.timeout(this.#timeoutMs)])
-              : AbortSignal.timeout(this.#timeoutMs),
-          },
-        );
-
-        if (!response.ok) {
-          const detail = (await response.text())
-            .replaceAll(/\s+/g, ' ')
-            .trim()
-            .slice(0, 500);
-          throw new Error(
-            `Ollama returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+        const execute = async () => {
+          const response = await this.#fetch(
+            `${this.options.url.replace(/\/$/, '')}/api/chat`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                model: this.options.model,
+                stream: false,
+                keep_alive: this.options.keepAlive ?? '5m',
+                think: this.options.think ?? false,
+                format,
+                messages,
+                options: {
+                  temperature: 0.1,
+                  num_ctx: this.options.numCtx ?? 4096,
+                  num_predict: numPredict,
+                },
+              }),
+              signal: signal
+                ? AbortSignal.any([
+                    signal,
+                    AbortSignal.timeout(this.#timeoutMs),
+                  ])
+                : AbortSignal.timeout(this.#timeoutMs),
+            },
           );
-        }
-        const payload = responseSchema.parse(await response.json());
+
+          if (!response.ok) {
+            const detail = (await response.text())
+              .replaceAll(/\s+/g, ' ')
+              .trim()
+              .slice(0, 500);
+            throw new Error(
+              `Ollama returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+            );
+          }
+          return responseSchema.parse(await response.json());
+        };
+        const payload = this.options.coordinator
+          ? await this.options.coordinator.run(
+              {
+                caller: this.options.caller ?? 'unknown',
+                model: this.options.model,
+                operation: 'chat',
+                priority: this.options.priority ?? 'normal',
+                timeoutMs: this.#timeoutMs,
+                inputSize: messages.reduce(
+                  (sum, message) => sum + message.content.length,
+                  0,
+                ),
+                ...(signal ? { signal } : {}),
+              },
+              execute,
+            )
+          : await execute();
         invalidContent = payload.message.content;
         const reachedTokenLimit =
           payload.done_reason === 'length' ||
