@@ -3,7 +3,11 @@ import type { BriefingConfiguration } from '@watcher/database';
 import type { CalendarEvent } from './calendar.js';
 import { calendarDayWindow } from './calendar.js';
 import type { ContextAvailability } from './script-generator.js';
-import type { WeatherContext, WeatherProvider } from './weather.js';
+import type {
+  WeatherContext,
+  WeatherForecastTarget,
+  WeatherProvider,
+} from './weather.js';
 
 export type CalendarProvider = {
   listEvents: (
@@ -61,6 +65,7 @@ export const loadBriefingWeather = async (
   configuration: BriefingConfiguration,
   weather: WeatherProvider,
   logger?: WatcherLogger,
+  target?: WeatherForecastTarget,
 ): Promise<AvailableContext<WeatherContext | undefined>> => {
   const location = configuration.location;
   if (
@@ -80,6 +85,7 @@ export const loadBriefingWeather = async (
         location.longitude,
         configuration.settings.timezone,
         AbortSignal.timeout(15_000),
+        target,
       ),
     };
   } catch (error) {

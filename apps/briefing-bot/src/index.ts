@@ -232,7 +232,7 @@ runtime.coordinator = new BriefingCoordinator({
   ttsAttempts: env.BRIEFING_TTS_ATTEMPTS,
   freshness: {
     maximumAgeMs: env.BRIEFING_FRESHNESS_MAX_AGE_MINUTES * 60_000,
-    timeoutMs: env.BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES * 60_000,
+    warningIntervalMs: env.BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES * 60_000,
     pollIntervalMs: env.BRIEFING_FRESHNESS_POLL_INTERVAL_MS,
   },
 });

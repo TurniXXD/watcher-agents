@@ -29,7 +29,7 @@ describe('waitForFreshWatcherRuns', () => {
       subscriptions: ['stocks', 'medical'],
       referenceTime: new Date('2026-09-06T05:00:00.000Z'),
       maximumAgeMs: 60 * 60_000,
-      timeoutMs: 10_000,
+      warningIntervalMs: 10_000,
       pollIntervalMs: 1_000,
       clock: () => clock,
       sleep: async (milliseconds) => {
@@ -60,7 +60,7 @@ describe('waitForFreshWatcherRuns', () => {
       subscriptions: ['stocks', 'medical'],
       referenceTime: new Date('2026-09-06T05:00:00.000Z'),
       maximumAgeMs: 60 * 60_000,
-      timeoutMs: 10_000,
+      warningIntervalMs: 10_000,
       pollIntervalMs: 1_000,
       trigger,
       clock: () => clock,
@@ -87,7 +87,7 @@ describe('waitForFreshWatcherRuns', () => {
       subscriptions: ['stocks'],
       referenceTime: new Date('2026-09-06T05:00:00.000Z'),
       maximumAgeMs: 60 * 60_000,
-      timeoutMs: 10_000,
+      warningIntervalMs: 10_000,
       pollIntervalMs: 1_000,
       trigger: vi.fn(async () => {
         throw new Error('producer unavailable');
@@ -102,27 +102,50 @@ describe('waitForFreshWatcherRuns', () => {
     expect(list).toHaveBeenCalledTimes(2);
   });
 
-  it('returns stale watcher IDs after the bounded timeout', async () => {
+  it('keeps the briefing postponed past the warning interval until all watchers finish', async () => {
     let clock = 0;
+    const logger = {
+      warn: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    };
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce([health('stocks', '2026-09-06T01:00:00.000Z')])
+      .mockResolvedValueOnce([health('stocks', '2026-09-06T01:00:00.000Z')])
+      .mockResolvedValueOnce([health('stocks', '2026-09-06T01:00:00.000Z')])
+      .mockResolvedValueOnce([
+        health('stocks', '2026-09-06T04:45:00.000Z'),
+        health('medical', '2026-09-06T04:50:00.000Z'),
+      ]);
     const result = await waitForFreshWatcherRuns({
-      watcherHealth: {
-        list: vi.fn(async () => [health('stocks', '2026-09-06T01:00:00.000Z')]),
-      },
+      watcherHealth: { list },
       subscriptions: ['stocks', 'medical'],
       referenceTime: new Date('2026-09-06T05:00:00.000Z'),
       maximumAgeMs: 60 * 60_000,
-      timeoutMs: 2_000,
+      warningIntervalMs: 2_000,
       pollIntervalMs: 1_000,
       clock: () => clock,
       sleep: async (milliseconds) => {
         clock += milliseconds;
       },
+      logger,
     });
 
     expect(result).toMatchObject({
-      timedOut: true,
-      staleWatchers: ['stocks', 'medical'],
-      waitedMs: 2_000,
+      timedOut: false,
+      staleWatchers: [],
+      waitedMs: 3_000,
     });
+    expect(list).toHaveBeenCalledTimes(4);
+    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        staleWatchers: ['stocks', 'medical'],
+        waitedMs: 2_000,
+      }),
+      'Briefing is postponed while subscribed watcher runs are still incomplete',
+    );
   });
 });

@@ -262,7 +262,9 @@ describe('BriefingScriptGenerator', () => {
       result.displayScript.indexOf('Tomorrow.'),
     );
     expect(prompt).toContain('Summarize what happened today');
-    expect(prompt).toContain('The supplied Calendar window is tomorrow');
+    expect(prompt).toContain(
+      'The supplied weather forecast and Calendar window are for tomorrow',
+    );
   });
 
   it('marks Czech story titles for the Czech Piper voice outside Calendar', () => {

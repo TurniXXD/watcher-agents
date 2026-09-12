@@ -9,6 +9,7 @@ export type GeocodedLocation = {
 };
 
 export type WeatherContext = {
+  forecastFor: 'today' | 'tomorrow';
   observedAt: string;
   timezone: string;
   temperatureCelsius: number;
@@ -26,12 +27,18 @@ export type WeatherContext = {
   precipitationLikelyAt?: string;
 };
 
+export type WeatherForecastTarget = {
+  date: string;
+  label: 'today' | 'tomorrow';
+};
+
 export type WeatherProvider = {
   forecast(
     latitude: number,
     longitude: number,
     timezone: string,
     signal?: AbortSignal,
+    target?: WeatherForecastTarget,
   ): Promise<WeatherContext>;
 };
 
@@ -68,6 +75,8 @@ const weatherResponseSchema = z.object({
     precipitation_probability: z.array(z.number().min(0).max(100)),
   }),
   daily: z.object({
+    time: z.array(z.string().min(1)).min(1),
+    weather_code: z.array(z.number().int().nonnegative()).min(1),
     temperature_2m_max: z.array(z.number()).min(1),
     temperature_2m_min: z.array(z.number()).min(1),
     precipitation_probability_max: z.array(z.number().min(0).max(100)).min(1),
@@ -137,8 +146,9 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
     longitude: number,
     timezone: string,
     signal?: AbortSignal,
+    target?: WeatherForecastTarget,
   ): Promise<WeatherContext> {
-    const key = `${latitude.toFixed(3)}:${longitude.toFixed(3)}:${timezone}`;
+    const key = `${latitude.toFixed(3)}:${longitude.toFixed(3)}:${timezone}:${target?.date ?? 'current'}:${target?.label ?? 'today'}`;
     const cached = this.cache.get(key);
     if (cached && cached.expiresAt > Date.now()) return cached.weather;
 
@@ -146,7 +156,12 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
     url.searchParams.set('latitude', String(latitude));
     url.searchParams.set('longitude', String(longitude));
     url.searchParams.set('timezone', timezone);
-    url.searchParams.set('forecast_days', '1');
+    if (target) {
+      url.searchParams.set('start_date', target.date);
+      url.searchParams.set('end_date', target.date);
+    } else {
+      url.searchParams.set('forecast_days', '1');
+    }
     url.searchParams.set(
       'current',
       'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m',
@@ -154,7 +169,7 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
     url.searchParams.set('hourly', 'precipitation_probability');
     url.searchParams.set(
       'daily',
-      'temperature_2m_max,temperature_2m_min,precipitation_probability_max,rain_sum,snowfall_sum,sunrise,sunset',
+      'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,rain_sum,snowfall_sum,sunrise,sunset',
     );
     const parsed = weatherResponseSchema.parse(
       await responseJson(
@@ -164,15 +179,22 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
     const likelyIndex = parsed.hourly.precipitation_probability.findIndex(
       (probability, index) =>
         probability >= 50 &&
-        (parsed.hourly.time[index] ?? '') >= parsed.current.time,
+        (!target ||
+          (parsed.hourly.time[index] ?? '').startsWith(target.date)) &&
+        (target?.label === 'tomorrow' ||
+          (parsed.hourly.time[index] ?? '') >= parsed.current.time),
     );
     const weather: WeatherContext = {
-      observedAt: parsed.current.time,
+      forecastFor: target?.label ?? 'today',
+      observedAt: target?.date ?? parsed.current.time,
       timezone: parsed.timezone,
       temperatureCelsius: parsed.current.temperature_2m,
       apparentTemperatureCelsius: parsed.current.apparent_temperature,
       precipitationMillimeters: parsed.current.precipitation,
-      weatherCode: parsed.current.weather_code,
+      weatherCode:
+        target?.label === 'tomorrow'
+          ? parsed.daily.weather_code[0]!
+          : parsed.current.weather_code,
       windSpeedKmh: parsed.current.wind_speed_10m,
       highCelsius: parsed.daily.temperature_2m_max[0]!,
       lowCelsius: parsed.daily.temperature_2m_min[0]!,
@@ -220,5 +242,8 @@ export const renderSpokenWeather = (
     : weather.precipitationProbabilityPercent >= 40
       ? ` There is a ${Math.round(weather.precipitationProbabilityPercent)} percent chance of precipitation.`
       : '';
+  if (weather.forecastFor === 'tomorrow') {
+    return `Tomorrow${where} will be ${weatherDescription(weather.weatherCode)}. The high will be about ${Math.round(weather.highCelsius)} degrees, with a low near ${Math.round(weather.lowCelsius)} degrees.${precipitation}`;
+  }
   return `It is ${Math.round(weather.temperatureCelsius)} degrees${where} and ${weatherDescription(weather.weatherCode)}. Today's high is about ${Math.round(weather.highCelsius)}, with a low near ${Math.round(weather.lowCelsius)}.${precipitation}`;
 };

@@ -155,7 +155,7 @@ Every application variable is represented in `.env.example`.
 | `BRIEFING_EMBEDDING_MIN_SIMILARITY`                 | stocks, briefing      | Shared minimum cosine similarity for a semantic candidate; defaults to `0.82`                 |
 | `BRIEFING_EMBEDDING_WINDOW_HOURS`                   | stocks, briefing      | Shared maximum time distance between semantic candidates; defaults to `96` hours              |
 | `BRIEFING_FRESHNESS_MAX_AGE_MINUTES`                | briefing bot          | Maximum accepted age of a producer run before scheduled delivery; defaults to `1560` minutes  |
-| `BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES`           | briefing bot          | Maximum wait for stale producers before degraded delivery; defaults to `20` minutes           |
+| `BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES`           | briefing bot          | Warning cadence while strict freshness waiting postpones delivery; defaults to `20` minutes   |
 | `BRIEFING_FRESHNESS_POLL_INTERVAL_MS`               | briefing bot          | Poll interval while waiting for producer freshness; defaults to `30000` milliseconds          |
 | `OLLAMA_NUM_PREDICT`                                | watcher producers     | Maximum generated tokens per analysis; defaults to `768`                                      |
 | `OLLAMA_FULL_ANALYSIS_NUM_PREDICT`                  | stocks bot            | Output-token cap for the larger thesis/scenario response; defaults to `1536`                  |

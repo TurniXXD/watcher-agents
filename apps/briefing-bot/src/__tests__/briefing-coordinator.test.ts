@@ -9,7 +9,10 @@ import type { ScriptGenerationInput } from '../script-generator.js';
 
 const now = new Date('2026-09-06T05:00:00.000Z');
 
-const configuration = (onboardingCompleted = true): BriefingConfiguration => ({
+const configuration = (
+  onboardingCompleted = true,
+  locationEnabled = false,
+): BriefingConfiguration => ({
   settings: {
     id: 'settings-1',
     telegramChatId: '123',
@@ -39,7 +42,15 @@ const configuration = (onboardingCompleted = true): BriefingConfiguration => ({
   ],
   location: {
     id: 'location-1',
-    mode: 'DISABLED',
+    mode: locationEnabled ? 'STATIC' : 'DISABLED',
+    ...(locationEnabled
+      ? {
+          city: 'Brno',
+          country: 'CZ',
+          latitude: 49.1951,
+          longitude: 16.6068,
+        }
+      : {}),
     updatedAt: now.toISOString(),
   },
   onboarding: {
@@ -80,6 +91,7 @@ const dependencies = (
     watcherLastRunAt?: string;
     onboardingCompleted?: boolean;
     currentTime?: Date;
+    locationEnabled?: boolean;
   } = {},
 ) => {
   const seen = new Map<string, BriefingRunRecord>();
@@ -142,7 +154,11 @@ const dependencies = (
   return {
     value: {
       configuration: {
-        ensure: async () => configuration(options.onboardingCompleted ?? true),
+        ensure: async () =>
+          configuration(
+            options.onboardingCompleted ?? true,
+            options.locationEnabled ?? false,
+          ),
       },
       runs,
       storyStates: { save: vi.fn() },
@@ -353,6 +369,28 @@ describe('BriefingCoordinator', () => {
     expect(scriptInput?.calendar.day).toBe('tomorrow');
   });
 
+  it("requests tomorrow's weather for the scheduled evening slot even when posting is delayed", async () => {
+    const scheduledFor = new Date('2026-09-06T18:00:00.000Z');
+    const setup = dependencies({
+      currentTime: new Date('2026-09-06T22:30:00.000Z'),
+      locationEnabled: true,
+    });
+    const coordinator = new BriefingCoordinator(setup.value);
+
+    await coordinator.generate(123n, 'SCHEDULED', scheduledFor);
+
+    expect(setup.value.weather.forecast).toHaveBeenCalledWith(
+      49.1951,
+      16.6068,
+      'Europe/Prague',
+      expect.any(AbortSignal),
+      { date: '2026-09-07', label: 'tomorrow' },
+    );
+    const scriptInput = setup.value.scripts.generate.mock.calls[0]?.[0];
+    expect(scriptInput?.dayPeriod).toBe('evening');
+    expect(scriptInput?.calendar.day).toBe('tomorrow');
+  });
+
   it('marks a briefing partial and persists reduced coverage for a degraded watcher', async () => {
     const setup = dependencies({ watcherHealth: 'DEGRADED' });
     const coordinator = new BriefingCoordinator(setup.value);
@@ -381,38 +419,56 @@ describe('BriefingCoordinator', () => {
     });
   });
 
-  it('marks scheduled output partial when a producer stays stale after the freshness timeout', async () => {
+  it('postpones scheduled output until a stale producer completes its requested run', async () => {
     const setup = dependencies({
       watcherLastRunAt: '2026-09-06T01:00:00.000Z',
     });
+    const staleHealth = {
+      watcherBot: 'stocks' as const,
+      status: 'HEALTHY' as const,
+      lastRunAt: '2026-09-06T01:00:00.000Z',
+      eventsEmitted: 0,
+      failedEventPublications: 0,
+      sourceFailures: 0,
+    };
+    const freshHealth = {
+      ...staleHealth,
+      lastRunAt: '2026-09-06T04:45:00.000Z',
+    };
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce([staleHealth])
+      .mockResolvedValueOnce([freshHealth])
+      .mockResolvedValueOnce([freshHealth]);
     const trigger = vi.fn(async () => ({
       status: 'QUEUED' as const,
       message: 'queued',
     }));
     const coordinator = new BriefingCoordinator({
       ...setup.value,
+      watcherHealth: { list },
       watcherTrigger: { trigger },
       freshness: {
         maximumAgeMs: 60 * 60_000,
-        timeoutMs: 0,
+        warningIntervalMs: 0,
         pollIntervalMs: 1_000,
       },
+      sleep: vi.fn(async () => undefined),
     });
 
     const result = await coordinator.generate(123n, 'SCHEDULED', now);
 
-    expect(result.run.status).toBe('PARTIAL');
+    expect(result.run.status).toBe('SUCCESS');
     expect(trigger).toHaveBeenCalledWith(123n, 'stocks');
+    expect(list).toHaveBeenCalledTimes(3);
     expect(setup.value.scripts.generate).toHaveBeenCalledWith(
       expect.objectContaining({
-        dataQuality: [
-          'stocks watcher has not completed a recent scan; older stored events were still considered.',
-        ],
+        dataQuality: [],
       }),
     );
     const completion: unknown = setup.runs.complete.mock.calls.at(-1)?.[1];
     expect(completion).toMatchObject({
-      metrics: { watcherHealth: { stocks: 'DEGRADED' } },
+      metrics: { watcherHealth: { stocks: 'HEALTHY' } },
     });
   });
 });

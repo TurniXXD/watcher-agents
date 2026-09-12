@@ -64,6 +64,8 @@ describe('Open-Meteo adapters', () => {
           precipitation_probability: [10, 70],
         },
         daily: {
+          time: ['2026-09-06'],
+          weather_code: [2],
           temperature_2m_max: [20.2],
           temperature_2m_min: [8.4],
           precipitation_probability_max: [70],
@@ -79,6 +81,7 @@ describe('Open-Meteo adapters', () => {
     const second = await provider.forecast(49.1951, 16.6068, 'Europe/Prague');
 
     expect(first).toMatchObject({
+      forecastFor: 'today',
       temperatureCelsius: 12.2,
       highCelsius: 20.2,
       precipitationProbabilityPercent: 70,
@@ -89,6 +92,69 @@ describe('Open-Meteo adapters', () => {
     expect(renderSpokenWeather(first, 'Brno')).toContain(
       'Precipitation becomes likely around 16:00.',
     );
+  });
+
+  it("loads and renders tomorrow's daily forecast for an evening briefing", async () => {
+    const requested: URL[] = [];
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      requested.push(
+        input instanceof URL
+          ? input
+          : new URL(typeof input === 'string' ? input : input.url),
+      );
+      return jsonResponse({
+        timezone: 'Europe/Prague',
+        current: {
+          time: '2026-09-06T20:00',
+          temperature_2m: 15,
+          apparent_temperature: 14,
+          precipitation: 0,
+          weather_code: 0,
+          wind_speed_10m: 5,
+        },
+        hourly: {
+          time: ['2026-09-07T08:00', '2026-09-07T15:00'],
+          precipitation_probability: [20, 60],
+        },
+        daily: {
+          time: ['2026-09-07'],
+          weather_code: [61],
+          temperature_2m_max: [18],
+          temperature_2m_min: [9],
+          precipitation_probability_max: [60],
+          rain_sum: [2],
+          snowfall_sum: [0],
+          sunrise: ['2026-09-07T06:20'],
+          sunset: ['2026-09-07T19:25'],
+        },
+      });
+    });
+    const provider = new OpenMeteoWeatherProvider(fetcher);
+
+    const result = await provider.forecast(
+      49.1951,
+      16.6068,
+      'Europe/Prague',
+      undefined,
+      { date: '2026-09-07', label: 'tomorrow' },
+    );
+
+    expect(requested[0]?.searchParams.get('start_date')).toBe('2026-09-07');
+    expect(requested[0]?.searchParams.get('end_date')).toBe('2026-09-07');
+    expect(requested[0]?.searchParams.has('forecast_days')).toBe(false);
+    expect(result).toMatchObject({
+      forecastFor: 'tomorrow',
+      observedAt: '2026-09-07',
+      weatherCode: 61,
+      highCelsius: 18,
+      lowCelsius: 9,
+      precipitationLikelyAt: '2026-09-07T15:00',
+    });
+    const spoken = renderSpokenWeather(result, 'Brno');
+    expect(spoken).toContain('Tomorrow in Brno will be rainy.');
+    expect(spoken).toContain('The high will be about 18 degrees');
+    expect(spoken).not.toContain("Today's high");
+    expect(spoken).not.toContain('It is 15 degrees');
   });
 
   it('rejects malformed provider responses', async () => {

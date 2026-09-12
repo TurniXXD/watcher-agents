@@ -99,7 +99,7 @@ export class BriefingCoordinator {
       ttsAttempts?: number;
       freshness?: {
         maximumAgeMs: number;
-        timeoutMs: number;
+        warningIntervalMs: number;
         pollIntervalMs: number;
       };
       sleep?: (milliseconds: number) => Promise<void>;
@@ -151,9 +151,9 @@ export class BriefingCoordinator {
       await waitForFreshWatcherRuns({
         watcherHealth: this.dependencies.watcherHealth,
         subscriptions,
-        referenceTime: scheduledFor ?? now,
+        referenceTime: now,
         maximumAgeMs: this.dependencies.freshness.maximumAgeMs,
-        timeoutMs: this.dependencies.freshness.timeoutMs,
+        warningIntervalMs: this.dependencies.freshness.warningIntervalMs,
         pollIntervalMs: this.dependencies.freshness.pollIntervalMs,
         ...(watcherTrigger
           ? {
@@ -169,7 +169,9 @@ export class BriefingCoordinator {
       now = this.dependencies.now?.() ?? new Date();
     }
     const periodEnd = now;
-    const local = dateParts(now, configuration.settings.timezone);
+    const presentationTime =
+      type === 'SCHEDULED' && scheduledFor ? scheduledFor : now;
+    const local = dateParts(presentationTime, configuration.settings.timezone);
     const dayPeriod = briefingDayPeriodFor(local.time);
     const endOfDay = isEndOfDayBriefing(dayPeriod);
     const previous =
@@ -181,12 +183,13 @@ export class BriefingCoordinator {
     const periodStart =
       explicitPeriodHours === undefined
         ? endOfDay
-          ? calendarDayWindow(now, configuration.settings.timezone).start
+          ? calendarDayWindow(presentationTime, configuration.settings.timezone)
+              .start
           : previous
             ? new Date(previous.periodEnd)
             : new Date(periodEnd.getTime() - 24 * 60 * 60_000)
         : new Date(periodEnd.getTime() - explicitPeriodHours * 60 * 60_000);
-    const scheduleIdentity = scheduledFor ?? now;
+    const scheduleIdentity = scheduledFor ?? presentationTime;
     const place = configuration.location
       ? locationLabel(configuration.location)
       : undefined;
@@ -276,6 +279,17 @@ export class BriefingCoordinator {
               configuration,
               this.dependencies.weather,
               this.dependencies.logger,
+              {
+                date: dateParts(
+                  calendarDayWindow(
+                    presentationTime,
+                    configuration.settings.timezone,
+                    endOfDay ? 1 : 0,
+                  ).start,
+                  configuration.settings.timezone,
+                ).date,
+                label: endOfDay ? 'tomorrow' : 'today',
+              },
             ),
           ),
           measured(() =>
@@ -284,7 +298,7 @@ export class BriefingCoordinator {
               configuration,
               this.dependencies.calendar,
               this.dependencies.logger,
-              now,
+              presentationTime,
               endOfDay ? 1 : 0,
             ),
           ),
@@ -369,7 +383,7 @@ export class BriefingCoordinator {
         'Briefing inputs prepared',
       );
       const scriptInput = {
-        date: dateLabel(now, configuration.settings.timezone),
+        date: dateLabel(presentationTime, configuration.settings.timezone),
         localTime: local.time,
         dayPeriod,
         timezone: configuration.settings.timezone,
