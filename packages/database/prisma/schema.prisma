@@ -310,6 +310,20 @@ enum NewsScope {
   GLOBAL
 }
 
+enum NewsCategory {
+  POLITICS
+  BUSINESS
+  ECONOMY
+  TECHNOLOGY
+  SCIENCE
+  HEALTH
+  SECURITY
+  CLIMATE
+  CULTURE
+  SPORT
+  OTHER
+}
+
 enum BriefingConfidence {
   LOW
   MEDIUM
@@ -751,6 +765,7 @@ model TelegramChat {
   queries       PublicationQuery[]
   newsFeeds     NewsFeed[]
   newsTopics    NewsTopic[]
+  newsCategoryPreferences NewsCategoryPreference[]
 
   @@unique([kind, chatId])
 }
@@ -1444,6 +1459,20 @@ model NewsTopic {
 
   @@unique([chatConfigId, scope, normalizedTopic])
   @@index([chatConfigId, scope])
+}
+
+model NewsCategoryPreference {
+  id           String       @id @default(uuid())
+  chatConfigId String
+  scope        NewsScope
+  category     NewsCategory
+  enabled      Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  chatConfig   TelegramChat @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([chatConfigId, scope, category])
+  @@index([chatConfigId, scope, enabled])
 }
 
 model MuClub {

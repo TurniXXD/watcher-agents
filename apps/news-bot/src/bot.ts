@@ -1,4 +1,9 @@
-import { type ProgressReporter, type RunExecution } from '@watcher/core';
+import {
+  newsCategories,
+  newsCategorySchema,
+  type ProgressReporter,
+  type RunExecution,
+} from '@watcher/core';
 import {
   newsScopeSchema,
   type NewsConfigurationStore,
@@ -58,6 +63,7 @@ export const createNewsBot = (
         url: builtInNewsSourceUrl(source),
       })),
     );
+    await newsConfiguration.syncCategoryPreferences(current.id);
     return current;
   };
 
@@ -74,9 +80,10 @@ export const createNewsBot = (
   });
   bot.command('status', async (context) => {
     const current = await chat(context.chat.id);
-    const [feeds, topics] = await Promise.all([
+    const [feeds, topics, categoryPreferences] = await Promise.all([
       newsConfiguration.listFeeds(current.id),
       newsConfiguration.listTopics(current.id),
+      newsConfiguration.listCategoryPreferences(current.id),
     ]);
     const count = (scope: 'CZECH' | 'GLOBAL', enabledOnly = false) =>
       feeds.filter(
@@ -91,6 +98,7 @@ export const createNewsBot = (
         '',
         `Czech: ${count('CZECH', true)}/${count('CZECH')} feeds enabled · ${topics.filter(({ scope }) => scope === 'CZECH').length} topics`,
         `Global: ${count('GLOBAL', true)}/${count('GLOBAL')} feeds enabled · ${topics.filter(({ scope }) => scope === 'GLOBAL').length} topics`,
+        `Sport: Czech ${categoryPreferences.some(({ scope, category, enabled }) => scope === 'CZECH' && category === 'SPORT' && enabled) ? 'enabled' : 'disabled'} · Global ${categoryPreferences.some(({ scope, category, enabled }) => scope === 'GLOBAL' && category === 'SPORT' && enabled) ? 'enabled' : 'disabled'}`,
       ].join('\n'),
     );
   });
@@ -217,6 +225,57 @@ export const createNewsBot = (
       );
       await context.reply(removed ? 'Topic removed.' : 'Topic was not found.');
     }
+  });
+  bot.command('categories', async (context) => {
+    const current = await chat(context.chat.id);
+    const preferences = await newsConfiguration.listCategoryPreferences(
+      current.id,
+    );
+    const forScope = (scope: 'CZECH' | 'GLOBAL') =>
+      newsCategories.map((category) => {
+        const enabled =
+          preferences.find(
+            (preference) =>
+              preference.scope === scope && preference.category === category,
+          )?.enabled ?? true;
+        return `${enabled ? '✅' : '⏸'} ${category}`;
+      });
+    await context.reply(
+      [
+        'News categories:',
+        '',
+        '🇨🇿 Czech',
+        ...forScope('CZECH'),
+        '',
+        '🌍 Global',
+        ...forScope('GLOBAL'),
+      ].join('\n'),
+    );
+  });
+  bot.command(['category_enable', 'category_disable'], async (context) => {
+    const parts = (commandArgument(context.message?.text) ?? '')
+      .split(/\s+/u)
+      .filter(Boolean);
+    const scope = parseScope(parts[0]);
+    const category = newsCategorySchema.safeParse(parts[1]?.toUpperCase());
+    if (!scope || !category.success || parts.length !== 2) {
+      await context.reply(
+        'Usage: /category_enable czech|global CATEGORY or /category_disable czech|global CATEGORY',
+      );
+      return;
+    }
+    const current = await chat(context.chat.id);
+    const enabled =
+      context.message?.text?.startsWith('/category_enable') === true;
+    await newsConfiguration.setCategoryEnabled(
+      current.id,
+      scope,
+      category.data,
+      enabled,
+    );
+    await context.reply(
+      `${scopeName(scope)} ${category.data} category ${enabled ? 'enabled' : 'disabled'}.`,
+    );
   });
   bot.command('schedule', async (context) => {
     const current = await chat(context.chat.id);

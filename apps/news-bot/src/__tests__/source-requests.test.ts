@@ -5,6 +5,7 @@ import {
   GdeltNewsSource,
   type GdeltNewsConfig,
   RssNewsSource,
+  type RssNewsConfig,
 } from '@watcher/sources/news';
 import { describe, expect, it } from 'vitest';
 import { buildNewsSourceRequests } from '../watcher.js';
@@ -65,5 +66,34 @@ describe('built-in news source requests', () => {
 
     expect(config.query).not.toContain('domain:reuters.com');
     expect(config.metadata?.sourceKeys).toHaveLength(4);
+  });
+
+  it('passes profile category exclusions into RSS requests', () => {
+    const requests = buildNewsSourceRequests(
+      feeds,
+      topics,
+      new RssNewsSource(),
+      new GdeltNewsSource(),
+      undefined,
+      [
+        { scope: 'CZECH', category: 'SPORT', enabled: false },
+        { scope: 'GLOBAL', category: 'SPORT', enabled: false },
+      ],
+    );
+    const czechRss = requests.find(
+      ({ source, targetKey }) =>
+        source.id === 'NEWS_RSS' && targetKey === 'CZECH',
+    );
+    const globalRss = requests.find(
+      ({ source, targetKey }) =>
+        source.id === 'NEWS_RSS' && targetKey === 'GLOBAL',
+    );
+
+    expect((czechRss?.config as RssNewsConfig).disabledCategories).toEqual([
+      'SPORT',
+    ]);
+    expect((globalRss?.config as RssNewsConfig).disabledCategories).toEqual([
+      'SPORT',
+    ]);
   });
 });

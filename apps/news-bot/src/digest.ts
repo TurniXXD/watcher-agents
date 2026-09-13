@@ -1,5 +1,7 @@
 import {
+  isNewsCategoryEnabled,
   newsAnalysisSchema,
+  type NewsCategoryPreference,
   type NewsAnalysis,
   type PipelineResult,
   type WatchItem,
@@ -15,12 +17,23 @@ type DigestStory = { item: WatchItem; analysis: NewsAnalysis };
 export const selectNewsDigestStories = (
   result: PipelineResult,
   manual: boolean,
+  categoryPreferences: readonly NewsCategoryPreference[] = [],
 ): DigestStory[] =>
   result.analyses
     .flatMap(({ item, outcome }): DigestStory[] => {
       if (outcome.status !== 'SUCCESS') return [];
       const analysis = newsAnalysisSchema.safeParse(outcome.result);
       if (!analysis.success) return [];
+      const scope = item.metadata.scope === 'CZECH' ? 'CZECH' : 'GLOBAL';
+      if (
+        !isNewsCategoryEnabled(
+          categoryPreferences,
+          scope,
+          analysis.data.category,
+        )
+      ) {
+        return [];
+      }
       if (
         !manual &&
         (analysis.data.importance < scheduledMinimumImportance ||
@@ -41,16 +54,24 @@ export const selectNewsDigestStories = (
     )
     .slice(0, maximumDeliveredStories);
 
-export const hasScheduledNewsDigest = (result: PipelineResult): boolean =>
-  selectNewsDigestStories(result, false).length > 0;
+export const hasScheduledNewsDigest = (
+  result: PipelineResult,
+  categoryPreferences: readonly NewsCategoryPreference[] = [],
+): boolean =>
+  selectNewsDigestStories(result, false, categoryPreferences).length > 0;
 
 const scopeLabel = (scope: unknown): string =>
   scope === 'CZECH' ? '🇨🇿 Czech' : '🌍 Global';
 
 const failures = (result: PipelineResult): string =>
-  result.sourceFailures.length === 0
+  result.sourceFailures.filter(
+    ({ message }) => !/^RATE_LIMITED backoff active\b/iu.test(message),
+  ).length === 0
     ? ''
     : `\n\n⚠️ <b>Feed errors</b>\n${result.sourceFailures
+        .filter(
+          ({ message }) => !/^RATE_LIMITED backoff active\b/iu.test(message),
+        )
         .map(
           (failure) =>
             `• <b>${htmlText(failure.target, 300)}</b>\n  ${htmlText(failure.message, 600)}`,
@@ -75,8 +96,9 @@ const analysisFailures = (result: PipelineResult): string => {
 export const renderNewsDigest = (
   result: PipelineResult,
   manual = false,
+  categoryPreferences: readonly NewsCategoryPreference[] = [],
 ): string => {
-  const stories = selectNewsDigestStories(result, manual);
+  const stories = selectNewsDigestStories(result, manual, categoryPreferences);
   const sections = stories.map(({ item, analysis }) => {
     const feedName =
       typeof item.metadata.feedName === 'string'

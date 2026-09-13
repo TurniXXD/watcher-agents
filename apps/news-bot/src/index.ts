@@ -68,11 +68,13 @@ const runner = createNewsRunner(
   bot.api,
   env.OLLAMA_MAX_ITEMS_PER_RUN,
   logger,
-  async (_chatId, result) => {
+  async (_chatId, result, _runId, categoryPreferences) => {
     const publication = await publishNewsBriefingEvents(
       briefingEvents,
       result,
       logger,
+      new Date(),
+      categoryPreferences,
     );
     logger.info(publication, 'News briefing events published');
     const health = await briefingWatcherHealth.recordRun({

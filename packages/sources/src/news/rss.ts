@@ -4,6 +4,7 @@ import {
   parseDate,
   retryTransient,
   sourceHttpError,
+  type NewsCategory,
   type Source,
   type WatchItem,
 } from '@watcher/core';
@@ -16,6 +17,7 @@ export type RssNewsConfig = {
   sourceKey?: string;
   scope: NewsScope;
   topics: string[];
+  disabledCategories?: NewsCategory[];
   maxItems?: number;
 };
 
@@ -61,6 +63,26 @@ const primitiveValue = (current: unknown): string => {
 
 const value = (entry: FeedEntry, key: string): string =>
   primitiveValue(entry[key]);
+
+const primitiveValues = (current: unknown): string[] => {
+  if (typeof current === 'string' || typeof current === 'number') {
+    const normalized = normalizeWhitespace(String(current));
+    return normalized ? [normalized] : [];
+  }
+  if (Array.isArray(current)) return current.flatMap(primitiveValues);
+  if (current && typeof current === 'object') {
+    const record = current as Record<string, unknown>;
+    return primitiveValues(record['#text'] ?? record['@_term']);
+  }
+  return [];
+};
+
+const categoryHints = (entry: FeedEntry): NewsCategory[] => {
+  const labels = primitiveValues(entry.category);
+  return labels.some((label) => /\bsports?(?:ovní)?\b/iu.test(label))
+    ? ['SPORT']
+    : [];
+};
 
 const entryLink = (entry: FeedEntry, feedUrl: string): string | undefined => {
   const raw = value(entry, 'link');
@@ -156,6 +178,14 @@ export class RssNewsSource implements Source<RssNewsConfig> {
     const entries = Array.isArray(rawEntries) ? rawEntries : [rawEntries];
 
     return entries.slice(0, config.maxItems ?? 20).flatMap((entry) => {
+      const feedCategories = categoryHints(entry);
+      if (
+        feedCategories.some((category) =>
+          config.disabledCategories?.includes(category),
+        )
+      ) {
+        return [];
+      }
       const title = stripHtml(value(entry, 'title'));
       const url = entryLink(entry, config.feedUrl);
       const description = stripHtml(
@@ -189,6 +219,7 @@ export class RssNewsSource implements Source<RssNewsConfig> {
             feedName: config.feedName,
             feedUrl: config.feedUrl,
             ...(config.sourceKey ? { sourceKey: config.sourceKey } : {}),
+            ...(feedCategories.length > 0 ? { feedCategories } : {}),
           },
         },
       ];

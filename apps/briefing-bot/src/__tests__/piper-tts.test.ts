@@ -97,6 +97,7 @@ describe('Piper audio pipeline', () => {
     expect(commands[3]?.arguments_).toContain('libopus');
     expect(commands[3]?.arguments_).toContain('48k');
     expect(commands[3]?.arguments_).toContain('voip');
+    expect(commands[3]?.arguments_).toContain('ogg');
     await expect(access(temporaryDirectory)).rejects.toThrow();
   });
 

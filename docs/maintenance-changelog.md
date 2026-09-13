@@ -2,6 +2,14 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-09-13 — Persistent News category controls
+
+- Added separate persistent category switches for Czech and Global News profiles.
+- SPORT now defaults to disabled in both profiles and is excluded from manual digests, scheduled digests, and Personal Briefing input regardless of its scores.
+- RSS items carrying an upstream sport category are discarded before Ollama analysis; remaining articles are still blocked after classification as a second guard.
+- Missing Ollama news titles now safely reuse the sourced article title, and an expected active GDELT rate-limit backoff is no longer repeated as a Telegram feed error.
+- Added `/categories`, `/category_enable PROFILE CATEGORY`, and `/category_disable PROFILE CATEGORY` commands.
+
 ## 2026-09-12 — Actionable maintenance recommendations
 
 - Source recovery closes failure proposals immediately instead of retaining historical incidents as current recommendations.

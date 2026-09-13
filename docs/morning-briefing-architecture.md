@@ -133,7 +133,7 @@ If streaming or concatenation proves unreliable, retain per-chunk hashes and res
 
 ## 22. Telegram delivery design
 
-Phase 10 sends one voice message with the compact HTML index in its caption and optionally a split transcript according to settings. Delivery records distinguish voice-sent, transcript-sent, text-fallback, and failed attempts; the historical `INDEX` channel remains in the database enum for migration compatibility but is not used for new deliveries. Telegram retries use bounded exponential backoff and respect retry-after. Stable delivery keys prevent duplicate morning messages after a crash.
+Phase 10 sends the voice note with explicit duration metadata, then sends the compact HTML index as a separate normal-width message, and optionally sends a split transcript according to settings. Delivery records distinguish voice-sent, index-sent, transcript-sent, text-fallback, and failed attempts. Telegram retries use bounded exponential backoff and respect retry-after. Stable per-channel delivery keys prevent duplicate morning messages after a crash.
 
 If voice generation or upload fails, send the generated briefing text as a fallback. If an optional transcript fails after voice succeeds, retry only the missing transcript.
 
@@ -188,7 +188,7 @@ Operational inspection uses structured container logs and PostgreSQL run/health 
 7. Phase 7 — deterministic retrieval/clustering/ranking/continuity and suppression metrics.
 8. Phase 8 — typed plan, bounded script, spoken normalization, hallucination/provenance tests.
 9. Phase 9 — pinned Piper, verified models/licenses, chunked synthesis, ffmpeg, benchmark gate.
-10. Phase 10 — idempotent voice-caption/transcript delivery, retry, and fallback.
+10. Phase 10 — idempotent voice/index/transcript delivery, retry, and fallback.
 11. Phase 11 — timezone schedule, durable claims/windows, manual/test isolation.
 12. Phase 12 — health, structured metrics/logging, cleanup, security and production verification.
 

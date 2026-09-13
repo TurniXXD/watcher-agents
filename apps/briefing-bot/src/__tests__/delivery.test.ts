@@ -5,7 +5,7 @@ import type {
 import { describe, expect, it, vi } from 'vitest';
 import {
   BriefingDeliveryService,
-  renderBriefingCaption,
+  renderBriefingIndex,
   type BriefingDeliveryInput,
 } from '../delivery.js';
 import type { BriefingTelegramTransport } from '../telegram-transport.js';
@@ -90,11 +90,12 @@ const input = (): BriefingDeliveryInput => ({
 
 const transport = (): BriefingTelegramTransport => ({
   sendVoice: vi.fn(async () => '101'),
+  sendIndex: vi.fn(async () => '102'),
   sendPlainText: vi.fn(async () => ['103']),
 });
 
 describe('BriefingDeliveryService', () => {
-  it('puts the compact index in the voice caption and sends only the optional transcript separately', async () => {
+  it('sends the voice and its readable index as separate idempotent messages', async () => {
     const attempts = new MemoryAttempts();
     const telegram = transport();
     const service = new BriefingDeliveryService(attempts, telegram);
@@ -104,18 +105,23 @@ describe('BriefingDeliveryService', () => {
     expect(result).toEqual({
       status: 'SUCCESS',
       voiceMessageId: '101',
+      indexMessageId: '102',
       failedChannels: [],
     });
     expect(attempts.records.map(({ channel }) => channel)).toEqual([
       'VOICE',
+      'INDEX',
       'TRANSCRIPT',
     ]);
     expect(telegram.sendVoice).toHaveBeenCalledOnce();
     expect(vi.mocked(telegram.sendVoice).mock.calls[0]?.[0]).toBe('123');
-    expect(vi.mocked(telegram.sendVoice).mock.calls[0]?.[1].caption).toContain(
+    expect(
+      vi.mocked(telegram.sendVoice).mock.calls[0]?.[1].durationSeconds,
+    ).toBe(582);
+    expect(vi.mocked(telegram.sendIndex).mock.calls[0]?.[1].html).toContain(
       '🎙 9:42',
     );
-    expect(vi.mocked(telegram.sendVoice).mock.calls[0]?.[1].feedbackRunId).toBe(
+    expect(vi.mocked(telegram.sendIndex).mock.calls[0]?.[1].feedbackRunId).toBe(
       'run-1',
     );
   });
@@ -155,10 +161,11 @@ describe('BriefingDeliveryService', () => {
     await service.deliver(request);
 
     expect(telegram.sendVoice).toHaveBeenCalledTimes(1);
+    expect(telegram.sendIndex).toHaveBeenCalledTimes(1);
     expect(telegram.sendPlainText).toHaveBeenCalledTimes(1);
   });
 
-  it('sends only the voice message when the transcript is disabled', async () => {
+  it('sends voice and index without a transcript when the transcript is disabled', async () => {
     const attempts = new MemoryAttempts();
     const telegram = transport();
     const service = new BriefingDeliveryService(attempts, telegram);
@@ -168,9 +175,42 @@ describe('BriefingDeliveryService', () => {
     const result = await service.deliver(request);
 
     expect(result.status).toBe('SUCCESS');
-    expect(attempts.records.map(({ channel }) => channel)).toEqual(['VOICE']);
+    expect(attempts.records.map(({ channel }) => channel)).toEqual([
+      'VOICE',
+      'INDEX',
+    ]);
     expect(telegram.sendVoice).toHaveBeenCalledTimes(1);
+    expect(telegram.sendIndex).toHaveBeenCalledTimes(1);
     expect(telegram.sendPlainText).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed index without resending the successful voice', async () => {
+    const attempts = new MemoryAttempts();
+    const telegram = transport();
+    vi.mocked(telegram.sendIndex).mockRejectedValue(
+      new Error('Telegram text failed'),
+    );
+    const service = new BriefingDeliveryService(attempts, telegram, {
+      maxAttempts: 1,
+    });
+    const request = input();
+    request.sendTranscript = false;
+
+    expect(await service.deliver(request)).toEqual({
+      status: 'PARTIAL',
+      voiceMessageId: '101',
+      failedChannels: ['INDEX'],
+    });
+
+    vi.mocked(telegram.sendIndex).mockResolvedValue('102');
+    expect(await service.deliver(request)).toEqual({
+      status: 'SUCCESS',
+      voiceMessageId: '101',
+      indexMessageId: '102',
+      failedChannels: [],
+    });
+    expect(telegram.sendVoice).toHaveBeenCalledTimes(1);
+    expect(telegram.sendIndex).toHaveBeenCalledTimes(2);
   });
 
   it('uses text directly when TTS is unavailable', async () => {
@@ -190,9 +230,9 @@ describe('BriefingDeliveryService', () => {
   });
 });
 
-describe('renderBriefingCaption', () => {
+describe('renderBriefingIndex', () => {
   it('labels evening Calendar events as tomorrow', () => {
-    const rendered = renderBriefingCaption({
+    const rendered = renderBriefingIndex({
       dateLabel: 'Sep 6',
       dayPeriod: 'evening',
       calendar: { status: 'AVAILABLE', count: 2 },
@@ -204,7 +244,7 @@ describe('renderBriefingCaption', () => {
   });
 
   it('escapes user-facing values and reports unavailable Calendar honestly', () => {
-    const rendered = renderBriefingCaption({
+    const rendered = renderBriefingIndex({
       dateLabel: '<Sep 6>',
       dayPeriod: 'evening',
       location: 'Brno & okolí',
@@ -222,15 +262,15 @@ describe('renderBriefingCaption', () => {
     expect(rendered).not.toContain('0 events today');
   });
 
-  it('keeps complete HTML lines within Telegram voice caption limits', () => {
-    const rendered = renderBriefingCaption({
+  it('keeps complete HTML lines within Telegram message limits', () => {
+    const rendered = renderBriefingIndex({
       dateLabel: 'Sep 6',
       dayPeriod: 'night',
       calendar: { status: 'DISABLED', count: 0 },
       topics: Array.from({ length: 8 }, () => ({ title: '&'.repeat(500) })),
     });
 
-    expect(rendered.length).toBeLessThanOrEqual(1024);
+    expect(rendered.length).toBeLessThanOrEqual(4096);
     expect(rendered).toContain('<b>Topics:</b>');
   });
 });

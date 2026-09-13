@@ -9,7 +9,12 @@ import {
   publishNewsBriefingEvents,
 } from '../briefing-publisher.js';
 
-const result = (importance = 9, relevance = 8): PipelineResult => ({
+const result = (
+  importance = 9,
+  relevance = 8,
+  category: 'POLITICS' | 'SPORT' = 'POLITICS',
+  scope: 'CZECH' | 'GLOBAL' = 'CZECH',
+): PipelineResult => ({
   fetchedCount: 1,
   newItemCount: 1,
   analyzedCount: 1,
@@ -25,7 +30,7 @@ const result = (importance = 9, relevance = 8): PipelineResult => ({
         url: 'https://example.com/story',
         publishedAt: new Date('2026-09-07T05:00:00.000Z'),
         content: 'The election result changed the expected coalition talks.',
-        metadata: { scope: 'CZECH', feedName: 'Example News' },
+        metadata: { scope, feedName: 'Example News' },
       },
       outcome: {
         status: 'SUCCESS',
@@ -34,7 +39,7 @@ const result = (importance = 9, relevance = 8): PipelineResult => ({
           summary: 'The result materially changed the coalition outlook.',
           importance,
           relevance,
-          category: 'POLITICS',
+          category,
           keyFacts: ['Coalition talks changed'],
           whyItMatters: 'It affects the likely next government.',
           entities: ['Czech government'],
@@ -71,5 +76,27 @@ describe('news briefing publisher', () => {
     await expect(
       publishNewsBriefingEvents(repository, result()),
     ).resolves.toEqual({ published: 0, failed: 1 });
+  });
+
+  it('does not publish disabled Czech or Global sport to briefings', () => {
+    const preferences = [
+      { scope: 'CZECH' as const, category: 'SPORT' as const, enabled: false },
+      { scope: 'GLOBAL' as const, category: 'SPORT' as const, enabled: false },
+    ];
+
+    expect(
+      newsBriefingEvents(
+        result(10, 10, 'SPORT', 'CZECH'),
+        new Date(),
+        preferences,
+      ),
+    ).toEqual([]);
+    expect(
+      newsBriefingEvents(
+        result(10, 10, 'SPORT', 'GLOBAL'),
+        new Date(),
+        preferences,
+      ),
+    ).toEqual([]);
   });
 });

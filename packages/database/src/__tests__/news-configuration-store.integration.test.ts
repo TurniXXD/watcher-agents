@@ -104,4 +104,25 @@ integration('news configuration with PostgreSQL', () => {
       news.addFeed(chat.id, 'CZECH', 'http://127.0.0.1/feed', 'Private'),
     ).rejects.toThrow(/Private or special-purpose/);
   });
+
+  it('persists category delivery preferences per profile', async () => {
+    const chat = await watcher.ensureChat('NEWS', 704n);
+    await news.syncCategoryPreferences(chat.id);
+
+    const preferences = await news.listCategoryPreferences(chat.id);
+    expect(preferences).toHaveLength(22);
+    expect(preferences).toEqual(
+      expect.arrayContaining([
+        { scope: 'CZECH', category: 'SPORT', enabled: false },
+        { scope: 'GLOBAL', category: 'SPORT', enabled: false },
+      ]),
+    );
+
+    await news.setCategoryEnabled(chat.id, 'GLOBAL', 'SPORT', true);
+    expect(await news.listCategoryPreferences(chat.id)).toEqual(
+      expect.arrayContaining([
+        { scope: 'GLOBAL', category: 'SPORT', enabled: true },
+      ]),
+    );
+  });
 });

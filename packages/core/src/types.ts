@@ -176,24 +176,44 @@ export const publicationAnalysisSchema = z.object({
 
 export type PublicationAnalysis = z.infer<typeof publicationAnalysisSchema>;
 
+export const newsCategories = [
+  'POLITICS',
+  'BUSINESS',
+  'ECONOMY',
+  'TECHNOLOGY',
+  'SCIENCE',
+  'HEALTH',
+  'SECURITY',
+  'CLIMATE',
+  'CULTURE',
+  'SPORT',
+  'OTHER',
+] as const;
+export const newsCategorySchema = z.enum(newsCategories);
+export type NewsCategory = z.infer<typeof newsCategorySchema>;
+
+export type NewsCategoryPreference = {
+  scope: 'CZECH' | 'GLOBAL';
+  category: NewsCategory;
+  enabled: boolean;
+};
+
+export const isNewsCategoryEnabled = (
+  preferences: readonly NewsCategoryPreference[],
+  scope: 'CZECH' | 'GLOBAL',
+  category: NewsCategory,
+): boolean =>
+  preferences.find(
+    (preference) =>
+      preference.scope === scope && preference.category === category,
+  )?.enabled ?? true;
+
 export const newsAnalysisSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
   importance: z.number().int().min(1).max(10),
   relevance: z.number().int().min(1).max(10),
-  category: z.enum([
-    'POLITICS',
-    'BUSINESS',
-    'ECONOMY',
-    'TECHNOLOGY',
-    'SCIENCE',
-    'HEALTH',
-    'SECURITY',
-    'CLIMATE',
-    'CULTURE',
-    'SPORT',
-    'OTHER',
-  ]),
+  category: newsCategorySchema,
   keyFacts: z.array(z.string()),
   whyItMatters: z.string().min(1),
   entities: z.array(z.string()),

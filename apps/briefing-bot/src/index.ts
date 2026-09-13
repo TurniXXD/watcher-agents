@@ -12,6 +12,7 @@ import {
   CalendarIntegrationStore,
   PostgresBriefingEventRepository,
   PostgresOllamaCoordinator,
+  NewsConfigurationStore,
   createDatabaseClient,
   ResourceLeaseStore,
 } from '@watcher/database';
@@ -65,6 +66,7 @@ const briefingStoryStates = new BriefingStoryStore(database);
 const briefingStoryClusters = new BriefingStoryClusterStore(database);
 const briefingWatcherHealth = new BriefingWatcherHealthStore(database);
 const briefingEvents = new PostgresBriefingEventRepository(database, logger);
+const newsConfiguration = new NewsConfigurationStore(database, logger);
 const briefingDeliveries = new BriefingDeliveryStore(database);
 const agentSchedules = new AgentScheduleStore(database);
 const agentTriggers = new AgentTriggerService({
@@ -218,6 +220,7 @@ runtime.coordinator = new BriefingCoordinator({
     briefingStoryClusters,
     semanticMatcher,
     logger,
+    newsConfiguration,
   ),
   scripts: new BriefingScriptGenerator(scriptModel),
   tts,

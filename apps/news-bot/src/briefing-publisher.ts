@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 import {
   briefingConfidenceFromScore,
+  isNewsCategoryEnabled,
   newsAnalysisSchema,
   type BriefingEvent,
   type BriefingEventRepository,
+  type NewsCategoryPreference,
   type PipelineResult,
   type WatcherLogger,
 } from '@watcher/core';
@@ -17,6 +19,7 @@ const scopeEntity = (scope: unknown): string =>
 export const newsBriefingEvents = (
   result: PipelineResult,
   now = new Date(),
+  categoryPreferences: readonly NewsCategoryPreference[] = [],
 ): BriefingEvent[] =>
   result.analyses.flatMap(({ item, outcome }) => {
     if (outcome.status !== 'SUCCESS') return [];
@@ -24,9 +27,15 @@ export const newsBriefingEvents = (
     if (!analysis.success) return [];
     if (analysis.data.importance < 7 || analysis.data.relevance < 6) return [];
 
+    const scope = item.metadata.scope === 'CZECH' ? 'CZECH' : 'GLOBAL';
+    if (
+      !isNewsCategoryEnabled(categoryPreferences, scope, analysis.data.category)
+    ) {
+      return [];
+    }
+
     const identity = eventIdentity(item.source, item.externalId);
     const timestamp = now.toISOString();
-    const scope = item.metadata.scope === 'CZECH' ? 'CZECH' : 'GLOBAL';
     return [
       {
         id: `news:${identity}`,
@@ -76,8 +85,9 @@ export const publishNewsBriefingEvents = async (
   result: PipelineResult,
   logger?: WatcherLogger,
   now = new Date(),
+  categoryPreferences: readonly NewsCategoryPreference[] = [],
 ): Promise<{ published: number; failed: number }> => {
-  const events = newsBriefingEvents(result, now);
+  const events = newsBriefingEvents(result, now, categoryPreferences);
   const settled = await Promise.allSettled(
     events.map((event) => repository.save(event)),
   );

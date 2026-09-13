@@ -501,7 +501,7 @@ const newsCategory = (value: unknown): unknown => {
   return newsCategories.has(normalized) ? normalized : 'OTHER';
 };
 
-const normalizeNewsOutput = (value: unknown): unknown => {
+const normalizeNewsOutput = (value: unknown, sourceTitle?: string): unknown => {
   const record = nestedAnalysisRecord(value);
   const summary = nonEmptyString(
     record.summary,
@@ -512,8 +512,12 @@ const normalizeNewsOutput = (value: unknown): unknown => {
   return {
     ...record,
     title:
-      nonEmptyString(record.title, record.headline, record.articleTitle) ??
-      record.title,
+      nonEmptyString(
+        record.title,
+        record.headline,
+        record.articleTitle,
+        sourceTitle,
+      ) ?? record.title,
     summary: summary ?? record.summary,
     importance: tenPointScore(
       record.importance ?? record.importanceScore ?? record.importance_score,
@@ -632,7 +636,7 @@ export class OllamaProvider implements Analyzer {
           newsAnalysisSchema,
           signal,
           {
-            normalize: normalizeNewsOutput,
+            normalize: (value) => normalizeNewsOutput(value, item.title),
           },
         );
         return {

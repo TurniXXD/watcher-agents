@@ -136,6 +136,8 @@ export class PiperLocalTtsProvider implements TtsProvider {
           '48k',
           '-application',
           'voip',
+          '-f',
+          'ogg',
           '-y',
           output,
         ],

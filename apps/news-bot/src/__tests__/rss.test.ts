@@ -69,6 +69,37 @@ describe('RssNewsSource', () => {
     expect(resolvePublicUrl).toHaveBeenCalledTimes(2);
   });
 
+  it('drops an RSS item tagged as a disabled sport category before analysis', async () => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response(`
+          <rss version="2.0"><channel>
+            <item>
+              <title>Football final</title>
+              <link>https://news.example/articles/football</link>
+              <category>Sport</category>
+            </item>
+            <item>
+              <title>Economic report</title>
+              <link>https://news.example/articles/economy</link>
+              <category>Economy</category>
+            </item>
+          </channel></rss>
+        `),
+    );
+    const source = new RssNewsSource(fetcher, async (url) => new URL(url));
+
+    await expect(
+      source.fetch({
+        feedUrl: 'https://news.example/rss',
+        feedName: 'Example News',
+        scope: 'CZECH',
+        topics: [],
+        disabledCategories: ['SPORT'],
+      }),
+    ).resolves.toMatchObject([{ title: 'Economic report' }]);
+  });
+
   it('retries a temporary DNS lookup failure before failing the feed', async () => {
     vi.useFakeTimers();
     const dnsError = Object.assign(new Error('lookup temporarily failed'), {

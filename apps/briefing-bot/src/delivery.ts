@@ -57,6 +57,7 @@ export type BriefingDeliveryInput = {
 export type BriefingDeliveryResult = {
   status: 'SUCCESS' | 'PARTIAL' | 'FAILED';
   voiceMessageId?: string;
+  indexMessageId?: string;
   fallbackMessageId?: string;
   failedChannels: BriefingDeliveryChannelId[];
 };
@@ -69,15 +70,15 @@ const durationLabel = (seconds: number): string => {
   return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, '0')}`;
 };
 
-const telegramCaptionLimit = 1024;
+const telegramMessageLimit = 4096;
 
-export const renderBriefingCaption = (index: BriefingIndex): string => {
+export const renderBriefingIndex = (index: BriefingIndex): string => {
   const period = briefingDayPeriodPresentation(index.dayPeriod);
   const lines = [
     `${period.icon} <b>${period.label} Briefing — ${escapeHtml(index.dateLabel)}</b>`,
   ];
   const append = (...additionalLines: string[]): boolean => {
-    if ([...lines, ...additionalLines].join('\n').length > telegramCaptionLimit)
+    if ([...lines, ...additionalLines].join('\n').length > telegramMessageLimit)
       return false;
     lines.push(...additionalLines);
     return true;
@@ -143,11 +144,7 @@ export class BriefingDeliveryService {
       await this.telegram.sendVoice(input.telegramChatId, {
         audio: audio.audio,
         fileName: audio.fileName,
-        caption: renderBriefingCaption({
-          ...input.index,
-          audioDurationSeconds: audio.audioDurationSeconds,
-        }),
-        feedbackRunId: input.runId,
+        durationSeconds: audio.audioDurationSeconds,
       }),
     ]);
     if (!voice.success) {
@@ -165,6 +162,17 @@ export class BriefingDeliveryService {
       };
     }
 
+    const index = await this.attempt(input.runId, 'INDEX', async () => [
+      await this.telegram.sendIndex(input.telegramChatId, {
+        html: renderBriefingIndex({
+          ...input.index,
+          audioDurationSeconds: audio.audioDurationSeconds,
+        }),
+        feedbackRunId: input.runId,
+      }),
+    ]);
+    if (!index.success) failedChannels.push('INDEX');
+
     if (input.sendTranscript) {
       const transcript = await this.attempt(input.runId, 'TRANSCRIPT', () =>
         this.telegram.sendPlainText(input.telegramChatId, input.displayScript),
@@ -175,6 +183,7 @@ export class BriefingDeliveryService {
     return {
       status: failedChannels.length === 0 ? 'SUCCESS' : 'PARTIAL',
       ...(voice.messageId ? { voiceMessageId: voice.messageId } : {}),
+      ...(index.messageId ? { indexMessageId: index.messageId } : {}),
       failedChannels,
     };
   }

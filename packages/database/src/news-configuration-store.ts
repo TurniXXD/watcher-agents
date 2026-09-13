@@ -1,7 +1,17 @@
-import { assertPublicHttpUrl, type WatcherLogger } from '@watcher/core';
+import {
+  assertPublicHttpUrl,
+  newsCategories,
+  newsCategorySchema,
+  type NewsCategoryPreference,
+  type WatcherLogger,
+} from '@watcher/core';
 import { z } from 'zod';
 import type { DatabaseClient } from './client.js';
-import { NewsScope } from './generated/prisma/enums.js';
+import {
+  NewsCategory,
+  NewsScope,
+  WatcherKind,
+} from './generated/prisma/enums.js';
 
 export const newsScopeSchema = z.enum(['CZECH', 'GLOBAL']);
 export type NewsScopeId = z.infer<typeof newsScopeSchema>;
@@ -48,6 +58,15 @@ export type NewsTopicRecord = {
   scope: NewsScopeId;
   topic: string;
 };
+
+const defaultCategoryPreferences = (['CZECH', 'GLOBAL'] as const).flatMap(
+  (scope) =>
+    newsCategories.map((category) => ({
+      scope,
+      category,
+      enabled: category !== 'SPORT',
+    })),
+);
 
 export class NewsConfigurationStore {
   public constructor(
@@ -253,5 +272,65 @@ export class NewsConfigurationStore {
       },
     });
     return result.count > 0;
+  }
+
+  public async syncCategoryPreferences(chatConfigId: string): Promise<void> {
+    await this.db.newsCategoryPreference.createMany({
+      data: defaultCategoryPreferences.map((preference) => ({
+        chatConfigId,
+        scope: NewsScope[preference.scope],
+        category: NewsCategory[preference.category],
+        enabled: preference.enabled,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  public listCategoryPreferences(
+    chatConfigId: string,
+  ): Promise<NewsCategoryPreference[]> {
+    return this.db.newsCategoryPreference.findMany({
+      where: { chatConfigId },
+      orderBy: [{ scope: 'asc' }, { category: 'asc' }],
+      select: { scope: true, category: true, enabled: true },
+    });
+  }
+
+  public async setCategoryEnabled(
+    chatConfigId: string,
+    rawScope: unknown,
+    rawCategory: unknown,
+    enabled: boolean,
+  ): Promise<NewsCategoryPreference> {
+    const scope = newsScopeSchema.parse(rawScope);
+    const category = newsCategorySchema.parse(rawCategory);
+    const saved = await this.db.newsCategoryPreference.upsert({
+      where: {
+        chatConfigId_scope_category: { chatConfigId, scope, category },
+      },
+      create: {
+        chatConfigId,
+        scope: NewsScope[scope],
+        category: NewsCategory[category],
+        enabled,
+      },
+      update: { enabled },
+      select: { scope: true, category: true, enabled: true },
+    });
+    return saved;
+  }
+
+  public async categoryPreferencesForTelegramChat(
+    telegramChatId: bigint,
+  ): Promise<NewsCategoryPreference[]> {
+    const chat = await this.db.telegramChat.findUnique({
+      where: {
+        kind_chatId: { kind: WatcherKind.NEWS, chatId: telegramChatId },
+      },
+      select: { id: true },
+    });
+    if (!chat) return defaultCategoryPreferences;
+    await this.syncCategoryPreferences(chat.id);
+    return this.listCategoryPreferences(chat.id);
   }
 }

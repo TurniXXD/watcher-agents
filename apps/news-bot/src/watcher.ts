@@ -2,6 +2,8 @@ import {
   WatcherPipeline,
   WatcherRunner,
   type Analyzer,
+  type NewsCategory,
+  type NewsCategoryPreference,
   type PipelineResult,
   type SourceRequest,
   type WatcherLogger,
@@ -30,6 +32,7 @@ export const buildNewsSourceRequests = (
   rssSource: RssNewsSource,
   gdeltSource: GdeltNewsSource,
   logger?: WatcherLogger,
+  categoryPreferences: readonly NewsCategoryPreference[] = [],
 ): SourceRequest[] => {
   const enabledFeeds = feeds.filter(({ enabled }) => enabled);
   const sourceForFeed = (builtInKey: string | null) =>
@@ -48,6 +51,12 @@ export const buildNewsSourceRequests = (
   );
   const topicsFor = (scope: 'CZECH' | 'GLOBAL') =>
     topics.filter((topic) => topic.scope === scope).map(({ topic }) => topic);
+  const disabledCategoriesFor = (scope: 'CZECH' | 'GLOBAL'): NewsCategory[] =>
+    categoryPreferences.flatMap((preference) =>
+      preference.scope === scope && !preference.enabled
+        ? [preference.category]
+        : [],
+    );
   const rssRequests = validFeeds.flatMap((feed): SourceRequest[] => {
     const builtIn = sourceForFeed(feed.builtInKey);
     if (builtIn?.adapter === 'GDELT') return [];
@@ -62,6 +71,7 @@ export const buildNewsSourceRequests = (
           ...(feed.builtInKey ? { sourceKey: feed.builtInKey } : {}),
           scope: feed.scope,
           topics: topicsFor(feed.scope),
+          disabledCategories: disabledCategoriesFor(feed.scope),
         },
       },
     ];
@@ -116,6 +126,7 @@ export const createNewsRunner = (
     chatId: bigint,
     result: PipelineResult,
     runId: string,
+    categoryPreferences: readonly NewsCategoryPreference[],
   ) => Promise<void>,
   afterFailure?: (
     chatId: bigint,
@@ -139,9 +150,11 @@ export const createNewsRunner = (
         url: builtInNewsSourceUrl(source),
       })),
     );
-    const [feeds, topics] = await Promise.all([
+    await newsConfiguration.syncCategoryPreferences(chat.id);
+    const [feeds, topics, categoryPreferences] = await Promise.all([
       newsConfiguration.listFeeds(chat.id),
       newsConfiguration.listTopics(chat.id),
+      newsConfiguration.listCategoryPreferences(chat.id),
     ]);
     return buildNewsSourceRequests(
       feeds,
@@ -149,6 +162,7 @@ export const createNewsRunner = (
       rssSource,
       gdeltSource,
       logger,
+      categoryPreferences,
     );
   };
   const notify = async (
@@ -156,14 +170,29 @@ export const createNewsRunner = (
     result: PipelineResult,
     manual: boolean,
   ): Promise<void> => {
+    const categoryPreferences =
+      await newsConfiguration.categoryPreferencesForTelegramChat(chatId);
     if (result.newItemCount === 0 && result.sourceFailures.length === 0) {
       if (manual)
         await api.sendMessage(chatId.toString(), 'Nothing new found.');
       return;
     }
-    if (!manual && !hasScheduledNewsDigest(result)) return;
-    await sendSplitMessage(api, chatId, renderNewsDigest(result, manual));
+    if (!manual && !hasScheduledNewsDigest(result, categoryPreferences)) return;
+    await sendSplitMessage(
+      api,
+      chatId,
+      renderNewsDigest(result, manual, categoryPreferences),
+    );
   };
+  const publishAfterRun = afterRun
+    ? async (chatId: bigint, result: PipelineResult, runId: string) =>
+        afterRun(
+          chatId,
+          result,
+          runId,
+          await newsConfiguration.categoryPreferencesForTelegramChat(chatId),
+        )
+    : undefined;
   return new WatcherRunner(
     'NEWS',
     pipeline,
@@ -171,7 +200,7 @@ export const createNewsRunner = (
     requestsForChat,
     notify,
     logger,
-    afterRun,
+    publishAfterRun,
     afterFailure,
     telemetry,
   );

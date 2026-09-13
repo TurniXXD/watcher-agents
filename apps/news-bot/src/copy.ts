@@ -1,4 +1,7 @@
 export const newsHelp = `/about — what the news bot does and how to use it
+/categories — list enabled and disabled categories for both profiles
+/category_disable PROFILE CATEGORY — stop delivering a category
+/category_enable PROFILE CATEGORY — resume delivering a category
 /feed_add PROFILE URL [NAME] — add an optional custom RSS/Atom feed
 /feed_disable ID — disable a feed without deleting it
 /feed_enable ID — enable a disabled feed
@@ -15,7 +18,7 @@ export const newsHelp = `/about — what the news bot does and how to use it
 /topic_remove PROFILE TOPIC — remove a ranking topic
 /topics — list ranking topics
 
-Profiles: czech, global`;
+Profiles: czech, global. SPORT is disabled by default for both profiles.`;
 
 export const newsAbout = `*News Watcher*
 
@@ -25,7 +28,7 @@ News Watcher is one private, self-hosted Telegram bot with two editorial profile
 • Reads built-in official RSS/Atom feeds and GDELT discovery results, plus optional custom feeds, and normalizes their articles into one format.
 • Deduplicates articles by stable source identity before analysis or delivery.
 • Uses Ollama to assess importance, relevance, category, key facts, entities, and why a story matters.
-• Ranks each story against the topics configured for its Czech or Global profile.
+• Ranks each story against the topics configured for its Czech or Global profile and suppresses disabled categories before Telegram or Briefing delivery.
 • Isolates feed failures, reports coverage, prevents overlapping runs, and persists scheduling state.
 • Publishes important stories into the Personal Morning Briefing Bot through the durable briefing-event contract.
 
@@ -39,9 +42,10 @@ News Watcher is one private, self-hosted Telegram bot with two editorial profile
 *How to use it*
 1. Review the automatically enabled source catalog with \`/feeds\`; use \`/feed_disable ID\` or \`/feed_enable ID\` to change it.
 2. Optionally add another feed with \`/feed_add czech URL NAME\` or \`/feed_add global URL NAME\`.
-3. Add editorial interests with \`/topic_add czech TOPIC\` and \`/topic_add global TOPIC\`. With no topics, the bot ranks general significance for that profile.
-4. Use \`/run\` for both profiles or \`/run czech\` / \`/run global\` for one.
-5. Configure recurring checks with \`/schedule CRON TIMEZONE\`; pause or resume them without losing configuration.
-6. In the Briefing Bot, enable the \`news\` subscription to include qualifying stories in morning briefings.
+3. Review delivery categories with \`/categories\`. SPORT starts disabled for both profiles; use \`/category_enable\` or \`/category_disable\` to change any category persistently.
+4. Add editorial interests with \`/topic_add czech TOPIC\` and \`/topic_add global TOPIC\`. With no topics, the bot ranks general significance for that profile.
+5. Use \`/run\` for both profiles or \`/run czech\` / \`/run global\` for one.
+6. Configure recurring checks with \`/schedule CRON TIMEZONE\`; pause or resume them without losing configuration.
+7. In the Briefing Bot, enable the \`news\` subscription to include qualifying stories in morning briefings.
 
 _Important:_ The bot summarizes feed-provided text. Open the linked source before relying on a story, especially when facts are developing or consequential.`;

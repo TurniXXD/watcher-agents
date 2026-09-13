@@ -300,6 +300,36 @@ describe('OllamaProvider', () => {
     });
   });
 
+  it('uses the sourced article title when news output omits title', async () => {
+    const mockFetch = vi.fn(async () =>
+      Response.json({
+        message: {
+          content: JSON.stringify({
+            summary: 'The source report contains the relevant facts.',
+            importance: 7,
+            relevance: 7,
+            category: 'ECONOMY',
+            keyFacts: [],
+            whyItMatters: 'The report changes the economic outlook.',
+            entities: [],
+            confidence: 0.7,
+          }),
+        },
+      }),
+    );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      fetch: mockFetch,
+    });
+
+    await expect(provider.analyze('NEWS', item)).resolves.toMatchObject({
+      status: 'SUCCESS',
+      result: { title: item.title },
+    });
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
+
   it('retries transient fetch failures and includes their root cause', async () => {
     const socketError = Object.assign(new Error('socket closed'), {
       code: 'UND_ERR_SOCKET',

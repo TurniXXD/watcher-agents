@@ -1,6 +1,9 @@
 import {
+  isNewsCategoryEnabled,
+  newsCategorySchema,
   registeredWatcherBots,
   type BriefingEventRepository,
+  type NewsCategoryPreference,
   type WatcherBotId,
 } from '@watcher/core';
 import type {
@@ -19,6 +22,11 @@ type ClusterPersistence = Pick<
   BriefingStoryClusterStore,
   'findIdByEventIds' | 'save'
 >;
+type NewsCategoryPreferences = {
+  categoryPreferencesForTelegramChat(
+    telegramChatId: bigint,
+  ): Promise<NewsCategoryPreference[]>;
+};
 
 const MAX_CANDIDATE_EVENTS = 1_000;
 
@@ -109,6 +117,7 @@ export class StoryEngine {
       'matchingPairs'
     >,
     private readonly logger?: WatcherLogger,
+    private readonly newsCategoryPreferences?: NewsCategoryPreferences,
   ) {}
 
   public async collect(input: StoryEngineInput): Promise<StoryEngineResult> {
@@ -122,7 +131,7 @@ export class StoryEngine {
       throw new Error('Story period end must not precede its start');
     }
 
-    const retrieved =
+    const rawEvents =
       input.subscriptions.length === 0
         ? []
         : await this.events.list({
@@ -132,6 +141,23 @@ export class StoryEngine {
             detectedOrder: 'desc',
             limit: MAX_CANDIDATE_EVENTS,
           });
+    const categoryPreferences =
+      input.subscriptions.includes('news') && this.newsCategoryPreferences
+        ? await this.newsCategoryPreferences.categoryPreferencesForTelegramChat(
+            input.telegramChatId,
+          )
+        : [];
+    const retrieved = rawEvents.filter((event) => {
+      if (event.watcherBot !== 'news') return true;
+      const scope = event.subcategory;
+      const category = newsCategorySchema.safeParse(
+        event.category.replace(/^NEWS_/u, ''),
+      );
+      if ((scope !== 'CZECH' && scope !== 'GLOBAL') || !category.success) {
+        return true;
+      }
+      return isNewsCategoryEnabled(categoryPreferences, scope, category.data);
+    });
     let semanticPairs: ReadonlySet<string> = new Set();
     if (this.semanticMatcher) {
       try {

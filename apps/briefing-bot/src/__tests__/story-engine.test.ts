@@ -366,4 +366,58 @@ describe('StoryEngine', () => {
       'Football transfer report',
     ]);
   });
+
+  it('excludes disabled news categories before clustering and ranking', async () => {
+    const sport = event('sport', {
+      watcherBot: 'news',
+      title: 'Football final',
+      category: 'NEWS_SPORT',
+      subcategory: 'GLOBAL',
+      importance: 100,
+      urgency: 100,
+    });
+    const politics = event('politics', {
+      watcherBot: 'news',
+      title: 'Election result',
+      category: 'NEWS_POLITICS',
+      subcategory: 'CZECH',
+    });
+    const repository: BriefingEventRepository = {
+      save: vi.fn(),
+      list: vi.fn(async () => [sport, politics]),
+    };
+    const engine = new StoryEngine(
+      repository,
+      { list: vi.fn(async () => []) },
+      undefined,
+      undefined,
+      undefined,
+      {
+        categoryPreferencesForTelegramChat: vi.fn(async () => [
+          {
+            scope: 'CZECH' as const,
+            category: 'SPORT' as const,
+            enabled: false,
+          },
+          {
+            scope: 'GLOBAL' as const,
+            category: 'SPORT' as const,
+            enabled: false,
+          },
+        ]),
+      },
+    );
+
+    const result = await engine.collect({
+      telegramChatId: 42n,
+      subscriptions: ['news'],
+      periodStart: new Date('2026-09-05T05:00:00.000Z'),
+      periodEnd: new Date('2026-09-06T06:00:00.000Z'),
+    });
+
+    expect(result.stories.map(({ title }) => title)).toEqual([
+      'Election result',
+    ]);
+    expect(result.metrics.eventsRetrieved).toBe(1);
+  });
 });
