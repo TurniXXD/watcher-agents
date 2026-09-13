@@ -38,7 +38,8 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /stock_off SYMBOL — disable monitoring for a stock
 /stock_on SYMBOL — enable monitoring for a stock
 /stocks — list stocks
-/thesis SYMBOL — show the latest persistent thesis and scores
+/stocks_tickers — list only enabled ticker symbols
+/thesis SYMBOL — refresh live sources for one ticker, then show its updated persistent thesis and scores
 /validate — backtest stored theses, alerts, and signals against stored prices`;
 
 export const stocksAbout = `*Stocks Watcher*

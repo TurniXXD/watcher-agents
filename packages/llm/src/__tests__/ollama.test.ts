@@ -130,6 +130,15 @@ describe('OllamaProvider', () => {
     expect(body.messages[0]?.content).not.toContain(
       'routine Form 3, Form 4, Form 5, and Form 144',
     );
+    expect(body.messages[0]?.content).toContain(
+      'Most publications should score 3-6',
+    );
+    expect(body.messages[0]?.content).toContain(
+      'A close match to the configured topic raises relevance, not importance',
+    );
+    expect(body.messages[0]?.content).toContain(
+      'Use 10 only for an exceptional, independently replicated breakthrough',
+    );
   });
 
   it('adds stock-specific guidance to avoid overrating routine ownership filings', async () => {

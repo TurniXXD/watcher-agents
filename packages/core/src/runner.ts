@@ -47,6 +47,8 @@ export type RunExecutionOptions = {
   signal?: AbortSignal;
   targetKeys?: ReadonlySet<string>;
   sourceIds?: ReadonlySet<string>;
+  initializeStockThesisFor?: ReadonlySet<string>;
+  notify?: boolean;
 };
 
 export class WatcherRunner {
@@ -158,6 +160,11 @@ export class WatcherRunner {
                 : 'Analyzing news',
           ...(onProgress ? { onProgress } : {}),
           ...(options.signal ? { signal: options.signal } : {}),
+          ...(options.initializeStockThesisFor
+            ? {
+                initializeStockThesisFor: options.initializeStockThesisFor,
+              }
+            : {}),
         },
       );
       const result = {
@@ -248,7 +255,10 @@ export class WatcherRunner {
         percent: 100,
         step: 'Complete',
       });
-      if (trigger === 'MANUAL' || result.newItemCount > 0) {
+      if (
+        options.notify !== false &&
+        (trigger === 'MANUAL' || result.newItemCount > 0)
+      ) {
         this.logger?.info(
           {
             kind: this.kind,
@@ -269,7 +279,9 @@ export class WatcherRunner {
             trigger,
             sourceFailureCount: result.sourceFailures.length,
           },
-          'Watcher run notification suppressed because no new content was found',
+          options.notify === false
+            ? 'Watcher run notification suppressed by caller'
+            : 'Watcher run notification suppressed because no new content was found',
         );
       }
       this.logger?.info(

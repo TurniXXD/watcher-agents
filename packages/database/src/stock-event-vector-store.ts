@@ -86,7 +86,8 @@ export class StockEventVectorStore {
         1 - ("embedding" <=> ${vector}::vector) AS "similarity"
       FROM "CanonicalEvent"
       WHERE "ticker" = ${input.ticker}
-        AND "firstDetectedAt" BETWEEN ${input.after} AND ${input.before}
+        AND COALESCE("occurredAt", "firstDetectedAt")
+          BETWEEN ${input.after} AND ${input.before}
         AND "embeddingModel" = ${input.model}
         AND "embedding" IS NOT NULL
         AND vector_dims("embedding") = vector_dims(${vector}::vector)

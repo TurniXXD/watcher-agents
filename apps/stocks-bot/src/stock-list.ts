@@ -95,3 +95,10 @@ export const renderStockList = (stocks: StockListEntry[]): string => {
   if (stocks.length === 0) return `${header}\n\nNo stocks configured.`;
   return `${header}\n\n${stocks.map(renderEntry).join('\n\n──────────\n\n')}`;
 };
+
+export const renderStockTickers = (stocks: StockListEntry[]): string => {
+  const symbols = stocks
+    .filter(({ enabled }) => enabled)
+    .map(({ symbol }) => symbol);
+  return symbols.length > 0 ? symbols.join('\n') : 'No watched tickers.';
+};

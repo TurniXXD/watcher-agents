@@ -193,7 +193,7 @@ describe('maintenance runtime monitoring', () => {
       operation: 'chat' as const,
       startedAt,
       leaseExpiresAt: new Date('2026-09-10T12:10:00Z'),
-      timeoutMs: 120_000,
+      timeoutMs: 300_000,
     };
     expect(
       evaluator.evaluate(
@@ -304,7 +304,7 @@ describe('maintenance runtime monitoring', () => {
             caller: 'news-bot',
             model: 'qwen3',
             operation: 'chat',
-            queuedAt: new Date(observedAt.getTime() - 181_000),
+            queuedAt: new Date(observedAt.getTime() - 301_000),
             priority: 'normal',
           },
         ],
@@ -318,7 +318,44 @@ describe('maintenance runtime monitoring', () => {
     expect(renderOllamaAnomaly(value, event!)).toContain(
       'publications-bot/chat/qwen3',
     );
-    expect(renderOllamaAnomaly(value, event!)).toContain('oldest wait 3m 1s');
+    expect(renderOllamaAnomaly(value, event!)).toContain('oldest wait 5m 1s');
+  });
+
+  it('does not call normal serialized work a backlog before the active timeout', () => {
+    const evaluator = new OllamaAnomalyEvaluator(anomalySettings);
+    const observedAt = new Date('2026-09-10T12:10:00Z');
+
+    expect(
+      evaluator.evaluate(
+        ollamaSnapshot({
+          observedAt,
+          queue: {
+            observedAt,
+            active: [
+              {
+                id: 'briefing',
+                caller: 'briefing-bot',
+                model: 'qwen3',
+                operation: 'chat',
+                startedAt: new Date(observedAt.getTime() - 135_000),
+                leaseExpiresAt: new Date(observedAt.getTime() + 195_000),
+                timeoutMs: 300_000,
+              },
+            ],
+            queued: [
+              {
+                id: 'news',
+                caller: 'news-bot',
+                model: 'qwen3',
+                operation: 'chat',
+                queuedAt: new Date(observedAt.getTime() - 192_000),
+                priority: 'normal',
+              },
+            ],
+          },
+        }),
+      ),
+    ).toEqual([]);
   });
 
   it('applies one cooldown across Ollama alerts and emits one recovery', () => {

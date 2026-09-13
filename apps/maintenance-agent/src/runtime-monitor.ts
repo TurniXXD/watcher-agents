@@ -519,13 +519,11 @@ export class OllamaAnomalyEvaluator {
 
   public evaluate(snapshot: OllamaUsageSnapshot): OllamaAnomalyEvent[] {
     const now = snapshot.observedAt;
-    const oldestActiveMs = snapshot.queue.active.length
-      ? Math.max(
-          ...snapshot.queue.active.map(
-            ({ startedAt }) => now.getTime() - startedAt.getTime(),
-          ),
-        )
-      : 0;
+    const stuckRequest = snapshot.queue.active.some(
+      ({ startedAt, timeoutMs }) =>
+        now.getTime() - startedAt.getTime() >=
+        Math.min(timeoutMs, this.settings.requestTimeoutMs),
+    );
     const oldestQueuedMs = snapshot.queue.queued.length
       ? Math.max(
           ...snapshot.queue.queued.map(
@@ -534,6 +532,13 @@ export class OllamaAnomalyEvaluator {
         )
       : 0;
     const active = snapshot.queue.active.length > 0;
+    const activeTimeoutMs = snapshot.queue.active.length
+      ? Math.max(...snapshot.queue.active.map(({ timeoutMs }) => timeoutMs))
+      : 0;
+    const effectiveQueueWaitAlertMs = Math.max(
+      this.settings.queueWaitAlertMs,
+      activeTimeoutMs,
+    );
     const cpuHeavyBySplit =
       snapshot.cpuSharePercent !== undefined &&
       snapshot.gpuSharePercent !== undefined &&
@@ -560,15 +565,11 @@ export class OllamaAnomalyEvaluator {
           (cpuHeavyBySplit || cpuHeavyByUtilization),
         this.settings.imbalanceDurationMs,
       ],
-      [
-        'stuck-request',
-        active && oldestActiveMs >= this.settings.requestTimeoutMs,
-        0,
-      ],
+      ['stuck-request', active && stuckRequest, 0],
       [
         'queue-backlog',
         snapshot.queue.queued.length > this.settings.queueAlertSize ||
-          oldestQueuedMs >= this.settings.queueWaitAlertMs,
+          oldestQueuedMs >= effectiveQueueWaitAlertMs,
         0,
       ],
     ];
@@ -686,12 +687,12 @@ export const renderOllamaAnomaly = (
   const models = snapshot.models.length
     ? snapshot.models.map(({ model }) => model).join(', ')
     : 'unavailable';
-  const advice = event.reasons.includes('cpu-gpu-imbalance')
-    ? 'Check Ollama GPU support, model offload, and host driver visibility.'
-    : event.reasons.includes('queue-backlog')
-      ? 'Inspect the active caller and reduce schedule overlap or model latency.'
-      : event.reasons.includes('stuck-request')
-        ? 'Inspect the active caller and Ollama logs; its request should be cancelled at timeout.'
+  const advice = event.reasons.includes('stuck-request')
+    ? 'Inspect the active caller and Ollama logs; its request should be cancelled at timeout.'
+    : event.reasons.includes('cpu-gpu-imbalance')
+      ? 'Check Ollama GPU support, model offload, and host driver visibility.'
+      : event.reasons.includes('queue-backlog')
+        ? 'Inspect the active caller and reduce schedule overlap or model latency.'
         : 'Inspect the active caller and Ollama host resource usage.';
   return [
     '🚨 Ollama resource warning',

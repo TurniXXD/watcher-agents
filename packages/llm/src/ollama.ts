@@ -232,6 +232,12 @@ const stockGuidance = `For stock watcher output:
 const publicationGuidance = `For publication watcher output:
 - Return every required property and never use null.
 - importance and relevance must be whole integers from 1 through 10, not percentages or decimals.
+- Score relevance and importance independently. A close match to the configured topic raises relevance, not importance.
+- Calibrate importance conservatively. Start at 4 and move only when the source provides evidence for a different score. Most publications should score 3-6.
+- Use 1-2 for negligible, duplicative, corrective, or unsupported material; 3-4 for routine, narrow, incremental, protocol, in-vitro, exploratory, or descriptive work; 5-6 for useful but not practice-changing evidence.
+- Use 7 only for unusually strong evidence or a substantial advance. Use 8 only for robust results with direct clinical, policy, or field-wide implications, such as a convincing phase III trial or major guideline-changing evidence.
+- Use 9 only for a rare field-changing result backed by large, high-quality evidence and broad near-term implications. Use 10 only for an exceptional, independently replicated breakthrough; it should almost never be assigned.
+- Do not give 8-10 merely because a title sounds novel, a mechanism is sophisticated, the topic is medically serious, the result is statistically significant, or the study uses animals, cells, a single cohort, or an early preprint.
 - confidence must be a number from 0 through 1.
 - summary and whyInteresting must be strings.
 - keyFindings, methods, and limitations must be arrays of strings; use [] when the source does not support an entry.`;

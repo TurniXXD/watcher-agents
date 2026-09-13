@@ -482,6 +482,54 @@ integration('WatcherStore with PostgreSQL', () => {
     });
   });
 
+  it('can bootstrap an initial thesis from stored evidence after a targeted live run', async () => {
+    const chat = await store.ensureChat('STOCKS', 781n);
+    const firstRun = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
+    if (!firstRun) throw new Error('Expected first run');
+    const item: WatchItem = {
+      ...watchItem('bootstrap-thesis'),
+      title: 'Micron routine ownership filing',
+      category: 'INSIDER_TRANSACTION',
+      normalizedFacts: { form: '4' },
+    };
+
+    expect(
+      await store.prepareItemsForRun('STOCKS', firstRun.id, [item], 5),
+    ).toHaveLength(0);
+    await store.finishRun(chat.watcherConfig!.id, firstRun.id, {
+      status: 'SUCCESS',
+    });
+
+    const refreshRun = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
+    if (!refreshRun) throw new Error('Expected refresh run');
+    const prepared = await store.prepareItemsForRun(
+      'STOCKS',
+      refreshRun.id,
+      [],
+      5,
+      { initializeStockThesisFor: new Set(['MU']) },
+    );
+
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0]?.recordId).toBeTruthy();
+    expect(prepared[0]).toMatchObject({
+      item: {
+        source: 'SEC',
+        externalId: 'bootstrap-thesis',
+        metadata: {
+          symbol: 'MU',
+          stockAnalysisContext: {
+            currentThesis: null,
+            event: { ticker: 'MU', materiality: 'LOW' },
+          },
+        },
+      },
+    });
+    expect(await database.canonicalEvent.findFirstOrThrow()).toMatchObject({
+      analysisStatus: 'ANALYZING',
+    });
+  });
+
   it('persists a versioned thesis and deterministic decision result', async () => {
     const chat = await store.ensureChat('STOCKS', 799n);
     const run = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
@@ -725,6 +773,7 @@ integration('WatcherStore with PostgreSQL', () => {
       category: 'INSIDER_TRANSACTION',
       normalizedFacts: {
         owner: 'Provider Overflow Test',
+        role: 'Chief Executive Officer',
         transactionCode: 'P',
         acquiredDisposedCode: 'A',
         transactionDate: '2026-09-05',

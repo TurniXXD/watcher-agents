@@ -262,12 +262,17 @@ export type SourceHealthContext = {
   retryAt?: Date;
 };
 
+export type ItemPreparationOptions = {
+  initializeStockThesisFor?: ReadonlySet<string>;
+};
+
 export interface PipelineRepository {
   prepareItemsForRun(
     kind: WatcherKind,
     runId: string,
     items: WatchItem[],
     maxAnalyses: number,
+    options?: ItemPreparationOptions,
   ): Promise<PreparedItem[]>;
   saveAnalysis(
     runId: string,

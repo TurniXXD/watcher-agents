@@ -35,11 +35,16 @@ import {
   stockThesisStateSchema,
   type ProgressReporter,
   type RunExecution,
+  type RunExecutionOptions,
 } from '@watcher/core';
 import type { DiscoveryExecution } from './discovery.js';
 import { registerValidationCommands } from './validation-commands.js';
 import { scheduleExample, stocksAbout, stocksHelp } from './copy.js';
-import { renderStockList, type StockListEntry } from './stock-list.js';
+import {
+  renderStockList,
+  renderStockTickers,
+  type StockListEntry,
+} from './stock-list.js';
 import { hasReportableStockInformation } from './run-output.js';
 import {
   parseStockNewsRequest,
@@ -100,7 +105,7 @@ export const createStocksBot = (
   runNow: (
     configId: string,
     chatId: bigint,
-    options?: { onProgress?: ProgressReporter },
+    options?: RunExecutionOptions,
   ) => Promise<RunExecution>,
   lookupCompany: StockCompanyLookup,
   discoveryEnabled: boolean,
@@ -173,6 +178,14 @@ export const createStocksBot = (
       renderStockList(stocks),
     );
   });
+  bot.command('stocks_tickers', async (ctx) => {
+    const current = await chat(ctx.chat.id);
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderStockTickers(await store.listStocks(current.id)),
+    );
+  });
   bot.command('dashboard', async (ctx) => {
     const current = await chat(ctx.chat.id);
     await sendSplitMessage(
@@ -209,10 +222,71 @@ export const createStocksBot = (
   });
   bot.command('thesis', async (ctx) => {
     const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
+    const current = await chat(ctx.chat.id);
+    const stock = (await store.listStocks(current.id)).find(
+      ({ symbol: configuredSymbol }) => configuredSymbol === symbol,
+    );
+    if (!stock) {
+      await ctx.reply(
+        `${symbol} is not on this watchlist. Add it with /add_stock ${symbol} first.`,
+      );
+      return;
+    }
+    if (!stock.enabled) {
+      await ctx.reply(
+        `${symbol} is disabled. Enable it before requesting a live thesis refresh.`,
+      );
+      return;
+    }
+    const initialProgress = renderRunProgress({
+      percent: 0,
+      step: `Refreshing live sources for ${symbol}`,
+    });
+    const progressMessage = await ctx.reply(initialProgress);
+    let lastProgress = initialProgress;
+    const onProgress: ProgressReporter = async (progress) => {
+      const text = renderRunProgress(progress);
+      if (text === lastProgress) return;
+      lastProgress = text;
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        progressMessage.message_id,
+        text,
+      );
+    };
+    const execution = await runNow(
+      current.watcherConfig!.id,
+      BigInt(ctx.chat.id),
+      {
+        onProgress,
+        targetKeys: new Set([symbol]),
+        initializeStockThesisFor: new Set([symbol]),
+        notify: false,
+      },
+    );
+    if (execution.status === 'BUSY') {
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        progressMessage.message_id,
+        `A watcher run is already in progress. Live thesis refresh for ${symbol} was not started; retry when it finishes.`,
+      );
+      return;
+    }
+    if (execution.status === 'FAILED') {
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        progressMessage.message_id,
+        `Live thesis refresh for ${symbol} failed after ${formatRunDuration(execution.durationMs)}: ${execution.error}`,
+      );
+      return;
+    }
     const thesis = await store.getStockThesis(symbol);
     if (!thesis) {
-      await ctx.reply(
-        `No thesis exists for ${symbol} yet. Run the watcher after a material event is detected.`,
+      const result = execution.result;
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        progressMessage.message_id,
+        `Live refresh for ${symbol} completed in ${formatRunDuration(result.durationMs ?? 0)}, but no thesis could be created. Fetched ${result.fetchedCount} observations from ${result.dataCoverage?.successfulSources ?? 0}/${result.dataCoverage?.expectedSources ?? 0} sources; ${result.failedAnalysisCount} analyses failed. There is not yet usable event evidence for an initial thesis.`,
       );
       return;
     }
@@ -236,10 +310,15 @@ export const createStocksBot = (
       materialDataGaps: thesis.materialDataGaps,
       decision: thesis.decision,
     });
-    await ctx.reply(renderStockThesis(parsed), {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true },
-    });
+    await ctx.api.editMessageText(
+      ctx.chat.id,
+      progressMessage.message_id,
+      renderStockThesis(parsed),
+      {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+      },
+    );
   });
   bot.command('discovery', async (ctx) => {
     const current = await chat(ctx.chat.id);

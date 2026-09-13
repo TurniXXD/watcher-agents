@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { renderStockList, type StockListEntry } from '../stock-list.js';
+import {
+  renderStockList,
+  renderStockTickers,
+  type StockListEntry,
+} from '../stock-list.js';
 
 const stock = (
   symbol: string,
@@ -76,5 +80,16 @@ describe('stock list rendering', () => {
   it('renders a useful empty-state count', () => {
     expect(renderStockList([])).toContain('👀 <b>Currently watched:</b> 0');
     expect(renderStockList([])).toContain('No stocks configured.');
+  });
+
+  it('renders only enabled ticker symbols for the compact command', () => {
+    expect(
+      renderStockTickers([
+        stock('AOUT'),
+        stock('MU', { enabled: false }),
+        stock('NVO'),
+      ]),
+    ).toBe('AOUT\nNVO');
+    expect(renderStockTickers([])).toBe('No watched tickers.');
   });
 });

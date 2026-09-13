@@ -827,14 +827,24 @@ export class StockEventStore {
   public async claimAnalysis(
     preparation: EventPreparation,
     now = new Date(),
+    forceInitialThesis = false,
   ): Promise<boolean> {
-    if (!preparation.eligibleForAnalysis) return false;
+    if (!preparation.eligibleForAnalysis && !forceInitialThesis) return false;
     class CooldownBlocked extends Error {}
     try {
       return await this.db.$transaction(async (transaction) => {
+        if (
+          forceInitialThesis &&
+          (await transaction.companyThesisState.count({
+            where: { ticker: preparation.ticker },
+          })) > 0
+        ) {
+          throw new CooldownBlocked();
+        }
         const eventClaim = await transaction.canonicalEvent.updateMany({
           where: {
             id: preparation.eventId,
+            ...(forceInitialThesis ? { thesisRevision: { is: null } } : {}),
             OR: [
               { analysisClaimedAt: null },
               {
@@ -854,6 +864,7 @@ export class StockEventStore {
         });
 
         if (
+          !forceInitialThesis &&
           preparation.materiality !== 'HIGH' &&
           preparation.materiality !== 'EXTREME'
         ) {

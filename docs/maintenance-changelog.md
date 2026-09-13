@@ -2,6 +2,25 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-09-13 — Compact watched-ticker command
+
+- Added `/stocks_tickers`, which returns only enabled ticker symbols from the current watchlist, one per line, without company names, status, mode, priority, or source details.
+
+## 2026-09-13 — Live on-demand stock thesis refresh
+
+- `/thesis SYMBOL` now runs the regular source pipeline only for that configured ticker before returning its thesis, without sending a second manual-run digest.
+- When a ticker has no thesis yet, the targeted run may bootstrap one from the strongest available event after checking live sources. Normal scheduled materiality gates and overlap protection remain unchanged.
+
+## 2026-09-13 — Bounded and conservatively scored publication digests
+
+- Publications runs now analyze and deliver at most 15 papers, while preserving the existing fair rotation across configured topics; a lower configured cap is still honored.
+- Publication importance uses a conservative evidence rubric independent of topic relevance. Routine, exploratory, preclinical, and single-cohort studies should normally remain below 7, while scores 9-10 are reserved for rare field-changing or independently replicated breakthroughs.
+
+## 2026-09-13 — Fair Ollama queue warnings
+
+- Normal and low-priority Ollama requests waiting for 30 seconds are promoted to FIFO order, preventing repeated high-priority briefing work from starving producer scans.
+- A small serialized queue is no longer reported as a backlog before the active request's declared timeout; genuinely stuck requests and oversized queues still alert immediately.
+
 ## 2026-09-13 — Persistent News category controls
 
 - Added separate persistent category switches for Czech and Global News profiles.

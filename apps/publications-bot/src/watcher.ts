@@ -22,6 +22,13 @@ import type { Api } from 'grammy';
 import type { AgentTelemetryRecorder } from '@watcher/observability';
 import { fairlyOrderPublicationItems } from './utils/fair-items.js';
 
+export const PUBLICATION_ITEMS_PER_RUN_CAP = 15;
+
+export const publicationItemsPerRunLimit = (configuredLimit: number): number =>
+  configuredLimit === 0
+    ? PUBLICATION_ITEMS_PER_RUN_CAP
+    : Math.min(configuredLimit, PUBLICATION_ITEMS_PER_RUN_CAP);
+
 export const createPublicationsRunner = (
   store: WatcherStore,
   analyzer: Analyzer,
@@ -49,7 +56,7 @@ export const createPublicationsRunner = (
   const pipeline = new WatcherPipeline(
     store,
     analyzer,
-    maxItemsPerRun,
+    publicationItemsPerRunLimit(maxItemsPerRun),
     logger,
     fairlyOrderPublicationItems,
   );

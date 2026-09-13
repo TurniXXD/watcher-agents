@@ -91,6 +91,7 @@ const runWithTimeout = <T>(
 export type OllamaCoordinatorOptions = {
   maximumQueueWaitMs?: number;
   pollIntervalMs?: number;
+  priorityAgingMs?: number;
   leaseGraceMs?: number;
   retentionMs?: number;
 };
@@ -98,6 +99,7 @@ export type OllamaCoordinatorOptions = {
 export class PostgresOllamaCoordinator implements OllamaRequestCoordinator {
   readonly #maximumQueueWaitMs: number;
   readonly #pollIntervalMs: number;
+  readonly #priorityAgingMs: number;
   readonly #leaseGraceMs: number;
   readonly #retentionMs: number;
 
@@ -108,6 +110,7 @@ export class PostgresOllamaCoordinator implements OllamaRequestCoordinator {
   ) {
     this.#maximumQueueWaitMs = options.maximumQueueWaitMs ?? 10 * 60_000;
     this.#pollIntervalMs = options.pollIntervalMs ?? 250;
+    this.#priorityAgingMs = options.priorityAgingMs ?? 30_000;
     this.#leaseGraceMs = options.leaseGraceMs ?? 30_000;
     this.#retentionMs = options.retentionMs ?? 7 * 24 * 60 * 60_000;
   }
@@ -223,11 +226,22 @@ export class PostgresOllamaCoordinator implements OllamaRequestCoordinator {
           },
         });
 
-        const first = await transaction.ollamaRequest.findFirst({
-          where: { status: 'QUEUED' },
-          orderBy: [{ priority: 'asc' }, { queuedAt: 'asc' }, { id: 'asc' }],
+        const priorityCutoff = new Date(now.getTime() - this.#priorityAgingMs);
+        const priorityEligible = await transaction.ollamaRequest.findFirst({
+          where: {
+            status: 'QUEUED',
+            OR: [{ priority: 0 }, { queuedAt: { lte: priorityCutoff } }],
+          },
+          orderBy: [{ queuedAt: 'asc' }, { id: 'asc' }],
           select: { id: true },
         });
+        const first =
+          priorityEligible ??
+          (await transaction.ollamaRequest.findFirst({
+            where: { status: 'QUEUED' },
+            orderBy: [{ priority: 'asc' }, { queuedAt: 'asc' }, { id: 'asc' }],
+            select: { id: true },
+          }));
         if (first?.id !== id) return { acquired: false } as const;
 
         const startedAt = new Date();

@@ -148,7 +148,7 @@ Every application variable is represented in `.env.example`.
 | `OLLAMA_URL`                                        | all bots              | Ollama base URL                                                                               |
 | `OLLAMA_MODEL`                                      | all bots              | Installed Ollama model name                                                                   |
 | `OLLAMA_KEEP_ALIVE`                                 | all bots              | How long Ollama keeps the model loaded; defaults to `5m`                                      |
-| `OLLAMA_MAX_ITEMS_PER_RUN`                          | watcher producers     | Maximum new items analyzed in one run; `0` means all new items and is the default             |
+| `OLLAMA_MAX_ITEMS_PER_RUN`                          | watcher producers     | Maximum new items analyzed in one run; Publications additionally enforces a hard cap of 15    |
 | `OLLAMA_NUM_CTX`                                    | watcher producers     | Per-request context size; defaults to `4096`                                                  |
 | `BRIEFING_OLLAMA_NUM_CTX`                           | briefing bot          | Briefing script context size; defaults to `8192` without increasing producer requests         |
 | `BRIEFING_EMBEDDING_MODEL`                          | stocks, briefing      | Shared Ollama model for bounded stock-event and briefing-story similarity; empty disables it  |
@@ -216,7 +216,7 @@ Manual `/run` requests first send one progress message, then update that message
 
 Stocks bot:
 
-- `/stocks` to show labeled per-stock state plus currently watched, configured, paused, and auto-discovered counts
+- `/stocks` to show labeled per-stock state plus currently watched, configured, paused, and auto-discovered counts; `/stocks_tickers` returns only enabled ticker symbols, one per line
 - `/dashboard` to show the latest state of every enabled stock
 - `/opportunities` to show elevated-attention or favorable-asymmetry stocks
 - `/alerts` to show recent generated alerts and delivery state
@@ -298,7 +298,7 @@ Stock and publication source switches are global within their respective bot. Ev
 
 ### Stocks
 
-The watchlist starts empty. `ELAN`, `CVS`, `NVO`, `PFE`, and `BMY` are examples only; none is seeded or mandatory. Add only the symbols you want with `/add_stock`. When a stock is added, Watcher resolves the ticker through SEC EDGAR, stores the company name and CIK, and shows the company name in `/stocks` and stock run digests. Confirmed upcoming quarterly earnings dates for watched stocks produce Morning Briefing reminders one week before and one day before the report date.
+The watchlist starts empty. `ELAN`, `CVS`, `NVO`, `PFE`, and `BMY` are examples only; none is seeded or mandatory. Add only the symbols you want with `/add_stock`. When a stock is added, Watcher resolves the ticker through SEC EDGAR, stores the company name and CIK, and shows the company name in `/stocks` and stock run digests. `/thesis SYMBOL` refreshes all enabled live sources only for that configured ticker before showing the updated thesis; if no thesis exists, it may initialize one from the strongest available event and the accumulated event context. This on-demand refresh does not send a second manual-run digest and does not weaken scheduled-run materiality gates. Confirmed upcoming quarterly earnings dates for watched stocks produce Morning Briefing reminders one week before and one day before the report date.
 
 Available stock sources are SEC EDGAR, issuer RSS/Atom feeds auto-discovered from SEC company metadata, GDELT news discovery, TradingView symbol news, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, Stooq price, FINRA short interest, ClinicalTrials.gov, openFDA Drugs@FDA, Alpha Vantage institutional/options data, and six optional Quiver datasets. Every source switch is enabled initially. Credential-backed switches remain dormant when their server credential or entitlement flag is absent. Provider URLs are built into the bot; use `/sources` to change a source globally for all existing stocks and as the default for stocks added later.
 
@@ -363,10 +363,10 @@ Watcher intentionally does not add Redis for Ollama coordination. PostgreSQL alr
 1. Sources may fetch concurrently, but expensive LLM analyses are sequential inside each run.
 2. The PostgreSQL queue and advisory lock permit only one Ollama request across watcher producers at a time. Queue wait, caller, model, timeout, input/output size, duration, and outcome are logged as structured events. Transaction release and a hard request timeout prevent a failed worker from permanently owning the slot; stale persisted telemetry is expired automatically.
 3. Canonical event deduplication, materiality, and persisted cooldowns reject redundant or low-value stock work before Ollama.
-4. `OLLAMA_MAX_ITEMS_PER_RUN` caps eligible analyses after the stock materiality gate. The default `0` processes every eligible event (and every new publication item). With a positive publication limit, candidate papers are selected round-robin across query topics with a run-specific rotation and newest-first ordering within each topic, preventing alphabetical topics from monopolizing successive runs.
+4. `OLLAMA_MAX_ITEMS_PER_RUN` caps eligible analyses after the stock materiality gate. The default `0` processes every eligible stock or news event. Publications always analyze and deliver at most 15 papers per run; a lower positive setting is honored. Candidate papers are selected round-robin across query topics with a run-specific rotation and newest-first ordering within each topic, preventing alphabetical topics from monopolizing successive runs. Unselected papers are not marked as delivered and can be discovered in a later run.
 5. Context, output length, timeout, retry count, thinking, and model keep-alive are bounded by environment variables.
 
-The default prioritizes complete overnight runs over digest speed. Set `OLLAMA_MAX_ITEMS_PER_RUN` to a positive value if you need a hard safety cap after observing free RAM/VRAM and run duration. Lower `OLLAMA_KEEP_ALIVE` to `0` when RAM is scarce and slower model reloads are acceptable.
+The default prioritizes complete overnight stock and news runs over digest speed, while Publications has a fixed 15-paper safety cap. Set `OLLAMA_MAX_ITEMS_PER_RUN` to a positive lower value if you need a tighter bound after observing free RAM/VRAM and run duration. Lower `OLLAMA_KEEP_ALIVE` to `0` when RAM is scarce and slower model reloads are acceptable.
 
 Also constrain the external Ollama service itself. For a Linux systemd installation, run `sudo systemctl edit ollama.service` and add:
 
@@ -382,7 +382,7 @@ Then run `sudo systemctl daemon-reload && sudo systemctl restart ollama`. These 
 
 Use `ollama ps`, `journalctl -u ollama --follow`, and host RAM/VRAM metrics during the first few runs. If Ollama shares the VPS with important services, additionally set systemd `MemoryHigh`, `MemoryMax`, or `CPUQuota` based on the server's actual capacity, always leaving headroom for PostgreSQL, Docker, and the operating system.
 
-The maintenance agent reads host CPU/process data through the existing read-only `/proc` and `/sys` mounts and queries host Ollama `/api/ps` through `host.docker.internal`. It does not need privileged mode or the Docker socket. Alerts use application-level active/queued request state, not TCP connection counts: several `ESTABLISHED` keep-alive sockets are therefore not considered concurrent inference. It warns on multiple active jobs, sustained Ollama CPU, sustained CPU-heavy model placement or low GPU use, stuck requests, and queue backlog. A single cooldown deduplicates repeated warnings and one recovery message is sent when usage returns to normal.
+The maintenance agent reads host CPU/process data through the existing read-only `/proc` and `/sys` mounts and queries host Ollama `/api/ps` through `host.docker.internal`. It does not need privileged mode or the Docker socket. Alerts use application-level active/queued request state, not TCP connection counts: several `ESTABLISHED` keep-alive sockets are therefore not considered concurrent inference. It warns on multiple active jobs, sustained Ollama CPU, sustained CPU-heavy model placement or low GPU use, stuck requests, and queue backlog. A small serialized queue is not treated as a backlog before the active request's declared timeout, and queued normal work ages into FIFO order after 30 seconds so high-priority briefing calls cannot starve it. A single cooldown deduplicates repeated warnings and one recovery message is sent when usage returns to normal.
 
 To add a source, implement the shared `Source<TConfig>` contract in the appropriate source package, validate the provider response at the HTTP boundary, normalize it into `WatchItem[]`, and keep the HTTP client injectable. Add the new database enum/config row, wire it into the relevant app's `watcher.ts`, expose its switch through `/sources`, and add normalization and failure-path tests. Commit a Prisma migration for schema changes.
 

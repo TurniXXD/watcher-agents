@@ -34,6 +34,7 @@ type PipelineRunOptions = {
   analysisStep?: string;
   onProgress?: ProgressReporter;
   signal?: AbortSignal;
+  initializeStockThesisFor?: ReadonlySet<string>;
 };
 
 export class WatcherPipeline {
@@ -243,12 +244,20 @@ export class WatcherPipeline {
       },
       'Preparing watcher items',
     );
-    const preparedItems = await this.repository.prepareItemsForRun(
-      kind,
-      runId,
-      uniqueItems,
-      this.maxItemsPerRun,
-    );
+    const preparedItems = options.initializeStockThesisFor
+      ? await this.repository.prepareItemsForRun(
+          kind,
+          runId,
+          uniqueItems,
+          this.maxItemsPerRun,
+          { initializeStockThesisFor: options.initializeStockThesisFor },
+        )
+      : await this.repository.prepareItemsForRun(
+          kind,
+          runId,
+          uniqueItems,
+          this.maxItemsPerRun,
+        );
     this.logger?.info(
       { kind, runId, preparedItemCount: preparedItems.length },
       'Watcher items prepared',

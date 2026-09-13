@@ -49,6 +49,7 @@ describe('stocks bot command copy', () => {
       'stock_off',
       'stock_on',
       'stocks',
+      'stocks_tickers',
       'thesis',
       'validate',
     ]);

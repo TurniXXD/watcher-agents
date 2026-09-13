@@ -5,10 +5,12 @@ import {
   decisionResultSchema,
   normalizeObservation,
   newsAnalysisSchema,
+  stockAnalysisContextSchema,
   stockIntelligenceResultSchema,
   stockThesisStateSchema,
   watchItemSchema,
   type AnalysisOutcome,
+  type ItemPreparationOptions,
   type PipelineRepository,
   type PreparedItem,
   type SourceHealthContext,
@@ -44,12 +46,12 @@ import {
   StockSourceType,
   WatcherKind,
 } from './generated/prisma/enums.js';
-import { prismaJson } from './utils/json.js';
+import { jsonObject, prismaJson } from './utils/json.js';
 import {
   PROVIDER_BACKOFF_TARGET,
   SourceHealthStore,
 } from './source-health-store.js';
-import { StockEventStore } from './stock-event-store.js';
+import { eventNeedsAnalysis, StockEventStore } from './stock-event-store.js';
 import { StockReportStore } from './stock-report-store.js';
 import { ConfigurationStore } from './configuration-store.js';
 
@@ -298,8 +300,12 @@ export class WatcherStore implements PipelineRepository {
     runId: string,
     items: WatchItem[],
     maxAnalyses: number,
+    options: ItemPreparationOptions = {},
   ): Promise<PreparedItem[]> {
-    if (items.length === 0) {
+    if (
+      items.length === 0 &&
+      (kind !== 'STOCKS' || !options.initializeStockThesisFor?.size)
+    ) {
       return [];
     }
     const safeItems = items.map((item) => watchItemSchema.parse(item));
@@ -532,6 +538,72 @@ export class WatcherStore implements PipelineRepository {
           });
           if (!bypassRunLimit) remainingAnalysisSlots -= 1;
         }
+      }
+      const preparedTickers = new Set(
+        prepared.flatMap(({ item }) => {
+          const context = stockAnalysisContextSchema.safeParse(
+            item.metadata.stockAnalysisContext,
+          );
+          return context.success ? [context.data.event.ticker] : [];
+        }),
+      );
+      for (const rawTicker of options.initializeStockThesisFor ?? []) {
+        const ticker = rawTicker.trim().toUpperCase();
+        if (!ticker || preparedTickers.has(ticker)) continue;
+        if (
+          await this.db.companyThesisState.findUnique({ where: { ticker } })
+        ) {
+          continue;
+        }
+        const event = await this.db.canonicalEvent.findFirst({
+          where: { ticker, thesisRevision: { is: null } },
+          orderBy: [
+            { materialityScore: 'desc' },
+            { lastSeenAt: 'desc' },
+            { id: 'asc' },
+          ],
+          include: { primaryEvidence: true },
+        });
+        if (!event) continue;
+        const claimed = await this.stockEvents.claimAnalysis(
+          {
+            eventId: event.id,
+            ticker: event.ticker,
+            materiality: event.materiality,
+            eligibleForAnalysis: eventNeedsAnalysis(
+              event.materiality,
+              event.action,
+            ),
+          },
+          new Date(),
+          true,
+        );
+        if (!claimed) continue;
+        const stockAnalysisContext = await this.stockEvents.getAnalysisContext(
+          event.id,
+          run.watcherConfigId,
+        );
+        const evidence = event.primaryEvidence;
+        prepared.push({
+          recordId: evidence.id,
+          item: watchItemSchema.parse({
+            id: `${evidence.source}:${evidence.externalId}`,
+            source: evidence.source,
+            externalId: evidence.externalId,
+            title: evidence.title,
+            url: evidence.url,
+            ...(evidence.publishedAt
+              ? { publishedAt: evidence.publishedAt }
+              : {}),
+            content: await this.stockEvents.getEvidenceContent(event.id),
+            metadata: {
+              ...jsonObject(evidence.metadata),
+              symbol: ticker,
+              stockAnalysisContext,
+            },
+          }),
+        });
+        preparedTickers.add(ticker);
       }
       return prepared;
     }

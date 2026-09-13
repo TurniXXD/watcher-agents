@@ -588,6 +588,44 @@ describe('core watcher behavior', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  it('supports a silent targeted run that requests initial thesis preparation', async () => {
+    const prepareItemsForRun = vi.fn(async () => []);
+    const notify = vi.fn(async () => undefined);
+    const runner = new WatcherRunner(
+      'STOCKS',
+      new WatcherPipeline(
+        {
+          prepareItemsForRun,
+          saveAnalysis: vi.fn(async () => undefined),
+        },
+        { analyze: vi.fn() },
+      ),
+      {
+        claimRun: vi.fn(async () => ({ id: 'thesis-run' })),
+        finishRun: vi.fn(async () => undefined),
+        recordSourceFailures: vi.fn(async () => undefined),
+      },
+      async () => [],
+      notify,
+    );
+    const tickers = new Set(['MU']);
+
+    await runner.execute('config', 1n, 'MANUAL', {
+      targetKeys: tickers,
+      initializeStockThesisFor: tickers,
+      notify: false,
+    });
+
+    expect(prepareItemsForRun).toHaveBeenCalledWith(
+      'STOCKS',
+      'thesis-run',
+      [],
+      0,
+      { initializeStockThesisFor: tickers },
+    );
+    expect(notify).not.toHaveBeenCalled();
+  });
+
   it('keeps scheduled source-only failures silent when no new content was found', async () => {
     const notify = vi.fn(async () => undefined);
     const store = {

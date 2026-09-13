@@ -76,6 +76,50 @@ integration('PostgresOllamaCoordinator', () => {
     });
   });
 
+  it('lets an aged normal request run before newly queued high-priority work', async () => {
+    const coordinator = new PostgresOllamaCoordinator(database, undefined, {
+      pollIntervalMs: 5,
+      priorityAgingMs: 20,
+    });
+    let release: (() => void) | undefined;
+    let markStarted: (() => void) | undefined;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const order: string[] = [];
+    const first = coordinator.run(context, async () => {
+      order.push('first-start');
+      markStarted?.();
+      await waiting;
+      order.push('first-end');
+    });
+    await started;
+    const normal = coordinator.run(context, async () => {
+      order.push('aged-normal');
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const high = coordinator.run(
+      { ...context, caller: 'briefing-bot', priority: 'high' },
+      async () => {
+        order.push('new-high');
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    release?.();
+    await Promise.all([first, normal, high]);
+
+    expect(order).toEqual([
+      'first-start',
+      'first-end',
+      'aged-normal',
+      'new-high',
+    ]);
+  });
+
   it('shares the hardware lease with speech generation', async () => {
     const resources = new ResourceLeaseStore(database);
     const coordinator = new PostgresOllamaCoordinator(database, undefined, {
