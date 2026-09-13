@@ -71,6 +71,43 @@ describe('MaintenanceStore', () => {
     });
   });
 
+  it('resolves evaluated findings before active findings are reopened', async () => {
+    const updateMany = vi.fn(async () => ({ count: 2 }));
+    const database = {
+      maintenanceFinding: { updateMany },
+    } as unknown as DatabaseClient;
+
+    await new MaintenanceStore(database).resolveFindings(['one', 'two']);
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        fingerprint: { in: ['one', 'two'] },
+        status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+      },
+      data: { status: 'RESOLVED' },
+    });
+  });
+
+  it('can limit proposed recommendations to currently open findings', async () => {
+    const findMany = vi.fn(async () => []);
+    const database = {
+      maintenanceRecommendation: { findMany },
+    } as unknown as DatabaseClient;
+
+    await new MaintenanceStore(database).listRecommendations({
+      status: 'PROPOSED',
+      activeOnly: true,
+      limit: 8,
+    });
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { status: 'PROPOSED', finding: { status: 'OPEN' } },
+      include: { finding: true },
+      orderBy: [{ confidence: 'desc' }, { createdAt: 'desc' }],
+      take: 8,
+    });
+  });
+
   it('starts a fresh persistent debug reporting window', async () => {
     const upsert = vi.fn(async () => ({ chatId: 42n, enabled: true }));
     const database = {

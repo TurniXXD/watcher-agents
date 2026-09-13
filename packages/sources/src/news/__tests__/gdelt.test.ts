@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GdeltNewsSource } from '../gdelt.js';
 
 const requestUrl = (input: RequestInfo | URL): string =>
@@ -7,6 +7,10 @@ const requestUrl = (input: RequestInfo | URL): string =>
     : input instanceof URL
       ? input.toString()
       : input.url;
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('shared GdeltNewsSource', () => {
   it('normalizes a publisher query with profile metadata', async () => {
@@ -59,16 +63,19 @@ describe('shared GdeltNewsSource', () => {
   });
 
   it('reports a bounded diagnostic when GDELT returns text with HTTP 200', async () => {
-    const source = new GdeltNewsSource(
-      vi.fn(
-        async () => new Response(`Parentheses are invalid ${'x'.repeat(600)}`),
-      ),
+    vi.useFakeTimers();
+    const fetcher = vi.fn(
+      async () => new Response(`Parentheses are invalid ${'x'.repeat(600)}`),
     );
+    const source = new GdeltNewsSource(fetcher);
 
-    const error = await source
+    const pending = source
       .fetch({ query: 'invalid query' })
       .catch((cause: unknown) => cause);
+    await vi.runAllTimersAsync();
+    const error = await pending;
 
+    expect(fetcher).toHaveBeenCalledTimes(3);
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toMatch(
       /^GDELT returned a non-JSON response: Parentheses are invalid/,

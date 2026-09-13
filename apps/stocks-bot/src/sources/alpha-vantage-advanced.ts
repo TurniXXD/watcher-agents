@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   finiteNumber,
   parseDate,
+  retryTransient,
   sourceHttpError,
   type Source,
   type WatchItem,
@@ -51,20 +52,25 @@ const checkedRows = async (
   url: URL,
   signal?: AbortSignal,
 ): Promise<Record<string, unknown>[]> => {
-  const response = await fetcher(url, {
-    headers: { accept: 'application/json' },
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-      : AbortSignal.timeout(30_000),
-  });
-  if (!response.ok) {
-    throw sourceHttpError(response, url);
-  }
-  const payload = responseSchema.parse(await response.json());
-  const providerError =
-    payload['Error Message'] ?? payload.Note ?? payload.Information;
-  if (providerError) throw new Error(`Alpha Vantage: ${providerError}`);
-  return payload.data ?? payload.holdings ?? [];
+  return retryTransient(
+    async () => {
+      const response = await fetcher(url, {
+        headers: { accept: 'application/json' },
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+          : AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) {
+        throw sourceHttpError(response, url);
+      }
+      const payload = responseSchema.parse(await response.json());
+      const providerError =
+        payload['Error Message'] ?? payload.Note ?? payload.Information;
+      if (providerError) throw new Error(`Alpha Vantage: ${providerError}`);
+      return payload.data ?? payload.holdings ?? [];
+    },
+    signal ? { signal } : {},
+  );
 };
 
 export class AlphaVantageOptionsSource implements Source<AlphaVantageStockConfig> {

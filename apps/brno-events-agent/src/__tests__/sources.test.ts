@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CeitecEventSource, parseCeitecResponse } from '../sources/ceitec.js';
 import { JsonLdEventSource, parseJsonLdEvents } from '../sources/json-ld.js';
 import { PaginatedHtmlEventSource } from '../sources/html-source.js';
@@ -11,6 +11,10 @@ import {
   parseVisitBrnoHtml,
   parseVutHtml,
 } from '../sources/site-html.js';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const now = new Date('2026-09-08T00:00:00Z');
 const pageUrl = 'https://events.example.test/list';
@@ -173,8 +177,11 @@ describe('Brno event sources', () => {
   });
 
   it('falls back to CEITEC JSON-LD when its API is unavailable', async () => {
+    vi.useFakeTimers();
     const fetcher = vi
       .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))
       .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))
       .mockResolvedValueOnce(
         new Response(
@@ -190,7 +197,12 @@ describe('Brno event sources', () => {
       ['science'],
       fetcher,
     );
-    await expect(source.fetchUpcomingEvents({ now })).resolves.toHaveLength(1);
+    const assertion = expect(
+      source.fetchUpcomingEvents({ now }),
+    ).resolves.toHaveLength(1);
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
   it('does not invent events from malformed structured data', async () => {

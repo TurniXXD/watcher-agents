@@ -1,4 +1,8 @@
-import type { BriefingEventRepository, WatcherLogger } from '@watcher/core';
+import {
+  errorMessage,
+  type BriefingEventRepository,
+  type WatcherLogger,
+} from '@watcher/core';
 import type { BriefingWatcherHealthStore } from '@watcher/database';
 import {
   ProcessResourceTracker,
@@ -13,9 +17,6 @@ import type {
   MonitorSource,
 } from './types.js';
 import type { MuClubsStore } from './store.js';
-
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
 
 export type MuMonitorResult = {
   status: 'BUSY' | 'SUCCESS' | 'PARTIAL' | 'FAILED';

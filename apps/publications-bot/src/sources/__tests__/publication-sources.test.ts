@@ -50,6 +50,7 @@ describe('publication source request control', () => {
   });
 
   it('retries a transient PubMed transport termination once', async () => {
+    vi.useFakeTimers();
     const fetcher = vi
       .fn()
       .mockResolvedValueOnce(
@@ -73,25 +74,31 @@ describe('publication source request control', () => {
       );
     const source = new PubMedSource(fetcher);
 
-    await expect(source.fetch({ query: 'test query' })).resolves.toMatchObject([
+    const result = source.fetch({ query: 'test query' });
+    const assertion = expect(result).resolves.toMatchObject([
       { externalId: '123', title: 'Test publication' },
     ]);
+    await vi.runAllTimersAsync();
+    await assertion;
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
-  it('reuses a failed bioRxiv request instead of hammering the provider', async () => {
+  it('retries and then reuses a failed bioRxiv request without hammering the provider', async () => {
+    vi.useFakeTimers();
     const fetcher = vi.fn(async () => {
       throw new Error('The operation was aborted due to timeout');
     });
     const source = new BioRxivSource(fetcher);
 
-    await expect(source.fetch({ query: 'genomics' })).rejects.toThrow(
+    const first = expect(source.fetch({ query: 'genomics' })).rejects.toThrow(
       'aborted due to timeout',
     );
+    await vi.runAllTimersAsync();
+    await first;
     await expect(source.fetch({ query: 'proteomics' })).rejects.toThrow(
       'aborted due to timeout',
     );
-    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
   it('downloads one bioRxiv dataset and filters it for multiple queries', async () => {

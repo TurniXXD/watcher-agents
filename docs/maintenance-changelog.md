@@ -2,6 +2,13 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-09-12 — Actionable maintenance recommendations
+
+- Source recovery closes failure proposals immediately instead of retaining historical incidents as current recommendations.
+- Overlapping recurring-failure and source-degradation proposals are consolidated into one recommendation per agent and source.
+- Normal upstream filtering is no longer mistaken for negative consumer feedback.
+- `/recommendations` shows at most eight active proposals and includes the concrete evidence behind each one.
+
 ## 2026-09-09 — Unified maintenance observability
 
 - Added the maintenance agent with deterministic health, quality, latency, cost, source, schedule, noise, classification, and duplication checks.

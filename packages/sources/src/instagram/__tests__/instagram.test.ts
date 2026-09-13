@@ -1,11 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CachedInstagramClient } from '../client.js';
 import {
   deduplicateInstagramPosts,
   normalizeInstagramUsername,
 } from '../normalizer.js';
 import { parseInstagramHtml } from '../parser.js';
+import { InstagramPublicProvider } from '../public-provider.js';
 import type { InstagramProvider } from '../types.js';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('Instagram normalization', () => {
   it('normalizes usernames from supported URL forms', () => {
@@ -57,5 +62,22 @@ describe('Instagram normalization', () => {
     await client.getRecentPosts('club');
     await client.getRecentPosts('club');
     expect(getRecentPosts).toHaveBeenCalledOnce();
+  });
+
+  it('retries a transient public profile request', async () => {
+    vi.useFakeTimers();
+    const html = `<script type="application/json">${JSON.stringify({ user: { username: 'club', full_name: 'Club', is_private: false } })}</script>`;
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(new Response(html));
+    const pending = new InstagramPublicProvider(fetcher).getProfile('club');
+    const assertion = expect(pending).resolves.toMatchObject({
+      username: 'club',
+    });
+    await vi.runAllTimersAsync();
+
+    await assertion;
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });

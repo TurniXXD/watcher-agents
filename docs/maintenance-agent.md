@@ -6,7 +6,7 @@ The maintenance agent evaluates the other Watcher services from one normalized t
 
 `@watcher/observability` owns the validated `AgentRun`, source-run, feedback, metric-name, and recorder contracts. `AgentTelemetryStore` persists this contract. `LegacyTelemetryImporter` normalizes existing watcher, briefing, MU Clubs, and Brno Events run tables without storing large raw payloads. New services can write the same contract directly.
 
-The maintenance engine calculates source health and stores deduplicated findings and recommendations. A finding fingerprint is stable for one agent, problem type, and scope. Repeated detection updates evidence and occurrence count instead of creating notification noise.
+The maintenance engine calculates source health and stores deduplicated findings and recommendations. A finding fingerprint is stable for one agent, problem type, and scope. Repeated detection updates evidence and occurrence count instead of creating notification noise. Each evaluation resolves the failure/noise scopes it re-evaluates before reopening only the findings still supported by current evidence. Overlapping recurring-failure and source-degradation findings for the same agent and source produce one recommendation.
 
 ## Detectors and baselines
 
@@ -51,7 +51,7 @@ Acknowledgement changes a proposal to approved but does not apply it. There are 
 
 ## Telegram and code updates
 
-The private Telegram bot supports `/about`, `/status`, `/summary`, `/run`, `/debug`, `/recommendations`, and `/updates` (help text). `/about` explains its operational-observer role, inputs, outputs, and non-mutating safety boundary. Runtime changes must be appended to `docs/maintenance-changelog.md`. On startup, entries are announced once per authorized chat and deduplicated in PostgreSQL.
+The private Telegram bot supports `/about`, `/status`, `/summary`, `/run`, `/debug`, `/recommendations`, and `/updates` (help text). `/about` explains its operational-observer role, inputs, outputs, and non-mutating safety boundary. `/recommendations` returns at most eight proposals backed by currently open findings and includes their evidence summary; historical or recovered findings are omitted. Runtime changes must be appended to `docs/maintenance-changelog.md`. On startup, entries are announced once per authorized chat and deduplicated in PostgreSQL.
 
 ## Limitations
 

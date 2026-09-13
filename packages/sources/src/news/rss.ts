@@ -2,6 +2,7 @@ import {
   assertPublicHttpUrl,
   assertPublicHttpUrlResolved,
   parseDate,
+  retryTransient,
   sourceHttpError,
   type Source,
   type WatchItem,
@@ -76,30 +77,36 @@ const fetchFeed = async (
   initialUrl: string,
   signal?: AbortSignal,
   resolvePublicUrl: typeof assertPublicHttpUrlResolved = assertPublicHttpUrlResolved,
-): Promise<string> => {
-  let url = await resolvePublicUrl(initialUrl);
-  for (let redirects = 0; redirects <= 5; redirects += 1) {
-    const response = await fetcher(url, {
-      headers: {
-        accept: 'application/atom+xml, application/rss+xml, application/xml',
-        'user-agent': 'Watcher/1.0',
-      },
-      redirect: 'manual',
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-        : AbortSignal.timeout(30_000),
-    });
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
-      if (!location) throw new Error('Feed redirect omitted its destination');
-      url = await resolvePublicUrl(new URL(location, url).toString());
-      continue;
-    }
-    if (!response.ok) throw sourceHttpError(response, url);
-    return response.text();
-  }
-  throw new Error('Feed exceeded the redirect limit');
-};
+): Promise<string> =>
+  retryTransient(
+    async () => {
+      let url = await resolvePublicUrl(initialUrl);
+      for (let redirects = 0; redirects <= 5; redirects += 1) {
+        const response = await fetcher(url, {
+          headers: {
+            accept:
+              'application/atom+xml, application/rss+xml, application/xml',
+            'user-agent': 'Watcher/1.0',
+          },
+          redirect: 'manual',
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+            : AbortSignal.timeout(30_000),
+        });
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get('location');
+          if (!location)
+            throw new Error('Feed redirect omitted its destination');
+          url = await resolvePublicUrl(new URL(location, url).toString());
+          continue;
+        }
+        if (!response.ok) throw sourceHttpError(response, url);
+        return response.text();
+      }
+      throw new Error('Feed exceeded the redirect limit');
+    },
+    signal ? { signal } : {},
+  );
 
 export class RssNewsSource implements Source<RssNewsConfig> {
   public readonly id = 'NEWS_RSS';

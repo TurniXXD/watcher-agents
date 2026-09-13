@@ -89,6 +89,39 @@ const catalystDirection = (value: string): CatalystDirection =>
 const catalystStatus = (value: string): CatalystStatus =>
   CatalystStatus[value as keyof typeof CatalystStatus];
 
+const databaseDecimal = (
+  value: number | null,
+  integerDigits: number,
+): number | null =>
+  value !== null &&
+  Number.isFinite(value) &&
+  Math.abs(value) < 10 ** integerDigits
+    ? value
+    : null;
+
+const safeInsiderDecimals = (
+  classification: ReturnType<typeof classifyInsiderTransaction>,
+) => {
+  const values = {
+    shares: databaseDecimal(classification.shares, 20),
+    price: databaseDecimal(classification.price, 16),
+    transactionValue: databaseDecimal(classification.transactionValue, 22),
+    holdingsBefore: databaseDecimal(classification.holdingsBefore, 20),
+    holdingsAfter: databaseDecimal(classification.holdingsAfter, 20),
+    holdingsChangePercent: databaseDecimal(
+      classification.holdingsChangePercent,
+      18,
+    ),
+  };
+  const omitted = Object.entries(values)
+    .filter(
+      ([key, value]) =>
+        classification[key as keyof typeof values] !== null && value === null,
+    )
+    .map(([key]) => key);
+  return { values, omitted };
+};
+
 export class StockSpecializedSignalStore {
   public constructor(
     private readonly db: DatabaseClient,
@@ -400,6 +433,7 @@ export class StockSpecializedSignalStore {
       classification.transactionDate ??
       observation.eventAt ??
       observation.publishedAt;
+    const safeDecimals = safeInsiderDecimals(classification);
     await this.db.insiderSignal.upsert({
       where: { processedItemId },
       create: {
@@ -409,16 +443,18 @@ export class StockSpecializedSignalStore {
         role: classification.role,
         transactionType: insiderType(classification.transactionType),
         occurredAt,
-        shares: classification.shares,
-        price: classification.price,
-        transactionValue: classification.transactionValue,
-        holdingsBefore: classification.holdingsBefore,
-        holdingsAfter: classification.holdingsAfter,
-        holdingsChangePercent: classification.holdingsChangePercent,
+        ...safeDecimals.values,
         planned: classification.planned,
         discretionary: classification.discretionary,
         convictionScore: classification.convictionScore,
-        rationale: prismaJson(classification.rationale),
+        rationale: prismaJson([
+          ...classification.rationale,
+          ...(safeDecimals.omitted.length > 0
+            ? [
+                `Ignored out-of-range provider values: ${safeDecimals.omitted.join(', ')}.`,
+              ]
+            : []),
+        ]),
       },
       update: {},
     });

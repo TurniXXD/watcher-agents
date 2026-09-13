@@ -51,6 +51,29 @@ export const renderReport = (title: string, findings: Finding[]): string => {
   ].join('\n');
 };
 
+type RecommendationSummary = {
+  agentName: string;
+  title: string;
+  confidence: number;
+  finding: { description: string };
+};
+
+export const renderRecommendations = (
+  recommendations: RecommendationSummary[],
+): string =>
+  [
+    '🧰 Current maintenance recommendations',
+    '',
+    ...(recommendations.length
+      ? recommendations.flatMap((item) => [
+          `• ${item.agentName}: ${item.title} (${Math.round(item.confidence * 100)}%)`,
+          `  ${item.finding.description}`,
+        ])
+      : ['No active proposals.']),
+    '',
+    'Only recommendations backed by a currently open finding are shown. Approval through the authenticated API records a decision but never applies a change automatically.',
+  ].join('\n');
+
 const changelogEntries = (markdown: string) =>
   markdown
     .split(/^##\s+/mu)
@@ -130,22 +153,10 @@ export const createMaintenanceBot = (
   bot.command('recommendations', async (context) => {
     const recommendations = await store.listRecommendations({
       status: 'PROPOSED',
-      limit: 15,
+      activeOnly: true,
+      limit: 8,
     });
-    await context.reply(
-      [
-        '🧰 Proposed maintenance changes',
-        '',
-        ...(recommendations.length
-          ? recommendations.map(
-              (item) =>
-                `• ${item.agentName}: ${item.title} (${Math.round(item.confidence * 100)}%)`,
-            )
-          : ['No proposals.']),
-        '',
-        'Approve or reject proposals through the authenticated API. Approval never applies a change automatically.',
-      ].join('\n'),
-    );
+    await context.reply(renderRecommendations(recommendations));
   });
   bot.command('updates', async (context) => {
     try {

@@ -10,6 +10,7 @@ import {
   detectAll,
   detectPerformance,
   detectRecurringFailures,
+  findingFingerprint,
 } from './detectors.js';
 import { calculateSourceHealth } from './source-health.js';
 import type { Finding, RunObservation } from './types.js';
@@ -112,6 +113,27 @@ export class MaintenanceEngine {
           ...detectPerformance(selfRuns, now),
         );
       }
+      const evaluatedFingerprints = [
+        ...new Set(runs.map((run) => run.agentName)),
+      ].flatMap((agentName) => [
+        findingFingerprint(agentName, 'RECURRING_FAILURE', 'runs'),
+        findingFingerprint(agentName, 'NOISY_OUTPUT', 'downstream-filtering'),
+      ]);
+      for (const health of sourceHealth) {
+        evaluatedFingerprints.push(
+          findingFingerprint(
+            health.agentName,
+            'RECURRING_FAILURE',
+            health.sourceId,
+          ),
+          findingFingerprint(
+            health.agentName,
+            'SOURCE_DEGRADATION',
+            health.sourceId,
+          ),
+        );
+      }
+      await this.#store.resolveFindings(evaluatedFingerprints);
       let recommendationCount = 0;
       for (const finding of findings) {
         const saved = await this.#store.upsertFinding(finding);

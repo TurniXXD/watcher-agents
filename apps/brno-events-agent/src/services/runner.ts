@@ -1,4 +1,4 @@
-import type { WatcherLogger } from '@watcher/core';
+import { errorMessage, type WatcherLogger } from '@watcher/core';
 import {
   ProcessResourceTracker,
   type AgentTelemetryRecorder,
@@ -39,10 +39,7 @@ export class EventRunner {
         : {
             source: selected[index]!.id,
             status: 'failed',
-            error:
-              outcome.reason instanceof Error
-                ? outcome.reason.message
-                : String(outcome.reason),
+            error: errorMessage(outcome.reason),
           },
     );
     return {
@@ -165,7 +162,7 @@ export class EventRunner {
       this.logger.info(result, 'Brno event source completed');
       return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       const persisted = await this.repository.recordRun(source.id, {
         startedAt,
         success: false,

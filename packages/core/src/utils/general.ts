@@ -4,8 +4,38 @@ export const clamp = (
   maximum: number,
 ): number => Math.min(maximum, Math.max(minimum, value));
 
-export const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+export const errorMessage = (error: unknown): string => {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current !== undefined && current !== null && !seen.has(current)) {
+    seen.add(current);
+    const message =
+      current instanceof Error
+        ? current.message
+        : typeof current === 'object' && 'message' in current
+          ? String(current.message)
+          : typeof current === 'string' ||
+              typeof current === 'number' ||
+              typeof current === 'boolean' ||
+              typeof current === 'bigint'
+            ? String(current)
+            : 'Unknown error';
+    const code =
+      typeof current === 'object' &&
+      'code' in current &&
+      typeof current.code === 'string'
+        ? current.code
+        : undefined;
+    if (message && !parts.includes(message)) parts.push(message);
+    if (code && !parts.includes(code)) parts.push(code);
+    current =
+      typeof current === 'object' && 'cause' in current
+        ? current.cause
+        : undefined;
+  }
+  return parts.slice(0, 8).join(' — ');
+};
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

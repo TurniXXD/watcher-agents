@@ -1,6 +1,7 @@
 import type { CheerioAPI } from 'cheerio';
 import { load } from 'cheerio';
 import { z } from 'zod';
+import { retryTransient } from '@watcher/core';
 import { inferCategories } from '../domain/categorization.js';
 import { canonicalUrl } from '../domain/normalization.js';
 import {
@@ -16,18 +17,25 @@ export const fetchSource = async (
   fetcher: typeof fetch,
   signal?: AbortSignal,
 ): Promise<Response> => {
-  const timeout = AbortSignal.timeout(30_000);
-  const response = await fetcher(url, {
-    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-    headers: {
-      accept:
-        'text/html,application/xhtml+xml,application/json,application/rss+xml',
-      'user-agent': sourceUserAgent,
+  return retryTransient(
+    async () => {
+      const timeout = AbortSignal.timeout(30_000);
+      const response = await fetcher(url, {
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+        headers: {
+          accept:
+            'text/html,application/xhtml+xml,application/json,application/rss+xml',
+          'user-agent': sourceUserAgent,
+        },
+      });
+      if (!response.ok)
+        throw new Error(
+          `HTTP ${response.status} from ${new URL(url).hostname}`,
+        );
+      return response;
     },
-  });
-  if (!response.ok)
-    throw new Error(`HTTP ${response.status} from ${new URL(url).hostname}`);
-  return response;
+    signal ? { signal } : {},
+  );
 };
 
 export const cleanText = (value?: string | null): string | undefined => {

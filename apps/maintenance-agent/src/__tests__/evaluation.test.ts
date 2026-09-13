@@ -59,10 +59,21 @@ describe('maintenance evaluation', () => {
   });
 
   it('detects 82 percent downstream filtering as noisy output', () => {
+    const runs = [
+      run(1, {
+        feedback: Array.from({ length: 100 }, (_, index) => ({
+          action: index < 82 ? 'FILTERED' : 'OPENED',
+        })),
+      }),
+    ];
+    expect(detectNoisyOutput(runs, now)[0]?.type).toBe('NOISY_OUTPUT');
+  });
+
+  it('does not treat normal upstream filtering as negative feedback', () => {
     const runs = Array.from({ length: 10 }, (_, index) =>
       run(index, { itemsProduced: 18, itemsFiltered: 82 }),
     );
-    expect(detectNoisyOutput(runs, now)[0]?.type).toBe('NOISY_OUTPUT');
+    expect(detectNoisyOutput(runs, now)).toEqual([]);
   });
 
   it('detects direct low-value consumer feedback', () => {
@@ -189,6 +200,46 @@ describe('maintenance evaluation', () => {
       findings.length,
     );
     expect(detectAll(runs, now)[0]?.fingerprint).toBe(findings[0]?.fingerprint);
+  });
+
+  it('emits one recommendation for an actively failing source', () => {
+    const runs = Array.from({ length: 5 }, (_, index) =>
+      run(index, {
+        sources: [
+          {
+            sourceId: 'FDA',
+            status: 'failed',
+            itemCount: 0,
+            createdAt: new Date(now.getTime() - (5 - index) * 3_600_000),
+          },
+        ],
+      }),
+    );
+    const sourceFindings = detectAll(runs, now).filter(
+      (finding) => finding.evidence['sourceId'] === 'FDA',
+    );
+    expect(sourceFindings).toHaveLength(1);
+    expect(sourceFindings[0]?.type).toBe('RECURRING_FAILURE');
+  });
+
+  it('does not propose source repair after the latest request succeeds', () => {
+    const runs = Array.from({ length: 5 }, (_, index) =>
+      run(index, {
+        sources: [
+          {
+            sourceId: 'FDA',
+            status: index === 4 ? 'success' : 'failed',
+            itemCount: 0,
+            createdAt: new Date(now.getTime() - (5 - index) * 3_600_000),
+          },
+        ],
+      }),
+    );
+    expect(
+      detectAll(runs, now).filter(
+        (finding) => finding.evidence['sourceId'] === 'FDA',
+      ),
+    ).toEqual([]);
   });
 
   it('generates an exact config diff', () => {

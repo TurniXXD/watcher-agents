@@ -959,7 +959,7 @@ model InsiderSignal {
   transactionValue      Decimal?               @db.Decimal(24, 2)
   holdingsBefore        Decimal?               @db.Decimal(24, 4)
   holdingsAfter         Decimal?               @db.Decimal(24, 4)
-  holdingsChangePercent Decimal?               @db.Decimal(12, 6)
+  holdingsChangePercent Decimal?               @db.Decimal(24, 6)
   planned               Boolean                @default(false)
   discretionary         Boolean                @default(false)
   convictionScore       Int

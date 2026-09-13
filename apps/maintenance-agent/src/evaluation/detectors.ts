@@ -8,7 +8,11 @@ import {
 } from './statistics.js';
 import type { Finding, RunObservation, Severity } from './types.js';
 
-const fingerprint = (agent: string, type: string, scope = 'agent'): string =>
+export const findingFingerprint = (
+  agent: string,
+  type: string,
+  scope = 'agent',
+): string =>
   createHash('sha256').update(`${agent}:${type}:${scope}`).digest('hex');
 
 const recordValue = (value: unknown): Record<string, unknown> | undefined =>
@@ -50,7 +54,7 @@ const base = (
   scope: string,
   now: Date,
 ) => ({
-  fingerprint: fingerprint(agentName, type, scope),
+  fingerprint: findingFingerprint(agentName, type, scope),
   agentName,
   type,
   detectedAt: now,
@@ -105,7 +109,11 @@ export const detectRecurringFailures = (
   }
   for (const health of calculateSourceHealth(runs, now)) {
     const rate = 1 - health.successRate;
-    if (health.totalRuns < 3 || (health.consecutiveFailures < 3 && rate < 0.25))
+    if (
+      health.totalRuns < 3 ||
+      health.consecutiveFailures === 0 ||
+      (health.consecutiveFailures < 3 && rate < 0.25)
+    )
       continue;
     const examples = runs
       .filter((run) => run.agentName === health.agentName)
@@ -162,16 +170,8 @@ export const detectNoisyOutput = (
         item.action,
       ),
     ).length;
-    const produced = selected.reduce(
-      (sum, run) => sum + (run.itemsProduced ?? 0),
-      0,
-    );
-    const filtered = Math.max(
-      filteredFeedback,
-      selected.reduce((sum, run) => sum + (run.itemsFiltered ?? 0), 0),
-    );
-    const denominator = Math.max(feedback.length, produced + filtered);
-    const rate = denominator === 0 ? 0 : filtered / denominator;
+    const denominator = feedback.length;
+    const rate = denominator === 0 ? 0 : filteredFeedback / denominator;
     if (denominator >= 10 && rate > 0.7) {
       findings.push({
         ...base(agentName, 'NOISY_OUTPUT', 'downstream-filtering', now),
@@ -537,7 +537,11 @@ export const detectSourceDegradationAndSchedules = (
 ): Finding[] => {
   const findings: Finding[] = [];
   for (const health of calculateSourceHealth(runs, now)) {
-    if (health.totalRuns >= 5 && health.successRate < 0.75) {
+    if (
+      health.totalRuns >= 5 &&
+      health.consecutiveFailures > 0 &&
+      health.successRate < 0.75
+    ) {
       findings.push({
         ...base(health.agentName, 'SOURCE_DEGRADATION', health.sourceId, now),
         severity: health.successRate < 0.5 ? 'HIGH' : 'MEDIUM',
@@ -624,8 +628,28 @@ export const detectAll = (
     ...detectPerformance(runs, now),
     ...detectSourceDegradationAndSchedules(runs, now),
   ];
+  const recurringSourceFailures = new Set(
+    all.flatMap((finding) => {
+      const sourceId = finding.evidence['sourceId'];
+      return finding.type === 'RECURRING_FAILURE' &&
+        typeof sourceId === 'string'
+        ? [`${finding.agentName}\u0000${sourceId}`]
+        : [];
+    }),
+  );
   return [
-    ...new Map(all.map((finding) => [finding.fingerprint, finding])).values(),
+    ...new Map(
+      all
+        .filter((finding) => {
+          const sourceId = finding.evidence['sourceId'];
+          return !(
+            finding.type === 'SOURCE_DEGRADATION' &&
+            typeof sourceId === 'string' &&
+            recurringSourceFailures.has(`${finding.agentName}\u0000${sourceId}`)
+          );
+        })
+        .map((finding) => [finding.fingerprint, finding]),
+    ).values(),
   ];
 };
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   AlphaVantageInstitutionalSource,
   AlphaVantageOptionsSource,
@@ -8,6 +8,10 @@ import {
   StockClinicalTrialsSource,
   StockFdaSource,
 } from '../stock-regulatory.js';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('advanced stock data sources', () => {
   it('aggregates an Alpha Vantage option chain without exposing the API key', async () => {
@@ -89,6 +93,22 @@ describe('advanced stock data sources', () => {
         },
       },
     ]);
+  });
+
+  it('retries a transient Alpha Vantage transport failure', async () => {
+    vi.useFakeTimers();
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(Response.json({ data: [] }));
+    const source = new AlphaVantageInstitutionalSource('key', fetcher);
+
+    const pending = source.fetch({ symbol: 'MU' });
+    const assertion = expect(pending).resolves.toEqual([]);
+    await vi.runAllTimersAsync();
+
+    await assertion;
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
   it('posts a ticker filter to FINRA and sorts short interest locally', async () => {

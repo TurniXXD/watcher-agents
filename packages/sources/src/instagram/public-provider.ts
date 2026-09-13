@@ -1,3 +1,4 @@
+import { retryTransient } from '@watcher/core';
 import {
   InstagramPrivateProfileError,
   InstagramUnavailableError,
@@ -20,20 +21,22 @@ export class InstagramPublicProvider implements InstagramProvider {
 
   private async load(username: string) {
     const normalized = normalizeInstagramUsername(username);
-    const response = await this.fetcher(instagramProfileUrl(normalized), {
-      headers: {
-        accept: 'text/html,application/xhtml+xml',
-        'user-agent': 'Watcher/1.0 (+public-profile-monitor)',
-      },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(30_000),
+    const parsed = await retryTransient(async () => {
+      const response = await this.fetcher(instagramProfileUrl(normalized), {
+        headers: {
+          accept: 'text/html,application/xhtml+xml',
+          'user-agent': 'Watcher/1.0 (+public-profile-monitor)',
+        },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) {
+        throw new InstagramUnavailableError(
+          `Instagram returned HTTP ${response.status} for @${normalized}`,
+        );
+      }
+      return parseInstagramHtml(normalized, await response.text());
     });
-    if (!response.ok) {
-      throw new InstagramUnavailableError(
-        `Instagram returned HTTP ${response.status} for @${normalized}`,
-      );
-    }
-    const parsed = parseInstagramHtml(normalized, await response.text());
     if (parsed.private) {
       throw new InstagramPrivateProfileError(
         `Instagram profile @${normalized} is private`,

@@ -10,5 +10,6 @@ export * from './runner.js';
 export * from './scheduler.js';
 export * from './stock-intelligence.js';
 export * from './source-http-error.js';
+export * from './transient-retry.js';
 export * from './types.js';
 export * from './utils/general.js';

@@ -161,6 +161,22 @@ export class MaintenanceStore {
     });
   }
 
+  public resolveFindings(fingerprints: readonly string[]) {
+    if (fingerprints.length === 0) return Promise.resolve({ count: 0 });
+    return this.db.maintenanceFinding.updateMany({
+      where: {
+        fingerprint: { in: [...fingerprints] },
+        status: {
+          in: [
+            MaintenanceFindingStatus.OPEN,
+            MaintenanceFindingStatus.ACKNOWLEDGED,
+          ],
+        },
+      },
+      data: { status: MaintenanceFindingStatus.RESOLVED },
+    });
+  }
+
   public upsertRecommendation(input: RecommendationInput) {
     return this.db.maintenanceRecommendation.upsert({
       where: { fingerprint: input.fingerprint },
@@ -225,6 +241,7 @@ export class MaintenanceStore {
     type?: keyof typeof MaintenanceRecommendationType;
     status?: keyof typeof MaintenanceRecommendationStatus;
     minConfidence?: number;
+    activeOnly?: boolean;
     limit: number;
   }) {
     return this.db.maintenanceRecommendation.findMany({
@@ -239,6 +256,9 @@ export class MaintenanceStore {
         ...(filters.minConfidence === undefined
           ? {}
           : { confidence: { gte: filters.minConfidence } }),
+        ...(filters.activeOnly
+          ? { finding: { status: MaintenanceFindingStatus.OPEN } }
+          : {}),
       },
       include: { finding: true },
       orderBy: [{ confidence: 'desc' }, { createdAt: 'desc' }],

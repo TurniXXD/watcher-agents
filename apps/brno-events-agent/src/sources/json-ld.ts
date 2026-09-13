@@ -1,3 +1,4 @@
+import { retryTransient } from '@watcher/core';
 import { z } from 'zod';
 import {
   rawEventSchema,
@@ -155,18 +156,24 @@ export class JsonLdEventSource implements EventSource {
   public async fetchUpcomingEvents(
     options: { signal?: AbortSignal; now?: Date } = {},
   ): Promise<RawEvent[]> {
-    const timeout = AbortSignal.timeout(30_000);
-    const signal = options.signal
-      ? AbortSignal.any([options.signal, timeout])
-      : timeout;
-    const response = await this.fetcher(this.url, {
-      signal,
-      headers: { 'user-agent': 'Watcher Brno Events Agent/1.0' },
-    });
-    if (!response.ok)
-      throw new Error(
-        `HTTP ${response.status} from ${new URL(this.url).hostname}`,
-      );
+    const response = await retryTransient(
+      async () => {
+        const timeout = AbortSignal.timeout(30_000);
+        const signal = options.signal
+          ? AbortSignal.any([options.signal, timeout])
+          : timeout;
+        const candidate = await this.fetcher(this.url, {
+          signal,
+          headers: { 'user-agent': 'Watcher Brno Events Agent/1.0' },
+        });
+        if (!candidate.ok)
+          throw new Error(
+            `HTTP ${candidate.status} from ${new URL(this.url).hostname}`,
+          );
+        return candidate;
+      },
+      options.signal ? { signal: options.signal } : {},
+    );
     const now = options.now ?? new Date();
     return parseJsonLdEvents(
       await response.text(),

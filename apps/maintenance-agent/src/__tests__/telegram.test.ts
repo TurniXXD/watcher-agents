@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { maintenanceAbout } from '../telegram.js';
+import { maintenanceAbout, renderRecommendations } from '../telegram.js';
 
 describe('maintenance Telegram copy', () => {
   it('explains the agent purpose and non-mutating safety boundary', () => {
@@ -12,5 +12,21 @@ describe('maintenance Telegram copy', () => {
     expect(maintenanceAbout).toContain(
       'Approval through the authenticated API records a human decision only.',
     );
+  });
+
+  it('renders current recommendation evidence without implying application', () => {
+    const rendered = renderRecommendations([
+      {
+        agentName: 'news-bot',
+        title: 'Repair NEWS_RSS',
+        confidence: 0.94,
+        finding: { description: 'Four of five current requests failed.' },
+      },
+    ]);
+
+    expect(rendered).toContain('Current maintenance recommendations');
+    expect(rendered).toContain('Four of five current requests failed.');
+    expect(rendered).toContain('94%');
+    expect(rendered).toContain('never applies a change automatically');
   });
 });

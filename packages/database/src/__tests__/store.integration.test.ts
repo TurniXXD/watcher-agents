@@ -715,6 +715,51 @@ integration('WatcherStore with PostgreSQL', () => {
     ).toBeGreaterThanOrEqual(1);
   });
 
+  it('does not fail a stock run on out-of-range insider provider numbers', async () => {
+    const chat = await store.ensureChat('STOCKS', 789n);
+    const run = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
+    if (!run) throw new Error('Expected run');
+    const item: WatchItem = {
+      ...watchItem('form4-overflow'),
+      title: 'MU Form 4 purchase with malformed magnitudes',
+      category: 'INSIDER_TRANSACTION',
+      normalizedFacts: {
+        owner: 'Provider Overflow Test',
+        transactionCode: 'P',
+        acquiredDisposedCode: 'A',
+        transactionDate: '2026-09-05',
+        shares: 1e25,
+        pricePerShare: 1e20,
+        sharesOwnedFollowing: 1e25,
+      },
+    };
+
+    await expect(
+      store.prepareItemsForRun('STOCKS', run.id, [item], 5),
+    ).resolves.toHaveLength(1);
+
+    const signal = await database.insiderSignal.findUniqueOrThrow({
+      where: {
+        processedItemId: (
+          await database.processedItem.findFirstOrThrow({
+            where: { externalId: item.externalId },
+          })
+        ).id,
+      },
+    });
+    expect(signal).toMatchObject({
+      shares: null,
+      price: null,
+      transactionValue: null,
+      holdingsAfter: null,
+    });
+    expect(signal.rationale).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Ignored out-of-range provider values'),
+      ]),
+    );
+  });
+
   it('links market anomalies to known drivers and keeps unknown anomalies in investigation', async () => {
     const chat = await store.ensureChat('STOCKS', 788n);
     await database.stock.create({

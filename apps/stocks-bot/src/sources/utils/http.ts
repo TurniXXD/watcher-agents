@@ -1,4 +1,4 @@
-import { sourceHttpError } from '@watcher/core';
+import { retryTransient, sourceHttpError } from '@watcher/core';
 import { assertPublicHttpUrlResolved } from './network.js';
 
 export const normalizeWhitespace = (value: string): string =>
@@ -29,16 +29,20 @@ export const fetchText = async (
   url: string,
   headers: HeadersInit = {},
   signal?: AbortSignal,
-): Promise<string> => {
-  const response = await fetcher(url, {
-    headers,
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-      : AbortSignal.timeout(30_000),
-  });
-  if (!response.ok) throw sourceHttpError(response, url);
-  return response.text();
-};
+): Promise<string> =>
+  retryTransient(
+    async () => {
+      const response = await fetcher(url, {
+        headers,
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+          : AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) throw sourceHttpError(response, url);
+      return response.text();
+    },
+    signal ? { signal } : {},
+  );
 
 export const stripHtml = (html: string): string =>
   normalizeWhitespace(
@@ -55,26 +59,29 @@ export const fetchPublicText = async (
   initialUrl: string,
   signal?: AbortSignal,
   resolvePublicUrl: typeof assertPublicHttpUrlResolved = assertPublicHttpUrlResolved,
-): Promise<string> => {
-  let url = await resolvePublicUrl(initialUrl);
-
-  for (let redirects = 0; redirects <= 5; redirects += 1) {
-    const response = await fetcher(url, {
-      headers: { accept: 'application/atom+xml,application/rss+xml' },
-      redirect: 'manual',
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-        : AbortSignal.timeout(30_000),
-    });
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
-      if (!location) throw new Error('Feed redirect omitted its destination');
-      url = await resolvePublicUrl(new URL(location, url).toString());
-      continue;
-    }
-    if (!response.ok) throw sourceHttpError(response, url);
-    return response.text();
-  }
-
-  throw new Error('Feed exceeded the redirect limit');
-};
+): Promise<string> =>
+  retryTransient(
+    async () => {
+      let url = await resolvePublicUrl(initialUrl);
+      for (let redirects = 0; redirects <= 5; redirects += 1) {
+        const response = await fetcher(url, {
+          headers: { accept: 'application/atom+xml,application/rss+xml' },
+          redirect: 'manual',
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+            : AbortSignal.timeout(30_000),
+        });
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get('location');
+          if (!location)
+            throw new Error('Feed redirect omitted its destination');
+          url = await resolvePublicUrl(new URL(location, url).toString());
+          continue;
+        }
+        if (!response.ok) throw sourceHttpError(response, url);
+        return response.text();
+      }
+      throw new Error('Feed exceeded the redirect limit');
+    },
+    signal ? { signal } : {},
+  );

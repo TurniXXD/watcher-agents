@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   parseDate,
+  retryTransient,
   sourceHttpError,
   type Source,
   type WatchItem,
@@ -74,34 +75,42 @@ export class GdeltNewsSource implements Source<GdeltNewsConfig> {
       'maxrecords',
       String(Math.min(Math.max(config.maxItems ?? 10, 1), 25)),
     );
-    const response = await this.fetcher(url, {
-      headers: { accept: 'application/json', 'user-agent': 'Watcher/1.0' },
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-        : AbortSignal.timeout(30_000),
-    });
-    if (!response.ok) throw sourceHttpError(response, url);
-    const responseText = await response.text();
-    if (
-      /requests more sparingly|rate[_ -]?limit|limit requests|too many requests/iu.test(
-        responseText,
-      )
-    ) {
-      throw new Error(
-        `GDELT rate limit: ${responseText.replaceAll(/\s+/gu, ' ').trim().slice(0, 500)}`,
-      );
-    }
-    let responseJson: unknown;
-    try {
-      responseJson = JSON.parse(responseText) as unknown;
-    } catch (error) {
-      const detail = responseText.replaceAll(/\s+/gu, ' ').trim().slice(0, 500);
-      throw new Error(
-        `GDELT returned a non-JSON response${detail ? `: ${detail}` : ''}`,
-        { cause: error },
-      );
-    }
-    const parsed = responseSchema.parse(responseJson);
+    const parsed = await retryTransient(
+      async () => {
+        const response = await this.fetcher(url, {
+          headers: { accept: 'application/json', 'user-agent': 'Watcher/1.0' },
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+            : AbortSignal.timeout(30_000),
+        });
+        if (!response.ok) throw sourceHttpError(response, url);
+        const responseText = await response.text();
+        if (
+          /requests more sparingly|rate[_ -]?limit|limit requests|too many requests/iu.test(
+            responseText,
+          )
+        ) {
+          throw new Error(
+            `GDELT rate limit: ${responseText.replaceAll(/\s+/gu, ' ').trim().slice(0, 500)}`,
+          );
+        }
+        let responseJson: unknown;
+        try {
+          responseJson = JSON.parse(responseText) as unknown;
+        } catch (error) {
+          const detail = responseText
+            .replaceAll(/\s+/gu, ' ')
+            .trim()
+            .slice(0, 500);
+          throw new Error(
+            `GDELT returned a non-JSON response${detail ? `: ${detail}` : ''}`,
+            { cause: error },
+          );
+        }
+        return responseSchema.parse(responseJson);
+      },
+      signal ? { signal } : {},
+    );
     const source =
       config.sourceId ??
       (config.scope ? `NEWS_GDELT_${config.scope}` : this.id);

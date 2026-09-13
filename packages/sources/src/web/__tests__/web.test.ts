@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { discoverSourceLinks } from '../discovery.js';
 import { extractHtmlLinks } from '../html.js';
 import { fetchPublicHtml } from '../public-html.js';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('shared public web sources', () => {
   it('extracts normalized links and readable labels', () => {
@@ -55,5 +59,29 @@ describe('shared public web sources', () => {
       url: 'https://club.example/current',
     });
     expect(resolvePublicUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a transient website transport failure', async () => {
+    vi.useFakeTimers();
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(
+        new Response('<p>recovered</p>', {
+          headers: { 'content-type': 'text/html' },
+        }),
+      );
+    const pending = fetchPublicHtml('https://club.example/events', {
+      fetcher,
+      resolvePublicUrl: async (url) => new URL(url),
+    });
+    const assertion = expect(pending).resolves.toMatchObject({
+      html: '<p>recovered</p>',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.runAllTimersAsync();
+
+    await assertion;
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });
