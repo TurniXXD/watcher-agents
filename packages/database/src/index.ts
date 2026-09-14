@@ -26,6 +26,7 @@ export * from './stock-report-store.js';
 export * from './source-health-store.js';
 export * from './resource-lease-store.js';
 export * from './specialized-signal-store.js';
+export * from './study-store.js';
 export * from './universe-store.js';
 export * from './validation-store.js';
 export * from './stock-domain/index.js';

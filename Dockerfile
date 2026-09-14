@@ -22,6 +22,7 @@ COPY apps/maintenance-agent/package.json apps/maintenance-agent/package.json
 COPY apps/news-bot/package.json apps/news-bot/package.json
 COPY apps/publications-bot/package.json apps/publications-bot/package.json
 COPY apps/stocks-bot/package.json apps/stocks-bot/package.json
+COPY apps/study-bot/package.json apps/study-bot/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/sources/package.json packages/sources/package.json
@@ -62,6 +63,7 @@ COPY --from=production-dependencies --chown=node:node /app/apps/maintenance-agen
 COPY --from=production-dependencies --chown=node:node /app/apps/news-bot/node_modules ./apps/news-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/publications-bot/node_modules ./apps/publications-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/stocks-bot/node_modules ./apps/stocks-bot/node_modules
+COPY --from=production-dependencies --chown=node:node /app/apps/study-bot/node_modules ./apps/study-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/package.json /app/pnpm-workspace.yaml ./
 COPY --from=build --chown=node:node /app/apps/brno-events-agent/package.json ./apps/brno-events-agent/package.json
@@ -78,6 +80,8 @@ COPY --from=build --chown=node:node /app/apps/publications-bot/package.json ./ap
 COPY --from=build --chown=node:node /app/apps/publications-bot/dist ./apps/publications-bot/dist
 COPY --from=build --chown=node:node /app/apps/stocks-bot/package.json ./apps/stocks-bot/package.json
 COPY --from=build --chown=node:node /app/apps/stocks-bot/dist ./apps/stocks-bot/dist
+COPY --from=build --chown=node:node /app/apps/study-bot/package.json ./apps/study-bot/package.json
+COPY --from=build --chown=node:node /app/apps/study-bot/dist ./apps/study-bot/dist
 COPY --from=build --chown=node:node /app/packages/core/dist ./packages/core/dist
 COPY --from=build --chown=node:node /app/packages/database/dist ./packages/database/dist
 COPY --from=build --chown=node:node /app/packages/database/prisma ./packages/database/prisma

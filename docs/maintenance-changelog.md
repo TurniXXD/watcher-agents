@@ -2,6 +2,11 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-09-14 — Source-grounded study bot
+
+- Added `study-bot`: it accepts authorized PDF uploads, persists documents and generated audio in the configured RustFS S3 prefixes, and creates a structured, page-referenced spoken lecture through the globally serialized Ollama coordinator and Piper TTS.
+- The bot rejects scanned/near-empty PDFs instead of inventing material, reports persistent job stages through `/status`, supports `/cancel`, resumes interrupted work after restart, and offers a stored lecture, source-cited summary, five-question quiz, and direct Anki TSV flashcard export with source-page tags.
+
 ## 2026-09-14 — Briefing cluster persistence isolation
 
 - A historical story-cluster membership conflict is now logged with bounded event context and isolated to that cluster instead of aborting the entire briefing before Telegram delivery.

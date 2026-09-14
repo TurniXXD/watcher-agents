@@ -21,8 +21,7 @@ export const chunkSpokenText = (
   units.forEach((unit) => {
     if (unit.length > maximumCharacters) {
       push();
-      const words = unit.split(/\s+/);
-      words.forEach((word) => {
+      unit.split(/\s+/).forEach((word) => {
         if (`${current} ${word}`.trim().length > maximumCharacters) push();
         current = `${current} ${word}`.trim();
       });

@@ -484,6 +484,19 @@ enum MaintenanceRunStatus {
   FAILED
 }
 
+enum StudyJobStatus {
+  RECEIVED
+  EXTRACTING
+  ANALYZING
+  OUTLINING
+  GENERATING_LECTURE
+  GENERATING_AUDIO
+  SENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 model BriefingEvent {
   id                 String                      @id
   watcherBot         BriefingWatcherBot
@@ -1913,4 +1926,98 @@ model MaintenanceDebugDelivery {
   @@index([agentRunId])
   @@index([deliveredAt])
   @@map("maintenance_debug_deliveries")
+}
+
+model StudyDocument {
+  id               String               @id @default(uuid())
+  chatId           BigInt
+  userId           BigInt
+  originalFilename String
+  title            String?
+  mimeType         String
+  byteSize         Int
+  sourceObjectKey  String               @unique
+  pageCount        Int?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  pages            StudyDocumentPage[]
+  jobs             StudyProcessingJob[]
+
+  @@index([chatId, createdAt])
+  @@map("study_documents")
+}
+
+model StudyDocumentPage {
+  id         String        @id @default(uuid())
+  documentId String
+  pageNumber Int
+  text       String
+  createdAt  DateTime      @default(now())
+  document   StudyDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, pageNumber])
+  @@index([documentId, pageNumber])
+  @@map("study_document_pages")
+}
+
+model StudyProcessingJob {
+  id          String         @id @default(uuid())
+  documentId  String
+  chatId      BigInt
+  status      StudyJobStatus @default(RECEIVED)
+  error       String?
+  cancelledAt DateTime?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  document    StudyDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  lecture     StudyGeneratedLecture?
+  quiz        StudyQuizSession?
+  flashcards  StudyFlashcardDeck?
+
+  @@index([chatId, createdAt])
+  @@index([status, createdAt])
+  @@map("study_processing_jobs")
+}
+
+model StudyGeneratedLecture {
+  id             String             @id @default(uuid())
+  jobId          String             @unique
+  script         String
+  outline        Json
+  audioObjectKey String?
+  audioMimeType  String?
+  durationSeconds Float?
+  createdAt      DateTime           @default(now())
+  job            StudyProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("study_generated_lectures")
+}
+
+model StudyQuizSession {
+  id          String             @id @default(uuid())
+  jobId       String             @unique
+  questions   Json
+  current     Int                @default(0)
+  score       Int                @default(0)
+  completedAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  job         StudyProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("study_quiz_sessions")
+}
+
+model StudyFlashcardDeck {
+  id          String             @id @default(uuid())
+  jobId       String             @unique
+  title       String
+  cards       Json
+  ankiObjectKey String            @unique
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  job         StudyProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("study_flashcard_decks")
 }

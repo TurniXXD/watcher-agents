@@ -1,8 +1,7 @@
 import { access, writeFile } from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
-import { chunkSpokenText } from '../utils/audio-chunks.js';
+import { chunkSpokenText, type ProcessRunner } from '@watcher/core';
 import { PiperLocalTtsProvider } from '../piper-tts.js';
-import type { ProcessRunner } from '../utils/process-runner.js';
 import type { TtsInput } from '../tts.js';
 import { czechCalendarVoice, piperVoices } from '../voice-registry.js';
 

@@ -58,6 +58,26 @@ PostgreSQL uses the pinned `pgvector/pgvector:0.8.6-pg16-bookworm` image and is 
 
 The bots emit structured JSON logs. At `LOG_LEVEL=info`, watcher runs record start, prepared source count, per-source fetch outcomes, source failures, notification sends, and completion counters. The briefing bot records commands, freshness-gate waits, semantic-clustering counts, context availability and latency, story-selection metrics, script and audio generation, Telegram delivery channels, and the final run duration. Each service exposes an internal `/healthz` readiness endpoint used by Compose; it verifies application startup and PostgreSQL, the Ollama-backed bots also verify Ollama, and Briefing additionally checks every Piper model file. The Maintenance `/status` command probes those private endpoints and combines readiness with latest-run freshness and recent errors. Capacity alerts use read-only host `/proc` and `/sys` views to report accurate RAM and the largest relevant processes; process environments are never read. Set `LOG_LEVEL=debug` to also log individual watcher item analysis, cached-analysis reuse, idle briefing scheduler checks, non-command Telegram updates, Piper chunks, and delivery attempts.
 
+## Study bot
+
+`study-bot` is a private Telegram study assistant for text-based university PDFs. Send it a PDF and it acknowledges receipt immediately, then persists the file under `documents/study-bot/` in RustFS, extracts text page-by-page, creates source-grounded chunk facts through the existing globally serialized Ollama queue, writes a spoken lecture, synthesizes OGG/Opus audio with the installed Piper voice, stores it under `media/study-bot/`, and returns it as a Telegram voice message. The database stores only metadata, page text, page references, jobs, scripts, and object keys.
+
+It never sends a scanned/near-empty PDF to the language model: it reports that OCR is required. Every analysis prompt treats the source as authoritative, records page ranges internally, and rejects malformed structured output. `/status` shows the latest job, `/cancel` safely stops it between stages, and the completion buttons resend the audio, create a short text summary, start a five-question source-cited quiz, or generate a stored UTF-8 TSV flashcard deck for direct Anki import. Each Anki card has source-page tags and a source citation on its back.
+
+Set `STUDY_TELEGRAM_TOKEN`, `STUDY_S3_ACCESS_KEY_ID`, and `STUDY_S3_SECRET_ACCESS_KEY` in addition to the shared database, Telegram-authorization, Ollama, and Piper settings in `.env.example`. The RustFS credentials must be application-specific and limited to `documents/study-bot/*` and `media/study-bot/*`. In production, `study-bot` joins the server's existing external `lateralis` Docker network so `http://rustfs:9000` resolves; local Compose may instead use an explicitly reachable S3-compatible endpoint.
+
+Example interaction:
+
+```text
+You: [upload genetics-notes.pdf]
+Study bot: 📚 PDF received. Analyzing the material...
+Study bot: 📖 Extracting text...
+Study bot: 🧠 Creating study outline...
+Study bot: ✍️ Preparing lecture...
+Study bot: 🎙️ Generating audio...
+Study bot: 🎧 Your lecture is ready.
+```
+
 Before a scheduled delivery, the Briefing Bot requests one immediate run from every stale subscribed producer and postpones delivery until those runs finish. It then ranks fresh cross-source stories, calls out Calendar deadlines, overlaps, short gaps, and likely travel transitions, and ends with a short action agenda. Personal ranking is managed with `/priority_add TOPIC`, `/priority_remove TOPIC`, `/mute_add TOPIC`, and `/mute_remove TOPIC`; urgent stories are never hidden solely by a mute. Every delivered voice briefing has useful, less-useful, and too-long feedback buttons. A too-long rating idempotently reduces future target and maximum duration by one minute.
 
 To stop the application without deleting data:

@@ -26,6 +26,7 @@ required_files=(
   deploy/runtime/mu-clubs-monitor.env
   deploy/runtime/brno-events-agent.env
   deploy/runtime/briefing-bot.env
+  deploy/runtime/study-bot.env
   deploy/runtime/maintenance-agent.env
 )
 
@@ -63,6 +64,13 @@ required_env_values=(
   "deploy/runtime/briefing-bot.env:BRIEFING_MU_CLUBS_URL"
   "deploy/runtime/briefing-bot.env:OLLAMA_URL"
   "deploy/runtime/briefing-bot.env:OLLAMA_MODEL"
+  "deploy/runtime/study-bot.env:DATABASE_URL"
+  "deploy/runtime/study-bot.env:STUDY_TELEGRAM_TOKEN"
+  "deploy/runtime/study-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/study-bot.env:OLLAMA_URL"
+  "deploy/runtime/study-bot.env:OLLAMA_MODEL"
+  "deploy/runtime/study-bot.env:STUDY_S3_ACCESS_KEY_ID"
+  "deploy/runtime/study-bot.env:STUDY_S3_SECRET_ACCESS_KEY"
   "deploy/runtime/maintenance-agent.env:DATABASE_URL"
   "deploy/runtime/maintenance-agent.env:MAINTENANCE_API_TOKEN"
   "deploy/runtime/maintenance-agent.env:MAINTENANCE_TELEGRAM_TOKEN"

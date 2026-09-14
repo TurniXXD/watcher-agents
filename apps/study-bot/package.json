@@ -1,0 +1,24 @@
+{
+  "name": "@watcher/study-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.940.0",
+    "@watcher/core": "workspace:*",
+    "@watcher/database": "workspace:*",
+    "@watcher/observability": "workspace:*",
+    "@watcher/telegram": "workspace:*",
+    "grammy": "1.46.0",
+    "pdfjs-dist": "5.4.530",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}
