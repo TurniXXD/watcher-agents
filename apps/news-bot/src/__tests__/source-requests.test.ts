@@ -24,7 +24,7 @@ const topics: NewsTopicRecord[] = [
 ];
 
 describe('built-in news source requests', () => {
-  it('creates one request per RSS source and one combined GDELT request', () => {
+  it('creates Global-only RSS requests and one combined GDELT request', () => {
     const requests = buildNewsSourceRequests(
       feeds,
       topics,
@@ -33,7 +33,10 @@ describe('built-in news source requests', () => {
     );
     const gdelt = requests.filter(({ source }) => source.id === 'NEWS_GDELT');
 
-    expect(requests).toHaveLength(30);
+    expect(requests).toHaveLength(18);
+    expect(requests.every(({ targetKey }) => targetKey === 'GLOBAL')).toBe(
+      true,
+    );
     expect(gdelt).toHaveLength(1);
     expect(gdelt[0]).toMatchObject({
       target: 'GLOBAL:built-in-gdelt',
@@ -68,7 +71,7 @@ describe('built-in news source requests', () => {
     expect(config.metadata?.sourceKeys).toHaveLength(4);
   });
 
-  it('passes profile category exclusions into RSS requests', () => {
+  it('passes Global category exclusions into RSS requests', () => {
     const requests = buildNewsSourceRequests(
       feeds,
       topics,
@@ -80,18 +83,11 @@ describe('built-in news source requests', () => {
         { scope: 'GLOBAL', category: 'SPORT', enabled: false },
       ],
     );
-    const czechRss = requests.find(
-      ({ source, targetKey }) =>
-        source.id === 'NEWS_RSS' && targetKey === 'CZECH',
-    );
     const globalRss = requests.find(
       ({ source, targetKey }) =>
         source.id === 'NEWS_RSS' && targetKey === 'GLOBAL',
     );
 
-    expect((czechRss?.config as RssNewsConfig).disabledCategories).toEqual([
-      'SPORT',
-    ]);
     expect((globalRss?.config as RssNewsConfig).disabledCategories).toEqual([
       'SPORT',
     ]);

@@ -52,19 +52,19 @@ const result = (
 });
 
 describe('news digest delivery policy', () => {
-  it('limits scheduled delivery to ten significant and relevant stories', () => {
+  it('limits delivery to three truly important global stories', () => {
     const input = result([
-      ...Array.from({ length: 12 }, () => ({ importance: 8, relevance: 7 })),
-      { importance: 6, relevance: 10 },
-      { importance: 10, relevance: 5 },
+      ...Array.from({ length: 5 }, () => ({ importance: 9, relevance: 8 })),
+      { importance: 8, relevance: 10 },
+      { importance: 10, relevance: 7 },
     ]);
 
     const digest = renderNewsDigest(input);
 
-    expect(digest).toContain('Selected:</b> 10 of 14 new articles');
-    expect(digest.match(/Ranked story/gu)).toHaveLength(10);
-    expect(digest).not.toContain('Ranked story 12');
-    expect(digest).not.toContain('Ranked story 13');
+    expect(digest).toContain('Selected:</b> 3 of 7 new articles');
+    expect(digest.match(/Ranked story/gu)).toHaveLength(3);
+    expect(digest).not.toContain('Ranked story 1');
+    expect(digest).not.toContain('Ranked story 6');
     expect(hasScheduledNewsDigest(input)).toBe(true);
   });
 
@@ -76,7 +76,7 @@ describe('news digest delivery policy', () => {
 
     expect(hasScheduledNewsDigest(input)).toBe(false);
     expect(renderNewsDigest(input, true)).toContain(
-      'Selected:</b> 2 of 2 new articles',
+      'Selected:</b> 0 of 2 new articles',
     );
   });
 
@@ -94,7 +94,7 @@ describe('news digest delivery policy', () => {
         category: 'SPORT',
         scope: 'GLOBAL',
       },
-      { importance: 8, relevance: 8, category: 'POLITICS' },
+      { importance: 9, relevance: 8, category: 'POLITICS' },
     ]);
     const preferences = [
       { scope: 'CZECH' as const, category: 'SPORT' as const, enabled: false },
@@ -113,8 +113,20 @@ describe('news digest delivery policy', () => {
     expect(hasScheduledNewsDigest(input, preferences)).toBe(true);
   });
 
+  it('never delivers Czech stories, even with a manually requested run', () => {
+    const input = result([
+      { importance: 10, relevance: 10, scope: 'CZECH' },
+      { importance: 9, relevance: 8, scope: 'GLOBAL' },
+    ]);
+
+    expect(renderNewsDigest(input, true)).toContain(
+      'Selected:</b> 1 of 2 new articles',
+    );
+    expect(renderNewsDigest(input, true)).not.toContain('Ranked story 0');
+  });
+
   it('does not repeat an expected provider rate-limit backoff as a feed error', () => {
-    const input = result([{ importance: 8, relevance: 8 }]);
+    const input = result([{ importance: 9, relevance: 8 }]);
     input.sourceFailures = [
       {
         source: 'NEWS_GDELT',

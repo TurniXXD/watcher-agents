@@ -42,6 +42,7 @@ Each code update that changes runtime behavior must add a concise entry here. Th
 - SPORT now defaults to disabled in both profiles and is excluded from manual digests, scheduled digests, and Personal Briefing input regardless of its scores.
 - RSS items carrying an upstream sport category are discarded before Ollama analysis; remaining articles are still blocked after classification as a second guard.
 - Missing Ollama news titles now safely reuse the sourced article title, and an expected active GDELT rate-limit backoff is no longer repeated as a Telegram feed error.
+- The Czech news profile is disabled at configuration, source-request, and delivery boundaries. Global delivery is now limited to at most three stories scoring importance 9/10 and relevance 8/10 or higher; high-impact publication delivery and medical briefing publication use the same 9/10 importance and 8/10 relevance threshold and cap each run at three items.
 - Added `/categories`, `/category_enable PROFILE CATEGORY`, and `/category_disable PROFILE CATEGORY` commands.
 
 ## 2026-09-12 — Actionable maintenance recommendations

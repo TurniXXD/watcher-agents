@@ -275,9 +275,9 @@ News bot:
 
 - `/categories` to list delivery categories separately for Czech and Global; `SPORT` is disabled by default in both profiles
 - `/category_enable PROFILE CATEGORY` and `/category_disable PROFILE CATEGORY` to persistently change delivery
-- `/feeds` to list the automatically configured Czech and Global sources with their stable IDs
+- `/feeds` to list the automatically configured Global sources with their stable IDs (the Czech profile is disabled)
 - `/feed_enable ID` and `/feed_disable ID` to control built-in or custom sources
-- `/feed_add PROFILE URL [NAME]` and `/feed_remove ID` for optional custom RSS/Atom feeds; built-in sources cannot be removed
+- `/feed_add global URL [NAME]` and `/feed_remove ID` for optional custom RSS/Atom feeds; built-in sources cannot be removed
 - `/topic_add PROFILE TOPIC`, `/topic_remove PROFILE TOPIC`, and `/topics`
 - `/run` to process both profiles, or `/run czech` / `/run global` for one profile
 - `/schedule`, `/status`, `/pause`, and `/resume` for the shared persisted runner

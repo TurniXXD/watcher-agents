@@ -34,7 +34,11 @@ export const buildNewsSourceRequests = (
   logger?: WatcherLogger,
   categoryPreferences: readonly NewsCategoryPreference[] = [],
 ): SourceRequest[] => {
-  const enabledFeeds = feeds.filter(({ enabled }) => enabled);
+  // The Czech profile is retired. Keep this guard here as well as in the
+  // configuration store so a stale record cannot start a Czech request.
+  const enabledFeeds = feeds.filter(
+    ({ enabled, scope }) => enabled && scope === 'GLOBAL',
+  );
   const sourceForFeed = (builtInKey: string | null) =>
     builtInKey ? getBuiltInNewsSource(builtInKey) : undefined;
   const unknownBuiltIns = enabledFeeds.filter(

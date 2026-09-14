@@ -20,35 +20,29 @@ integration('news configuration with PostgreSQL', () => {
     await database.$disconnect();
   });
 
-  it('persists separate Czech and Global feeds and topics', async () => {
+  it('accepts Global feeds while keeping the Czech profile disabled', async () => {
     const chat = await watcher.ensureChat('NEWS', 701n);
-    const czech = await news.addFeed(
-      chat.id,
-      'CZECH',
-      'https://example.cz/rss',
-      'Example CZ',
-    );
+    await expect(
+      news.addFeed(chat.id, 'CZECH', 'https://example.cz/rss', 'Example CZ'),
+    ).rejects.toThrow(/Czech news profile is disabled/);
     await news.addFeed(
       chat.id,
       'GLOBAL',
       'https://example.com/rss',
       'Example Global',
     );
-    await news.addTopic(chat.id, 'CZECH', 'energetika');
     await news.addTopic(chat.id, 'GLOBAL', 'artificial intelligence');
 
     expect(await news.listFeeds(chat.id)).toMatchObject([
-      { scope: 'CZECH', name: 'Example CZ', enabled: true },
       { scope: 'GLOBAL', name: 'Example Global', enabled: true },
     ]);
     expect(await news.listTopics(chat.id)).toMatchObject([
-      { scope: 'CZECH', topic: 'energetika' },
       { scope: 'GLOBAL', topic: 'artificial intelligence' },
     ]);
 
-    expect(await news.setFeedEnabled(chat.id, czech.id, false)).toBe(true);
-    expect(await news.removeFeed(chat.id, czech.id)).toBe('REMOVED');
-    expect(await news.removeTopic(chat.id, 'CZECH', 'energetika')).toBe(true);
+    const [global] = await news.listFeeds(chat.id);
+    expect(await news.setFeedEnabled(chat.id, global!.id, false)).toBe(true);
+    expect(await news.removeFeed(chat.id, global!.id)).toBe('REMOVED');
   });
 
   it('adds built-in feeds once, preserves switches, and prevents removal', async () => {
@@ -73,10 +67,10 @@ integration('news configuration with PostgreSQL', () => {
     expect(await news.listFeeds(chat.id)).toHaveLength(2);
     expect(czech).toMatchObject({
       builtInKey: 'czech-example',
-      enabled: true,
+      enabled: false,
     });
 
-    expect(await news.setFeedEnabled(chat.id, czech!.id, false)).toBe(true);
+    expect(await news.setFeedEnabled(chat.id, czech!.id, true)).toBe(false);
     await news.syncBuiltInFeeds(chat.id, defaults);
     expect((await news.listFeeds(chat.id))[0]).toMatchObject({
       builtInKey: 'czech-example',
@@ -85,23 +79,20 @@ integration('news configuration with PostgreSQL', () => {
     expect(await news.removeFeed(chat.id, czech!.id)).toBe('BUILT_IN');
     expect(await news.listFeeds(chat.id)).toHaveLength(2);
 
-    const readded = await news.addFeed(
-      chat.id,
-      'CZECH',
-      'https://example.cz/rss',
-      'Attempted rename',
-    );
-    expect(readded).toMatchObject({
-      builtInKey: 'czech-example',
-      name: 'Example Czech',
-      enabled: true,
-    });
+    await expect(
+      news.addFeed(
+        chat.id,
+        'CZECH',
+        'https://example.cz/rss',
+        'Attempted rename',
+      ),
+    ).rejects.toThrow(/Czech news profile is disabled/);
   });
 
   it('rejects private feed URLs', async () => {
     const chat = await watcher.ensureChat('NEWS', 702n);
     await expect(
-      news.addFeed(chat.id, 'CZECH', 'http://127.0.0.1/feed', 'Private'),
+      news.addFeed(chat.id, 'GLOBAL', 'http://127.0.0.1/feed', 'Private'),
     ).rejects.toThrow(/Private or special-purpose/);
   });
 

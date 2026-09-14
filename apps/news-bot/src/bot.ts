@@ -85,10 +85,7 @@ export const createNewsBot = (
       newsConfiguration.listTopics(current.id),
       newsConfiguration.listCategoryPreferences(current.id),
     ]);
-    const count = (scope: 'CZECH' | 'GLOBAL', enabledOnly = false) =>
-      feeds.filter(
-        (feed) => feed.scope === scope && (!enabledOnly || feed.enabled),
-      ).length;
+    const globalFeeds = feeds.filter(({ scope }) => scope === 'GLOBAL');
     await context.reply(
       [
         `Status: ${current.watcherConfig?.enabled ? 'running' : 'paused'}`,
@@ -96,15 +93,17 @@ export const createNewsBot = (
         `Next: ${current.watcherConfig?.nextRunAt?.toISOString() ?? 'not scheduled'}`,
         `Last: ${current.watcherConfig?.lastRunStatus ?? 'never'}`,
         '',
-        `Czech: ${count('CZECH', true)}/${count('CZECH')} feeds enabled · ${topics.filter(({ scope }) => scope === 'CZECH').length} topics`,
-        `Global: ${count('GLOBAL', true)}/${count('GLOBAL')} feeds enabled · ${topics.filter(({ scope }) => scope === 'GLOBAL').length} topics`,
-        `Sport: Czech ${categoryPreferences.some(({ scope, category, enabled }) => scope === 'CZECH' && category === 'SPORT' && enabled) ? 'enabled' : 'disabled'} · Global ${categoryPreferences.some(({ scope, category, enabled }) => scope === 'GLOBAL' && category === 'SPORT' && enabled) ? 'enabled' : 'disabled'}`,
+        'Czech profile: disabled',
+        `Global: ${globalFeeds.filter(({ enabled }) => enabled).length}/${globalFeeds.length} feeds enabled · ${topics.filter(({ scope }) => scope === 'GLOBAL').length} topics`,
+        `Sport: ${categoryPreferences.some(({ scope, category, enabled }) => scope === 'GLOBAL' && category === 'SPORT' && enabled) ? 'enabled' : 'disabled'}`,
       ].join('\n'),
     );
   });
   bot.command('feeds', async (context) => {
     const current = await chat(context.chat.id);
-    const feeds = await newsConfiguration.listFeeds(current.id);
+    const feeds = (await newsConfiguration.listFeeds(current.id)).filter(
+      ({ scope }) => scope === 'GLOBAL',
+    );
     const message = feeds.length
       ? [
           'News sources (built-in sources are configured automatically):',
@@ -128,7 +127,13 @@ export const createNewsBot = (
     const scope = parseScope(parts.shift());
     const url = parts.shift();
     if (!scope || !url) {
-      await context.reply('Usage: /feed_add czech|global URL [NAME]');
+      await context.reply('Usage: /feed_add global URL [NAME]');
+      return;
+    }
+    if (scope === 'CZECH') {
+      await context.reply(
+        'The Czech news profile is disabled. Add Global feeds only.',
+      );
       return;
     }
     let defaultName: string;
@@ -187,19 +192,15 @@ export const createNewsBot = (
   bot.command('topics', async (context) => {
     const current = await chat(context.chat.id);
     const topics = await newsConfiguration.listTopics(current.id);
-    const forScope = (scope: 'CZECH' | 'GLOBAL') =>
-      topics
-        .filter((topic) => topic.scope === scope)
-        .map(({ topic }) => `• ${topic}`);
+    const globalTopics = topics
+      .filter((topic) => topic.scope === 'GLOBAL')
+      .map(({ topic }) => `• ${topic}`);
     await context.reply(
       [
         'Ranking topics:',
         '',
-        '🇨🇿 Czech',
-        ...(forScope('CZECH').length ? forScope('CZECH') : ['• none']),
-        '',
         '🌍 Global',
-        ...(forScope('GLOBAL').length ? forScope('GLOBAL') : ['• none']),
+        ...(globalTopics.length ? globalTopics : ['• none']),
       ].join('\n'),
     );
   });
@@ -209,7 +210,13 @@ export const createNewsBot = (
     const topic = parts.join(' ').trim();
     if (!scope || !topic) {
       await context.reply(
-        'Usage: /topic_add czech|global TOPIC or /topic_remove czech|global TOPIC',
+        'Usage: /topic_add global TOPIC or /topic_remove global TOPIC',
+      );
+      return;
+    }
+    if (scope === 'CZECH') {
+      await context.reply(
+        'The Czech news profile is disabled. Use Global topics only.',
       );
       return;
     }
@@ -231,25 +238,16 @@ export const createNewsBot = (
     const preferences = await newsConfiguration.listCategoryPreferences(
       current.id,
     );
-    const forScope = (scope: 'CZECH' | 'GLOBAL') =>
-      newsCategories.map((category) => {
-        const enabled =
-          preferences.find(
-            (preference) =>
-              preference.scope === scope && preference.category === category,
-          )?.enabled ?? true;
-        return `${enabled ? '✅' : '⏸'} ${category}`;
-      });
+    const globalCategories = newsCategories.map((category) => {
+      const enabled =
+        preferences.find(
+          (preference) =>
+            preference.scope === 'GLOBAL' && preference.category === category,
+        )?.enabled ?? true;
+      return `${enabled ? '✅' : '⏸'} ${category}`;
+    });
     await context.reply(
-      [
-        'News categories:',
-        '',
-        '🇨🇿 Czech',
-        ...forScope('CZECH'),
-        '',
-        '🌍 Global',
-        ...forScope('GLOBAL'),
-      ].join('\n'),
+      ['News categories:', '', '🌍 Global', ...globalCategories].join('\n'),
     );
   });
   bot.command(['category_enable', 'category_disable'], async (context) => {
@@ -260,7 +258,13 @@ export const createNewsBot = (
     const category = newsCategorySchema.safeParse(parts[1]?.toUpperCase());
     if (!scope || !category.success || parts.length !== 2) {
       await context.reply(
-        'Usage: /category_enable czech|global CATEGORY or /category_disable czech|global CATEGORY',
+        'Usage: /category_enable global CATEGORY or /category_disable global CATEGORY',
+      );
+      return;
+    }
+    if (scope === 'CZECH') {
+      await context.reply(
+        'The Czech news profile is disabled. Use Global categories only.',
       );
       return;
     }

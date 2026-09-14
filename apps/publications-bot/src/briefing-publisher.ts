@@ -34,7 +34,7 @@ export const medicalBriefingEvents = (
     if (outcome.status !== 'SUCCESS') return [];
     const analysis = publicationAnalysisSchema.safeParse(outcome.result);
     if (!analysis.success) return [];
-    if (analysis.data.importance < 7 || analysis.data.relevance < 7) return [];
+    if (analysis.data.importance < 9 || analysis.data.relevance < 8) return [];
 
     const timestamp = now.toISOString();
     const externalEventId = `${item.source}:${item.externalId}`;

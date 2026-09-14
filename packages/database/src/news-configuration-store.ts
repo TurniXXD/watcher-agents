@@ -83,6 +83,11 @@ export class NewsConfigurationStore {
     const scope = newsScopeSchema.parse(rawScope);
     const url = feedUrlSchema.parse(rawUrl);
     const name = feedNameSchema.parse(rawName);
+    if (scope === 'CZECH') {
+      throw new Error(
+        'The Czech news profile is disabled. Add Global feeds only.',
+      );
+    }
     const existing = await this.db.newsFeed.findUnique({
       where: { chatConfigId_scope_url: { chatConfigId, scope, url } },
     });
@@ -114,6 +119,12 @@ export class NewsConfigurationStore {
     rawFeeds: readonly BuiltInNewsFeed[],
   ): Promise<void> {
     const feeds = z.array(builtInFeedSchema).parse(rawFeeds);
+    // Apply this to custom feeds too, including records persisted by an older
+    // release, because the Czech watcher has been explicitly turned off.
+    await this.db.newsFeed.updateMany({
+      where: { chatConfigId, scope: NewsScope.CZECH, enabled: true },
+      data: { enabled: false },
+    });
     const existing = await this.db.newsFeed.findMany({
       where: { chatConfigId },
       select: {
@@ -154,7 +165,7 @@ export class NewsConfigurationStore {
             scope: NewsScope[feed.scope],
             name: feed.name,
             url: feed.url,
-            enabled: true,
+            enabled: feed.scope === 'GLOBAL',
           },
           update: { builtInKey: feed.key, name: feed.name },
         });
@@ -216,7 +227,11 @@ export class NewsConfigurationStore {
     enabled: boolean,
   ): Promise<boolean> {
     const result = await this.db.newsFeed.updateMany({
-      where: { id, chatConfigId },
+      where: {
+        id,
+        chatConfigId,
+        ...(enabled ? { scope: NewsScope.GLOBAL } : {}),
+      },
       data: { enabled },
     });
     return result.count > 0;

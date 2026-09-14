@@ -13,13 +13,14 @@ import {
   FdaSource,
   PubMedSource,
 } from './sources/index.js';
-import {
-  formatRunDuration,
-  renderPublicationDigest,
-  sendSplitMessage,
-} from '@watcher/telegram';
+import { formatRunDuration, sendSplitMessage } from '@watcher/telegram';
 import type { Api } from 'grammy';
 import type { AgentTelemetryRecorder } from '@watcher/observability';
+import {
+  hasHighImpactPublicationDigest,
+  highImpactPublicationResult,
+  renderHighImpactPublicationDigest,
+} from './digest.js';
 import { fairlyOrderPublicationItems } from './utils/fair-items.js';
 
 export const PUBLICATION_ITEMS_PER_RUN_CAP = 15;
@@ -87,8 +88,25 @@ export const createPublicationsRunner = (
         );
       return;
     }
-    await sendSplitMessage(api, chatId, renderPublicationDigest(result));
+    if (!hasHighImpactPublicationDigest(result)) {
+      if (manual) {
+        await api.sendMessage(
+          chatId.toString(),
+          'No new publication met the high-impact threshold (importance ≥ 9, relevance ≥ 8).',
+        );
+      }
+      return;
+    }
+    await sendSplitMessage(
+      api,
+      chatId,
+      renderHighImpactPublicationDigest(result),
+    );
   };
+  const publishHighImpactAfterRun = afterRun
+    ? async (chatId: bigint, result: PipelineResult, runId: string) =>
+        afterRun(chatId, highImpactPublicationResult(result), runId)
+    : undefined;
   return new WatcherRunner(
     'PUBLICATIONS',
     pipeline,
@@ -96,7 +114,7 @@ export const createPublicationsRunner = (
     requestsForChat,
     notify,
     logger,
-    afterRun,
+    publishHighImpactAfterRun,
     afterFailure,
     telemetry,
   );

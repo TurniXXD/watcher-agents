@@ -8,15 +8,16 @@ import {
 } from '@watcher/core';
 import { formatRunDuration, htmlText, sourceLink } from '@watcher/telegram';
 
-const maximumDeliveredStories = 10;
-const scheduledMinimumImportance = 7;
-const scheduledMinimumRelevance = 6;
+/** The news watcher is an exception feed, not a general headline reader. */
+export const MAXIMUM_GLOBAL_NEWS_STORIES_PER_RUN = 3;
+export const MINIMUM_GLOBAL_NEWS_IMPORTANCE = 9;
+export const MINIMUM_GLOBAL_NEWS_RELEVANCE = 8;
 
 type DigestStory = { item: WatchItem; analysis: NewsAnalysis };
 
 export const selectNewsDigestStories = (
   result: PipelineResult,
-  manual: boolean,
+  _manual: boolean,
   categoryPreferences: readonly NewsCategoryPreference[] = [],
 ): DigestStory[] =>
   result.analyses
@@ -25,6 +26,9 @@ export const selectNewsDigestStories = (
       const analysis = newsAnalysisSchema.safeParse(outcome.result);
       if (!analysis.success) return [];
       const scope = item.metadata.scope === 'CZECH' ? 'CZECH' : 'GLOBAL';
+      // Enforce the retired Czech profile at the delivery boundary too, so
+      // older stored results cannot be sent by a manual run.
+      if (scope === 'CZECH') return [];
       if (
         !isNewsCategoryEnabled(
           categoryPreferences,
@@ -35,9 +39,8 @@ export const selectNewsDigestStories = (
         return [];
       }
       if (
-        !manual &&
-        (analysis.data.importance < scheduledMinimumImportance ||
-          analysis.data.relevance < scheduledMinimumRelevance)
+        analysis.data.importance < MINIMUM_GLOBAL_NEWS_IMPORTANCE ||
+        analysis.data.relevance < MINIMUM_GLOBAL_NEWS_RELEVANCE
       ) {
         return [];
       }
@@ -52,7 +55,7 @@ export const selectNewsDigestStories = (
         (right.item.publishedAt?.getTime() ?? 0) -
           (left.item.publishedAt?.getTime() ?? 0),
     )
-    .slice(0, maximumDeliveredStories);
+    .slice(0, MAXIMUM_GLOBAL_NEWS_STORIES_PER_RUN);
 
 export const hasScheduledNewsDigest = (
   result: PipelineResult,
@@ -128,7 +131,7 @@ export const renderNewsDigest = (
     '🗞 <b>NEWS WATCHER</b>',
     `⏱ <b>Run time:</b> ${formatRunDuration(result.durationMs ?? 0)}`,
     coverage,
-    `📰 <b>Selected:</b> ${stories.length} of ${result.newItemCount} new articles${manual ? '' : ` (importance ≥ ${scheduledMinimumImportance}, relevance ≥ ${scheduledMinimumRelevance})`}`,
+    `📰 <b>Selected:</b> ${stories.length} of ${result.newItemCount} new articles (global only; importance ≥ ${MINIMUM_GLOBAL_NEWS_IMPORTANCE}, relevance ≥ ${MINIMUM_GLOBAL_NEWS_RELEVANCE})`,
     sections.join('\n\n──────────\n\n'),
   ]
     .filter(Boolean)
