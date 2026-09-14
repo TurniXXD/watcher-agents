@@ -36,7 +36,7 @@ export class OllamaStudyLlm implements StudyLlm {
   }
 
   public async generate<T>(prompt: string, schema: z.ZodType<T>): Promise<T> {
-    const run = async () => {
+    const run = async (coordinatorSignal: AbortSignal) => {
       const response = await this.fetcher(
         `${this.options.url.replace(/\/$/u, '')}/api/chat`,
         {
@@ -52,7 +52,10 @@ export class OllamaStudyLlm implements StudyLlm {
             },
             messages: [{ role: 'user', content: prompt }],
           }),
-          signal: AbortSignal.timeout(this.options.timeoutMs),
+          signal: AbortSignal.any([
+            coordinatorSignal,
+            AbortSignal.timeout(this.options.timeoutMs),
+          ]),
         },
       );
       if (!response.ok) {

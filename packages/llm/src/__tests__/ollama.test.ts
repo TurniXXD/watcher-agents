@@ -25,9 +25,12 @@ describe('OllamaProvider', () => {
   it('queues each chat attempt with its caller, priority, model, and timeout', async () => {
     const contexts: OllamaRequestContext[] = [];
     const coordinator: OllamaRequestCoordinator = {
-      run: async <T>(context: OllamaRequestContext, task: () => Promise<T>) => {
+      run: async <T>(
+        context: OllamaRequestContext,
+        task: (signal: AbortSignal) => Promise<T>,
+      ) => {
         contexts.push(context);
-        return task();
+        return task(new AbortController().signal);
       },
       snapshot: vi.fn(),
     };
@@ -57,6 +60,54 @@ describe('OllamaProvider', () => {
       priority: 'high',
       timeoutMs: 45_000,
     });
+  });
+
+  it('forwards coordinator cancellation to the in-flight chat request', async () => {
+    let fetchSignal: AbortSignal | undefined;
+    const coordinator: OllamaRequestCoordinator = {
+      run: async <T>(
+        _context: OllamaRequestContext,
+        task: (signal: AbortSignal) => Promise<T>,
+      ) => {
+        const controller = new AbortController();
+        const pending = task(controller.signal);
+        controller.abort(new Error('Ollama request timed out after 50 ms'));
+        return pending;
+      },
+      snapshot: vi.fn(),
+    };
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'qwen3',
+      retries: 0,
+      coordinator,
+      fetch: vi.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            const requestSignal = init?.signal as AbortSignal | undefined;
+            fetchSignal = requestSignal;
+            requestSignal?.addEventListener(
+              'abort',
+              () =>
+                reject(
+                  requestSignal.reason instanceof Error
+                    ? requestSignal.reason
+                    : new Error('Ollama request aborted'),
+                ),
+              { once: true },
+            );
+          }),
+      ),
+    });
+
+    await expect(
+      provider.generateStructured(
+        'hello',
+        { type: 'object' },
+        z.object({ ok: z.boolean() }),
+      ),
+    ).rejects.toThrow('timed out after 50 ms');
+    expect(fetchSignal?.aborted).toBe(true);
   });
 
   it('extracts JSON from Markdown fences and leading commentary', () => {
@@ -691,9 +742,12 @@ describe('OllamaEmbeddingProvider', () => {
   it('queues embedding requests through the same coordinator', async () => {
     const contexts: OllamaRequestContext[] = [];
     const coordinator: OllamaRequestCoordinator = {
-      run: async <T>(context: OllamaRequestContext, task: () => Promise<T>) => {
+      run: async <T>(
+        context: OllamaRequestContext,
+        task: (signal: AbortSignal) => Promise<T>,
+      ) => {
         contexts.push(context);
-        return task();
+        return task(new AbortController().signal);
       },
       snapshot: vi.fn(),
     };

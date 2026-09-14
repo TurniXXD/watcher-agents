@@ -52,11 +52,12 @@ const wait = (durationMs: number, signal?: AbortSignal): Promise<void> =>
   });
 
 const runWithTimeout = <T>(
-  task: () => Promise<T>,
+  task: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
   signal?: AbortSignal,
 ): Promise<T> =>
   new Promise((resolve, reject) => {
+    const controller = new AbortController();
     let settled = false;
     const finish = (action: () => void): void => {
       if (settled) return;
@@ -65,15 +66,15 @@ const runWithTimeout = <T>(
       signal?.removeEventListener('abort', abort);
       action();
     };
+    const abortWith = (reason: Error): void => {
+      if (!controller.signal.aborted) controller.abort(reason);
+      finish(() => reject(reason));
+    };
     const abort = (): void =>
-      finish(() =>
-        reject(rejectionError(signal?.reason, 'Ollama request aborted')),
-      );
+      abortWith(rejectionError(signal?.reason, 'Ollama request aborted'));
     const timer = setTimeout(
       () =>
-        finish(() =>
-          reject(new Error(`Ollama request timed out after ${timeoutMs} ms`)),
-        ),
+        abortWith(new Error(`Ollama request timed out after ${timeoutMs} ms`)),
       timeoutMs,
     );
     signal?.addEventListener('abort', abort, { once: true });
@@ -81,11 +82,13 @@ const runWithTimeout = <T>(
       abort();
       return;
     }
-    void task().then(
-      (result) => finish(() => resolve(result)),
-      (error: unknown) =>
-        finish(() => reject(rejectionError(error, 'Ollama request failed'))),
-    );
+    void Promise.resolve()
+      .then(() => task(controller.signal))
+      .then(
+        (result) => finish(() => resolve(result)),
+        (error: unknown) =>
+          finish(() => reject(rejectionError(error, 'Ollama request failed'))),
+      );
   });
 
 export type OllamaCoordinatorOptions = {
@@ -117,7 +120,7 @@ export class PostgresOllamaCoordinator implements OllamaRequestCoordinator {
 
   public async run<T>(
     context: OllamaRequestContext,
-    task: () => Promise<T>,
+    task: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
     const id = randomUUID();
     const queuedAt = new Date();
@@ -200,7 +203,7 @@ export class PostgresOllamaCoordinator implements OllamaRequestCoordinator {
     id: string,
     queuedAt: Date,
     context: OllamaRequestContext,
-    task: () => Promise<T>,
+    task: (signal: AbortSignal) => Promise<T>,
   ): Promise<{ acquired: false } | { acquired: true; result: T }> {
     const leaseTimeoutMs = context.timeoutMs + this.#leaseGraceMs;
     return this.db.$transaction(

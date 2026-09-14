@@ -36,6 +36,9 @@ export type OllamaQueueSnapshot = {
 };
 
 export interface OllamaRequestCoordinator {
-  run<T>(context: OllamaRequestContext, task: () => Promise<T>): Promise<T>;
+  run<T>(
+    context: OllamaRequestContext,
+    task: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T>;
   snapshot(now?: Date): Promise<OllamaQueueSnapshot>;
 }

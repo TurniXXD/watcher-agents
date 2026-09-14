@@ -314,7 +314,7 @@ export class OllamaEmbeddingProvider {
     signal?: AbortSignal,
   ): Promise<number[][]> {
     if (input.length === 0) return [];
-    const execute = async () => {
+    const execute = async (coordinatorSignal?: AbortSignal) => {
       const response = await this.#fetch(
         `${this.options.url.replace(/\/$/, '')}/api/embed`,
         {
@@ -326,9 +326,13 @@ export class OllamaEmbeddingProvider {
             keep_alive: this.options.keepAlive ?? '5m',
             truncate: true,
           }),
-          signal: signal
-            ? AbortSignal.any([signal, AbortSignal.timeout(this.#timeoutMs)])
-            : AbortSignal.timeout(this.#timeoutMs),
+          signal: AbortSignal.any(
+            [
+              signal,
+              coordinatorSignal,
+              AbortSignal.timeout(this.#timeoutMs),
+            ].filter((value): value is AbortSignal => value !== undefined),
+          ),
         },
       );
       if (!response.ok) {
@@ -726,7 +730,7 @@ export class OllamaProvider implements Analyzer {
               ]
             : []),
         ];
-        const execute = async () => {
+        const execute = async (coordinatorSignal?: AbortSignal) => {
           const response = await this.#fetch(
             `${this.options.url.replace(/\/$/, '')}/api/chat`,
             {
@@ -745,12 +749,13 @@ export class OllamaProvider implements Analyzer {
                   num_predict: numPredict,
                 },
               }),
-              signal: signal
-                ? AbortSignal.any([
-                    signal,
-                    AbortSignal.timeout(this.#timeoutMs),
-                  ])
-                : AbortSignal.timeout(this.#timeoutMs),
+              signal: AbortSignal.any(
+                [
+                  signal,
+                  coordinatorSignal,
+                  AbortSignal.timeout(this.#timeoutMs),
+                ].filter((value): value is AbortSignal => value !== undefined),
+              ),
             },
           );
 

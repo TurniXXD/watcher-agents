@@ -173,12 +173,25 @@ integration('PostgresOllamaCoordinator', () => {
       pollIntervalMs: 5,
       leaseGraceMs: 250,
     });
+    let requestSignal: AbortSignal | undefined;
     await expect(
-      coordinator.run(
-        { ...context, timeoutMs: 50 },
-        () => new Promise(() => undefined),
-      ),
+      coordinator.run({ ...context, timeoutMs: 50 }, (signal) => {
+        requestSignal = signal;
+        return new Promise((_, reject) => {
+          signal.addEventListener(
+            'abort',
+            () =>
+              reject(
+                signal.reason instanceof Error
+                  ? signal.reason
+                  : new Error('Ollama request aborted'),
+              ),
+            { once: true },
+          );
+        });
+      }),
     ).rejects.toThrow('timed out after 50 ms');
+    expect(requestSignal?.aborted).toBe(true);
     await expect(
       coordinator.run({ ...context, timeoutMs: 1_000 }, () =>
         Promise.resolve('released'),
