@@ -54,7 +54,7 @@ Renaming the deployed app/service is deliberately avoided; only the integration 
 
 The shared contract defines a strict Zod schema for `WatcherBotId`, timestamps, scores, URLs, JSON-safe metadata, entities, confidence, status, and registered per-producer categories. Scores are integer percentages from 0 through 100. Unknown fields, unknown watcher IDs, invalid URLs/timestamps, cross-producer categories, and non-JSON metadata are rejected. Ticker syntax is normalized at the producing boundary and must already be uppercase.
 
-The registry includes `stocks`, `medical`, `news`, and `mu-clubs`. News maps to the `NEWS` runtime kind and owns `NEWS_*`; the standalone MU Clubs service owns `CLUB_*` events and reports producer health as `mu-clubs`. Every watcher addition requires an explicit schema, registry, migration, producer, and UI change.
+The registry includes `stocks`, `medical`, `news`, `mu-clubs`, and `brno-events`. News maps to the `NEWS` runtime kind and owns `NEWS_*`; the standalone MU Clubs service owns `CLUB_*` events and reports producer health as `mu-clubs`; Brno Events owns `BRNO_EVENT*` events and reports health as `brno-events`. Every watcher addition requires an explicit schema, registry, migration, producer, and UI change.
 
 ## 11. Database migrations
 
@@ -94,7 +94,7 @@ Calendar failure produces a short unavailable notice and does not block the rest
 
 Subscriptions are Briefing Bot preferences keyed by Telegram chat and `WatcherBotId`. They do not enable, disable, or schedule producer bots. The UI lists only the registry entries. The retrieval query filters briefing events using enabled subscriptions and the run window. Disabling a subscription preserves old story state so re-enabling does not replay the entire history.
 
-`mu-clubs` is created idempotently for existing and new Briefing settings the next time they are loaded. Its producer publishes semantically classified activities rather than generic “new post” notices and uses the same durable event repository and watcher-health store as Stocks, Medical, and News.
+`mu-clubs` and `brno-events` are created idempotently for existing and new Briefing settings the next time they are loaded. MU Clubs publishes semantically classified activities rather than generic “new post” notices, including a bounded backfill of current relevant activities missing from the event stream. Brno Events publishes high-relevance discoveries and cancellations. Both use the same durable event repository and watcher-health store as Stocks, Medical, and News.
 
 ## 17. Story clustering design
 

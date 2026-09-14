@@ -1,4 +1,5 @@
 import { errorMessage, type WatcherLogger } from '@watcher/core';
+import type { BriefingWatcherHealthStore } from '@watcher/database';
 import {
   ProcessResourceTracker,
   type AgentTelemetryRecorder,
@@ -20,6 +21,7 @@ export class EventRunner {
     private readonly logger: WatcherLogger,
     private readonly publisher: BrnoEventPublisher = noOpEventPublisher,
     private readonly telemetry?: AgentTelemetryRecorder,
+    private readonly briefingHealth?: BriefingWatcherHealthStore,
   ) {}
   public sourceIds(): string[] {
     return this.sources.map((source) => source.id);
@@ -131,6 +133,14 @@ export class EventRunner {
         else duplicates++;
         if (result !== 'duplicate') {
           await this.publishEventUpdates(source.id, event, result, startedAt);
+        } else if (scoreEvent(event, startedAt).score >= 80) {
+          // Briefing support may be deployed after an event was first stored.
+          // The publisher adds that high-signal event once without duplicating it.
+          await this.publisher.publish(
+            'event.high_relevance',
+            event,
+            source.id,
+          );
         }
       }
       const persisted = await this.repository.recordRun(source.id, {
@@ -159,6 +169,12 @@ export class EventRunner {
         { fetched, produced: created + updated, duplicates },
         resources,
       );
+      await this.recordBriefingHealth({
+        degraded: false,
+        eventsEmitted: created + updated,
+        failedEventPublications: 0,
+        sourceFailures: 0,
+      });
       this.logger.info(result, 'Brno event source completed');
       return result;
     } catch (error) {
@@ -182,6 +198,7 @@ export class EventRunner {
         resources,
         message,
       );
+      await this.recordBriefingFailure(message);
       this.logger.warn(
         { source: source.id, err: error },
         'Brno event source failed',
@@ -189,6 +206,39 @@ export class EventRunner {
       throw error;
     } finally {
       this.#running.delete(source.id);
+    }
+  }
+
+  private async recordBriefingHealth(input: {
+    degraded: boolean;
+    eventsEmitted: number;
+    failedEventPublications: number;
+    sourceFailures: number;
+  }): Promise<void> {
+    try {
+      await this.briefingHealth?.recordRun({
+        watcherBot: 'brno-events',
+        ...input,
+      });
+    } catch (error) {
+      this.logger.warn(
+        { err: error },
+        'Brno events briefing health recording failed',
+      );
+    }
+  }
+
+  private async recordBriefingFailure(error: string): Promise<void> {
+    try {
+      await this.briefingHealth?.recordFailure({
+        watcherBot: 'brno-events',
+        error,
+      });
+    } catch (failure) {
+      this.logger.warn(
+        { err: failure },
+        'Brno events briefing health failure recording failed',
+      );
     }
   }
 

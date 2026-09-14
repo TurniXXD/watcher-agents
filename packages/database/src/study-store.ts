@@ -98,7 +98,7 @@ export class StudyStore {
         where: { id: jobId },
         select: { status: true },
       });
-      const previous = current.status as StudyJobStatus;
+      const previous = current.status;
       if (previous === next)
         return transaction.studyProcessingJob.findUniqueOrThrow({
           where: { id: jobId },

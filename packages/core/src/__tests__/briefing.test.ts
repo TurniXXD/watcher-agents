@@ -73,6 +73,7 @@ describe('briefing event contract', () => {
       'medical',
       'news',
       'mu-clubs',
+      'brno-events',
     ]);
     expect(getWatcherRegistration('stocks')).toMatchObject({
       displayName: 'Stocks',
@@ -89,6 +90,10 @@ describe('briefing event contract', () => {
     expect(getWatcherRegistration('mu-clubs')).toMatchObject({
       displayName: 'MU Clubs',
       producerKind: 'MU_CLUBS',
+    });
+    expect(getWatcherRegistration('brno-events')).toMatchObject({
+      displayName: 'Brno Events',
+      producerKind: 'BRNO_EVENTS',
     });
   });
 });

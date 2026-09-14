@@ -1,4 +1,4 @@
-import { commandArgument, authorizationMiddleware } from '@watcher/telegram';
+import { authorizationMiddleware } from '@watcher/telegram';
 import { InputFile, InlineKeyboard, Bot } from 'grammy';
 import { randomUUID } from 'node:crypto';
 import type { StudyStore } from '@watcher/database';

@@ -66,12 +66,19 @@ describe('briefing observability', () => {
       resolvedSuppressed: 0,
       continuityStories: 0,
       selected: 23,
-      eventsByWatcher: { stocks: 25, medical: 5, news: 0, 'mu-clubs': 0 },
+      eventsByWatcher: {
+        stocks: 25,
+        medical: 5,
+        news: 0,
+        'mu-clubs': 0,
+        'brno-events': 0,
+      },
       duplicateReductionByWatcher: {
         stocks: 5,
         medical: 0,
         news: 0,
         'mu-clubs': 0,
+        'brno-events': 0,
       },
     };
     const stories = [
@@ -109,6 +116,14 @@ describe('briefing observability', () => {
         flaggedForTuning: false,
       },
       'mu-clubs': {
+        eventsEmitted: 0,
+        eventsSelected: 0,
+        eventsOmitted: 0,
+        selectionRate: 0,
+        duplicateRate: 0,
+        flaggedForTuning: false,
+      },
+      'brno-events': {
         eventsEmitted: 0,
         eventsSelected: 0,
         eventsOmitted: 0,

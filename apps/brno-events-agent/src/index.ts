@@ -1,9 +1,15 @@
 import { createLogger } from '@watcher/core';
-import { AgentTelemetryStore, createDatabaseClient } from '@watcher/database';
+import {
+  AgentTelemetryStore,
+  BriefingWatcherHealthStore,
+  PostgresBriefingEventRepository,
+  createDatabaseClient,
+} from '@watcher/database';
 import { createApi } from './api/server.js';
 import { env, sourceSettings } from './env.js';
 import { EventRepository } from './repositories/event-repository.js';
 import { EventRunner } from './services/runner.js';
+import { BriefingBrnoEventPublisher } from './services/briefing-publisher.js';
 import { createSources } from './sources/registry.js';
 
 process.env.TZ = env.TZ;
@@ -14,8 +20,11 @@ const runner = new EventRunner(
   repository,
   createSources(sourceSettings),
   logger,
-  undefined,
+  new BriefingBrnoEventPublisher(
+    new PostgresBriefingEventRepository(database, logger),
+  ),
   new AgentTelemetryStore(database),
+  new BriefingWatcherHealthStore(database),
 );
 const api = createApi(
   repository,

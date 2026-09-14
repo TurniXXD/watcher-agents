@@ -38,7 +38,6 @@ const tts = new PiperStudyTtsProvider({
   dataDirectory: env.PIPER_DATA_DIR,
   voice: env.STUDY_TTS_VOICE,
 });
-let service: StudyService;
 const bot = createStudyBot({
   token: env.STUDY_TELEGRAM_TOKEN,
   allowedIds: parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS),
@@ -64,7 +63,7 @@ const bot = createStudyBot({
   reportError: (error) =>
     logger.error({ err: error }, 'Study Telegram update failed'),
 });
-service = new StudyService({
+const service = new StudyService({
   store,
   storage,
   extractor: new PdfJsExtractor(),

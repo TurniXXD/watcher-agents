@@ -659,7 +659,7 @@ export const createBriefingBot = (
     await prompt(context, configuration);
   });
   bot.callbackQuery(
-    /^onb:subscription:(stocks|medical|news|mu-clubs)$/,
+    /^onb:subscription:(stocks|medical|news|mu-clubs|brno-events)$/,
     async (context) => {
       const current = await store.ensure(BigInt(context.chat!.id));
       const watcher = context.match[1];

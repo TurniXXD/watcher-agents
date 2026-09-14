@@ -43,6 +43,7 @@ Each code update that changes runtime behavior must add a concise entry here. Th
 - RSS items carrying an upstream sport category are discarded before Ollama analysis; remaining articles are still blocked after classification as a second guard.
 - Missing Ollama news titles now safely reuse the sourced article title, and an expected active GDELT rate-limit backoff is no longer repeated as a Telegram feed error.
 - The Czech news profile is disabled at configuration, source-request, and delivery boundaries. Global delivery is now limited to at most three stories scoring importance 9/10 and relevance 8/10 or higher; high-impact publication delivery and medical briefing publication use the same 9/10 importance and 8/10 relevance threshold and cap each run at three items.
+- Brno Events now publishes high-relevance discoveries and cancellations into the Briefing event stream and participates in subscriptions and freshness checks. MU Clubs backfills a bounded set of current, relevant activities that have not yet been published, without replaying existing briefing events.
 - Added `/categories`, `/category_enable PROFILE CATEGORY`, and `/category_disable PROFILE CATEGORY` commands.
 
 ## 2026-09-12 — Actionable maintenance recommendations

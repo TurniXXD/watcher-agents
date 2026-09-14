@@ -50,11 +50,17 @@ export const muClubsBriefingCategories = [
   'CLUB_OTHER_RELEVANT_UPDATE',
 ] as const;
 
+export const brnoEventsBriefingCategories = [
+  'BRNO_EVENT',
+  'BRNO_EVENT_CANCELLED',
+] as const;
+
 export const watcherBotIdSchema = z.enum([
   'stocks',
   'medical',
   'news',
   'mu-clubs',
+  'brno-events',
 ]);
 export type WatcherBotId = z.infer<typeof watcherBotIdSchema>;
 
@@ -149,7 +155,7 @@ export type BriefingEvent = z.infer<typeof briefingEventSchema>;
 export type WatcherRegistration = {
   id: WatcherBotId;
   displayName: string;
-  producerKind: 'STOCKS' | 'PUBLICATIONS' | 'NEWS' | 'MU_CLUBS';
+  producerKind: 'STOCKS' | 'PUBLICATIONS' | 'NEWS' | 'MU_CLUBS' | 'BRNO_EVENTS';
   categories: readonly string[];
 };
 
@@ -177,6 +183,12 @@ export const watcherRegistry = Object.freeze({
     displayName: 'MU Clubs',
     producerKind: 'MU_CLUBS',
     categories: muClubsBriefingCategories,
+  }),
+  'brno-events': Object.freeze({
+    id: 'brno-events',
+    displayName: 'Brno Events',
+    producerKind: 'BRNO_EVENTS',
+    categories: brnoEventsBriefingCategories,
   }),
 } satisfies Record<WatcherBotId, WatcherRegistration>);
 

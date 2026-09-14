@@ -1,8 +1,8 @@
 import {
   HEAVY_LOCAL_MODEL_RESOURCE,
-  ResourceLeaseStore,
-  StudyStore,
   type StudyJobStatus,
+  type ResourceLeaseStore,
+  type StudyStore,
 } from '@watcher/database';
 import type { WatcherLogger } from '@watcher/core';
 import type { StudyLlm } from './llm/study-llm.js';
@@ -27,7 +27,6 @@ import {
   outlineSchema,
   quizSchema,
   type ChunkFact,
-  type StudyOutline,
 } from './types.js';
 import type { TTSProvider } from './tts/piper-tts.js';
 import { z } from 'zod';

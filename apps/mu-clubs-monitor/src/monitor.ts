@@ -9,7 +9,10 @@ import {
   type AgentRun,
   type AgentTelemetryRecorder,
 } from '@watcher/observability';
-import { publishClubBriefingEvents } from './briefing-publisher.js';
+import {
+  clubBriefingEvent,
+  publishClubBriefingEvents,
+} from './briefing-publisher.js';
 import { HeuristicActivityClassifier } from './classifier.js';
 import type {
   ClubSourceDefinition,
@@ -133,9 +136,28 @@ export class MuClubsMonitor {
             });
         }
       }
+      const knownBriefingEvents = await this.briefingEvents.list({
+        watcherBots: ['mu-clubs'],
+        limit: 1_000,
+      });
+      const knownEventIds = new Set(knownBriefingEvents.map(({ id }) => id));
+      const entriesByActivityId = new Map(
+        briefingEntries.map((entry) => [entry.activity.id, entry]),
+      );
+      const currentActivities =
+        await this.store.listBriefingCandidates(startedAt);
+      for (const activity of currentActivities) {
+        const event = clubBriefingEvent(activity.club, activity, startedAt);
+        if (!knownEventIds.has(event.id)) {
+          entriesByActivityId.set(activity.id, {
+            club: activity.club,
+            activity,
+          });
+        }
+      }
       const publication = await publishClubBriefingEvents(
         this.briefingEvents,
-        briefingEntries,
+        [...entriesByActivityId.values()],
         this.logger,
       );
       const degraded = sourceFailures.length > 0 || publication.failed > 0;

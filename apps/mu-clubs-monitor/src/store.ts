@@ -401,6 +401,27 @@ export class MuClubsStore {
     });
   }
 
+  /**
+   * Current activities are backfilled once when briefing integration is added.
+   * They are intentionally constrained to timely or recently detected items so
+   * old club history cannot turn into a briefing flood.
+   */
+  public listBriefingCandidates(now = new Date(), limit = 100) {
+    return this.db.muClubActivity.findMany({
+      where: {
+        importance: { gte: 4 },
+        OR: [
+          { startAt: { gte: now } },
+          { deadlineAt: { gte: now } },
+          { detectedAt: { gte: new Date(now.getTime() - 14 * 86_400_000) } },
+        ],
+      },
+      include: { club: true },
+      orderBy: [{ importance: 'desc' }, { detectedAt: 'desc' }],
+      take: Math.min(100, Math.max(1, limit)),
+    });
+  }
+
   public listClubs() {
     return this.db.muClub.findMany({
       include: { sources: true },

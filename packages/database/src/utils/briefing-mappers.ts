@@ -25,6 +25,7 @@ export const toDatabaseWatcher = (
     medical: BriefingWatcherBot.MEDICAL,
     news: BriefingWatcherBot.NEWS,
     'mu-clubs': BriefingWatcherBot.MU_CLUBS,
+    'brno-events': BriefingWatcherBot.BRNO_EVENTS,
   })[watcherBot];
 
 export const fromDatabaseWatcher = (
@@ -35,6 +36,7 @@ export const fromDatabaseWatcher = (
     [BriefingWatcherBot.MEDICAL]: 'medical',
     [BriefingWatcherBot.NEWS]: 'news',
     [BriefingWatcherBot.MU_CLUBS]: 'mu-clubs',
+    [BriefingWatcherBot.BRNO_EVENTS]: 'brno-events',
   })[watcherBot] as WatcherBotId;
 
 export const fromDatabaseConfidence = (
