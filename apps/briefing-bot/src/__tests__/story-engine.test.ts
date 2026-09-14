@@ -1,4 +1,8 @@
-import type { BriefingEvent, BriefingEventRepository } from '@watcher/core';
+import type {
+  BriefingEvent,
+  BriefingEventRepository,
+  WatcherLogger,
+} from '@watcher/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
   clusterBriefingEvents,
@@ -326,6 +330,51 @@ describe('StoryEngine', () => {
 
     expect(list).not.toHaveBeenCalled();
     expect(result.metrics.eventsRetrieved).toBe(0);
+  });
+
+  it('continues when historical events belong to conflicting story clusters', async () => {
+    const conflicting = event('conflicting-event');
+    const conflictError = new Error(
+      'Events already belong to conflicting story clusters',
+    );
+    const repository: BriefingEventRepository = {
+      save: vi.fn(),
+      list: vi.fn(async () => [conflicting]),
+    };
+    const clusters = {
+      findIdByEventIds: vi.fn(async () => {
+        throw conflictError;
+      }),
+      save: vi.fn(),
+    };
+    const warn = vi.fn();
+    const logger = { warn } as unknown as WatcherLogger;
+    const engine = new StoryEngine(
+      repository,
+      { list: vi.fn(async () => []) },
+      clusters,
+      undefined,
+      logger,
+    );
+
+    const result = await engine.collect({
+      telegramChatId: 42n,
+      subscriptions: ['stocks'],
+      periodStart: new Date('2026-09-05T05:00:00.000Z'),
+      periodEnd: new Date('2026-09-06T06:00:00.000Z'),
+    });
+
+    expect(result.stories).toHaveLength(1);
+    expect(result.stories[0]?.eventIds).toEqual(['conflicting-event']);
+    expect(clusters.save).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: conflictError,
+        eventCount: 1,
+        eventIds: ['conflicting-event'],
+      }),
+      'Failed to persist briefing story cluster; continuing with the current cluster',
+    );
   });
 
   it('boosts configured priorities and reduces non-urgent muted topics', async () => {

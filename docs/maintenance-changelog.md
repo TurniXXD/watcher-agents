@@ -2,6 +2,11 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-09-14 — Briefing cluster persistence isolation
+
+- A historical story-cluster membership conflict is now logged with bounded event context and isolated to that cluster instead of aborting the entire briefing before Telegram delivery.
+- The current in-memory cluster remains available for ranking and delivery while the persisted conflict can be investigated separately.
+
 ## 2026-09-14 — Stock allocation research command
 
 - Added `/allocation [--amount-czk AMOUNT] [--days DAYS]`, which ranks enabled watchlist tickers using the persisted decision engine, expected value, selected probability horizon, confidence, and coverage.

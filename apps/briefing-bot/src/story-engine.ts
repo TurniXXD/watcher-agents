@@ -172,7 +172,22 @@ export class StoryEngine {
     let clustered = clusterBriefingEvents(retrieved, semanticPairs);
     if (this.clusters) {
       clustered = await Promise.all(
-        clustered.map((cluster) => this.persistCluster(cluster)),
+        clustered.map(async (cluster) => {
+          try {
+            return await this.persistCluster(cluster);
+          } catch (error) {
+            this.logger?.warn(
+              {
+                err: error,
+                storyId: cluster.id,
+                eventCount: cluster.eventIds.length,
+                eventIds: cluster.eventIds.slice(0, 20),
+              },
+              'Failed to persist briefing story cluster; continuing with the current cluster',
+            );
+            return cluster;
+          }
+        }),
       );
     }
 
