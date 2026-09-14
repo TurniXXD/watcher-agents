@@ -2,6 +2,11 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-09-14 — Stock allocation research command
+
+- Added `/allocation [--amount-czk AMOUNT] [--days DAYS]`, which ranks enabled watchlist tickers using the persisted decision engine, expected value, selected probability horizon, confidence, and coverage.
+- When a Czech-koruna amount is supplied, it creates a transparent research allocation only across tickers that pass the existing model threshold and have a better-than-even probability for the selected horizon; no trade is executed and an ineligible universe remains unallocated.
+
 ## 2026-09-13 — Compact watched-ticker command
 
 - Added `/stocks_tickers`, which returns only enabled ticker symbols from the current watchlist, one per line, without company names, status, mode, priority, or source details.

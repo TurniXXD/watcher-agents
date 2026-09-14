@@ -5,6 +5,7 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /add_stock SYMBOL — add a stock using the global source settings
 /advanced [SYMBOL] — latest options, institutional, short-interest, FDA, and trial data
 /alerts — recently generated live alerts
+/allocation [--amount-czk AMOUNT] [--days DAYS] — rank stored research and optionally calculate a Czech-koruna research allocation
 /backtest — return/hit-rate/MFE/MAE validation report
 /calibration — predicted vs realized 30-day probability buckets
 /catalysts [SYMBOL] — list active and upcoming catalysts

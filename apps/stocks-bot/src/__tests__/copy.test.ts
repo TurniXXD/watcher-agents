@@ -17,6 +17,7 @@ describe('stocks bot command copy', () => {
       'add_stock',
       'advanced',
       'alerts',
+      'allocation',
       'backtest',
       'calibration',
       'catalysts',

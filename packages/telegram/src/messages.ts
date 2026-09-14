@@ -416,6 +416,7 @@ export type StockDashboardEntry = {
   };
   thesis: {
     verdict: string;
+    confidence: number;
     attentionScore: number;
     netSignal: number;
     insiderConviction: number | null;

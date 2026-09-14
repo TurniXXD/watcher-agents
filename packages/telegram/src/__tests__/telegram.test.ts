@@ -420,6 +420,7 @@ describe('Telegram utilities', () => {
         },
         thesis: {
           verdict: 'WATCH',
+          confidence: 0.8,
           attentionScore: 90,
           netSignal: 2,
           insiderConviction: 3,

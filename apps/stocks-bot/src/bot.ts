@@ -45,6 +45,12 @@ import {
   renderStockTickers,
   type StockListEntry,
 } from './stock-list.js';
+import {
+  parseStockAllocationRequest,
+  renderStockAllocation,
+  stockAllocationUsage,
+  rankStockAllocations,
+} from './stock-allocation.js';
 import { hasReportableStockInformation } from './run-output.js';
 import {
   parseStockNewsRequest,
@@ -200,6 +206,25 @@ export const createStocksBot = (
       ctx.api,
       BigInt(ctx.chat.id),
       renderOpportunityFeed(await store.getStockDashboard(current.id)),
+    );
+  });
+  bot.command('allocation', async (ctx) => {
+    let request;
+    try {
+      request = parseStockAllocationRequest(commandArgument(ctx.message?.text));
+    } catch {
+      await ctx.reply(stockAllocationUsage);
+      return;
+    }
+    const current = await chat(ctx.chat.id);
+    const ranked = rankStockAllocations(
+      await store.getStockDashboard(current.id),
+      request,
+    );
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderStockAllocation(ranked, request),
     );
   });
   bot.command('alerts', async (ctx) => {

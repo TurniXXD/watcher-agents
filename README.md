@@ -217,6 +217,7 @@ Manual `/run` requests first send one progress message, then update that message
 Stocks bot:
 
 - `/stocks` to show labeled per-stock state plus currently watched, configured, paused, and auto-discovered counts; `/stocks_tickers` returns only enabled ticker symbols, one per line
+- `/allocation [--amount-czk AMOUNT] [--days DAYS]` to rank stored stock research for a 1–365 day horizon and optionally distribute a whole-CZK research budget among model-eligible tickers; the selected horizon must have a better-than-even stored probability before it receives money, no trade is executed, and the budget remains unallocated when evidence is insufficient
 - `/dashboard` to show the latest state of every enabled stock
 - `/opportunities` to show elevated-attention or favorable-asymmetry stocks
 - `/alerts` to show recent generated alerts and delivery state
