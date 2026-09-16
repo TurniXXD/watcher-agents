@@ -123,19 +123,19 @@ The ready-to-copy names also live in `github-variables.production.example` and `
 
 Runtime credentials are intentionally not uploaded by GitHub Actions. Create these files on the VPS:
 
-| Server file                            | Purpose                                                |
-| -------------------------------------- | ------------------------------------------------------ |
-| `deploy/runtime/compose.env`           | Non-secret Compose project options                     |
-| `deploy/runtime/postgres.env`          | PostgreSQL initialization values                       |
-| `deploy/runtime/migrate.env`           | Prisma migration database URL                          |
-| `deploy/runtime/stocks-bot.env`        | Stocks bot runtime and credentials                     |
-| `deploy/runtime/publications-bot.env`  | Publications bot runtime values                        |
-| `deploy/runtime/news-bot.env`          | Czech and Global news bot values                       |
-| `deploy/runtime/mu-clubs-monitor.env`  | MU Clubs API and polling settings                      |
-| `deploy/runtime/brno-events-agent.env` | Brno event API and per-source polling settings         |
-| `deploy/runtime/briefing-bot.env`      | Morning briefing bot credentials                       |
-| `deploy/runtime/study-bot.env`         | Study Bot, Anki export, and object-storage credentials |
-| `deploy/runtime/maintenance-agent.env` | Maintenance API, Telegram, and scheduler values        |
+| Server file                            | Purpose                                                         |
+| -------------------------------------- | --------------------------------------------------------------- |
+| `deploy/runtime/compose.env`           | Non-secret Compose project options                              |
+| `deploy/runtime/postgres.env`          | PostgreSQL initialization values                                |
+| `deploy/runtime/migrate.env`           | Prisma migration database URL                                   |
+| `deploy/runtime/stocks-bot.env`        | Stocks bot runtime and credentials                              |
+| `deploy/runtime/publications-bot.env`  | Publications bot runtime values                                 |
+| `deploy/runtime/news-bot.env`          | Czech and Global news bot values                                |
+| `deploy/runtime/mu-clubs-monitor.env`  | MU Clubs API and polling settings                               |
+| `deploy/runtime/brno-events-agent.env` | Brno event API and per-source polling settings                  |
+| `deploy/runtime/briefing-bot.env`      | Morning briefing bot credentials                                |
+| `deploy/runtime/study-bot.env`         | Optional Study Bot, Anki export, and object-storage credentials |
+| `deploy/runtime/maintenance-agent.env` | Maintenance API, Telegram, and scheduler values                 |
 
 You can copy the readable examples from `deploy/presets`, or render all files from environment variables:
 
@@ -181,7 +181,7 @@ Before enabling automatic deployment:
 1. Confirm the VPS can reach Ollama at the configured `OLLAMA_URL`.
 2. Apply the conservative Ollama systemd settings documented in the root README (`OLLAMA_NUM_PARALLEL=1`, one loaded model, and a small queue), then verify them with `systemctl show ollama` and `ollama ps`.
 3. Confirm the deployment user can run `docker compose version` without sudo.
-4. Confirm all runtime env files exist, and install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation.
+4. Confirm all runtime env files exist, and install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation. Study Bot is optional: its empty S3 fields do not block the core rollout, and it starts automatically once its Telegram and S3 credentials are complete.
    Runtime values containing `$` must either be fully single-quoted or encode each literal dollar sign as `$$`. `deploy/render-env.sh` safely single-quotes every value. If older unquoted runtime files caused Compose interpolation warnings, rotate any affected database password and update every rendered `DATABASE_URL` together before deploying again.
 5. Push the completed application to `main` and wait for `watcher-ci` to pass.
 6. Approve the `production` environment deployment if approval protection is enabled.
@@ -195,7 +195,7 @@ The workflow then:
 5. Starts the pinned PostgreSQL 16 image with pgvector and waits for readiness.
 6. Creates a compressed pre-deployment database backup when the database already exists; a running database is backed up before its container image can be replaced.
 7. Applies committed Prisma migrations and verifies that the `vector` extension is installed.
-8. Starts all bots plus the MU Clubs producer and waits for their health checks.
+8. Starts the core bots plus the MU Clubs producer and waits for their health checks. If Study Bot is configured, it is started separately; a Study Bot failure does not roll back the core release.
 9. Restores the prior image tag if the new containers fail health checks.
 
 When the VPS has `nvidia-smi` and Docker reports the NVIDIA runtime, deployment automatically layers `docker-compose.nvidia.yml` onto the production definition. This grants only GPU utility access to the maintenance container, allowing utilization, VRAM, and NVIDIA compute-process reporting. Install and configure NVIDIA Container Toolkit on an NVIDIA host if the deployment warns that the runtime is unavailable. AMD and Intel detection uses the read-only host DRM sysfs mount and does not require this overlay.

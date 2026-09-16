@@ -26,6 +26,8 @@ required_files=(
   deploy/runtime/mu-clubs-monitor.env
   deploy/runtime/brno-events-agent.env
   deploy/runtime/briefing-bot.env
+  # The optional Study Bot still has an env file so Compose can parse the full
+  # service definition. Its credentials are validated only when it is started.
   deploy/runtime/study-bot.env
   deploy/runtime/maintenance-agent.env
 )
@@ -64,6 +66,13 @@ required_env_values=(
   "deploy/runtime/briefing-bot.env:BRIEFING_MU_CLUBS_URL"
   "deploy/runtime/briefing-bot.env:OLLAMA_URL"
   "deploy/runtime/briefing-bot.env:OLLAMA_MODEL"
+  "deploy/runtime/maintenance-agent.env:DATABASE_URL"
+  "deploy/runtime/maintenance-agent.env:MAINTENANCE_API_TOKEN"
+  "deploy/runtime/maintenance-agent.env:MAINTENANCE_TELEGRAM_TOKEN"
+  "deploy/runtime/maintenance-agent.env:TELEGRAM_ALLOWED_USER_IDS"
+)
+
+study_bot_env_values=(
   "deploy/runtime/study-bot.env:DATABASE_URL"
   "deploy/runtime/study-bot.env:STUDY_TELEGRAM_TOKEN"
   "deploy/runtime/study-bot.env:TELEGRAM_ALLOWED_USER_IDS"
@@ -71,10 +80,6 @@ required_env_values=(
   "deploy/runtime/study-bot.env:OLLAMA_MODEL"
   "deploy/runtime/study-bot.env:STUDY_S3_ACCESS_KEY_ID"
   "deploy/runtime/study-bot.env:STUDY_S3_SECRET_ACCESS_KEY"
-  "deploy/runtime/maintenance-agent.env:DATABASE_URL"
-  "deploy/runtime/maintenance-agent.env:MAINTENANCE_API_TOKEN"
-  "deploy/runtime/maintenance-agent.env:MAINTENANCE_TELEGRAM_TOKEN"
-  "deploy/runtime/maintenance-agent.env:TELEGRAM_ALLOWED_USER_IDS"
 )
 
 required_piper_voice_files=(
@@ -129,6 +134,24 @@ if ((${#missing_env_values[@]} > 0)); then
   echo "Runtime environment files are missing required values:" >&2
   printf '%s\n' "${missing_env_values[@]}" >&2
   exit 1
+fi
+
+study_bot_missing_values=()
+for study_env_value in "${study_bot_env_values[@]}"; do
+  file="${study_env_value%%:*}"
+  key="${study_env_value#*:}"
+  line="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1 || true)"
+  value="${line#*=}"
+
+  if [[ -z "$line" || -z "$value" || "$value" == "''" || "$value" == '""' ]]; then
+    study_bot_missing_values+=("$key")
+  fi
+done
+
+study_bot_configured=true
+if ((${#study_bot_missing_values[@]} > 0)); then
+  study_bot_configured=false
+  echo "Study Bot is not configured; it will be skipped without blocking this release. Missing: ${study_bot_missing_values[*]}" >&2
 fi
 
 if ! [[ "$BACKUP_RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
@@ -345,6 +368,19 @@ if ! compose_candidate up \
   fi
 
   exit 1
+fi
+
+if [[ "$study_bot_configured" == true ]]; then
+  echo "Starting optional Study Bot..."
+  if ! compose_candidate pull study-bot || ! compose_candidate up \
+    -d \
+    --force-recreate \
+    --wait \
+    --wait-timeout 180 \
+    study-bot; then
+    echo "Study Bot could not be started; the core Watcher release remains healthy." >&2
+    compose_candidate logs --tail 200 study-bot || true
+  fi
 fi
 
 mv "$CANDIDATE_FILE" "$RELEASE_FILE"
