@@ -80,8 +80,26 @@ export class PersistentScheduler {
     }
 
     const activeTick = (async () => {
-      const due = await this.listDue(now);
-      await Promise.allSettled(due.map((schedule) => this.execute(schedule)));
+      let due: DueSchedule[];
+      try {
+        due = await this.listDue(now);
+      } catch (error) {
+        this.logger?.error(
+          { err: error, now: now.toISOString() },
+          'Scheduler could not list due work',
+        );
+        return;
+      }
+      const results = await Promise.allSettled(
+        due.map((schedule) => this.execute(schedule)),
+      );
+      results.forEach((result, index) => {
+        if (result.status !== 'rejected') return;
+        this.logger?.error(
+          { err: result.reason, scheduleId: due[index]?.id },
+          'Scheduled work failed',
+        );
+      });
     })().finally(() => {
       if (this.#activeTick === activeTick) this.#activeTick = undefined;
     });

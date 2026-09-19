@@ -1,4 +1,4 @@
-import { createLogger } from '@watcher/core';
+import { PersistentScheduler, createLogger } from '@watcher/core';
 import {
   AgentTelemetryStore,
   BriefingWatcherHealthStore,
@@ -36,42 +36,33 @@ const api = createApi(
   logger,
 );
 let stopping = false;
-let activeTick: Promise<void> | undefined;
-const tick = (): Promise<void> => {
-  if (stopping) return Promise.resolve();
-  if (activeTick) return activeTick;
-  activeTick = (async () => {
+const scheduler = new PersistentScheduler(
+  async (now) => {
     if (await repository.scheduledRunsEnabled()) {
-      await runner.runDue(await repository.latestRuns());
+      return runner
+        .dueSourceIds(await repository.latestRuns(), now)
+        .map((id) => ({ id }));
     }
-  })().finally(() => {
-    activeTick = undefined;
-  });
-  return activeTick;
-};
-const timer = setInterval(
-  () =>
-    void tick().catch((error) =>
-      logger.error({ err: error }, 'Brno events scheduler failed'),
-    ),
+    return [];
+  },
+  async ({ id }) => {
+    await runner.runScheduledSource(id);
+  },
   env.BRNO_EVENTS_SCHEDULER_INTERVAL_MS,
+  logger,
 );
-timer.unref();
 await api.listen({ host: env.BRNO_EVENTS_HOST, port: env.BRNO_EVENTS_PORT });
 logger.info(
   { host: env.BRNO_EVENTS_HOST, port: env.BRNO_EVENTS_PORT },
   'Brno events agent started',
 );
-void tick().catch((error) =>
-  logger.error({ err: error }, 'Initial Brno events run failed'),
-);
+scheduler.start();
 const shutdown = async (signal: string) => {
   if (stopping) return;
   stopping = true;
-  clearInterval(timer);
+  await scheduler.stop();
   logger.info({ signal }, 'Shutting down Brno events agent');
   await api.close();
-  await activeTick;
   await database.$disconnect();
 };
 process.once('SIGTERM', () => void shutdown('SIGTERM'));

@@ -26,6 +26,16 @@ export class EventRunner {
   public sourceIds(): string[] {
     return this.sources.map((source) => source.id);
   }
+  public dueSourceIds(lastRuns: Map<string, Date>, now = new Date()): string[] {
+    return this.sources
+      .filter(
+        (source) =>
+          source.enabled &&
+          now.getTime() - (lastRuns.get(source.id)?.getTime() ?? 0) >=
+            source.intervalMinutes * 60_000,
+      )
+      .map((source) => source.id);
+  }
   public async run(sourceId?: string) {
     const selected = sourceId
       ? this.sources.filter((source) => source.id === sourceId)
@@ -52,15 +62,18 @@ export class EventRunner {
     };
   }
   public async runDue(lastRuns: Map<string, Date>, now = new Date()) {
-    const due = this.sources.filter(
-      (source) =>
-        source.enabled &&
-        now.getTime() - (lastRuns.get(source.id)?.getTime() ?? 0) >=
-          source.intervalMinutes * 60_000,
-    );
+    const due = this.dueSourceIds(lastRuns, now)
+      .map((sourceId) => this.sources.find(({ id }) => id === sourceId))
+      .filter((source): source is EventSource => Boolean(source));
     return Promise.allSettled(
       due.map((source) => this.runSource(source, 'SCHEDULED')),
     );
+  }
+
+  public async runScheduledSource(sourceId: string) {
+    const source = this.sources.find(({ id }) => id === sourceId);
+    if (!source?.enabled) return { source: sourceId, status: 'disabled' };
+    return this.runSource(source, 'SCHEDULED');
   }
 
   private async recordSourceTelemetry(

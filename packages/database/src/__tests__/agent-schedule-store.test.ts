@@ -3,6 +3,52 @@ import type { DatabaseClient } from '../client.js';
 import { AgentScheduleStore } from '../agent-schedule-store.js';
 
 describe('AgentScheduleStore', () => {
+  it('persists a paused state for every scheduled producer', async () => {
+    const watcherUpdate = vi.fn(async () => ({ count: 3 }));
+    const muUpsert = vi.fn(async () => ({ enabled: false }));
+    const brnoUpsert = vi.fn(async () => ({ enabled: false }));
+    const database = {
+      telegramChat: {
+        findMany: vi.fn(async () => [
+          { watcherConfig: { id: 'stocks-config' } },
+          { watcherConfig: { id: 'medical-config' } },
+          { watcherConfig: { id: 'news-config' } },
+        ]),
+      },
+      watcherConfig: { updateMany: watcherUpdate },
+      muMonitorState: { upsert: muUpsert },
+      brnoEventAgentState: { upsert: brnoUpsert },
+      $transaction: vi.fn(async (operations: Promise<unknown>[]) =>
+        Promise.all(operations),
+      ),
+    } as unknown as DatabaseClient;
+    const schedules = new AgentScheduleStore(database);
+    vi.spyOn(schedules, 'get').mockResolvedValue({
+      watchers: [],
+      brnoEvents: { enabled: false },
+      brnoEventSources: [],
+    });
+
+    await schedules.setAllScheduledAgentsEnabled(
+      42n,
+      false,
+      new Date('2026-09-19T10:00:00Z'),
+    );
+
+    expect(watcherUpdate).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['stocks-config', 'medical-config', 'news-config'] },
+      },
+      data: { enabled: false },
+    });
+    expect(muUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { enabled: false } }),
+    );
+    expect(brnoUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { enabled: false } }),
+    );
+  });
+
   it('queues an enabled watcher for its existing scheduler', async () => {
     const nextRunAt = new Date('2026-09-09T10:00:00Z');
     const findUnique = vi.fn(async () => ({

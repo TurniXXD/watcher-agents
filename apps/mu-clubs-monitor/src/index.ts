@@ -1,4 +1,4 @@
-import { createLogger } from '@watcher/core';
+import { PersistentScheduler, createLogger } from '@watcher/core';
 import {
   BriefingWatcherHealthStore,
   AgentTelemetryStore,
@@ -52,34 +52,26 @@ const api = createApi(
   },
 );
 let stopping = false;
-const tick = async (): Promise<void> => {
-  if (stopping) return;
-  const state = await store.monitorState();
-  if ((!state || state.enabled) && (!state || state.nextRunAt <= new Date()))
+const scheduler = new PersistentScheduler(
+  (now) => store.listDueSchedules(now),
+  async () => {
     await monitor.run('SCHEDULED');
-};
-const timer = setInterval(
-  () =>
-    void tick().catch((error) =>
-      logger.error({ err: error }, 'MU Clubs scheduler failed'),
-    ),
+  },
   env.MU_CLUBS_SCHEDULER_INTERVAL_MS,
+  logger,
 );
-timer.unref();
 await api.listen({ host: env.MU_CLUBS_HOST, port: env.MU_CLUBS_PORT });
 logger.info(
   { host: env.MU_CLUBS_HOST, port: env.MU_CLUBS_PORT },
   'MU Clubs monitor started',
 );
-void tick().catch((error) =>
-  logger.error({ err: error }, 'Initial MU Clubs monitor run failed'),
-);
+scheduler.start();
 
 const shutdown = async (signal: string): Promise<void> => {
   if (stopping) return;
   stopping = true;
   logger.info({ signal }, 'Shutting down MU Clubs monitor');
-  clearInterval(timer);
+  await scheduler.stop();
   await api.close();
   await database.$disconnect();
 };

@@ -254,6 +254,23 @@ export class MuClubsStore {
     });
   }
 
+  public async listDueSchedules(
+    now = new Date(),
+  ): Promise<Array<{ id: string }>> {
+    await this.db.muMonitorState.upsert({
+      where: { id: 'singleton' },
+      create: { id: 'singleton', nextRunAt: now },
+      update: {},
+    });
+    const state = await this.db.muMonitorState.findUnique({
+      where: { id: 'singleton' },
+      select: { enabled: true, nextRunAt: true },
+    });
+    return state?.enabled && state.nextRunAt <= now
+      ? [{ id: 'singleton' }]
+      : [];
+  }
+
   public async finishRun(
     runId: string,
     input: {

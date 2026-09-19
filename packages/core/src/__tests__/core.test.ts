@@ -119,6 +119,34 @@ describe('core watcher behavior', () => {
     expect(finished).toBe(true);
   });
 
+  it('records listing and execution failures without stopping future ticks', async () => {
+    const error = vi.fn();
+    const scheduler = new PersistentScheduler(
+      vi
+        .fn()
+        .mockRejectedValueOnce(new Error('database unavailable'))
+        .mockResolvedValueOnce([{ id: 'news' }]),
+      async () => Promise.reject(new Error('source unavailable')),
+      30_000,
+      { error } as never,
+    );
+
+    await scheduler.tick(new Date('2026-09-19T10:00:00Z'));
+    await scheduler.tick(new Date('2026-09-19T10:00:30Z'));
+
+    expect(error).toHaveBeenCalledTimes(2);
+    expect(error).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ now: '2026-09-19T10:00:00.000Z' }),
+      'Scheduler could not list due work',
+    );
+    expect(error).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ scheduleId: 'news' }),
+      'Scheduled work failed',
+    );
+  });
+
   it('keeps successful sources when another source fails', async () => {
     const repository = {
       prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) =>
