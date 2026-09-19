@@ -8,5 +8,5 @@ CREATE TABLE "brno_event_agent_state" (
     CONSTRAINT "brno_event_agent_state_pkey" PRIMARY KEY ("id")
 );
 
-ALTER TABLE "discovery_signals"
+ALTER TABLE "DiscoverySignal"
 ALTER COLUMN "stockId" DROP NOT NULL;
