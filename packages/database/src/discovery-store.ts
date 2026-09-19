@@ -1,4 +1,4 @@
-import { type RunIntelligenceSummary } from '@watcher/core';
+import { computeNextRun, type RunIntelligenceSummary } from '@watcher/core';
 import {
   investigationExpiryDecision,
   type DiscoveryCandidate,
@@ -15,8 +15,6 @@ import {
   RunTrigger,
   WatcherKind,
 } from './generated/prisma/enums.js';
-import { defaultStockSourceTypes } from './stock-source-defaults.js';
-import { stockSourceSettingsForChat } from './utils/source-settings.js';
 
 export type DiscoveryLifecycleOptions = {
   investigationMs: number;
@@ -84,16 +82,27 @@ export class StockDiscoveryStore {
   ) {}
 
   public async initializeSchedules(
-    scanIntervalMs: number,
+    weeklySchedule: string,
     now = new Date(),
   ): Promise<void> {
-    await this.db.watcherConfig.updateMany({
-      where: {
-        nextDiscoveryScanAt: null,
-        chatConfig: { kind: WatcherKind.STOCKS },
-      },
-      data: { nextDiscoveryScanAt: new Date(now.getTime() + scanIntervalMs) },
+    const configs = await this.db.watcherConfig.findMany({
+      where: { chatConfig: { kind: WatcherKind.STOCKS } },
+      select: { id: true, timezone: true, lastDiscoveryScanAt: true },
     });
+    await Promise.all(
+      configs.map((config) =>
+        this.db.watcherConfig.update({
+          where: { id: config.id },
+          data: {
+            nextDiscoveryScanAt: computeNextRun(
+              weeklySchedule,
+              config.timezone,
+              config.lastDiscoveryScanAt ?? now,
+            ),
+          },
+        }),
+      ),
+    );
   }
 
   public listDueScans(now: Date): Promise<DueDiscoveryScan[]> {
@@ -169,9 +178,13 @@ export class StockDiscoveryStore {
       activatedCount?: number;
       error?: string;
     },
-    scanIntervalMs: number,
+    weeklySchedule: string,
     now = new Date(),
   ): Promise<void> {
+    const config = await this.db.watcherConfig.findUniqueOrThrow({
+      where: { id: watcherConfigId },
+      select: { timezone: true },
+    });
     await this.db.$transaction([
       this.db.discoveryScan.update({
         where: { id: scanId },
@@ -190,30 +203,22 @@ export class StockDiscoveryStore {
           discoveryScanInProgress: false,
           discoveryScanStartedAt: null,
           lastDiscoveryScanAt: now,
-          nextDiscoveryScanAt: new Date(now.getTime() + scanIntervalMs),
+          nextDiscoveryScanAt: computeNextRun(
+            weeklySchedule,
+            config.timezone,
+            now,
+          ),
         },
       }),
     ]);
   }
 
-  public async activateCandidate(
+  public async recordCandidate(
     watcherConfigId: string,
     scanId: string,
     candidate: DiscoveryCandidate,
-    profile: DiscoveryCompanyProfile,
     now = new Date(),
-  ): Promise<{ activated: boolean; ticker: string }> {
-    const config = await this.db.watcherConfig.findUniqueOrThrow({
-      where: { id: watcherConfigId },
-      select: { chatConfigId: true },
-    });
-    const sourceSettings = await stockSourceSettingsForChat(
-      this.db,
-      config.chatConfigId,
-    );
-    const enabledBySource = new Map(
-      sourceSettings.map(({ source, enabled }) => [source, enabled]),
-    );
+  ): Promise<{ recorded: boolean; ticker: string }> {
     return this.db.$transaction(async (transaction) => {
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${watcherConfigId}), hashtext(${candidate.ticker}))`;
       const existingSignal = await transaction.discoverySignal.findUnique({
@@ -225,94 +230,12 @@ export class StockDiscoveryStore {
         },
       });
       if (existingSignal) {
-        return { activated: false, ticker: candidate.ticker };
+        return { recorded: false, ticker: candidate.ticker };
       }
-      const existing = await transaction.stock.findUnique({
-        where: {
-          chatConfigId_symbol: {
-            chatConfigId: config.chatConfigId,
-            symbol: candidate.ticker,
-          },
-        },
-      });
-      const investigationUntil = new Date(
-        now.getTime() + this.options.investigationMs,
-      );
-      const shouldInvestigate =
-        !existing ||
-        (existing.enabled &&
-          (existing.monitoringTier === MonitoringTier.DISCOVERY ||
-            existing.monitoringTier === MonitoringTier.INVESTIGATE));
-      const shouldEscalateExisting =
-        existing?.enabled === true &&
-        (existing.monitoringTier === MonitoringTier.WATCH ||
-          existing.monitoringTier === MonitoringTier.CORE) &&
-        existing.monitoringMode !== MonitoringMode.EVENT_MODE;
-      const stock = existing
-        ? await transaction.stock.update({
-            where: { id: existing.id },
-            data: {
-              attentionScore: Math.max(
-                existing.attentionScore,
-                candidate.attentionScore,
-              ),
-              lastDiscoverySignalAt: candidate.observedAt,
-              ...(shouldInvestigate
-                ? {
-                    monitoringTier: MonitoringTier.INVESTIGATE,
-                    monitoringMode: MonitoringMode.HIGH_RESOLUTION,
-                    investigationStartedAt:
-                      existing.investigationStartedAt ?? now,
-                    investigateUntil: investigationUntil,
-                    highResolutionUntil: investigationUntil,
-                    nextHighResolutionCheckAt: now,
-                    watchReason: candidate.reason,
-                  }
-                : {}),
-              ...(shouldEscalateExisting
-                ? {
-                    monitoringMode: MonitoringMode.HIGH_RESOLUTION,
-                    highResolutionUntil: investigationUntil,
-                    nextHighResolutionCheckAt: now,
-                  }
-                : {}),
-            },
-          })
-        : await transaction.stock.create({
-            data: {
-              chatConfigId: config.chatConfigId,
-              symbol: profile.symbol,
-              companyName: profile.companyName,
-              cik: profile.cik,
-              exchange: profile.exchange,
-              industry: profile.industry,
-              investorRelationsUrl: profile.investorRelationsUrl,
-              enabled: true,
-              monitoringTier: MonitoringTier.INVESTIGATE,
-              monitoringMode: MonitoringMode.HIGH_RESOLUTION,
-              priority: candidate.attentionScore,
-              watchReason: candidate.reason,
-              autoDiscovered: true,
-              attentionScore: candidate.attentionScore,
-              investigationStartedAt: now,
-              investigateUntil: investigationUntil,
-              highResolutionUntil: investigationUntil,
-              lastDiscoverySignalAt: candidate.observedAt,
-              nextHighResolutionCheckAt: now,
-              sources: {
-                create: defaultStockSourceTypes.map((source) => ({
-                  source,
-                  enabled: enabledBySource.get(source) ?? true,
-                })),
-              },
-            },
-          });
-      const activated = shouldInvestigate || shouldEscalateExisting;
       await transaction.discoverySignal.create({
         data: {
           watcherConfigId,
           scanId,
-          stockId: stock.id,
           fingerprint: candidate.fingerprint,
           ticker: candidate.ticker,
           source: candidate.source,
@@ -324,32 +247,26 @@ export class StockDiscoveryStore {
           dollarVolume: candidate.dollarVolume,
           attentionScore: candidate.attentionScore,
           reason: candidate.reason,
-          status: activated
-            ? DiscoverySignalStatus.INVESTIGATING
-            : DiscoverySignalStatus.OBSERVED,
+          status: DiscoverySignalStatus.OBSERVED,
         },
       });
       await transaction.domainEvent.create({
         data: {
           id: randomUUID(),
-          type: activated
-            ? 'discovery.investigation_started'
-            : 'discovery.candidate_observed',
-          aggregateType: 'COMPANY',
-          aggregateId: stock.id,
+          type: 'discovery.candidate_observed',
+          aggregateType: 'DISCOVERY_SIGNAL',
+          aggregateId: candidate.fingerprint,
           occurredAt: now,
           payload: {
             ticker: candidate.ticker,
             changePercent: candidate.changePercent,
             volume: candidate.volume,
             attentionScore: candidate.attentionScore,
-            previousTier: existing?.monitoringTier ?? null,
-            monitoringTier: stock.monitoringTier,
-            monitoringMode: stock.monitoringMode,
+            reason: candidate.reason,
           },
         },
       });
-      return { activated, ticker: stock.symbol };
+      return { recorded: true, ticker: candidate.ticker };
     });
   }
 

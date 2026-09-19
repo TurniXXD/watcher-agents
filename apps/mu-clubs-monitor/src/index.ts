@@ -55,7 +55,8 @@ let stopping = false;
 const tick = async (): Promise<void> => {
   if (stopping) return;
   const state = await store.monitorState();
-  if (!state || state.nextRunAt <= new Date()) await monitor.run('SCHEDULED');
+  if ((!state || state.enabled) && (!state || state.nextRunAt <= new Date()))
+    await monitor.run('SCHEDULED');
 };
 const timer = setInterval(
   () =>

@@ -41,7 +41,9 @@ const tick = (): Promise<void> => {
   if (stopping) return Promise.resolve();
   if (activeTick) return activeTick;
   activeTick = (async () => {
-    await runner.runDue(await repository.latestRuns());
+    if (await repository.scheduledRunsEnabled()) {
+      await runner.runDue(await repository.latestRuns());
+    }
   })().finally(() => {
     activeTick = undefined;
   });

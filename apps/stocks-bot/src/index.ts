@@ -38,7 +38,6 @@ import { createStocksBot } from './bot.js';
 import { StockDiscoveryCoordinator } from './discovery.js';
 import { env } from './env.js';
 import { StockReconciliationCoordinator } from './reconciliation.js';
-import { StockCandidateProcessor } from './stock-candidate-processor.js';
 import { createStocksRunner } from './watcher.js';
 import {
   publishEarningsReminderBriefingEvents,
@@ -224,6 +223,7 @@ const bot = createStocksBot(
     return runtime.reconciliation.execute(configId, chatId, 'MANUAL');
   },
   env.DEFAULT_TIMEZONE,
+  env.STOCKS_MONITOR_SCHEDULE,
   (error) => logger.error({ err: error }, 'Telegram update failed'),
 );
 const runner = createStocksRunner(
@@ -306,7 +306,6 @@ const runner = createStocksRunner(
   telemetry,
 );
 runtime.runner = runner;
-const candidateProcessor = new StockCandidateProcessor(eventBus, runner);
 const reconciliationIntervalMs = env.RECONCILIATION_INTERVAL_MINUTES * 60_000;
 runtime.reconciliation = new StockReconciliationCoordinator(
   store,
@@ -314,7 +313,6 @@ runtime.reconciliation = new StockReconciliationCoordinator(
   reconciliationIntervalMs,
   logger,
 );
-const scanIntervalMs = env.DISCOVERY_SCAN_INTERVAL_MINUTES * 60_000;
 if (env.ALPHA_VANTAGE_API_KEY) {
   runtime.discovery = new StockDiscoveryCoordinator(
     discoveryStore,
@@ -323,16 +321,8 @@ if (env.ALPHA_VANTAGE_API_KEY) {
       env.DISCOVERY_MARKET_DATA_ENTITLEMENT,
     ),
     (symbol) => sec.lookupCompanyProfile(symbol),
-    async (configId, chatId, tickers) => {
-      await candidateProcessor.processStockCandidate({
-        type: 'stock.market_anomaly.detected',
-        configId,
-        chatId,
-        tickers,
-      });
-    },
     env.DISCOVERY_MARKET_DATA_ENTITLEMENT === 'EOD' ? 'DAILY' : 'INTRADAY',
-    scanIntervalMs,
+    env.DISCOVERY_WEEKLY_SCHEDULE,
     {
       ...defaultDiscoveryPolicy,
       moveThresholdPercent: env.DISCOVERY_MOVE_THRESHOLD_PERCENT,
@@ -347,13 +337,16 @@ if (env.ALPHA_VANTAGE_API_KEY) {
     },
     logger,
   );
-  await discoveryStore.initializeSchedules(scanIntervalMs);
+  await discoveryStore.initializeSchedules(env.DISCOVERY_WEEKLY_SCHEDULE);
 }
+await store.initializeStockMonitoringSchedules(env.STOCKS_MONITOR_SCHEDULE);
 const scheduler = new PersistentScheduler(
   (now) => store.listDue('STOCKS', now),
   async (due) => {
     const entry = due as { id: string; chatConfig: { chatId: bigint } };
-    await runner.execute(entry.id, entry.chatConfig.chatId, 'SCHEDULED');
+    await runner.execute(entry.id, entry.chatConfig.chatId, 'SCHEDULED', {
+      sourceIds: new Set(['NEWS', 'TRADINGVIEW_NEWS']),
+    });
   },
   undefined,
   logger,
@@ -363,7 +356,24 @@ const discoveryScheduler = new PersistentScheduler(
     runtime.discovery ? discoveryStore.listDueScans(now) : Promise.resolve([]),
   async (due) => {
     const entry = due as { id: string; chatId: bigint };
-    await runtime.discovery?.execute(entry.id, entry.chatId, 'SCHEDULED');
+    const result = await runtime.discovery?.execute(
+      entry.id,
+      entry.chatId,
+      'SCHEDULED',
+    );
+    if (result?.status !== 'COMPLETED') return;
+    const recommendations = result.recommendedCandidates.length
+      ? result.recommendedCandidates
+          .map(
+            (candidate) =>
+              `• ${candidate.ticker} — ${candidate.companyName} · ${candidate.changePercent >= 0 ? '+' : ''}${candidate.changePercent.toFixed(2)}% · attention ${candidate.attentionScore}/100\n  ${candidate.reason}`,
+          )
+          .join('\n')
+      : 'No candidates met the quality filters this week.';
+    await bot.api.sendMessage(
+      Number(entry.chatId),
+      `🔎 Weekly stock discovery\n\n${recommendations}\n\nNothing was added to your watchlist. Add a company explicitly with /add_stock SYMBOL to start five-minute news monitoring.`,
+    );
   },
   undefined,
   logger,
@@ -426,7 +436,6 @@ const shutdown = async (signal: string): Promise<void> => {
     alertScheduler.stop(),
   ]);
   await bot.stop();
-  candidateProcessor.stop();
   await readiness.stop();
   await database.$disconnect();
 };

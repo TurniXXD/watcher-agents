@@ -23,7 +23,7 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /replay SYMBOL DATE — reconstruct only information known by that date
 /resume — resume scheduled runs
 /run — run now
-/run_discovery — run the cheap market-wide discovery scan now
+/run_discovery — run the market-wide discovery report now; it never changes your watchlist
 /schedule [CRON[; CRON...]] [TIMEZONE] — view or replace all schedules
 /schedule_add CRON — add one schedule without replacing the others
 /schedule_list — list numbered schedules, timezone, and next run
@@ -65,7 +65,7 @@ Stocks Watcher is a private, self-hosted Telegram research assistant for monitor
 *How to use it*
 1. Add a company with \`/add_stock SYMBOL\`, then review it with \`/stocks\`.
 2. Use \`/sources\` to enable or disable providers globally for every current and future stock, and \`/list_sources\` to see what every provider contributes.
-3. Run \`/run\` for an immediate check, or configure recurring monitoring with \`/schedule CRON TIMEZONE\`. Separate multiple cron expressions with semicolons when you want several daily checks.
+3. Watched stocks check news every five minutes by default. Run \`/run\` for a full immediate check, or configure recurring monitoring with \`/schedule CRON TIMEZONE\`.
 4. Read \`/dashboard\`, \`/thesis SYMBOL\`, \`/catalysts\`, \`/alerts\`, and \`/opportunities\` for the current decision picture.
 5. Use \`/health\` when diagnosing coverage or model issues, and \`/replay\`, \`/event_replay\`, \`/validate\`, and \`/backtest\` to audit historical behavior.
 6. Use \`/pause\` and \`/resume\` to control scheduled runs without deleting configuration.

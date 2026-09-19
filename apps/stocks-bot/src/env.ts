@@ -44,6 +44,7 @@ const schema = z.object({
     .default(120_000),
   SEC_USER_AGENT: z.string().min(5),
   DEFAULT_TIMEZONE: z.string().default('Europe/Prague'),
+  STOCKS_MONITOR_SCHEDULE: z.string().default('*/5 * * * *'),
   LOG_LEVEL: z.string().default('info'),
   STOCK_EVENT_COOLDOWN_MINUTES: z.coerce
     .number()
@@ -154,12 +155,7 @@ const schema = z.object({
   DISCOVERY_MARKET_DATA_ENTITLEMENT: z
     .enum(['EOD', 'DELAYED', 'REALTIME'])
     .default('EOD'),
-  DISCOVERY_SCAN_INTERVAL_MINUTES: z.coerce
-    .number()
-    .int()
-    .min(5)
-    .max(10_080)
-    .default(1440),
+  DISCOVERY_WEEKLY_SCHEDULE: z.string().default('0 15 * * 0'),
   DISCOVERY_MOVE_THRESHOLD_PERCENT: z.coerce
     .number()
     .positive()

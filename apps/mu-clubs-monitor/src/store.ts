@@ -237,6 +237,7 @@ export class MuClubsStore {
     const claimed = await this.db.muMonitorState.updateMany({
       where: {
         id: 'singleton',
+        enabled: true,
         OR: [
           { runInProgress: false },
           { runStartedAt: { lt: new Date(now.getTime() - 2 * 60 * 60_000) } },

@@ -17,34 +17,33 @@ export type DiscoveryExecution =
       status: 'COMPLETED';
       observedCount: number;
       candidateCount: number;
-      activatedTickers: string[];
+      recommendedCandidates: Array<{
+        ticker: string;
+        companyName: string;
+        changePercent: number;
+        attentionScore: number;
+        reason: string;
+      }>;
       rejectedCount: number;
       durationMs: number;
     }
   | { status: 'FAILED'; error: string; durationMs: number };
 
 type CompanyLookup = (symbol: string) => Promise<DiscoveryCompanyProfile>;
-type InvestigationRun = (
-  configId: string,
-  chatId: bigint,
-  tickers: string[],
-) => Promise<void>;
-
 export class StockDiscoveryCoordinator {
   public constructor(
     private readonly store: StockDiscoveryStore,
     private readonly scanner: MarketDiscoveryScanner,
     private readonly lookupCompany: CompanyLookup,
-    private readonly runInvestigation: InvestigationRun,
     private readonly scanMode: DiscoveryScanMode,
-    private readonly scanIntervalMs: number,
+    private readonly weeklySchedule: string,
     private readonly policy: DiscoveryPolicy,
     private readonly logger?: WatcherLogger,
   ) {}
 
   public async execute(
     watcherConfigId: string,
-    chatId: bigint,
+    _chatId: bigint,
     trigger: 'MANUAL' | 'SCHEDULED',
     signal?: AbortSignal,
   ): Promise<DiscoveryExecution> {
@@ -64,7 +63,10 @@ export class StockDiscoveryCoordinator {
     try {
       const observations = await this.scanner.scan(this.scanMode, signal);
       const candidates = selectDiscoveryCandidates(observations, this.policy);
-      const activatedTickers: string[] = [];
+      const recommendedCandidates: Extract<
+        DiscoveryExecution,
+        { status: 'COMPLETED' }
+      >['recommendedCandidates'] = [];
       let rejectedCount = 0;
       let resolutionFailureCount = 0;
 
@@ -84,14 +86,19 @@ export class StockDiscoveryCoordinator {
             );
             continue;
           }
-          const activated = await this.store.activateCandidate(
+          const recorded = await this.store.recordCandidate(
             watcherConfigId,
             scan.id,
             candidate,
-            profile,
           );
-          if (activated.activated) {
-            activatedTickers.push(activated.ticker);
+          if (recorded.recorded) {
+            recommendedCandidates.push({
+              ticker: recorded.ticker,
+              companyName: profile.companyName,
+              changePercent: candidate.changePercent,
+              attentionScore: candidate.attentionScore,
+              reason: candidate.reason,
+            });
           }
         } catch (error) {
           rejectedCount += 1;
@@ -115,25 +122,22 @@ export class StockDiscoveryCoordinator {
           status: resolutionFailureCount > 0 ? 'PARTIAL' : 'SUCCESS',
           observedCount: observations.length,
           candidateCount: candidates.length,
-          activatedCount: activatedTickers.length,
+          activatedCount: recommendedCandidates.length,
           ...(resolutionFailureCount > 0
             ? {
                 error: `${resolutionFailureCount} candidates could not be resolved`,
               }
             : {}),
         },
-        this.scanIntervalMs,
+        this.weeklySchedule,
       );
-      if (activatedTickers.length > 0) {
-        await this.runInvestigation(watcherConfigId, chatId, activatedTickers);
-      }
       this.logger?.info(
         {
           watcherConfigId,
           scanId: scan.id,
           observedCount: observations.length,
           candidateCount: candidates.length,
-          activatedCount: activatedTickers.length,
+          recommendedCount: recommendedCandidates.length,
           rejectedCount,
           durationMs: Date.now() - startedAt,
         },
@@ -143,7 +147,7 @@ export class StockDiscoveryCoordinator {
         status: 'COMPLETED',
         observedCount: observations.length,
         candidateCount: candidates.length,
-        activatedTickers,
+        recommendedCandidates,
         rejectedCount,
         durationMs: Date.now() - startedAt,
       };
@@ -153,7 +157,7 @@ export class StockDiscoveryCoordinator {
         watcherConfigId,
         scan.id,
         { status: 'FAILED', error: message },
-        this.scanIntervalMs,
+        this.weeklySchedule,
       );
       this.logger?.error(
         {

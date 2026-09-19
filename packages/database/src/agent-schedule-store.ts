@@ -23,6 +23,7 @@ export type AgentScheduleOverview = {
   };
   watchers: WatcherScheduleOverview[];
   muClubs?: {
+    enabled: boolean;
     nextRunAt: Date;
     lastRunAt?: Date;
     runInProgress: boolean;
@@ -30,6 +31,7 @@ export type AgentScheduleOverview = {
     health?: string;
     healthLastRunAt?: Date;
   };
+  brnoEvents: { enabled: boolean };
   brnoEventSources: Array<{
     sourceId: string;
     lastRunAt: Date;
@@ -80,8 +82,47 @@ export class AgentScheduleStore {
     return claimed.count === 1 ? { status: 'QUEUED' } : { status: 'BUSY' };
   }
 
+  /** Controls scheduled collection only; manual commands intentionally remain usable. */
+  public async setAllScheduledAgentsEnabled(
+    telegramChatId: bigint,
+    enabled: boolean,
+    now = new Date(),
+  ): Promise<WatcherScheduleOverview[]> {
+    const chats = await this.db.telegramChat.findMany({
+      where: {
+        chatId: telegramChatId,
+        kind: { in: watcherDefinitions.map(({ kind }) => kind) },
+      },
+      select: { watcherConfig: { select: { id: true } } },
+    });
+    const configIds = chats.flatMap(({ watcherConfig }) =>
+      watcherConfig ? [watcherConfig.id] : [],
+    );
+    await this.db.$transaction([
+      ...(configIds.length
+        ? [
+            this.db.watcherConfig.updateMany({
+              where: { id: { in: configIds } },
+              data: { enabled, ...(enabled ? { nextRunAt: now } : {}) },
+            }),
+          ]
+        : []),
+      this.db.muMonitorState.upsert({
+        where: { id: 'singleton' },
+        create: { id: 'singleton', enabled, nextRunAt: now },
+        update: { enabled, ...(enabled ? { nextRunAt: now } : {}) },
+      }),
+      this.db.brnoEventAgentState.upsert({
+        where: { id: 'singleton' },
+        create: { id: 'singleton', enabled },
+        update: { enabled },
+      }),
+    ]);
+    return (await this.get(telegramChatId)).watchers;
+  }
+
   public async get(telegramChatId: bigint): Promise<AgentScheduleOverview> {
-    const [briefing, chats, muState, muRun, health, brnoRuns] =
+    const [briefing, chats, muState, muRun, health, brnoRuns, brnoState] =
       await Promise.all([
         this.db.briefingSettings.findUnique({
           where: { telegramChatId },
@@ -107,6 +148,7 @@ export class AgentScheduleStore {
           distinct: ['sourceId'],
           select: { sourceId: true, finishedAt: true, success: true },
         }),
+        this.db.brnoEventAgentState.findUnique({ where: { id: 'singleton' } }),
       ]);
     const healthByWatcher = new Map(
       health.map((entry) => [entry.watcherBot.toString(), entry]),
@@ -155,6 +197,7 @@ export class AgentScheduleStore {
       ...(muState
         ? {
             muClubs: {
+              enabled: muState.enabled,
               nextRunAt: muState.nextRunAt,
               ...(muState.lastRunAt ? { lastRunAt: muState.lastRunAt } : {}),
               runInProgress: muState.runInProgress,
@@ -168,6 +211,7 @@ export class AgentScheduleStore {
             },
           }
         : {}),
+      brnoEvents: { enabled: brnoState?.enabled ?? true },
       brnoEventSources: brnoRuns.map((run) => ({
         sourceId: run.sourceId,
         lastRunAt: run.finishedAt,

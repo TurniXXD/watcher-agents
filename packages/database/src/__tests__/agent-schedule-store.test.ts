@@ -104,6 +104,7 @@ describe('AgentScheduleStore', () => {
       },
       muMonitorState: {
         findUnique: vi.fn(async () => ({
+          enabled: true,
           nextRunAt: new Date('2026-09-09T03:00:00Z'),
           lastRunAt: new Date('2026-09-08T03:00:00Z'),
           runInProgress: false,
@@ -134,6 +135,9 @@ describe('AgentScheduleStore', () => {
             success: true,
           },
         ]),
+      },
+      brnoEventAgentState: {
+        findUnique: vi.fn(async () => ({ enabled: true })),
       },
     } as unknown as DatabaseClient;
 

@@ -82,7 +82,7 @@ _Important:_ The briefing summarizes available data and may be incomplete. Revie
 
 export const briefingHelp = [
   '/about — what the briefing bot does and how to use it',
-  '/agents — list producers that can be triggered',
+  '/agents [on|off] — list producers or enable/pause all scheduled producers',
   '/briefing — generate a briefing now',
   '/briefing_duration MINUTES — set target length',
   '/briefing_max_duration MINUTES — set hard maximum length',

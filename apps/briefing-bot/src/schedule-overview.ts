@@ -2,6 +2,10 @@ import type { AgentScheduleOverview } from '@watcher/database';
 
 export type AgentScheduleReader = {
   get(telegramChatId: bigint): Promise<AgentScheduleOverview>;
+  setAllScheduledAgentsEnabled(
+    telegramChatId: bigint,
+    enabled: boolean,
+  ): Promise<unknown>;
 };
 
 const labels = {
@@ -76,7 +80,7 @@ export const renderAgentSchedules = (
   });
   if (overview.muClubs) {
     const beforeBriefing = timing(
-      true,
+      overview.muClubs.enabled,
       true,
       overview.muClubs.nextRunAt,
       nextBriefingAt,
@@ -86,7 +90,7 @@ export const renderAgentSchedules = (
       [
         `${stateIcon({
           configured: true,
-          enabled: true,
+          enabled: overview.muClubs.enabled,
           runInProgress: overview.muClubs.runInProgress,
           ...(overview.muClubs.health
             ? { health: overview.muClubs.health }
@@ -108,7 +112,8 @@ export const renderAgentSchedules = (
   sections.push(
     overview.brnoEventSources.length > 0
       ? [
-          '📍 Brno Events agent',
+          `${overview.brnoEvents.enabled ? '📍' : '⏸'} Brno Events agent`,
+          ...(overview.brnoEvents.enabled ? [] : ['Scheduled runs are paused']),
           ...overview.brnoEventSources.map(
             (source) =>
               `${source.success ? '✅' : '❌'} ${source.sourceId}: ${time(source.lastRunAt)}`,

@@ -158,6 +158,7 @@ export class WatcherStore implements PipelineRepository {
     kind: CoreWatcherKind,
     chatId: bigint,
     timezone = DEFAULT_TIMEZONE,
+    defaultSchedule = DEFAULT_SCHEDULE,
   ) {
     const existing = await this.getChat(kind, chatId);
     if (existing?.watcherConfig) {
@@ -169,9 +170,9 @@ export class WatcherStore implements PipelineRepository {
         chatId,
         watcherConfig: {
           create: {
-            schedule: DEFAULT_SCHEDULE,
+            schedule: defaultSchedule,
             timezone,
-            nextRunAt: computeNextRun(DEFAULT_SCHEDULE, timezone),
+            nextRunAt: computeNextRun(defaultSchedule, timezone),
           },
         },
       },
@@ -206,6 +207,27 @@ export class WatcherStore implements PipelineRepository {
       where: { id: configId },
       data: { enabled },
     });
+  }
+
+  /** Migrates only the historical once-daily Stocks default, preserving user schedules. */
+  public async initializeStockMonitoringSchedules(
+    schedule: string,
+  ): Promise<void> {
+    const configs = await this.db.watcherConfig.findMany({
+      where: {
+        schedule: DEFAULT_SCHEDULE,
+        chatConfig: { kind: WatcherKind.STOCKS },
+      },
+      select: { id: true, timezone: true },
+    });
+    await Promise.all(
+      configs.map(({ id, timezone }) =>
+        this.db.watcherConfig.update({
+          where: { id },
+          data: { schedule, nextRunAt: computeNextRun(schedule, timezone) },
+        }),
+      ),
+    );
   }
 
   public listDue(kind: CoreWatcherKind, now: Date) {

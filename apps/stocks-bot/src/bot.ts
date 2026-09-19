@@ -122,13 +122,14 @@ export const createStocksBot = (
   getDiscoveryStatus: (chatConfigId: string) => Promise<DiscoveryStatus>,
   reconcileNow: (configId: string, chatId: bigint) => Promise<RunExecution>,
   timezone: string,
+  monitoringSchedule: string,
   reportError: (error: unknown) => void,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
 
   const chat = async (chatId: number) =>
-    store.ensureChat('STOCKS', BigInt(chatId), timezone);
+    store.ensureChat('STOCKS', BigInt(chatId), timezone, monitoringSchedule);
   registerValidationCommands(
     bot,
     validation,
@@ -372,7 +373,7 @@ export const createStocksBot = (
         ? 'A discovery scan is already running.'
         : result.status === 'FAILED'
           ? `Discovery scan failed after ${formatRunDuration(result.durationMs)}: ${result.error}`
-          : `Discovery scan complete in ${formatRunDuration(result.durationMs)}. Observed ${result.observedCount}, selected ${result.candidateCount}, activated ${result.activatedTickers.length}${result.activatedTickers.length ? ` (${result.activatedTickers.join(', ')})` : ''}, rejected ${result.rejectedCount}.`;
+          : `Weekly discovery finished in ${formatRunDuration(result.durationMs)}. Observed ${result.observedCount}, selected ${result.candidateCount}, recommended ${result.recommendedCandidates.length}${result.recommendedCandidates.length ? `:\n${result.recommendedCandidates.map((candidate) => `• ${candidate.ticker} — ${candidate.companyName} · ${candidate.changePercent >= 0 ? '+' : ''}${candidate.changePercent.toFixed(2)}% · attention ${candidate.attentionScore}/100\n  ${candidate.reason}`).join('\n')}` : ''}. Nothing was added to your watchlist. Rejected ${result.rejectedCount}.`;
     await ctx.api.editMessageText(ctx.chat.id, progress.message_id, message);
   });
   bot.command(['add_stock', 'addstock'], async (ctx) => {

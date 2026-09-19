@@ -252,10 +252,29 @@ export const createBriefingBot = (
     );
   });
   bot.command('agents', async (context) => {
+    const argument = commandArgument(context.message?.text)
+      .trim()
+      .toLowerCase();
+    if (argument === 'on' || argument === 'off') {
+      if (!scheduleReader) {
+        await context.reply('Scheduled-agent controls are not available.');
+        return;
+      }
+      await scheduleReader.setAllScheduledAgentsEnabled(
+        BigInt(context.chat.id),
+        argument === 'on',
+      );
+      await context.reply(
+        argument === 'on'
+          ? '✅ Scheduled runs for Stocks, Publications, News, MU Clubs, and Brno Events are enabled. Configured watchers were queued now.'
+          : '⏸ Scheduled runs for Stocks, Publications, News, MU Clubs, and Brno Events are paused. Manual commands remain available.',
+      );
+      return;
+    }
     await context.reply(
       agentTriggers
-        ? agentTriggers.describe()
-        : 'Producer triggers are not configured.',
+        ? `${agentTriggers.describe()}\n\nUse /agents on or /agents off to control all scheduled producers.`
+        : 'Use /agents on or /agents off to control all scheduled producers.',
     );
   });
   bot.command('trigger', async (context) => {

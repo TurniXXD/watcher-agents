@@ -221,4 +221,12 @@ export class EventRepository {
     });
     return new Map(rows.map((row) => [row.sourceId, row.finishedAt]));
   }
+
+  public async scheduledRunsEnabled(): Promise<boolean> {
+    const state = await this.db.brnoEventAgentState.findUnique({
+      where: { id: 'singleton' },
+      select: { enabled: true },
+    });
+    return state?.enabled ?? true;
+  }
 }

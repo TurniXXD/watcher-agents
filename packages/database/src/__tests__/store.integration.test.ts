@@ -1365,7 +1365,7 @@ integration('WatcherStore with PostgreSQL', () => {
     ]);
   });
 
-  it('activates, promotes, and expires an auto-discovered company', async () => {
+  it('records discovery candidates without adding them to the watchlist', async () => {
     const now = new Date('2026-09-04T10:00:00Z');
     const chat = await store.ensureChat('STOCKS', 880n);
     const scan = await discovery.claimScan(
@@ -1389,132 +1389,31 @@ integration('WatcherStore with PostgreSQL', () => {
       reason: '+6.50% price move on 2,000,000 shares',
       fingerprint: 'discovery-fingerprint',
     };
-    const profile = {
-      symbol: 'MU',
-      companyName: 'Micron Technology, Inc.',
-      cik: '0000723125',
-      exchange: 'Nasdaq',
-      industry: 'Semiconductors',
-      investorRelationsUrl: 'https://investors.micron.com/',
-    };
-
     await expect(
-      discovery.activateCandidate(
+      discovery.recordCandidate(
         chat.watcherConfig!.id,
         scan.id,
         candidate,
-        profile,
         now,
       ),
-    ).resolves.toEqual({ activated: true, ticker: 'MU' });
+    ).resolves.toEqual({ recorded: true, ticker: 'MU' });
     await expect(
-      discovery.activateCandidate(
+      discovery.recordCandidate(
         chat.watcherConfig!.id,
         scan.id,
         candidate,
-        profile,
         now,
       ),
-    ).resolves.toEqual({ activated: false, ticker: 'MU' });
-    const investigating = await database.stock.findFirstOrThrow({
-      where: { chatConfigId: chat.id, symbol: 'MU' },
-      include: { sources: true },
-    });
-    expect(investigating).toMatchObject({
-      autoDiscovered: true,
-      monitoringTier: 'INVESTIGATE',
-      monitoringMode: 'HIGH_RESOLUTION',
-      attentionScore: 78,
-    });
-    expect(investigating.sources).toHaveLength(19);
-    expect(investigating.sources.every(({ enabled }) => enabled)).toBe(true);
-
-    const promotionRun = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
-    if (!promotionRun) throw new Error('Expected promotion run');
-    await store.prepareItemsForRun(
-      'STOCKS',
-      promotionRun.id,
-      [
-        {
-          ...watchItem('discovery-promotion-source'),
-          title: 'Micron announces a major acquisition',
-          content: 'Micron entered a definitive major acquisition agreement.',
-        },
-      ],
-      5,
-    );
-    const promotionEvent = await database.canonicalEvent.findFirstOrThrow({
-      where: {
-        ticker: 'MU',
-        primaryEvidence: { source: 'SEC' },
-      },
-      orderBy: { firstDetectedAt: 'desc' },
-    });
-    await database.canonicalEvent.update({
-      where: { id: promotionEvent.id },
-      data: { firstDetectedAt: now },
-    });
-
-    await discovery.promoteMaterialEvents(
-      chat.id,
-      {
-        events: [
-          {
-            eventId: promotionEvent.id,
-            ticker: 'MU',
-            eventType: 'ACQUISITION',
-            title: promotionEvent.title,
-            materiality: 'HIGH',
-            action: 'FULL_ANALYSIS',
-            decision: 'DUPLICATE',
-          },
-        ],
-        newEventCount: 0,
-        duplicateEventCount: 1,
-        storedOnlyCount: 0,
-        cooldownCount: 0,
-      },
-      now,
-    );
+    ).resolves.toEqual({ recorded: false, ticker: 'MU' });
     expect(
-      await database.stock.findUniqueOrThrow({
-        where: { id: investigating.id },
+      await database.stock.findUnique({
+        where: { chatConfigId_symbol: { chatConfigId: chat.id, symbol: 'MU' } },
       }),
-    ).toMatchObject({
-      monitoringTier: 'WATCH',
-      monitoringMode: 'EVENT_MODE',
-      attentionScore: 90,
-      watchStartedAt: now,
-    });
-    const [listedStock] = await store.listStocks(chat.id);
-    expect(listedStock).toMatchObject({
-      symbol: 'MU',
-      watchReason: promotionEvent.title,
-      discoverySignals: [
-        {
-          source: 'ALPHA_VANTAGE_MARKET_MOVERS',
-          trigger: 'PRICE_MOVE',
-          reason: '+6.50% price move on 2,000,000 shares',
-        },
-      ],
-    });
-    expect(listedStock?.watchReasonSource).toMatchObject({ source: 'SEC' });
-
-    await discovery.reconcileExpired(new Date('2026-09-04T12:01:00Z'));
-    expect(
-      await database.stock.findUniqueOrThrow({
-        where: { id: investigating.id },
-      }),
-    ).toMatchObject({ monitoringTier: 'WATCH', monitoringMode: 'NORMAL' });
-    await discovery.reconcileExpired(new Date('2026-09-18T10:01:00Z'));
-    expect(
-      await database.stock.findUniqueOrThrow({
-        where: { id: investigating.id },
-      }),
-    ).toMatchObject({
-      monitoringTier: 'DISCOVERY',
-      monitoringMode: 'LOW_RESOLUTION',
-      watchUntil: null,
+    ).toBeNull();
+    expect(await database.discoverySignal.findFirstOrThrow()).toMatchObject({
+      ticker: 'MU',
+      stockId: null,
+      status: 'OBSERVED',
     });
 
     const configured = await universe.createCompany({
@@ -1537,6 +1436,7 @@ integration('WatcherStore with PostgreSQL', () => {
       watchReason: null,
       watchUntil: null,
     });
+
     await discovery.promoteMaterialEvents(
       chat.id,
       {

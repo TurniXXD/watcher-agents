@@ -41,6 +41,7 @@ describe('agent schedule overview', () => {
             runInProgress: false,
           },
         ],
+        brnoEvents: { enabled: true },
         brnoEventSources: [],
       },
       new Date('2026-09-08T00:00:00Z'),

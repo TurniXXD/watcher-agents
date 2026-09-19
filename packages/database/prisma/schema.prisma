@@ -1374,7 +1374,7 @@ model DiscoverySignal {
   id              String                @id @default(uuid())
   watcherConfigId String
   scanId          String
-  stockId         String
+  stockId         String?
   fingerprint     String
   ticker          String
   source          String
@@ -1391,7 +1391,7 @@ model DiscoverySignal {
   updatedAt       DateTime              @updatedAt
   watcherConfig   WatcherConfig         @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
   scan            DiscoveryScan         @relation(fields: [scanId], references: [id], onDelete: Cascade)
-  stock           Stock                 @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stock           Stock?                @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
   @@unique([watcherConfigId, fingerprint])
   @@index([watcherConfigId, status, observedAt])
@@ -1591,6 +1591,7 @@ model MuClubActivity {
 
 model MuMonitorState {
   id            String    @id
+  enabled       Boolean   @default(true)
   runInProgress Boolean   @default(false)
   runStartedAt  DateTime?
   nextRunAt     DateTime
@@ -1598,6 +1599,14 @@ model MuMonitorState {
   updatedAt     DateTime  @updatedAt
 
   @@map("mu_monitor_state")
+}
+
+model BrnoEventAgentState {
+  id        String   @id
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@map("brno_event_agent_state")
 }
 
 model MuMonitorRun {
