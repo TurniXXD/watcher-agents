@@ -4,8 +4,10 @@ import {
   type TargetedStockAnalysis,
 } from '@watcher/core';
 import type { DatabaseClient } from './client.js';
+import { StockSourceType, WatcherKind } from './generated/prisma/enums.js';
 import { PROVIDER_BACKOFF_TARGET } from './source-health-store.js';
 import { average } from './stock-domain/statistics.js';
+import { jsonObject, nullableNumber } from './utils/json.js';
 
 const firstByTicker = <T extends { ticker: string }>(values: T[]) => {
   const result = new Map<string, T>();
@@ -38,6 +40,44 @@ export type StockDecisionEventContext = {
   reliabilityWeight: number;
   fullAnalysisPerformed: boolean;
 };
+
+export type EarningsSnapshot = {
+  ticker: string;
+  source: string;
+  sourceUrl: string;
+  observedAt: Date;
+  upcoming: {
+    earningsDate: Date | null;
+    confirmedAt: Date | null;
+    fiscalQuarter: number | null;
+    quarterEnd: Date | null;
+    consensusEps: number | null;
+    whisperEps: number | null;
+    revenueEstimate: number | null;
+  } | null;
+  latest: {
+    earningsDate: Date | null;
+    fiscalPeriod: string | null;
+    actualEps: number | null;
+    consensusEps: number | null;
+    whisperEps: number | null;
+    lowEpsEstimate: number | null;
+    highEpsEstimate: number | null;
+    epsSurprise: number | null;
+    actualRevenue: number | null;
+    revenueEstimate: number | null;
+    revenueSurprise: number | null;
+  } | null;
+};
+
+const dateFact = (value: unknown): Date | null => {
+  if (typeof value !== 'string') return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const stringFact = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim().length ? value.trim() : null;
 
 export class StockReportStore {
   public constructor(private readonly db: DatabaseClient) {}
@@ -91,6 +131,66 @@ export class StockReportStore {
       targeted: targeted.success ? targeted.data : null,
       reliabilityWeight: revision.reliabilityWeight,
       fullAnalysisPerformed: revision.fullAnalysisPerformed,
+    };
+  }
+
+  public async getEarningsSnapshot(
+    chatConfigId: string,
+    ticker: string,
+  ): Promise<EarningsSnapshot | null> {
+    const item = await this.db.processedItem.findFirst({
+      where: {
+        watcherKind: WatcherKind.STOCKS,
+        source: StockSourceType.EARNINGS_WHISPERS,
+        ticker: ticker.trim().toUpperCase(),
+        eventObservations: {
+          some: { run: { watcherConfig: { chatConfigId } } },
+        },
+      },
+      orderBy: { discoveredAt: 'desc' },
+      select: {
+        ticker: true,
+        source: true,
+        sourceUrl: true,
+        url: true,
+        discoveredAt: true,
+        normalizedFacts: true,
+      },
+    });
+    if (!item?.ticker) return null;
+    const facts = jsonObject(item.normalizedFacts);
+    const upcoming = {
+      earningsDate: dateFact(facts.nextEarningsDate),
+      confirmedAt: dateFact(facts.nextEarningsConfirmedAt),
+      fiscalQuarter: nullableNumber(facts.nextEarningsQuarter),
+      quarterEnd: dateFact(facts.nextEarningsQuarterEnd),
+      consensusEps: nullableNumber(facts.consensusEstimate),
+      whisperEps: nullableNumber(facts.earningsWhisper),
+      revenueEstimate: nullableNumber(facts.nextRevenueEstimate),
+    };
+    const latest = {
+      earningsDate: dateFact(facts.latestEarningsDate),
+      fiscalPeriod: stringFact(facts.latestEarningsQuarter),
+      actualEps: nullableNumber(facts.latestEps),
+      consensusEps: nullableNumber(facts.latestEstimate),
+      whisperEps: nullableNumber(facts.latestEarningsWhisper),
+      lowEpsEstimate: nullableNumber(facts.latestEpsLowEstimate),
+      highEpsEstimate: nullableNumber(facts.latestEpsHighEstimate),
+      epsSurprise: nullableNumber(facts.epsSurprise),
+      actualRevenue: nullableNumber(facts.latestRevenue),
+      revenueEstimate: nullableNumber(facts.latestRevenueEstimate),
+      revenueSurprise: nullableNumber(facts.revenueSurprise),
+    };
+    const hasUpcoming = Object.values(upcoming).some((value) => value !== null);
+    const hasLatest = Object.values(latest).some((value) => value !== null);
+    if (!hasUpcoming && !hasLatest) return null;
+    return {
+      ticker: item.ticker,
+      source: item.source,
+      sourceUrl: item.sourceUrl ?? item.url,
+      observedAt: item.discoveredAt,
+      upcoming: hasUpcoming ? upcoming : null,
+      latest: hasLatest ? latest : null,
     };
   }
 

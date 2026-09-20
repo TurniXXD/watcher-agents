@@ -12,6 +12,7 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /dashboard — current state of every enabled stock
 /decision SYMBOL — show the latest evidence-linked research decision card
 /discovery — discovery scanner status and recent candidates
+/earnings SYMBOL — show the stored earnings setup and the latest expectation-versus-actual comparison
 /event_replay SYMBOL [FROM] [TO] — replay events and thesis transitions
 /health — runs, reconciliation, LLM metrics, and source health
 /help — show this command list

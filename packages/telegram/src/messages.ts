@@ -285,6 +285,120 @@ export const renderCatalystList = (
   ].join('\n\n');
 };
 
+export type EarningsSnapshotView = {
+  ticker: string;
+  source: string;
+  sourceUrl: string;
+  observedAt: Date;
+  upcoming: {
+    earningsDate: Date | null;
+    confirmedAt: Date | null;
+    fiscalQuarter: number | null;
+    quarterEnd: Date | null;
+    consensusEps: number | null;
+    whisperEps: number | null;
+    revenueEstimate: number | null;
+  } | null;
+  latest: {
+    earningsDate: Date | null;
+    fiscalPeriod: string | null;
+    actualEps: number | null;
+    consensusEps: number | null;
+    whisperEps: number | null;
+    lowEpsEstimate: number | null;
+    highEpsEstimate: number | null;
+    epsSurprise: number | null;
+    actualRevenue: number | null;
+    revenueEstimate: number | null;
+    revenueSurprise: number | null;
+  } | null;
+};
+
+const earningsNumber = (value: number | null, digits = 2): string =>
+  value === null
+    ? 'n/a'
+    : new Intl.NumberFormat('en-US', {
+        maximumFractionDigits: digits,
+      }).format(value);
+
+const earningsDate = (value: Date | null): string =>
+  value ? value.toISOString().slice(0, 10) : 'not confirmed';
+
+const earningsComparison = (
+  label: string,
+  actual: number | null,
+  expected: number | null,
+  surprise: number | null,
+  suffix = '',
+): string => {
+  if (actual === null) return `• ${label}: n/a`;
+  if (expected === null)
+    return `• ${label}: actual ${earningsNumber(actual)}${suffix}`;
+  const difference = actual - expected;
+  const verdict = difference > 0 ? 'beat' : difference < 0 ? 'miss' : 'in line';
+  const surpriseText =
+    surprise === null
+      ? ''
+      : ` · provider surprise ${(surprise * 100).toFixed(1)}%`;
+  return `• ${label}: actual ${earningsNumber(actual)}${suffix} vs consensus ${earningsNumber(expected)}${suffix} · ${verdict} ${difference >= 0 ? '+' : ''}${earningsNumber(difference)}${suffix}${surpriseText}`;
+};
+
+export const renderEarningsSnapshot = (
+  snapshot: EarningsSnapshotView,
+): string => {
+  const upcoming = snapshot.upcoming;
+  const latest = snapshot.latest;
+  return [
+    `📅 <b>${htmlText(snapshot.ticker, 30)} EARNINGS</b>`,
+    `<i>Latest ${htmlText(snapshot.source, 100)} observation · ${htmlText(snapshot.observedAt.toISOString(), 40)}</i>`,
+    upcoming
+      ? [
+          '<b>Next setup</b>',
+          `📆 Report date: ${earningsDate(upcoming.earningsDate)}${upcoming.confirmedAt ? ` · confirmed ${earningsDate(upcoming.confirmedAt)}` : ''}`,
+          upcoming.fiscalQuarter === null
+            ? ''
+            : `Fiscal quarter: Q${upcoming.fiscalQuarter}${upcoming.quarterEnd ? ` · quarter end ${earningsDate(upcoming.quarterEnd)}` : ''}`,
+          `• Consensus EPS: ${earningsNumber(upcoming.consensusEps)}`,
+          `• Whisper EPS: ${earningsNumber(upcoming.whisperEps)}`,
+          `• Revenue estimate: ${earningsNumber(upcoming.revenueEstimate)} USD`,
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : '',
+    latest
+      ? [
+          '<b>Latest reported result — expectation vs actual</b>',
+          `📆 Reported: ${earningsDate(latest.earningsDate)}${latest.fiscalPeriod ? ` · ${htmlText(latest.fiscalPeriod, 160)}` : ''}`,
+          earningsComparison(
+            'EPS',
+            latest.actualEps,
+            latest.consensusEps,
+            latest.epsSurprise,
+          ),
+          latest.whisperEps === null
+            ? ''
+            : `• Provider whisper EPS: ${earningsNumber(latest.whisperEps)}`,
+          latest.lowEpsEstimate === null && latest.highEpsEstimate === null
+            ? ''
+            : `• Provider EPS range: ${earningsNumber(latest.lowEpsEstimate)}–${earningsNumber(latest.highEpsEstimate)}`,
+          earningsComparison(
+            'Revenue',
+            latest.actualRevenue,
+            latest.revenueEstimate,
+            latest.revenueSurprise,
+            ' USDm',
+          ),
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : '',
+    `🔗 Source: ${sourceLink(snapshot.source, snapshot.sourceUrl)}`,
+    '<i>Provider snapshot only. It does not evaluate guidance, valuation, or price reaction; refresh live evidence with /thesis SYMBOL.</i>',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+};
+
 export const renderStockThesis = (state: StockThesisState): string => {
   const availableSignals = state.signalGroups.filter(
     ({ availability, score }) => availability === 'AVAILABLE' && score !== 0,

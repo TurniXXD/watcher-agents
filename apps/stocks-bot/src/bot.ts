@@ -17,6 +17,7 @@ import {
   globalSourceKeyboard,
   globalSourceSettingsText,
   renderCatalystList,
+  renderEarningsSnapshot,
   renderAdvancedStockData,
   renderOpportunityFeed,
   renderRecentStockAlerts,
@@ -612,6 +613,31 @@ export const createStocksBot = (
         parse_mode: 'HTML',
         link_preview_options: { is_disabled: true },
       },
+    );
+  });
+  bot.command('earnings', async (ctx) => {
+    const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
+    const current = await chat(ctx.chat.id);
+    const stock = (await store.listStocks(current.id)).find(
+      ({ symbol: configuredSymbol }) => configuredSymbol === symbol,
+    );
+    if (!stock) {
+      await ctx.reply(
+        `${symbol} is not on this watchlist. Add it with /add_stock ${symbol} first.`,
+      );
+      return;
+    }
+    const snapshot = await store.getEarningsSnapshot(current.id, symbol);
+    if (!snapshot) {
+      await ctx.reply(
+        `No earnings snapshot exists for ${symbol} yet. Run /thesis ${symbol} to collect the enabled live sources first.`,
+      );
+      return;
+    }
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderEarningsSnapshot(snapshot),
     );
   });
   bot.command('advanced', async (ctx) => {

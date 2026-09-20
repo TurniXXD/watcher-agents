@@ -278,9 +278,13 @@ describe('EarningsWhispersSource', () => {
         symbol: 'MU',
         companyName: 'Micron Technology, Inc.',
         nextEarningsDate: '2026-09-30T00:00:00',
+        nextEarningsConfirmedAt: '2026-08-26T16:20:09.007',
+        nextEarningsQuarter: 4,
         consensusEstimate: 31.17,
         earningsWhisper: null,
+        nextRevenueEstimate: 50_760_000_000,
         latestEps: 24.89,
+        latestEarningsWhisper: 22.15,
       },
     });
     expect(item?.content).toContain('Upcoming earnings:');

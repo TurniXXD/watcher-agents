@@ -1016,7 +1016,22 @@ integration('WatcherStore with PostgreSQL', () => {
       sourceType: 'ANALYST',
       primarySource: false,
       category: 'EARNINGS',
-      normalizedFacts: { nextEarningsDate: '2026-09-30T20:00:00Z' },
+      normalizedFacts: {
+        nextEarningsDate: '2026-09-30T20:00:00Z',
+        nextEarningsConfirmedAt: '2026-08-26T16:20:09.007Z',
+        nextEarningsQuarter: 4,
+        consensusEstimate: 31.17,
+        nextRevenueEstimate: 50_760,
+        latestEarningsDate: '2026-06-24T16:01:00Z',
+        latestEarningsQuarter: 'fiscal third quarter',
+        latestEps: 24.89,
+        latestEstimate: 20.98,
+        latestEarningsWhisper: 22.15,
+        epsSurprise: 0.1237,
+        latestRevenue: 41_456,
+        latestRevenueEstimate: 34_980,
+        revenueSurprise: 0.1851,
+      },
     };
 
     await store.prepareItemsForRun('STOCKS', run.id, [earnings], 5);
@@ -1030,6 +1045,30 @@ integration('WatcherStore with PostgreSQL', () => {
         status: 'UPCOMING',
       },
     ]);
+    await expect(
+      store.getEarningsSnapshot(chat.id, 'MU'),
+    ).resolves.toMatchObject({
+      ticker: 'MU',
+      source: 'EARNINGS_WHISPERS',
+      upcoming: {
+        earningsDate: new Date('2026-09-30T20:00:00Z'),
+        confirmedAt: new Date('2026-08-26T16:20:09.007Z'),
+        fiscalQuarter: 4,
+        consensusEps: 31.17,
+        revenueEstimate: 50_760,
+      },
+      latest: {
+        earningsDate: new Date('2026-06-24T16:01:00Z'),
+        fiscalPeriod: 'fiscal third quarter',
+        actualEps: 24.89,
+        consensusEps: 20.98,
+        whisperEps: 22.15,
+        epsSurprise: 0.1237,
+        actualRevenue: 41_456,
+        revenueEstimate: 34_980,
+        revenueSurprise: 0.1851,
+      },
+    });
   });
 
   it('deduplicates the same SEC event reported by a second source', async () => {

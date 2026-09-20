@@ -6,6 +6,7 @@ import { parsePublicationQueriesCsv } from '../utils/input.js';
 import {
   formatRunDuration,
   renderCatalystList,
+  renderEarningsSnapshot,
   renderPublicationDigest,
   renderRunProgress,
   renderStockAlert,
@@ -22,6 +23,43 @@ import {
 } from '../source-messages.js';
 
 describe('Telegram utilities', () => {
+  it('renders an earnings setup and latest result without implying a trade action', () => {
+    const text = renderEarningsSnapshot({
+      ticker: 'MU',
+      source: 'EARNINGS_WHISPERS',
+      sourceUrl: 'https://www.earningswhispers.com/stocks/MU',
+      observedAt: new Date('2026-09-20T10:00:00Z'),
+      upcoming: {
+        earningsDate: new Date('2026-09-30T00:00:00Z'),
+        confirmedAt: new Date('2026-08-26T00:00:00Z'),
+        fiscalQuarter: 4,
+        quarterEnd: new Date('2026-08-31T00:00:00Z'),
+        consensusEps: 31.17,
+        whisperEps: null,
+        revenueEstimate: 50_760,
+      },
+      latest: {
+        earningsDate: new Date('2026-06-24T00:00:00Z'),
+        fiscalPeriod: 'fiscal third quarter',
+        actualEps: 24.89,
+        consensusEps: 20.98,
+        whisperEps: 22.15,
+        lowEpsEstimate: 19.1,
+        highEpsEstimate: 26,
+        epsSurprise: 0.1237,
+        actualRevenue: 41_456,
+        revenueEstimate: 34_980,
+        revenueSurprise: 0.1851,
+      },
+    });
+
+    expect(text).toContain('<b>MU EARNINGS</b>');
+    expect(text).toContain('Next setup');
+    expect(text).toContain('actual 24.89 vs consensus 20.98 · beat +3.91');
+    expect(text).toContain('actual 41,456 USDm vs consensus 34,980 USDm');
+    expect(text).toContain('refresh live evidence with /thesis SYMBOL');
+  });
+
   it('escapes and truncates shared HTML output safely', () => {
     expect(escapeHtml('<A&B "quote">')).toBe(
       '&lt;A&amp;B &quot;quote&quot;&gt;',
