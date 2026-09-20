@@ -20,6 +20,7 @@ import {
   PostgresOllamaCoordinator,
   StockDiscoveryStore,
   StockNewsStore,
+  TelegramOutboxStore,
   createDatabaseClient,
   WatcherStore,
   ValidationStore,
@@ -36,6 +37,7 @@ import {
 } from '@watcher/telegram';
 import { createStocksBot } from './bot.js';
 import { StockDiscoveryCoordinator } from './discovery.js';
+import { renderWeeklyDiscoveryReport } from './discovery-report.js';
 import { env } from './env.js';
 import { StockReconciliationCoordinator } from './reconciliation.js';
 import { createStocksRunner } from './watcher.js';
@@ -134,6 +136,7 @@ const store = new WatcherStore(database, {
     shortInterestDaysToCover: env.SHORT_INTEREST_DAYS_TO_COVER_THRESHOLD,
   },
 });
+const telegramOutbox = new TelegramOutboxStore(database);
 const telemetry = new AgentTelemetryStore(database);
 const universeStore = new CompanyUniverseStore(database);
 const validationStore = new ValidationStore(database);
@@ -237,6 +240,7 @@ const runner = createStocksRunner(
     quiverToken: env.QUIVER_API_TOKEN,
   },
   env.OLLAMA_MAX_ITEMS_PER_RUN,
+  env.SOURCE_MAX_CONCURRENCY,
   logger,
   async (chatId, result) => {
     const publication = await publishStockBriefingEvents(
@@ -362,20 +366,68 @@ const discoveryScheduler = new PersistentScheduler(
       'SCHEDULED',
     );
     if (result?.status !== 'COMPLETED') return;
-    const recommendations = result.recommendedCandidates.length
-      ? result.recommendedCandidates
-          .map(
-            (candidate) =>
-              `• ${candidate.ticker} — ${candidate.companyName} · ${candidate.changePercent >= 0 ? '+' : ''}${candidate.changePercent.toFixed(2)}% · attention ${candidate.attentionScore}/100\n  ${candidate.reason}`,
-          )
-          .join('\n')
-      : 'No candidates met the quality filters this week.';
-    await bot.api.sendMessage(
-      Number(entry.chatId),
-      `🔎 Weekly stock discovery\n\n${recommendations}\n\nNothing was added to your watchlist. Add a company explicitly with /add_stock SYMBOL to start five-minute news monitoring.`,
-    );
+    await telegramOutbox.enqueue({
+      kind: 'STOCK_DISCOVERY_REPORT',
+      deduplicationKey: result.scanId,
+      chatId: entry.chatId,
+      body: renderWeeklyDiscoveryReport(result.recommendedCandidates),
+    });
   },
   undefined,
+  logger,
+);
+const telegramOutboxScheduler = new PersistentScheduler(
+  (now) => telegramOutbox.claimDue(now),
+  async (due) => {
+    const message = due as Awaited<
+      ReturnType<typeof telegramOutbox.claimDue>
+    >[number];
+    try {
+      const sent = await bot.api.sendMessage(
+        message.chatId.toString(),
+        message.body,
+        {
+          link_preview_options: { is_disabled: true },
+        },
+      );
+      const marked = await telegramOutbox.markDelivered(
+        message,
+        String(sent.message_id),
+      );
+      if (!marked) {
+        logger.warn(
+          { outboxMessageId: message.id },
+          'Outbox lease was lost after Telegram delivery',
+        );
+      }
+    } catch (error) {
+      const retryDelayMs = Math.min(
+        60 * 60_000,
+        30_000 * 2 ** Math.max(0, message.attemptCount - 1),
+      );
+      const retryAt =
+        message.attemptCount >= 6
+          ? undefined
+          : new Date(Date.now() + retryDelayMs);
+      const marked = await telegramOutbox.markFailed(
+        message,
+        errorMessage(error),
+        retryAt,
+      );
+      logger.warn(
+        {
+          outboxMessageId: message.id,
+          kind: message.kind,
+          attemptCount: message.attemptCount,
+          retryAt: retryAt?.toISOString(),
+          marked,
+          err: error,
+        },
+        'Telegram outbox delivery failed',
+      );
+    }
+  },
+  30_000,
   logger,
 );
 const fastSourceIds = new Set([
@@ -434,6 +486,7 @@ const shutdown = async (signal: string): Promise<void> => {
     highResolutionScheduler.stop(),
     reconciliationScheduler.stop(),
     alertScheduler.stop(),
+    telegramOutboxScheduler.stop(),
   ]);
   await bot.stop();
   await readiness.stop();
@@ -446,6 +499,7 @@ discoveryScheduler.start();
 highResolutionScheduler.start();
 reconciliationScheduler.start();
 alertScheduler.start();
+telegramOutboxScheduler.start();
 await readiness.start();
 await bot.start({
   onStart: () => {

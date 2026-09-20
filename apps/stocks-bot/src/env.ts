@@ -70,6 +70,7 @@ const schema = z.object({
     .min(1)
     .max(10_080)
     .default(360),
+  SOURCE_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(8),
   ALERT_ATTENTION_THRESHOLD: z.coerce
     .number()
     .int()

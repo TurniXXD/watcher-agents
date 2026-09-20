@@ -414,6 +414,55 @@ describe('core watcher behavior', () => {
     );
   });
 
+  it('limits concurrent source requests across providers', async () => {
+    let active = 0;
+    let maximumActive = 0;
+    const releases: Array<() => void> = [];
+    const repository = {
+      prepareItemsForRun: vi.fn(async () => []),
+      saveAnalysis: vi.fn(async () => undefined),
+    };
+    const pipeline = new WatcherPipeline(
+      repository,
+      {
+        analyze: vi.fn(async () => ({
+          status: 'FAILED' as const,
+          error: 'none',
+        })),
+      },
+      0,
+      undefined,
+      undefined,
+      { maxConcurrentSourceRequests: 2 },
+    );
+    const source = (id: string) => ({
+      id,
+      fetch: async () =>
+        new Promise<WatchItem[]>((resolve) => {
+          active += 1;
+          maximumActive = Math.max(maximumActive, active);
+          releases.push(() => {
+            active -= 1;
+            resolve([]);
+          });
+        }),
+    });
+
+    const run = pipeline.run('NEWS', 'run', [
+      { source: source('ONE'), target: 'one', config: {} },
+      { source: source('TWO'), target: 'two', config: {} },
+      { source: source('THREE'), target: 'three', config: {} },
+    ]);
+
+    await vi.waitFor(() => expect(active).toBe(2));
+    expect(maximumActive).toBe(2);
+    releases.shift()?.();
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    releases.splice(0).forEach((release) => release());
+    await run;
+    expect(maximumActive).toBe(2);
+  });
+
   it('reuses cached successful analyses without calling the analyzer', async () => {
     const cached = {
       status: 'SUCCESS' as const,

@@ -52,6 +52,7 @@ export const createStocksRunner = (
   sec: SecEdgarSource,
   advancedSources: StocksAdvancedSourcesConfig,
   maxItemsPerRun: number,
+  sourceMaxConcurrency: number,
   logger?: WatcherLogger,
   afterRun?: (
     chatId: bigint,
@@ -99,7 +100,14 @@ export const createStocksRunner = (
           ]),
         )
       : new Map<StockSourceType, QuiverSource>();
-  const pipeline = new WatcherPipeline(store, analyzer, maxItemsPerRun, logger);
+  const pipeline = new WatcherPipeline(
+    store,
+    analyzer,
+    maxItemsPerRun,
+    logger,
+    undefined,
+    { maxConcurrentSourceRequests: sourceMaxConcurrency },
+  );
   const withCompany = async (stock: StockEntry): Promise<StockEntry> => {
     if (stock.companyName && stock.cik) {
       return stock;

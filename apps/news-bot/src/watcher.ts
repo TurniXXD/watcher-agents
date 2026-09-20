@@ -125,6 +125,7 @@ export const createNewsRunner = (
   analyzer: Analyzer,
   api: Api,
   maxItemsPerRun: number,
+  sourceMaxConcurrency: number,
   logger?: WatcherLogger,
   afterRun?: (
     chatId: bigint,
@@ -141,7 +142,16 @@ export const createNewsRunner = (
 ): WatcherRunner => {
   const rssSource = new RssNewsSource();
   const gdeltSource = new GdeltNewsSource();
-  const pipeline = new WatcherPipeline(store, analyzer, maxItemsPerRun, logger);
+  const pipeline = new WatcherPipeline(
+    store,
+    analyzer,
+    maxItemsPerRun,
+    logger,
+    undefined,
+    {
+      maxConcurrentSourceRequests: sourceMaxConcurrency,
+    },
+  );
   const requestsForChat = async (chatId: bigint): Promise<SourceRequest[]> => {
     const chat = await store.getChat('NEWS', chatId);
     if (!chat) return [];

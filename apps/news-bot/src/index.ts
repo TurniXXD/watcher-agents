@@ -67,6 +67,7 @@ const runner = createNewsRunner(
   analyzer,
   bot.api,
   env.OLLAMA_MAX_ITEMS_PER_RUN,
+  env.SOURCE_MAX_CONCURRENCY,
   logger,
   async (_chatId, result, _runId, categoryPreferences) => {
     const publication = await publishNewsBriefingEvents(

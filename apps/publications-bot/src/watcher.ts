@@ -35,6 +35,7 @@ export const createPublicationsRunner = (
   analyzer: Analyzer,
   api: Api,
   maxItemsPerRun: number,
+  sourceMaxConcurrency: number,
   logger?: WatcherLogger,
   afterRun?: (
     chatId: bigint,
@@ -60,6 +61,7 @@ export const createPublicationsRunner = (
     publicationItemsPerRunLimit(maxItemsPerRun),
     logger,
     fairlyOrderPublicationItems,
+    { maxConcurrentSourceRequests: sourceMaxConcurrency },
   );
   const requestsForChat = async (chatId: bigint): Promise<SourceRequest[]> => {
     const chat = await store.getChat('PUBLICATIONS', chatId);

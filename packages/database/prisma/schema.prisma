@@ -385,6 +385,13 @@ enum BriefingDeliveryStatus {
   FAILED
 }
 
+enum TelegramOutboxStatus {
+  PENDING
+  SENDING
+  SENT
+  DEAD_LETTER
+}
+
 enum BriefingWatcherHealthStatus {
   HEALTHY
   DEGRADED
@@ -732,6 +739,29 @@ model BriefingDeliveryAttempt {
   @@map("briefing_delivery_attempts")
 }
 
+model TelegramOutboxMessage {
+  id                String               @id @default(uuid())
+  kind              String
+  deduplicationKey  String
+  telegramChatId    BigInt
+  body              String
+  status            TelegramOutboxStatus @default(PENDING)
+  attemptCount      Int                  @default(0)
+  nextAttemptAt     DateTime             @default(now())
+  leaseToken        String?
+  leaseExpiresAt    DateTime?
+  telegramMessageId String?
+  lastError         String?
+  sentAt            DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@unique([kind, deduplicationKey])
+  @@index([status, nextAttemptAt])
+  @@index([status, leaseExpiresAt])
+  @@map("telegram_outbox_messages")
+}
+
 model BriefingStoryState {
   id                String              @id @default(uuid())
   settingsId        String
@@ -769,16 +799,16 @@ model CalendarIntegrationState {
 }
 
 model TelegramChat {
-  id            String             @id @default(uuid())
-  kind          WatcherKind
-  chatId        BigInt
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  watcherConfig WatcherConfig?
-  stocks        Stock[]
-  queries       PublicationQuery[]
-  newsFeeds     NewsFeed[]
-  newsTopics    NewsTopic[]
+  id                      String                   @id @default(uuid())
+  kind                    WatcherKind
+  chatId                  BigInt
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  watcherConfig           WatcherConfig?
+  stocks                  Stock[]
+  queries                 PublicationQuery[]
+  newsFeeds               NewsFeed[]
+  newsTopics              NewsTopic[]
   newsCategoryPreferences NewsCategoryPreference[]
 
   @@unique([kind, chatId])
@@ -905,22 +935,22 @@ model EventChain {
 }
 
 model CanonicalEvent {
-  id                  String             @id @default(uuid())
+  id                  String                   @id @default(uuid())
   ticker              String
   eventType           CanonicalEventType
-  eventTypes          CanonicalEventType[] @default([])
+  eventTypes          CanonicalEventType[]     @default([])
   title               String
-  fingerprint         String             @unique
+  fingerprint         String                   @unique
   occurredAt          DateTime?
   firstPublicAt       DateTime?
   firstDetectedAt     DateTime
-  lastSeenAt          DateTime             @default(now())
+  lastSeenAt          DateTime                 @default(now())
   direction           EventDirection
-  magnitude           Json               @default("{}")
+  magnitude           Json                     @default("{}")
   surprise            EventSurprise
   materiality         Materiality
   materialityScore    Int
-  materialityReasons  Json               @default("[]")
+  materialityReasons  Json                     @default("[]")
   action              EventAction
   evidencePriority    Int
   primaryEvidenceId   String
@@ -934,10 +964,10 @@ model CanonicalEvent {
   embeddingModel      String?
   embeddingInputHash  String?
   embeddingUpdatedAt  DateTime?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  primaryEvidence     ProcessedItem      @relation("PrimaryEvidence", fields: [primaryEvidenceId], references: [id], onDelete: Restrict)
-  chain               EventChain         @relation(fields: [chainId], references: [id], onDelete: Restrict)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  primaryEvidence     ProcessedItem            @relation("PrimaryEvidence", fields: [primaryEvidenceId], references: [id], onDelete: Restrict)
+  chain               EventChain               @relation(fields: [chainId], references: [id], onDelete: Restrict)
   observations        EventObservation[]
   catalysts           Catalyst[]
   thesisRevision      ThesisRevision?
@@ -1656,29 +1686,29 @@ model BrnoEvent {
   venueAddress         String?
   latitude             Float?
   longitude            Float?
-  city                  String                @default("Brno")
-  organizerName         String?
-  organizerUrl          String?
-  categories            String[]
-  language              String?
-  priceAmount           Float?
-  priceCurrency         String?
-  priceFree             Boolean?
-  priceText             String?
+  city                 String                @default("Brno")
+  organizerName        String?
+  organizerUrl         String?
+  categories           String[]
+  language             String?
+  priceAmount          Float?
+  priceCurrency        String?
+  priceFree            Boolean?
+  priceText            String?
   registrationRequired Boolean?
-  registrationUrl       String?
+  registrationUrl      String?
   registrationDeadline DateTime?
-  imageUrl               String?
-  relevanceScore        Int
-  relevanceReasons      String[]
-  recurring             Boolean               @default(false)
-  cancelled             Boolean               @default(false)
-  firstSeenAt           DateTime              @default(now())
-  lastSeenAt            DateTime              @default(now())
-  sourceUpdatedAt       DateTime?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  sourceLinks           BrnoEventSourceLink[]
+  imageUrl             String?
+  relevanceScore       Int
+  relevanceReasons     String[]
+  recurring            Boolean               @default(false)
+  cancelled            Boolean               @default(false)
+  firstSeenAt          DateTime              @default(now())
+  lastSeenAt           DateTime              @default(now())
+  sourceUpdatedAt      DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  sourceLinks          BrnoEventSourceLink[]
 
   @@index([startAt, relevanceScore])
   @@index([firstSeenAt])
@@ -1723,30 +1753,30 @@ model BrnoEventSourceRun {
 }
 
 model AgentRun {
-  id                String         @id
-  agentName         String
-  agentVersion      String?
-  startedAt         DateTime
-  finishedAt        DateTime?
-  status            AgentRunStatus
-  input             Json?
-  output            Json?
-  error             Json?
-  latencyMs         Int?
-  llmProvider       String?
-  llmModel          String?
-  llmInputTokens    Int?
-  llmOutputTokens   Int?
-  llmCostUsd        Decimal?       @db.Decimal(18, 8)
-  itemsFetched      Int?
-  itemsProduced     Int?
-  itemsFiltered     Int?
-  duplicatesRemoved Int?
-  metadata          Json?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  sources           AgentSourceRun[]
-  feedback          AgentOutputFeedback[]
+  id                         String                     @id
+  agentName                  String
+  agentVersion               String?
+  startedAt                  DateTime
+  finishedAt                 DateTime?
+  status                     AgentRunStatus
+  input                      Json?
+  output                     Json?
+  error                      Json?
+  latencyMs                  Int?
+  llmProvider                String?
+  llmModel                   String?
+  llmInputTokens             Int?
+  llmOutputTokens            Int?
+  llmCostUsd                 Decimal?                   @db.Decimal(18, 8)
+  itemsFetched               Int?
+  itemsProduced              Int?
+  itemsFiltered              Int?
+  duplicatesRemoved          Int?
+  metadata                   Json?
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  sources                    AgentSourceRun[]
+  feedback                   AgentOutputFeedback[]
   maintenanceDebugDeliveries MaintenanceDebugDelivery[]
 
   @@index([agentName, startedAt])
@@ -1755,13 +1785,13 @@ model AgentRun {
 }
 
 model OllamaRequest {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   caller         String
   model          String
   operation      String
   priority       Int
   status         String
-  queuedAt       DateTime @default(now())
+  queuedAt       DateTime  @default(now())
   queueExpiresAt DateTime
   startedAt      DateTime?
   finishedAt     DateTime?
@@ -1772,7 +1802,7 @@ model OllamaRequest {
   inputSize      Int?
   outputSize     Int?
   error          String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   @@index([status, priority, queuedAt])
   @@index([status, leaseExpiresAt])
@@ -1781,16 +1811,16 @@ model OllamaRequest {
 }
 
 model AgentSourceRun {
-  id          String   @id @default(uuid())
-  agentRunId  String
-  sourceId    String
-  url         String?
-  status      String
-  latencyMs   Int?
-  itemCount   Int?
-  error       String?
-  createdAt   DateTime @default(now())
-  agentRun    AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  agentRunId String
+  sourceId   String
+  url        String?
+  status     String
+  latencyMs  Int?
+  itemCount  Int?
+  error      String?
+  createdAt  DateTime @default(now())
+  agentRun   AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
 
   @@index([agentRunId])
   @@index([sourceId, createdAt])
@@ -1813,25 +1843,25 @@ model AgentOutputFeedback {
 }
 
 model MaintenanceSourceHealth {
-  id                    String   @id @default(uuid())
-  agentName             String
-  sourceId              String
-  windowStartedAt       DateTime
-  windowEndedAt         DateTime
-  totalRuns             Int
-  successfulRuns        Int
-  failedRuns            Int
-  successRate           Float
-  lastSuccessfulAt      DateTime?
-  lastNewItemAt         DateTime?
-  averageLatencyMs      Float?
-  consecutiveFailures   Int
-  itemsProduced         Int
-  uniqueItemsProduced   Int
-  duplicateRate         Float?
-  staleDays             Float?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                  String    @id @default(uuid())
+  agentName           String
+  sourceId            String
+  windowStartedAt     DateTime
+  windowEndedAt       DateTime
+  totalRuns           Int
+  successfulRuns      Int
+  failedRuns          Int
+  successRate         Float
+  lastSuccessfulAt    DateTime?
+  lastNewItemAt       DateTime?
+  averageLatencyMs    Float?
+  consecutiveFailures Int
+  itemsProduced       Int
+  uniqueItemsProduced Int
+  duplicateRate       Float?
+  staleDays           Float?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@unique([agentName, sourceId])
   @@index([sourceId, updatedAt])
@@ -1840,21 +1870,21 @@ model MaintenanceSourceHealth {
 }
 
 model MaintenanceFinding {
-  id          String                   @id @default(uuid())
-  fingerprint String                   @unique
-  agentName   String
-  type        MaintenanceFindingType
-  severity    MaintenanceSeverity
-  title       String
-  description String
-  evidence    Json
-  confidence  Float
-  detectedAt  DateTime
-  lastSeenAt  DateTime
-  occurrenceCount Int                  @default(1)
-  status      MaintenanceFindingStatus @default(OPEN)
-  createdAt   DateTime                 @default(now())
-  updatedAt   DateTime                 @updatedAt
+  id              String                      @id @default(uuid())
+  fingerprint     String                      @unique
+  agentName       String
+  type            MaintenanceFindingType
+  severity        MaintenanceSeverity
+  title           String
+  description     String
+  evidence        Json
+  confidence      Float
+  detectedAt      DateTime
+  lastSeenAt      DateTime
+  occurrenceCount Int                         @default(1)
+  status          MaintenanceFindingStatus    @default(OPEN)
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
   recommendations MaintenanceRecommendation[]
 
   @@index([agentName, detectedAt])
@@ -1885,16 +1915,16 @@ model MaintenanceRecommendation {
 }
 
 model MaintenanceRun {
-  id             String               @id @default(uuid())
-  type           MaintenanceRunType
-  status         MaintenanceRunStatus @default(RUNNING)
-  startedAt      DateTime             @default(now())
-  finishedAt     DateTime?
-  lookbackHours  Int
-  findingCount   Int                  @default(0)
-  recommendationCount Int             @default(0)
-  error          String?
-  metrics        Json?
+  id                  String               @id @default(uuid())
+  type                MaintenanceRunType
+  status              MaintenanceRunStatus @default(RUNNING)
+  startedAt           DateTime             @default(now())
+  finishedAt          DateTime?
+  lookbackHours       Int
+  findingCount        Int                  @default(0)
+  recommendationCount Int                  @default(0)
+  error               String?
+  metrics             Json?
 
   @@index([type, startedAt])
   @@index([status, startedAt])
@@ -1914,23 +1944,23 @@ model MaintenanceChangeAnnouncement {
 }
 
 model MaintenanceDebugSubscription {
-  chatId      BigInt   @id
-  enabled     Boolean  @default(false)
-  enabledAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deliveries  MaintenanceDebugDelivery[]
+  chatId     BigInt                     @id
+  enabled    Boolean                    @default(false)
+  enabledAt  DateTime?
+  createdAt  DateTime                   @default(now())
+  updatedAt  DateTime                   @updatedAt
+  deliveries MaintenanceDebugDelivery[]
 
   @@index([enabled, updatedAt])
   @@map("maintenance_debug_subscriptions")
 }
 
 model MaintenanceDebugDelivery {
-  chatId      BigInt
-  agentRunId  String
-  deliveredAt DateTime @default(now())
+  chatId       BigInt
+  agentRunId   String
+  deliveredAt  DateTime                     @default(now())
   subscription MaintenanceDebugSubscription @relation(fields: [chatId], references: [chatId], onDelete: Cascade)
-  agentRun     AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  agentRun     AgentRun                     @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
 
   @@id([chatId, agentRunId])
   @@index([agentRunId])
@@ -1971,17 +2001,17 @@ model StudyDocumentPage {
 }
 
 model StudyProcessingJob {
-  id          String         @id @default(uuid())
+  id          String                 @id @default(uuid())
   documentId  String
   chatId      BigInt
-  status      StudyJobStatus @default(RECEIVED)
+  status      StudyJobStatus         @default(RECEIVED)
   error       String?
   cancelledAt DateTime?
   startedAt   DateTime?
   finishedAt  DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  document    StudyDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  document    StudyDocument          @relation(fields: [documentId], references: [id], onDelete: Cascade)
   lecture     StudyGeneratedLecture?
   quiz        StudyQuizSession?
   flashcards  StudyFlashcardDeck?
@@ -1992,15 +2022,15 @@ model StudyProcessingJob {
 }
 
 model StudyGeneratedLecture {
-  id             String             @id @default(uuid())
-  jobId          String             @unique
-  script         String
-  outline        Json
-  audioObjectKey String?
-  audioMimeType  String?
+  id              String             @id @default(uuid())
+  jobId           String             @unique
+  script          String
+  outline         Json
+  audioObjectKey  String?
+  audioMimeType   String?
   durationSeconds Float?
-  createdAt      DateTime           @default(now())
-  job            StudyProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt       DateTime           @default(now())
+  job             StudyProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@map("study_generated_lectures")
 }
@@ -2020,14 +2050,14 @@ model StudyQuizSession {
 }
 
 model StudyFlashcardDeck {
-  id          String             @id @default(uuid())
-  jobId       String             @unique
-  title       String
-  cards       Json
-  ankiObjectKey String            @unique
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  job         StudyProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id            String             @id @default(uuid())
+  jobId         String             @unique
+  title         String
+  cards         Json
+  ankiObjectKey String             @unique
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  job           StudyProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@map("study_flashcard_decks")
 }

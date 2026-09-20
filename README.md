@@ -189,6 +189,7 @@ Every application variable is represented in `.env.example`.
 | `STOCK_TICKER_ANALYSIS_COOLDOWN_MINUTES`            | stocks bot            | Same-ticker analysis cooldown; defaults to 30 minutes                                         |
 | `SOURCE_BACKOFF_BASE_SECONDS`                       | watcher producers     | Initial source-failure backoff; defaults to 60 seconds                                        |
 | `SOURCE_BACKOFF_MAX_MINUTES`                        | watcher producers     | Maximum exponential source backoff; defaults to 360 minutes                                   |
+| `SOURCE_MAX_CONCURRENCY`                            | watcher producers     | Global ceiling for concurrent external source requests per watcher; defaults to 8             |
 | `ALERT_ATTENTION_THRESHOLD`                         | stocks bot            | Attention score that creates a live alert when crossed; defaults to 85                        |
 | `STOCK_ALERT_BATCH_WINDOW_MINUTES`                  | stocks bot            | Accumulation delay for non-extreme alert batches; defaults to 60 minutes                      |
 | `STOCK_NOTIFICATION_START_HOUR`                     | stocks bot            | First local hour when queued stock alerts may be delivered; defaults to 7                     |

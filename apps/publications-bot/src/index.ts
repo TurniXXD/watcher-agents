@@ -63,6 +63,7 @@ const runner = createPublicationsRunner(
   analyzer,
   bot.api,
   env.OLLAMA_MAX_ITEMS_PER_RUN,
+  env.SOURCE_MAX_CONCURRENCY,
   logger,
   async (_chatId, result) => {
     const publication = await publishMedicalBriefingEvents(

@@ -15,6 +15,7 @@ export type DiscoveryExecution =
   | { status: 'BUSY' }
   | {
       status: 'COMPLETED';
+      scanId: string;
       observedCount: number;
       candidateCount: number;
       recommendedCandidates: Array<{
@@ -145,6 +146,7 @@ export class StockDiscoveryCoordinator {
       );
       return {
         status: 'COMPLETED',
+        scanId: scan.id,
         observedCount: observations.length,
         candidateCount: candidates.length,
         recommendedCandidates,
