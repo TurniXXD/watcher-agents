@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import {
+  targetedStockAnalysisSchema,
+  type TargetedStockAnalysis,
+} from '@watcher/core';
 import type { DatabaseClient } from './client.js';
 import { PROVIDER_BACKOFF_TARGET } from './source-health-store.js';
 import { average } from './stock-domain/statistics.js';
@@ -16,6 +20,25 @@ const averageRounded = (values: number[]): number | null => {
   return mean === null ? null : Math.round(mean);
 };
 
+export type StockDecisionEventContext = {
+  event: {
+    title: string;
+    eventType: string;
+    materiality: string;
+    firstDetectedAt: Date;
+  };
+  evidence: {
+    source: string;
+    sourceUrl: string | null;
+    url: string;
+    primarySource: boolean;
+    reliability: number;
+  };
+  targeted: TargetedStockAnalysis | null;
+  reliabilityWeight: number;
+  fullAnalysisPerformed: boolean;
+};
+
 export class StockReportStore {
   public constructor(private readonly db: DatabaseClient) {}
 
@@ -23,6 +46,52 @@ export class StockReportStore {
     return this.db.companyThesisState.findUnique({
       where: { ticker: ticker.trim().toUpperCase() },
     });
+  }
+
+  public async getStockDecisionEventContext(
+    ticker: string,
+  ): Promise<StockDecisionEventContext | null> {
+    const revision = await this.db.thesisRevision.findFirst({
+      where: { ticker: ticker.trim().toUpperCase() },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        event: {
+          include: {
+            primaryEvidence: {
+              select: {
+                source: true,
+                sourceUrl: true,
+                url: true,
+                primarySource: true,
+                reliability: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!revision) return null;
+    const targeted = targetedStockAnalysisSchema.safeParse(
+      revision.targetedAnalysis,
+    );
+    return {
+      event: {
+        title: revision.event.title,
+        eventType: revision.event.eventType,
+        materiality: revision.event.materiality,
+        firstDetectedAt: revision.event.firstDetectedAt,
+      },
+      evidence: {
+        source: revision.event.primaryEvidence.source,
+        sourceUrl: revision.event.primaryEvidence.sourceUrl,
+        url: revision.event.primaryEvidence.url,
+        primarySource: revision.event.primaryEvidence.primarySource,
+        reliability: revision.event.primaryEvidence.reliability,
+      },
+      targeted: targeted.success ? targeted.data : null,
+      reliabilityWeight: revision.reliabilityWeight,
+      fullAnalysisPerformed: revision.fullAnalysisPerformed,
+    };
   }
 
   public async claimPendingAlerts(watcherConfigId: string, now = new Date()) {

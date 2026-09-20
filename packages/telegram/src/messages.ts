@@ -4,6 +4,7 @@ import {
   type PublicationAnalysis,
   type RunProgress,
   type StockAnalysis,
+  type TargetedStockAnalysis,
   type StockThesisState,
 } from '@watcher/core';
 import type { Api } from 'grammy';
@@ -328,6 +329,117 @@ export const renderStockThesis = (state: StockThesisState): string => {
     decision
       ? `⚖️ <b>Decision engine</b>\nExpected value: ${decision.expectedValuePercent === null ? 'insufficient data' : `${decision.expectedValuePercent.toFixed(1)}%`} · Asymmetry: ${htmlText(decision.asymmetry, 30)}\nPriced in: ${htmlText(decision.pricedIn.classification, 50)}\nMax suggested position: ${decision.maxRecommendedPositionPercent.minimum.toFixed(1)}–${decision.maxRecommendedPositionPercent.maximum.toFixed(1)}%\n${probabilityLine ? `Probability higher: ${htmlText(probabilityLine, 500)}\n` : ''}<i>Research output only; human review required.</i>`
       : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+};
+
+export type StockDecisionCardView = {
+  state: StockThesisState;
+  latestEvent: {
+    event: {
+      title: string;
+      eventType: string;
+      materiality: string;
+      firstDetectedAt: Date;
+    };
+    evidence: {
+      source: string;
+      sourceUrl: string | null;
+      url: string;
+      primarySource: boolean;
+      reliability: number;
+    };
+    targeted: TargetedStockAnalysis | null;
+    reliabilityWeight: number;
+    fullAnalysisPerformed: boolean;
+  } | null;
+};
+
+const decisionAction = (state: StockThesisState): string => {
+  const recommendation = state.decision?.recommendation;
+  if (!recommendation || recommendation === 'INSUFFICIENT_DATA') {
+    return 'RESEARCH';
+  }
+  if (['STRONG_BUY', 'BUY', 'SMALL_POSITION'].includes(recommendation)) {
+    return 'BUY_CANDIDATE';
+  }
+  if (['WATCH', 'HOLD'].includes(recommendation)) return 'WATCH';
+  return 'WAIT';
+};
+
+const evidenceStrength = (card: StockDecisionCardView): string => {
+  const event = card.latestEvent;
+  if (!event) return 'INSUFFICIENT';
+  if (
+    event.evidence.primarySource &&
+    event.evidence.reliability >= 0.9 &&
+    card.state.dataCoverage >= 75 &&
+    card.state.confidence >= 0.65
+  ) {
+    return 'STRONG';
+  }
+  if (
+    event.evidence.reliability >= 0.7 &&
+    card.state.dataCoverage >= 50 &&
+    card.state.confidence >= 0.45
+  ) {
+    return 'MODERATE';
+  }
+  return 'LIMITED';
+};
+
+const invalidationConditions = (state: StockThesisState): string[] => {
+  const scenarios = state.decision?.scenarios;
+  if (!scenarios) return state.risks;
+  return [
+    ...scenarios.bull.invalidationConditions,
+    ...scenarios.base.invalidationConditions,
+    ...scenarios.bear.invalidationConditions,
+  ].filter((condition, index, values) => values.indexOf(condition) === index);
+};
+
+export const renderStockDecisionCard = (
+  card: StockDecisionCardView,
+): string => {
+  const { state, latestEvent } = card;
+  const decision = state.decision;
+  const action = decisionAction(state);
+  const invalidations = invalidationConditions(state);
+  const eventLines = latestEvent
+    ? [
+        `<b>${htmlText(latestEvent.event.title, MAX_TITLE)}</b>`,
+        `${htmlText(latestEvent.event.eventType, 80)} · ${htmlText(latestEvent.event.materiality, 30)} materiality · detected ${htmlText(latestEvent.event.firstDetectedAt.toISOString(), 40)}`,
+        `Source: ${sourceLink(latestEvent.evidence.source, latestEvent.evidence.sourceUrl ?? latestEvent.evidence.url)} · ${latestEvent.evidence.primarySource ? 'primary evidence' : 'context evidence'}`,
+      ].join('\n')
+    : 'No analyzed event is stored yet.';
+  const change = latestEvent?.targeted
+    ? `${latestEvent.targeted.thesisChange} · ${latestEvent.targeted.informationChange}\n${htmlText(latestEvent.targeted.primaryDriver, 500)}`
+    : 'No event-level thesis change is available yet.';
+  const expectedValue =
+    decision?.expectedValuePercent === null ||
+    decision?.expectedValuePercent === undefined
+      ? 'n/a'
+      : `${decision.expectedValuePercent.toFixed(1)}%`;
+  const position = decision
+    ? `${decision.maxRecommendedPositionPercent.minimum.toFixed(1)}–${decision.maxRecommendedPositionPercent.maximum.toFixed(1)}%`
+    : '0.0–0.0%';
+  return [
+    `🎯 <b>${htmlText(state.ticker, 30)} DECISION CARD</b>`,
+    `<b>Action:</b> ${action}${decision ? ` · model ${htmlText(decision.recommendation, 40)}` : ''}`,
+    `<b>Evidence:</b> ${evidenceStrength(card)} · confidence ${Math.round(state.confidence * 100)}% · coverage ${Math.round(state.dataCoverage)}%`,
+    `<b>Latest analyzed event</b>\n${eventLines}`,
+    `<b>What changed</b>\n${change}`,
+    decision
+      ? `<b>Decision basis</b>\nEV ${expectedValue} · ${htmlText(decision.asymmetry, 30)} asymmetry · ${htmlText(decision.pricedIn.classification, 50)}\nMaximum research position: ${position}`
+      : '<b>Decision basis</b>\nInsufficient decision inputs; collect more verified evidence.',
+    invalidations.length
+      ? `<b>Invalidate / reassess if</b>\n${bulletList(invalidations)}`
+      : '<b>Invalidate / reassess if</b>\nNo explicit invalidation condition is stored yet.',
+    state.materialDataGaps.length
+      ? `<b>Missing evidence</b>\n${bulletList(state.materialDataGaps)}`
+      : '',
+    '<i>Research only — BUY_CANDIDATE is not a trade instruction. Review the linked primary source, current price, liquidity, diversification, and your own risk limits before acting.</i>',
   ]
     .filter(Boolean)
     .join('\n\n');

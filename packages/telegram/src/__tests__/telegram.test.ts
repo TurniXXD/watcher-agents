@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stockThesisStateSchema } from '@watcher/core';
 import { isAuthorized, parseAllowedUserIds } from '../authorization.js';
 import { escapeHtml, htmlText, optionalSourceLink } from '../utils/html.js';
 import { parsePublicationQueriesCsv } from '../utils/input.js';
@@ -9,6 +10,7 @@ import {
   renderRunProgress,
   renderStockAlert,
   renderStockDashboard,
+  renderStockDecisionCard,
   renderStockDigest,
   renderWatcherHealth,
   splitTelegramMessage,
@@ -480,5 +482,114 @@ describe('Telegram utilities', () => {
     });
     expect(health).toContain('Duplicates prevented: 12');
     expect(health).toContain('3 calls');
+  });
+
+  it('renders an evidence-linked buy candidate without treating it as an order', () => {
+    const state = stockThesisStateSchema.parse({
+      ticker: 'MU',
+      thesis: 'Verified HBM demand supports the current thesis.',
+      verdict: 'WATCH',
+      confidence: 0.76,
+      attentionScore: 84,
+      bullScore: 3,
+      bearScore: 1,
+      netSignal: 2.5,
+      signalGroups: [],
+      catalysts: [],
+      insiderConviction: null,
+      pricedIn: 'PARTIALLY_PRICED_IN',
+      primaryDrivers: ['HBM demand'],
+      risks: ['Memory pricing can weaken.'],
+      dataCoverage: 82,
+      dataQuality: 'HIGH',
+      materialDataGaps: [],
+      decision: {
+        recommendation: 'BUY',
+        expectedValuePercent: 14.2,
+        asymmetry: 'VERY_GOOD',
+        probabilityHigher: {
+          sevenDays: null,
+          thirtyDays: { minimum: 55, maximum: 65 },
+          ninetyDays: { minimum: 58, maximum: 70 },
+          twelveMonths: null,
+        },
+        scenarios: {
+          bull: {
+            probabilityPercent: { minimum: 25, maximum: 35 },
+            expectedReturnPercent: { minimum: 25, maximum: 40 },
+            assumptions: [],
+            requiredCatalysts: [],
+            invalidationConditions: ['HBM demand fails to materialize.'],
+          },
+          base: {
+            probabilityPercent: { minimum: 45, maximum: 55 },
+            expectedReturnPercent: { minimum: 5, maximum: 15 },
+            assumptions: [],
+            requiredCatalysts: [],
+            invalidationConditions: ['Guidance is reduced.'],
+          },
+          bear: {
+            probabilityPercent: { minimum: 15, maximum: 25 },
+            expectedReturnPercent: { minimum: -30, maximum: -10 },
+            assumptions: [],
+            requiredCatalysts: [],
+            invalidationConditions: ['Memory pricing falls sharply.'],
+          },
+        },
+        pricedIn: {
+          classification: 'PARTIALLY_PRICED_IN',
+          explanation: 'The market reflects part of the demand recovery.',
+        },
+        volatilityRisk: 'HIGH',
+        binaryCatalystExposure: false,
+        downsideExplanation: 'Memory pricing remains cyclical.',
+        maxRecommendedPositionPercent: { minimum: 0.5, maximum: 2.4 },
+        rationale: ['Evidence supports a conditional setup.'],
+        humanReviewRequired: true,
+      },
+    });
+
+    const card = renderStockDecisionCard({
+      state,
+      latestEvent: {
+        event: {
+          title: 'Micron raises HBM supply outlook',
+          eventType: 'GUIDANCE',
+          materiality: 'HIGH',
+          firstDetectedAt: new Date('2026-09-20T12:00:00Z'),
+        },
+        evidence: {
+          source: 'Investor relations',
+          sourceUrl: 'https://investors.micron.com/news',
+          url: 'https://investors.micron.com/news',
+          primarySource: true,
+          reliability: 0.95,
+        },
+        targeted: {
+          materiality: 'HIGH',
+          thesisChange: 'IMPROVED',
+          informationChange: 'NEW_INFORMATION',
+          reanalysisRequired: true,
+          affectedSignalGroups: [],
+          catalystChange: 'UPDATED',
+          recommendationChange: true,
+          primaryDriver: 'Higher HBM supply outlook.',
+          explanation: 'Demand is improving.',
+          risks: [],
+          confidence: 0.8,
+        },
+        reliabilityWeight: 0.95,
+        fullAnalysisPerformed: true,
+      },
+    });
+
+    expect(card).toContain('<b>Action:</b> BUY_CANDIDATE · model BUY');
+    expect(card).toContain('<b>Evidence:</b> STRONG');
+    expect(card).toContain('IMPROVED · NEW_INFORMATION');
+    expect(card).toContain(
+      '<a href="https://investors.micron.com/news">Investor relations</a>',
+    );
+    expect(card).toContain('HBM demand fails to materialize.');
+    expect(card).toContain('not a trade instruction');
   });
 });

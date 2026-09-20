@@ -22,6 +22,7 @@ import {
   renderRecentStockAlerts,
   renderRunProgress,
   renderStockDashboard,
+  renderStockDecisionCard,
   renderStockSourceList,
   renderStockThesis,
   renderWatcherHealth,
@@ -344,6 +345,54 @@ export const createStocksBot = (
         parse_mode: 'HTML',
         link_preview_options: { is_disabled: true },
       },
+    );
+  });
+  bot.command('decision', async (ctx) => {
+    const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
+    const current = await chat(ctx.chat.id);
+    const stock = (await store.listStocks(current.id)).find(
+      ({ symbol: configuredSymbol }) => configuredSymbol === symbol,
+    );
+    if (!stock) {
+      await ctx.reply(
+        `${symbol} is not on this watchlist. Add it with /add_stock ${symbol} first.`,
+      );
+      return;
+    }
+    const thesis = await store.getStockThesis(symbol);
+    if (!thesis) {
+      await ctx.reply(
+        `No decision card exists for ${symbol} yet. Run /thesis ${symbol} to collect live evidence and create its first thesis.`,
+      );
+      return;
+    }
+    const state = stockThesisStateSchema.parse({
+      ticker: thesis.ticker,
+      thesis: thesis.thesis,
+      verdict: thesis.verdict,
+      confidence: thesis.confidence,
+      attentionScore: thesis.attentionScore,
+      bullScore: thesis.bullScore,
+      bearScore: thesis.bearScore,
+      netSignal: thesis.netSignal,
+      signalGroups: thesis.signalGroups,
+      catalysts: thesis.catalysts,
+      insiderConviction: thesis.insiderConviction,
+      pricedIn: thesis.pricedIn,
+      primaryDrivers: thesis.primaryDrivers,
+      risks: thesis.risks,
+      dataCoverage: thesis.dataCoverage,
+      dataQuality: thesis.dataQuality,
+      materialDataGaps: thesis.materialDataGaps,
+      decision: thesis.decision,
+    });
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderStockDecisionCard({
+        state,
+        latestEvent: await store.getStockDecisionEventContext(symbol),
+      }),
     );
   });
   bot.command('discovery', async (ctx) => {

@@ -923,6 +923,10 @@ export class WatcherStore implements PipelineRepository {
     return this.stockReports.getStockThesis(ticker);
   }
 
+  public getStockDecisionEventContext(ticker: string) {
+    return this.stockReports.getStockDecisionEventContext(ticker);
+  }
+
   public async claimPendingAlerts(watcherConfigId: string, now = new Date()) {
     return this.stockReports.claimPendingAlerts(watcherConfigId, now);
   }

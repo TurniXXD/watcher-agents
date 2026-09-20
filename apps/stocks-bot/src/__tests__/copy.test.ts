@@ -22,6 +22,7 @@ describe('stocks bot command copy', () => {
       'calibration',
       'catalysts',
       'dashboard',
+      'decision',
       'discovery',
       'event_replay',
       'health',

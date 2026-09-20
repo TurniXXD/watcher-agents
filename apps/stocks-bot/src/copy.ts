@@ -10,6 +10,7 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /calibration — predicted vs realized 30-day probability buckets
 /catalysts [SYMBOL] — list active and upcoming catalysts
 /dashboard — current state of every enabled stock
+/decision SYMBOL — show the latest evidence-linked research decision card
 /discovery — discovery scanner status and recent candidates
 /event_replay SYMBOL [FROM] [TO] — replay events and thesis transitions
 /health — runs, reconciliation, LLM metrics, and source health
