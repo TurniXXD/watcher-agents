@@ -140,8 +140,8 @@ export const selectDiscoveryCandidates = (
   return [...candidates.values()]
     .sort(
       (left, right) =>
-        right.attentionScore - left.attentionScore ||
-        right.dollarVolume - left.dollarVolume,
+        right.dollarVolume - left.dollarVolume ||
+        Math.abs(right.changePercent) - Math.abs(left.changePercent),
     )
     .slice(0, policy.maximumCandidates);
 };

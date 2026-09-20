@@ -10,8 +10,8 @@ import { formatRunDuration, htmlText, sourceLink } from '@watcher/telegram';
 
 /** The news watcher is an exception feed, not a general headline reader. */
 export const MAXIMUM_GLOBAL_NEWS_STORIES_PER_RUN = 3;
-export const MINIMUM_GLOBAL_NEWS_IMPORTANCE = 9;
-export const MINIMUM_GLOBAL_NEWS_RELEVANCE = 8;
+export const MINIMUM_GLOBAL_NEWS_IMPORTANCE = 10;
+export const MINIMUM_GLOBAL_NEWS_RELEVANCE = 9;
 
 type DigestStory = { item: WatchItem; analysis: NewsAnalysis };
 
@@ -136,7 +136,7 @@ export const renderNewsDigest = (
   ]
     .filter(Boolean)
     .join('\n\n')
-    .concat(analysisFailures(result))
-    .concat(failures(result))
+    .concat(manual ? analysisFailures(result) : '')
+    .concat(manual ? failures(result) : '')
     .trim();
 };

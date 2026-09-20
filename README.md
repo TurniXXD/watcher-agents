@@ -174,6 +174,7 @@ Every application variable is represented in `.env.example`.
 | `BRIEFING_EMBEDDING_MODEL`                          | stocks, briefing      | Shared Ollama model for bounded stock-event and briefing-story similarity; empty disables it  |
 | `BRIEFING_EMBEDDING_MIN_SIMILARITY`                 | stocks, briefing      | Shared minimum cosine similarity for a semantic candidate; defaults to `0.82`                 |
 | `BRIEFING_EMBEDDING_WINDOW_HOURS`                   | stocks, briefing      | Shared maximum time distance between semantic candidates; defaults to `96` hours              |
+| `BRIEFING_SCHEDULER_MAX_DELAY_MINUTES`              | briefing bot          | Late-delivery grace window; older missed briefings are skipped; defaults to `10` minutes      |
 | `BRIEFING_FRESHNESS_MAX_AGE_MINUTES`                | briefing bot          | Maximum accepted age of a producer run before scheduled delivery; defaults to `1560` minutes  |
 | `BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES`           | briefing bot          | Warning cadence while strict freshness waiting postpones delivery; defaults to `20` minutes   |
 | `BRIEFING_FRESHNESS_POLL_INTERVAL_MS`               | briefing bot          | Poll interval while waiting for producer freshness; defaults to `30000` milliseconds          |

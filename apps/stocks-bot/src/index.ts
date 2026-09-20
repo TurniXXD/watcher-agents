@@ -29,6 +29,7 @@ import { OllamaEmbeddingProvider, OllamaProvider } from '@watcher/llm';
 import {
   AlphaVantageDiscoveryScanner,
   SecEdgarSource,
+  TradingViewNewsSource,
 } from './sources/index.js';
 import {
   parseAllowedUserIds,
@@ -37,6 +38,7 @@ import {
 } from '@watcher/telegram';
 import { createStocksBot } from './bot.js';
 import { StockDiscoveryCoordinator } from './discovery.js';
+import { DiscoveryCatalystAnalyzer } from './discovery-catalyst.js';
 import { renderWeeklyDiscoveryReport } from './discovery-report.js';
 import { env } from './env.js';
 import { StockReconciliationCoordinator } from './reconciliation.js';
@@ -339,6 +341,12 @@ if (env.ALPHA_VANTAGE_API_KEY) {
         .filter(Boolean),
       excludeOtc: env.DISCOVERY_EXCLUDE_OTC,
     },
+    async ({ symbol, companyName, exchange }, signal) =>
+      new TradingViewNewsSource().fetch(
+        { symbol, companyName, exchange, maxItems: 5 },
+        signal,
+      ),
+    new DiscoveryCatalystAnalyzer(ollama),
     logger,
   );
   await discoveryStore.initializeSchedules(env.DISCOVERY_WEEKLY_SCHEDULE);

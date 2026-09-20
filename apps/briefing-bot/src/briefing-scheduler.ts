@@ -16,6 +16,7 @@ export class BriefingScheduler {
     private readonly intervalMs = 30_000,
     private readonly reportError: (error: unknown) => void = () => undefined,
     private readonly logger?: WatcherLogger,
+    private readonly maximumDelayMs = 10 * 60_000,
   ) {}
 
   public start(): void {
@@ -50,7 +51,11 @@ export class BriefingScheduler {
         { now: now.toISOString() },
         'Checking for due briefing schedules',
       );
-      const due = await this.schedules.claimDue(now);
+      const due = await this.schedules.claimDue(
+        now,
+        undefined,
+        this.maximumDelayMs,
+      );
       if (due.length === 0) {
         this.logger?.debug(
           { durationMs: Date.now() - startedAt },

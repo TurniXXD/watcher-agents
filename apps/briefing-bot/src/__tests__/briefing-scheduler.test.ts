@@ -22,6 +22,11 @@ describe('BriefingScheduler', () => {
     const overlapping = scheduler.tick(new Date('2026-09-06T05:00:02.000Z'));
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
     expect(first).toBe(overlapping);
+    expect(claimDue).toHaveBeenCalledWith(
+      new Date('2026-09-06T05:00:01.000Z'),
+      undefined,
+      10 * 60_000,
+    );
     release?.();
     await first;
     expect(claimDue).toHaveBeenCalledTimes(1);

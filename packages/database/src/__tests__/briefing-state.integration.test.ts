@@ -392,6 +392,29 @@ integration('briefing persistent state', () => {
     ).toEqual({ nextBriefingAt: null });
   });
 
+  it('skips missed briefing slots instead of delivering them after a long outage', async () => {
+    await configuration.updateSettings(111n, {
+      timezone: 'Europe/Prague',
+      briefingTime: '07:00;20:00',
+    });
+    await configuration.setOnboardingStep(111n, 'COMPLETE');
+    await schedules.initializeMissing(new Date('2026-09-19T04:00:00.000Z'));
+
+    expect(
+      await schedules.claimDue(
+        new Date('2026-09-20T17:25:00.000Z'),
+        10,
+        10 * 60_000,
+      ),
+    ).toEqual([]);
+    expect(
+      await database.briefingSettings.findUnique({
+        where: { telegramChatId: 111n },
+        select: { nextBriefingAt: true },
+      }),
+    ).toEqual({ nextBriefingAt: new Date('2026-09-20T18:00:00.000Z') });
+  });
+
   it('claims multiple daily and weekly briefing slots from one schedule spec', async () => {
     await configuration.updateSettings(111n, {
       timezone: 'Europe/Prague',

@@ -26,6 +26,13 @@ import type { Api } from 'grammy';
 import type { AgentTelemetryRecorder } from '@watcher/observability';
 import { hasScheduledNewsDigest, renderNewsDigest } from './digest.js';
 
+export const NEWS_ITEMS_PER_RUN_CAP = 8;
+
+export const newsItemsPerRunLimit = (configuredLimit: number): number =>
+  configuredLimit === 0
+    ? NEWS_ITEMS_PER_RUN_CAP
+    : Math.min(configuredLimit, NEWS_ITEMS_PER_RUN_CAP);
+
 export const buildNewsSourceRequests = (
   feeds: readonly NewsFeedRecord[],
   topics: readonly NewsTopicRecord[],
@@ -145,7 +152,7 @@ export const createNewsRunner = (
   const pipeline = new WatcherPipeline(
     store,
     analyzer,
-    maxItemsPerRun,
+    newsItemsPerRunLimit(maxItemsPerRun),
     logger,
     undefined,
     {

@@ -5,11 +5,17 @@ import {
   type DiscoveryScanMode,
   type MarketDiscoveryScanner,
 } from './core/index.js';
-import { errorMessage, type WatcherLogger } from '@watcher/core';
+import {
+  errorMessage,
+  type WatcherLogger,
+  type WatchItem,
+} from '@watcher/core';
 import {
   type DiscoveryCompanyProfile,
   type StockDiscoveryStore,
 } from '@watcher/database';
+import { discoveryOpportunityScore } from './discovery-catalyst.js';
+import type { DiscoveryCatalystAnalyzer } from './discovery-catalyst.js';
 
 export type DiscoveryExecution =
   | { status: 'BUSY' }
@@ -31,6 +37,13 @@ export type DiscoveryExecution =
   | { status: 'FAILED'; error: string; durationMs: number };
 
 type CompanyLookup = (symbol: string) => Promise<DiscoveryCompanyProfile>;
+type DiscoveryNewsLookup = (
+  input: { symbol: string; companyName: string; exchange: string | null },
+  signal?: AbortSignal,
+) => Promise<WatchItem[]>;
+
+const maximumCatalystReviews = 5;
+
 export class StockDiscoveryCoordinator {
   public constructor(
     private readonly store: StockDiscoveryStore,
@@ -39,6 +52,8 @@ export class StockDiscoveryCoordinator {
     private readonly scanMode: DiscoveryScanMode,
     private readonly weeklySchedule: string,
     private readonly policy: DiscoveryPolicy,
+    private readonly fetchNews: DiscoveryNewsLookup,
+    private readonly catalystAnalyzer: DiscoveryCatalystAnalyzer,
     private readonly logger?: WatcherLogger,
   ) {}
 
@@ -71,7 +86,7 @@ export class StockDiscoveryCoordinator {
       let rejectedCount = 0;
       let resolutionFailureCount = 0;
 
-      for (const candidate of candidates) {
+      for (const candidate of candidates.slice(0, maximumCatalystReviews)) {
         try {
           const profile = await this.lookupCompany(candidate.ticker);
           if (!discoveryCompanyIsEligible(profile.exchange, this.policy)) {
@@ -87,18 +102,83 @@ export class StockDiscoveryCoordinator {
             );
             continue;
           }
+          const freshAfter = new Date(Date.now() - 7 * 24 * 60 * 60_000);
+          const articles = (
+            await this.fetchNews(
+              {
+                symbol: candidate.ticker,
+                companyName: profile.companyName,
+                exchange: profile.exchange,
+              },
+              signal,
+            )
+          ).filter(
+            (article) =>
+              article.publishedAt && article.publishedAt >= freshAfter,
+          );
+          if (articles.length === 0) {
+            rejectedCount += 1;
+            this.logger?.info(
+              { watcherConfigId, scanId: scan.id, ticker: candidate.ticker },
+              'Discovery candidate rejected because no fresh news was found',
+            );
+            continue;
+          }
+          const assessment = await this.catalystAnalyzer.assess(
+            {
+              ticker: candidate.ticker,
+              companyName: profile.companyName,
+              changePercent: candidate.changePercent,
+              articles,
+            },
+            signal,
+          );
+          if (
+            !assessment.qualifies ||
+            assessment.direction !== 'POSITIVE' ||
+            assessment.confirmation === 'NONE' ||
+            assessment.upsidePotential < 5 ||
+            assessment.catalystStrength < 5 ||
+            assessment.pricedIn === 'OVERPRICED_EXPECTATIONS'
+          ) {
+            rejectedCount += 1;
+            this.logger?.info(
+              {
+                watcherConfigId,
+                scanId: scan.id,
+                ticker: candidate.ticker,
+                confirmation: assessment.confirmation,
+                pricedIn: assessment.pricedIn,
+              },
+              'Discovery candidate rejected by catalyst assessment',
+            );
+            continue;
+          }
+          const opportunityScore = discoveryOpportunityScore(
+            assessment,
+            candidate.changePercent,
+          );
           const recorded = await this.store.recordCandidate(
             watcherConfigId,
             scan.id,
-            candidate,
+            {
+              ...candidate,
+              attentionScore: opportunityScore,
+              reason: `${assessment.catalyst} · current move ${candidate.changePercent >= 0 ? '+' : ''}${candidate.changePercent.toFixed(2)}% · ${assessment.pricedIn.replaceAll('_', ' ').toLowerCase()}`,
+            },
           );
           if (recorded.recorded) {
             recommendedCandidates.push({
               ticker: recorded.ticker,
               companyName: profile.companyName,
               changePercent: candidate.changePercent,
-              attentionScore: candidate.attentionScore,
-              reason: candidate.reason,
+              attentionScore: opportunityScore,
+              reason: [
+                `Catalyst: ${assessment.catalyst}`,
+                `Assessment: ${assessment.explanation}`,
+                `Confirmation: ${assessment.confirmation.replaceAll('_', ' ').toLowerCase()} · pricing: ${assessment.pricedIn.replaceAll('_', ' ').toLowerCase()}`,
+                `Risks: ${assessment.risks.join('; ')}`,
+              ].join('\n'),
             });
           }
         } catch (error) {

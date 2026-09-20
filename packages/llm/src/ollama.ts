@@ -245,6 +245,9 @@ const publicationGuidance = `For publication watcher output:
 const newsGuidance = `For news watcher output:
 - Return every required property exactly as named in the supplied schema and never use null.
 - importance and relevance must be whole integers from 1 through 10, not percentages or decimals.
+- Calibrate global importance strictly. Start at 3. Use 9 only for a rare, verified development with direct international or systemic consequences. Use 10 only for an exceptional, immediately consequential global event; it should be extremely rare.
+- A local crime, celebrity story, opinion, cartoon, newsletter, routine political dispute, or an alarming headline without a verified cross-border or systemic consequence must not receive importance 9 or 10.
+- Relevance measures the configured topics, not emotional weight. If no topic is configured, score relevance by broad international significance.
 - confidence must be a number from 0 through 1.
 - category must be exactly one of the uppercase values allowed by the schema.
 - keyFacts and entities must be arrays of strings, never arrays of objects; use [] when the source does not support an entry.

@@ -271,6 +271,7 @@ const scheduler = new BriefingScheduler(
   env.BRIEFING_SCHEDULER_INTERVAL_MS,
   (error) => logger.error({ err: error }, 'Briefing scheduler failed'),
   logger,
+  env.BRIEFING_SCHEDULER_MAX_DELAY_MINUTES * 60_000,
 );
 const oauthServer = calendarOAuth
   ? new OAuthCallbackServer(

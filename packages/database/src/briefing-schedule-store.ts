@@ -41,7 +41,11 @@ export class BriefingScheduleStore {
   public async claimDue(
     now = new Date(),
     limit = 10,
+    maximumDelayMs = 10 * 60_000,
   ): Promise<DueBriefingSchedule[]> {
+    const earliestDeliverableAt = new Date(
+      now.getTime() - Math.max(0, Math.trunc(maximumDelayMs)),
+    );
     await this.initializeMissing(now);
     return this.db.$transaction(async (transaction) => {
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('briefing-scheduler'))`;
@@ -66,7 +70,12 @@ export class BriefingScheduleStore {
         });
       }
       return due.flatMap((settings) => {
-        if (!settings.nextBriefingAt) return [];
+        if (
+          !settings.nextBriefingAt ||
+          settings.nextBriefingAt < earliestDeliverableAt
+        ) {
+          return [];
+        }
         const occurrence = briefingOccurrenceAt(
           settings.briefingTime,
           settings.timezone,

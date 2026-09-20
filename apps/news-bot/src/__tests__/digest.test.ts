@@ -54,9 +54,9 @@ const result = (
 describe('news digest delivery policy', () => {
   it('limits delivery to three truly important global stories', () => {
     const input = result([
-      ...Array.from({ length: 5 }, () => ({ importance: 9, relevance: 8 })),
-      { importance: 8, relevance: 10 },
-      { importance: 10, relevance: 7 },
+      ...Array.from({ length: 5 }, () => ({ importance: 10, relevance: 9 })),
+      { importance: 9, relevance: 10 },
+      { importance: 10, relevance: 8 },
     ]);
 
     const digest = renderNewsDigest(input);
@@ -71,7 +71,7 @@ describe('news digest delivery policy', () => {
   it('keeps a scheduled run silent when no story meets both thresholds', () => {
     const input = result([
       { importance: 6, relevance: 10 },
-      { importance: 10, relevance: 5 },
+      { importance: 10, relevance: 8 },
     ]);
 
     expect(hasScheduledNewsDigest(input)).toBe(false);
@@ -94,7 +94,7 @@ describe('news digest delivery policy', () => {
         category: 'SPORT',
         scope: 'GLOBAL',
       },
-      { importance: 9, relevance: 8, category: 'POLITICS' },
+      { importance: 10, relevance: 9, category: 'POLITICS' },
     ]);
     const preferences = [
       { scope: 'CZECH' as const, category: 'SPORT' as const, enabled: false },
@@ -116,7 +116,7 @@ describe('news digest delivery policy', () => {
   it('never delivers Czech stories, even with a manually requested run', () => {
     const input = result([
       { importance: 10, relevance: 10, scope: 'CZECH' },
-      { importance: 9, relevance: 8, scope: 'GLOBAL' },
+      { importance: 10, relevance: 9, scope: 'GLOBAL' },
     ]);
 
     expect(renderNewsDigest(input, true)).toContain(
@@ -126,7 +126,7 @@ describe('news digest delivery policy', () => {
   });
 
   it('does not repeat an expected provider rate-limit backoff as a feed error', () => {
-    const input = result([{ importance: 9, relevance: 8 }]);
+    const input = result([{ importance: 10, relevance: 9 }]);
     input.sourceFailures = [
       {
         source: 'NEWS_GDELT',
@@ -137,5 +137,33 @@ describe('news digest delivery policy', () => {
 
     expect(renderNewsDigest(input)).not.toContain('Feed errors');
     expect(renderNewsDigest(input)).not.toContain('RATE_LIMITED');
+  });
+
+  it('keeps scheduled delivery free of item and provider error detail', () => {
+    const input = result([{ importance: 10, relevance: 9 }]);
+    input.sourceFailures = [
+      {
+        source: 'NEWS_GDELT',
+        target: 'GLOBAL:built-in-gdelt',
+        message: 'HTTP 429 from api.gdeltproject.org',
+      },
+    ];
+    input.analyses.push({
+      item: {
+        id: 'NEWS:failed',
+        source: 'NEWS_RSS_GLOBAL',
+        externalId: 'failed',
+        title: 'Malformed output story',
+        url: 'https://example.com/failed',
+        content: 'Story',
+        metadata: { scope: 'GLOBAL' },
+      },
+      outcome: { status: 'FAILED', error: 'Invalid output' },
+    });
+
+    expect(renderNewsDigest(input)).not.toContain('Analysis errors');
+    expect(renderNewsDigest(input)).not.toContain('Feed errors');
+    expect(renderNewsDigest(input, true)).toContain('Analysis errors');
+    expect(renderNewsDigest(input, true)).toContain('Feed errors');
   });
 });

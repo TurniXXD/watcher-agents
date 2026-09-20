@@ -87,6 +87,12 @@ const schema = z
       .min(5_000)
       .max(300_000)
       .default(30_000),
+    BRIEFING_SCHEDULER_MAX_DELAY_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(60)
+      .default(10),
     BRIEFING_FRESHNESS_MAX_AGE_MINUTES: z.coerce
       .number()
       .int()
