@@ -39,11 +39,14 @@ type PipelineRunOptions = {
 
 export type WatcherPipelineCapacityOptions = {
   maxConcurrentSourceRequests?: number;
+  /** Bounds one external source request; the rest of a run can still finish. */
+  sourceRequestTimeoutMs?: number;
 };
 
 export class WatcherPipeline {
   private readonly providerLimiters = new Map<string, ProviderRequestLimiter>();
   private readonly sourceRequestLimiter: ProviderRequestLimiter;
+  private readonly sourceRequestTimeoutMs: number;
 
   public constructor(
     private readonly repository: PipelineRepository,
@@ -61,6 +64,10 @@ export class WatcherPipeline {
       minimumSpacingMs: 0,
       sharedRateLimitBackoff: false,
     });
+    this.sourceRequestTimeoutMs = Math.max(
+      1,
+      Math.trunc(capacity.sourceRequestTimeoutMs ?? 45_000),
+    );
   }
 
   private providerPolicy(source: Source): ProviderRequestPolicy {
@@ -131,11 +138,26 @@ export class WatcherPipeline {
                 { kind, runId, source: source.id, target },
                 'Fetching watcher source',
               );
+              const sourceTimeout = new AbortController();
+              const timeout = setTimeout(
+                () =>
+                  sourceTimeout.abort(
+                    new Error(
+                      `Source request exceeded its ${this.sourceRequestTimeoutMs}ms timeout`,
+                    ),
+                  ),
+                this.sourceRequestTimeoutMs,
+              );
+              timeout.unref();
+              const signal = options.signal
+                ? AbortSignal.any([options.signal, sourceTimeout.signal])
+                : sourceTimeout.signal;
               let items: WatchItem[];
               try {
-                items = (await source.fetch(config, options.signal)).map(
-                  (item) => watchItemSchema.parse(item),
-                );
+                if (signal.aborted) throw signal.reason;
+                const sourceItems = await source.fetch(config, signal);
+                clearTimeout(timeout);
+                items = sourceItems.map((item) => watchItemSchema.parse(item));
                 await this.repository.recordSourceSuccess?.(
                   kind,
                   runId,
@@ -150,24 +172,31 @@ export class WatcherPipeline {
                   },
                 );
               } catch (error) {
-                const retryAt = sourceRetryAt(error);
+                clearTimeout(timeout);
+                const timeoutReason: unknown = sourceTimeout.signal.reason;
+                const requestError = sourceTimeout.signal.aborted
+                  ? timeoutReason instanceof Error
+                    ? timeoutReason
+                    : new Error(errorMessage(timeoutReason))
+                  : error;
+                const retryAt = sourceRetryAt(requestError);
                 await this.repository.recordSourceFailure?.(
                   kind,
                   runId,
                   source.id,
                   target,
-                  errorMessage(error),
+                  errorMessage(requestError),
                   new Date(),
                   {
                     ...(policy.providerKey
                       ? { providerKey: policy.providerKey }
                       : {}),
                     sharedRateLimitBackoff: policy.sharedRateLimitBackoff,
-                    rateLimited: isSourceRateLimited(error),
+                    rateLimited: isSourceRateLimited(requestError),
                     ...(retryAt ? { retryAt } : {}),
                   },
                 );
-                throw error;
+                throw requestError;
               }
               this.logger?.info(
                 {

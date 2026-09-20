@@ -195,6 +195,81 @@ describe('core watcher behavior', () => {
     });
   });
 
+  it('times out one source request without discarding another source result', async () => {
+    const recordSourceFailure = vi.fn(async () => undefined);
+    const pipeline = new WatcherPipeline(
+      {
+        prepareItemsForRun: vi.fn(async (_kind, _runId, items: WatchItem[]) =>
+          items.map((value, index) => ({
+            item: value,
+            recordId: String(index),
+          })),
+        ),
+        saveAnalysis: vi.fn(async () => undefined),
+        recordSourceFailure,
+      },
+      {
+        analyze: vi.fn(async () => ({
+          status: 'FAILED' as const,
+          error: 'no model',
+        })),
+      },
+      0,
+      undefined,
+      undefined,
+      { sourceRequestTimeoutMs: 5 },
+    );
+
+    const result = await pipeline.run('NEWS', 'run', [
+      {
+        source: { id: 'RSS', fetch: async () => [item('available')] },
+        target: 'GLOBAL:RSS',
+        config: {},
+      },
+      {
+        source: {
+          id: 'STALLED',
+          fetch: async (_config: unknown, signal?: AbortSignal) =>
+            new Promise<WatchItem[]>((_, reject) => {
+              const abortedError = (): Error => {
+                const reason: unknown = signal?.reason;
+                return reason instanceof Error
+                  ? reason
+                  : new Error('Source request aborted');
+              };
+              if (signal?.aborted) {
+                reject(abortedError());
+                return;
+              }
+              signal?.addEventListener('abort', () => reject(abortedError()), {
+                once: true,
+              });
+            }),
+        },
+        target: 'GLOBAL:STALLED',
+        config: {},
+      },
+    ]);
+
+    expect(result.newItemCount).toBe(1);
+    expect(result.sourceFailures).toEqual([
+      {
+        source: 'STALLED',
+        target: 'GLOBAL:STALLED',
+        message: 'Source request exceeded its 5ms timeout',
+      },
+    ]);
+    expect(recordSourceFailure).toHaveBeenCalledWith(
+      'NEWS',
+      'run',
+      'STALLED',
+      'GLOBAL:STALLED',
+      'Source request exceeded its 5ms timeout',
+      expect.any(Date),
+      expect.objectContaining({ rateLimited: false }),
+    );
+  });
+
   it('stops queued requests for a provider after its first rate limit', async () => {
     const retryAt = new Date(Date.now() + 60_000);
     const fetchSource = vi.fn(async () => {
