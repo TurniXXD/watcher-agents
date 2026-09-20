@@ -71,6 +71,7 @@ const briefingWatcherHealth = new BriefingWatcherHealthStore(database);
 const availableStockSourceIds = new Set([
   'SEC',
   'INVESTOR_RELATIONS',
+  'COMPANY_INTELLIGENCE',
   'NEWS',
   'TRADINGVIEW_NEWS',
   'PRICE',
@@ -357,7 +358,7 @@ const scheduler = new PersistentScheduler(
   async (due) => {
     const entry = due as { id: string; chatConfig: { chatId: bigint } };
     await runner.execute(entry.id, entry.chatConfig.chatId, 'SCHEDULED', {
-      sourceIds: new Set(['NEWS', 'TRADINGVIEW_NEWS']),
+      sourceIds: new Set(['NEWS', 'TRADINGVIEW_NEWS', 'COMPANY_INTELLIGENCE']),
     });
   },
   undefined,
@@ -441,6 +442,7 @@ const telegramOutboxScheduler = new PersistentScheduler(
 const fastSourceIds = new Set([
   'SEC',
   'INVESTOR_RELATIONS',
+  'COMPANY_INTELLIGENCE',
   'NEWS',
   'TRADINGVIEW_NEWS',
   'PRICE',

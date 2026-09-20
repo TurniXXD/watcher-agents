@@ -1,5 +1,6 @@
 export * from './alpha-vantage-discovery.js';
 export * from './alpha-vantage-advanced.js';
+export * from './company-intelligence/index.js';
 export * from './earnings-whispers.js';
 export * from './finviz.js';
 export * from './finra-short-interest.js';

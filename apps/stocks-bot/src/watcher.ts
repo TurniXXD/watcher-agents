@@ -10,6 +10,8 @@ import { StockSourceType, type WatcherStore } from '@watcher/database';
 import {
   AlphaVantageInstitutionalSource,
   AlphaVantageOptionsSource,
+  CompanyIntelligenceSource,
+  companyIntelligenceProfileFor,
   EarningsWhispersSource,
   FinraShortInterestSource,
   FinvizInsiderSource,
@@ -68,6 +70,7 @@ export const createStocksRunner = (
 ): WatcherRunner => {
   const price = new StooqPriceSource();
   const investorRelations = new InvestorRelationsSource();
+  const companyIntelligence = new CompanyIntelligenceSource();
   const news = new GdeltNewsSource();
   const tradingViewNews = new TradingViewNewsSource();
   const finviz = new FinvizInsiderSource();
@@ -169,6 +172,18 @@ export const createStocksRunner = (
                     symbol: stock.symbol,
                     investorRelationsUrl: stock.investorRelationsUrl,
                   },
+                },
+              ];
+            }
+            if (entry.source === StockSourceType.COMPANY_INTELLIGENCE) {
+              if (!companyIntelligenceProfileFor(stock.symbol)) {
+                return [];
+              }
+              return [
+                {
+                  source: companyIntelligence,
+                  target,
+                  config: { symbol: stock.symbol },
                 },
               ];
             }

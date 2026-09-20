@@ -87,6 +87,24 @@ describe('hybrid stock event policy', () => {
     expect(event?.materiality).toBe('HIGH');
   });
 
+  it('keeps a peer earnings release distinct from the watched company earnings', () => {
+    const event = extractCanonicalEvent({
+      ...observation(
+        'Marvell reports quarterly results for data infrastructure',
+      ),
+      ticker: 'CRDO',
+      category: 'COMPETITOR_EVENT',
+      metadata: {
+        symbol: 'CRDO',
+        companyIntelligenceRelationship: 'PEER',
+        relatedTicker: 'MRVL',
+      },
+    });
+
+    expect(event?.ticker).toBe('CRDO');
+    expect(event?.eventTypes[0]).toBe('COMPETITOR_EVENT');
+  });
+
   it('retains legacy and broad financing/capital-return classifications', () => {
     const event = extractCanonicalEvent(
       observation('AOUT announces convertible notes and a new share buyback'),

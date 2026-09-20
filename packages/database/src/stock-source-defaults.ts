@@ -3,6 +3,7 @@ import { StockSourceType } from './generated/prisma/enums.js';
 export const defaultStockSourceTypes = [
   StockSourceType.SEC,
   StockSourceType.INVESTOR_RELATIONS,
+  StockSourceType.COMPANY_INTELLIGENCE,
   StockSourceType.NEWS,
   StockSourceType.TRADINGVIEW_NEWS,
   StockSourceType.PRICE,

@@ -40,6 +40,7 @@ enum ValidationTargetType {
 enum StockSourceType {
   SEC
   INVESTOR_RELATIONS
+  COMPANY_INTELLIGENCE
   NEWS
   TRADINGVIEW_NEWS
   PRICE

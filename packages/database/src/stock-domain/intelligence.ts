@@ -171,6 +171,9 @@ const classifyEventTypes = (
   observation: NormalizedObservation,
   text: string,
 ): CanonicalEventType[] => {
+  if (observation.category === 'COMPETITOR_EVENT') {
+    return ['COMPETITOR_EVENT'];
+  }
   const values: CanonicalEventType[] = [];
   const add = (value: CanonicalEventType): void => {
     if (!values.includes(value)) values.push(value);
