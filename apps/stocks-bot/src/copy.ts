@@ -21,6 +21,7 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /reconcile — run the comprehensive daily reconciliation now
 /remove_stock SYMBOL — remove a stock
 /replay SYMBOL DATE — reconstruct only information known by that date
+/reset_stocks CONFIRM — remove every stock from this watchlist; historical research is retained
 /resume — resume scheduled runs
 /run — run now
 /run_discovery — run the market-wide discovery report now; it never changes your watchlist

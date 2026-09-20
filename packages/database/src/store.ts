@@ -1227,6 +1227,10 @@ export class WatcherStore implements PipelineRepository {
     return this.configuration.removeStock(chatConfigId, symbol);
   }
 
+  public resetStocks(chatConfigId: string) {
+    return this.configuration.resetStocks(chatConfigId);
+  }
+
   public listStockSourceSettings(chatConfigId: string) {
     return this.configuration.listStockSourceSettings(chatConfigId);
   }

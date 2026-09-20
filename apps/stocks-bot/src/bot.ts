@@ -492,6 +492,21 @@ export const createStocksBot = (
       result.count ? `${symbol} removed.` : `${symbol} was not configured.`,
     );
   });
+  bot.command(['reset_stocks', 'resetstocks'], async (ctx) => {
+    if (commandArgument(ctx.message?.text) !== 'CONFIRM') {
+      await ctx.reply(
+        "This removes every stock from this chat's watchlist and stops its per-stock monitoring. Historical research is kept. To continue, use /reset_stocks CONFIRM.",
+      );
+      return;
+    }
+    const current = await chat(ctx.chat.id);
+    const result = await store.resetStocks(current.id);
+    await ctx.reply(
+      result.count
+        ? `Removed ${result.count} ${result.count === 1 ? 'stock' : 'stocks'} from this watchlist.`
+        : 'This watchlist is already empty.',
+    );
+  });
   bot.command('sources', async (ctx) => {
     const current = await chat(ctx.chat.id);
     const stocks = await store.listStocks(current.id);

@@ -136,6 +136,10 @@ export class ConfigurationStore {
     return this.db.stock.deleteMany({ where: { chatConfigId, symbol } });
   }
 
+  public resetStocks(chatConfigId: string) {
+    return this.db.stock.deleteMany({ where: { chatConfigId } });
+  }
+
   public listStockSourceSettings(chatConfigId: string) {
     return stockSourceSettingsForChat(this.db, chatConfigId);
   }

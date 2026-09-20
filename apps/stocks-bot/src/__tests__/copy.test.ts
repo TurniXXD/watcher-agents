@@ -33,6 +33,7 @@ describe('stocks bot command copy', () => {
       'reconcile',
       'remove_stock',
       'replay',
+      'reset_stocks',
       'resume',
       'run',
       'run_discovery',
