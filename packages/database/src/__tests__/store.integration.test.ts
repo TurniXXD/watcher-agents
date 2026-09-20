@@ -153,6 +153,7 @@ integration('WatcherStore with PostgreSQL', () => {
         'FINRA_SHORT_INTEREST',
         'FINVIZ',
         'INVESTOR_RELATIONS',
+        'COMPANY_INTELLIGENCE',
         'CLINICAL_TRIALS',
         'NEWS',
         'PRICE',
