@@ -66,6 +66,7 @@ import {
   removeStockSchedule,
   renderStockSchedules,
 } from './schedule-management.js';
+import { renderThesisNotReady } from './thesis-refresh.js';
 
 type StockCompany = {
   symbol: string;
@@ -76,6 +77,32 @@ type StockCompany = {
   investorRelationsUrl: string | null;
 };
 type StockCompanyLookup = (symbol: string) => Promise<StockCompany>;
+type StoredStockThesis = NonNullable<
+  Awaited<ReturnType<WatcherStore['getStockThesis']>>
+>;
+
+const parseStoredStockThesis = (thesis: StoredStockThesis) =>
+  stockThesisStateSchema.parse({
+    ticker: thesis.ticker,
+    thesis: thesis.thesis,
+    verdict: thesis.verdict,
+    confidence: thesis.confidence,
+    attentionScore: thesis.attentionScore,
+    bullScore: thesis.bullScore,
+    bearScore: thesis.bearScore,
+    netSignal: thesis.netSignal,
+    signalGroups: thesis.signalGroups,
+    catalysts: thesis.catalysts,
+    insiderConviction: thesis.insiderConviction,
+    pricedIn: thesis.pricedIn,
+    primaryDrivers: thesis.primaryDrivers,
+    risks: thesis.risks,
+    dataCoverage: thesis.dataCoverage,
+    dataQuality: thesis.dataQuality,
+    materialDataGaps: thesis.materialDataGaps,
+    decision: thesis.decision,
+  });
+
 const renderDiscoveryStatus = (
   status: DiscoveryStatus,
   enabled: boolean,
@@ -314,30 +341,11 @@ export const createStocksBot = (
       await ctx.api.editMessageText(
         ctx.chat.id,
         progressMessage.message_id,
-        `Live refresh for ${symbol} completed in ${formatRunDuration(result.durationMs ?? 0)}, but no thesis could be created. Fetched ${result.fetchedCount} observations from ${result.dataCoverage?.successfulSources ?? 0}/${result.dataCoverage?.expectedSources ?? 0} sources; ${result.failedAnalysisCount} analyses failed. There is not yet usable event evidence for an initial thesis.`,
+        renderThesisNotReady(symbol, result),
       );
       return;
     }
-    const parsed = stockThesisStateSchema.parse({
-      ticker: thesis.ticker,
-      thesis: thesis.thesis,
-      verdict: thesis.verdict,
-      confidence: thesis.confidence,
-      attentionScore: thesis.attentionScore,
-      bullScore: thesis.bullScore,
-      bearScore: thesis.bearScore,
-      netSignal: thesis.netSignal,
-      signalGroups: thesis.signalGroups,
-      catalysts: thesis.catalysts,
-      insiderConviction: thesis.insiderConviction,
-      pricedIn: thesis.pricedIn,
-      primaryDrivers: thesis.primaryDrivers,
-      risks: thesis.risks,
-      dataCoverage: thesis.dataCoverage,
-      dataQuality: thesis.dataQuality,
-      materialDataGaps: thesis.materialDataGaps,
-      decision: thesis.decision,
-    });
+    const parsed = parseStoredStockThesis(thesis);
     await ctx.api.editMessageText(
       ctx.chat.id,
       progressMessage.message_id,
@@ -367,26 +375,7 @@ export const createStocksBot = (
       );
       return;
     }
-    const state = stockThesisStateSchema.parse({
-      ticker: thesis.ticker,
-      thesis: thesis.thesis,
-      verdict: thesis.verdict,
-      confidence: thesis.confidence,
-      attentionScore: thesis.attentionScore,
-      bullScore: thesis.bullScore,
-      bearScore: thesis.bearScore,
-      netSignal: thesis.netSignal,
-      signalGroups: thesis.signalGroups,
-      catalysts: thesis.catalysts,
-      insiderConviction: thesis.insiderConviction,
-      pricedIn: thesis.pricedIn,
-      primaryDrivers: thesis.primaryDrivers,
-      risks: thesis.risks,
-      dataCoverage: thesis.dataCoverage,
-      dataQuality: thesis.dataQuality,
-      materialDataGaps: thesis.materialDataGaps,
-      decision: thesis.decision,
-    });
+    const state = parseStoredStockThesis(thesis);
     await sendSplitMessage(
       ctx.api,
       BigInt(ctx.chat.id),
@@ -634,10 +623,13 @@ export const createStocksBot = (
       );
       return;
     }
+    const thesis = await store.getStockThesis(symbol);
     await sendSplitMessage(
       ctx.api,
       BigInt(ctx.chat.id),
-      renderEarningsSnapshot(snapshot),
+      renderEarningsSnapshot(snapshot, {
+        research: thesis ? parseStoredStockThesis(thesis) : null,
+      }),
     );
   });
   bot.command('advanced', async (ctx) => {

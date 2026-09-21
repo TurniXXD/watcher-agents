@@ -57,7 +57,13 @@ describe('Telegram utilities', () => {
     expect(text).toContain('Next setup');
     expect(text).toContain('actual 24.89 vs consensus 20.98 · beat +3.91');
     expect(text).toContain('actual 41,456 USDm vs consensus 34,980 USDm');
-    expect(text).toContain('refresh live evidence with /thesis SYMBOL');
+    expect(text).toContain('What it means');
+    expect(text).toContain('positive historical operating momentum');
+    expect(text).toContain('Is buying supported by the current research?');
+    expect(text).toContain('This earnings snapshot alone is not enough');
+    expect(text).toContain(
+      'not personal financial advice or a trade instruction',
+    );
   });
 
   it('escapes and truncates shared HTML output safely', () => {
@@ -629,5 +635,20 @@ describe('Telegram utilities', () => {
     );
     expect(card).toContain('HBM demand fails to materialize.');
     expect(card).toContain('not a trade instruction');
+
+    const earnings = renderEarningsSnapshot(
+      {
+        ticker: 'MU',
+        source: 'EARNINGS_WHISPERS',
+        sourceUrl: 'https://www.earningswhispers.com/stocks/MU',
+        observedAt: new Date('2026-09-20T12:00:00Z'),
+        upcoming: null,
+        latest: null,
+      },
+      { research: state },
+    );
+    expect(earnings).toContain('The stored model is BUY');
+    expect(earnings).toContain('research candidate, not an automatic buy');
+    expect(earnings).toContain('Memory pricing can weaken.');
   });
 });

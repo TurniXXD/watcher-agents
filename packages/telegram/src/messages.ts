@@ -343,11 +343,93 @@ const earningsComparison = (
   return `• ${label}: actual ${earningsNumber(actual)}${suffix} vs consensus ${earningsNumber(expected)}${suffix} · ${verdict} ${difference >= 0 ? '+' : ''}${earningsNumber(difference)}${suffix}${surpriseText}`;
 };
 
+const resultInterpretation = (snapshot: EarningsSnapshotView): string => {
+  const latest = snapshot.latest;
+  if (!latest) {
+    return 'No reported result is stored yet, so there is no historical beat-or-miss signal to interpret.';
+  }
+  const epsDelta =
+    latest.actualEps === null || latest.consensusEps === null
+      ? null
+      : latest.actualEps - latest.consensusEps;
+  const revenueDelta =
+    latest.actualRevenue === null || latest.revenueEstimate === null
+      ? null
+      : latest.actualRevenue - latest.revenueEstimate;
+  if (epsDelta !== null && revenueDelta !== null) {
+    if (epsDelta > 0 && revenueDelta > 0) {
+      return 'The last report beat the provider consensus on both EPS and revenue. That supports positive historical operating momentum, but it does not tell us whether the next report or the share-price reaction will be positive.';
+    }
+    if (epsDelta < 0 && revenueDelta < 0) {
+      return 'The last report missed the provider consensus on both EPS and revenue. That is negative historical evidence; a later recovery needs confirmation in the next report and management guidance.';
+    }
+    return 'The last report was mixed: one headline metric beat consensus while the other missed. Read the primary release and guidance before treating the result as bullish or bearish.';
+  }
+  if (epsDelta !== null) {
+    return epsDelta > 0
+      ? 'The last EPS result beat provider consensus, but revenue data is incomplete. Treat the positive EPS signal as partial rather than a full operating beat.'
+      : 'The last EPS result missed provider consensus, but revenue data is incomplete. Check the primary release and guidance before drawing a broader conclusion.';
+  }
+  return 'The provider has insufficient actual-versus-consensus fields to assess the last result. Refresh sources and read the issuer release before acting.';
+};
+
+const nextReportInterpretation = (snapshot: EarningsSnapshotView): string => {
+  const upcoming = snapshot.upcoming;
+  if (!upcoming) {
+    return 'No upcoming earnings setup is stored. Refresh live sources before relying on this view.';
+  }
+  const expectations = [
+    upcoming.consensusEps === null
+      ? ''
+      : `EPS must be evaluated against the stored consensus of ${earningsNumber(upcoming.consensusEps)}.`,
+    upcoming.revenueEstimate === null
+      ? 'No revenue expectation is available, so this bot cannot quantify a revenue beat or miss in advance.'
+      : `Revenue will be compared with the stored estimate of ${earningsNumber(upcoming.revenueEstimate)} USD.`,
+  ].filter(Boolean);
+  return `${expectations.join(' ')} Guidance, demand commentary, margins, and the current valuation can still dominate the price reaction even when headline EPS beats.`;
+};
+
+const researchPosture = (state: StockThesisState | null): string => {
+  if (!state?.decision) {
+    return 'No current decision model is stored. This earnings snapshot alone is not enough to conclude that buying is a good idea; run /thesis SYMBOL for a live evidence refresh.';
+  }
+  const decision = state.decision;
+  const position = `${decision.maxRecommendedPositionPercent.minimum.toFixed(1)}–${decision.maxRecommendedPositionPercent.maximum.toFixed(1)}%`;
+  const shared = `The stored model is ${htmlText(decision.recommendation, 40)} with ${Math.round(state.confidence * 100)}% confidence and ${Math.round(state.dataCoverage)}% coverage. EV is ${decision.expectedValuePercent === null ? 'not supported by enough data' : `${decision.expectedValuePercent.toFixed(1)}%`}; expectations are ${htmlText(decision.pricedIn.classification, 60)}.`;
+  if (
+    ['STRONG_BUY', 'BUY', 'SMALL_POSITION'].includes(decision.recommendation)
+  ) {
+    return `${shared} This is a research candidate, not an automatic buy: the model's maximum research position is ${position}, and it should be reassessed after current price, primary evidence, and portfolio risk are reviewed.`;
+  }
+  if (
+    decision.recommendation === 'WATCH' ||
+    decision.recommendation === 'HOLD'
+  ) {
+    return `${shared} The current posture is to monitor, not to add on this snapshot alone. Wait for stronger evidence or a better risk/reward setup.`;
+  }
+  return `${shared} The current evidence does not support a purchase case. Refresh the thesis after material news or the next report before reassessing.`;
+};
+
+const earningsRisks = (
+  snapshot: EarningsSnapshotView,
+  state: StockThesisState | null,
+): string[] =>
+  [
+    'Earnings are a binary catalyst: guidance and price reaction can diverge from an EPS or revenue beat.',
+    snapshot.upcoming?.revenueEstimate === null
+      ? 'No upcoming revenue estimate is stored, so the forward setup is incomplete.'
+      : '',
+    ...(state?.risks ?? []).slice(0, 3),
+    ...(state?.materialDataGaps ?? []).slice(0, 2),
+  ].filter(Boolean);
+
 export const renderEarningsSnapshot = (
   snapshot: EarningsSnapshotView,
+  options: { research?: StockThesisState | null } = {},
 ): string => {
   const upcoming = snapshot.upcoming;
   const latest = snapshot.latest;
+  const risks = earningsRisks(snapshot, options.research ?? null);
   return [
     `📅 <b>${htmlText(snapshot.ticker, 30)} EARNINGS</b>`,
     `<i>Latest ${htmlText(snapshot.source, 100)} observation · ${htmlText(snapshot.observedAt.toISOString(), 40)}</i>`,
@@ -392,8 +474,12 @@ export const renderEarningsSnapshot = (
           .filter(Boolean)
           .join('\n')
       : '',
+    `<b>What it means</b>\n${resultInterpretation(snapshot)}`,
+    `<b>What to watch next</b>\n${nextReportInterpretation(snapshot)}`,
+    `<b>Is buying supported by the current research?</b>\n${researchPosture(options.research ?? null)}`,
+    risks.length ? `<b>Key risks</b>\n${bulletList(risks)}` : '',
     `🔗 Source: ${sourceLink(snapshot.source, snapshot.sourceUrl)}`,
-    '<i>Provider snapshot only. It does not evaluate guidance, valuation, or price reaction; refresh live evidence with /thesis SYMBOL.</i>',
+    '<i>Research only, not personal financial advice or a trade instruction. Refresh live evidence with /thesis SYMBOL before relying on this snapshot.</i>',
   ]
     .filter(Boolean)
     .join('\n\n');
