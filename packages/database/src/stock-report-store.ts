@@ -70,6 +70,24 @@ export type EarningsSnapshot = {
   } | null;
 };
 
+export type StockValuationSnapshot = {
+  ticker: string;
+  companyName: string | null;
+  marketCapUsd: number | null;
+  price: {
+    close: number;
+    observedAt: Date;
+    sourceUrl: string;
+  } | null;
+  zacks: {
+    forwardPe: number | null;
+    rank: string | null;
+    observedAt: Date;
+    sourceUrl: string;
+  } | null;
+  earnings: EarningsSnapshot['upcoming'];
+};
+
 const dateFact = (value: unknown): Date | null => {
   if (typeof value !== 'string') return null;
   const date = new Date(value);
@@ -191,6 +209,74 @@ export class StockReportStore {
       observedAt: item.discoveredAt,
       upcoming: hasUpcoming ? upcoming : null,
       latest: hasLatest ? latest : null,
+    };
+  }
+
+  public async getStockValuationSnapshot(
+    chatConfigId: string,
+    ticker: string,
+  ): Promise<StockValuationSnapshot | null> {
+    const symbol = ticker.trim().toUpperCase();
+    const observationForChat = {
+      some: { run: { watcherConfig: { chatConfigId } } },
+    };
+    const [stock, price, zacks, earnings] = await Promise.all([
+      this.db.stock.findUnique({
+        where: { chatConfigId_symbol: { chatConfigId, symbol } },
+        select: { symbol: true, companyName: true, marketCap: true },
+      }),
+      this.db.marketSnapshot.findFirst({
+        where: {
+          ticker: symbol,
+          processedItem: { eventObservations: observationForChat },
+        },
+        orderBy: { observedAt: 'desc' },
+        select: {
+          close: true,
+          observedAt: true,
+          processedItem: { select: { sourceUrl: true, url: true } },
+        },
+      }),
+      this.db.processedItem.findFirst({
+        where: {
+          watcherKind: WatcherKind.STOCKS,
+          source: StockSourceType.ZACKS,
+          ticker: symbol,
+          eventObservations: observationForChat,
+        },
+        orderBy: { discoveredAt: 'desc' },
+        select: {
+          discoveredAt: true,
+          sourceUrl: true,
+          url: true,
+          normalizedFacts: true,
+        },
+      }),
+      this.getEarningsSnapshot(chatConfigId, symbol),
+    ]);
+    if (!stock) return null;
+    const zacksFacts = zacks ? jsonObject(zacks.normalizedFacts) : {};
+    const rank = stringFact(zacksFacts.rankText);
+    return {
+      ticker: stock.symbol,
+      companyName: stock.companyName,
+      marketCapUsd: stock.marketCap === null ? null : Number(stock.marketCap),
+      price: price
+        ? {
+            close: Number(price.close),
+            observedAt: price.observedAt,
+            sourceUrl: price.processedItem.sourceUrl ?? price.processedItem.url,
+          }
+        : null,
+      zacks: zacks
+        ? {
+            forwardPe: nullableNumber(zacksFacts.forwardPe),
+            rank,
+            observedAt: zacks.discoveredAt,
+            sourceUrl: zacks.sourceUrl ?? zacks.url,
+          }
+        : null,
+      earnings: earnings?.upcoming ?? null,
     };
   }
 

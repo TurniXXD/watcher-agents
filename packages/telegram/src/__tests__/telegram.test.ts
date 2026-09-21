@@ -13,6 +13,8 @@ import {
   renderStockDashboard,
   renderStockDecisionCard,
   renderStockDigest,
+  renderStockPeerMap,
+  renderStockValuation,
   renderWatcherHealth,
   splitTelegramMessage,
 } from '../messages.js';
@@ -23,6 +25,60 @@ import {
 } from '../source-messages.js';
 
 describe('Telegram utilities', () => {
+  it('renders a peer map without asserting unverified supply-chain ties', () => {
+    const text = renderStockPeerMap({
+      ticker: 'MU',
+      focus: 'DRAM, HBM, NAND and AI memory demand',
+      peers: [
+        {
+          name: 'SK hynix',
+          relationship: 'COMPETITIVE_PEER',
+          role: 'HBM and DRAM memory peer',
+          watchFor: 'HBM capacity and pricing',
+        },
+      ],
+    });
+
+    expect(text).toContain('<b>MU PEER MAP</b>');
+    expect(text).toContain('competitive peer');
+    expect(text).toContain('not an assertion of a customer, supplier');
+  });
+
+  it('renders stored valuation and consensus data without a valuation verdict', () => {
+    const text = renderStockValuation({
+      ticker: 'MU',
+      companyName: 'Micron Technology',
+      marketCapUsd: 160_000_000_000,
+      price: {
+        close: 145.23,
+        observedAt: new Date('2026-09-21T08:00:00Z'),
+        sourceUrl: 'https://stooq.com/q/?s=mu.us',
+      },
+      zacks: {
+        forwardPe: 12.5,
+        rank: 'Buy',
+        observedAt: new Date('2026-09-21T07:00:00Z'),
+        sourceUrl: 'https://www.zacks.com/stock/quote/MU',
+      },
+      earnings: {
+        earningsDate: new Date('2026-09-30T00:00:00Z'),
+        confirmedAt: null,
+        fiscalQuarter: 4,
+        quarterEnd: null,
+        consensusEps: 31.17,
+        whisperEps: null,
+        revenueEstimate: 50_760_000_000,
+      },
+    });
+
+    expect(text).toContain('<b>MU VALUATION &amp; CONSENSUS</b>');
+    expect(text).toContain('Forward P/E: 12.5');
+    expect(text).toContain('implied forward earnings yield 8.0%');
+    expect(text).toContain('Market capitalization: $160.00bn');
+    expect(text).toContain('not a valuation verdict');
+    expect(text).toContain('not real-time quotes');
+  });
+
   it('renders an earnings setup and latest result without implying a trade action', () => {
     const text = renderEarningsSnapshot({
       ticker: 'MU',

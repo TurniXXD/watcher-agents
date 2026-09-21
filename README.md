@@ -252,6 +252,8 @@ Stocks bot:
 - `/reconcile` to run the comprehensive recovery scan now
 - `/catalysts [SYMBOL]` to list active and upcoming catalyst records with evidence
 - `/earnings SYMBOL` to show the stored next-report setup and latest EPS/revenue expectation-versus-actual comparison; run `/thesis SYMBOL` first when no source snapshot is stored
+- `/peers SYMBOL` to show the curated peer and sector context map for CRDO, MU, SNDK, and DOCN; it never asserts an unverified customer or supplier relationship
+- `/valuation SYMBOL` to show stored price, market capitalization, provider forward P/E, and earnings consensus without treating a multiple as a buy/sell conclusion
 - `/advanced [SYMBOL]` to inspect the latest options, institutional, short-interest, FDA, and clinical-trial data
 - `/thesis SYMBOL` to show the latest persistent thesis, decision state, scenarios, coverage, and signal scores
 - `/discovery` to show scanner state, active investigations, and recent signals

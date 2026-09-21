@@ -931,6 +931,10 @@ export class WatcherStore implements PipelineRepository {
     return this.stockReports.getEarningsSnapshot(chatConfigId, ticker);
   }
 
+  public getStockValuationSnapshot(chatConfigId: string, ticker: string) {
+    return this.stockReports.getStockValuationSnapshot(chatConfigId, ticker);
+  }
+
   public async claimPendingAlerts(watcherConfigId: string, now = new Date()) {
     return this.stockReports.claimPendingAlerts(watcherConfigId, now);
   }

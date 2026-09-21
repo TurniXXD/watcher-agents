@@ -485,6 +485,96 @@ export const renderEarningsSnapshot = (
     .join('\n\n');
 };
 
+export type StockPeerMapView = {
+  ticker: string;
+  focus: string;
+  peers: readonly {
+    name: string;
+    ticker?: string;
+    relationship: 'COMPETITIVE_PEER' | 'ADJACENT_INFRASTRUCTURE';
+    role: string;
+    watchFor: string;
+  }[];
+};
+
+export const renderStockPeerMap = (map: StockPeerMapView): string =>
+  [
+    `🕸 <b>${htmlText(map.ticker, 30)} PEER MAP</b>`,
+    `<b>Focus:</b> ${htmlText(map.focus, 300)}`,
+    '<b>Monitored sector context</b>',
+    ...map.peers.map(
+      (peer) =>
+        `• <b>${htmlText(peer.name, 120)}${peer.ticker ? ` (${htmlText(peer.ticker, 20)})` : ''}</b> · ${htmlText(peer.relationship === 'COMPETITIVE_PEER' ? 'competitive peer' : 'adjacent infrastructure', 80)}\n  ${htmlText(peer.role, 240)}\n  Watch for: ${htmlText(peer.watchFor, 360)}`,
+    ),
+    '<i>This is a curated sector map, not an assertion of a customer, supplier, ownership, or commercial relationship. Peer updates are context evidence and never treated as the watched company’s own earnings or filing.</i>',
+  ].join('\n\n');
+
+export type StockValuationView = {
+  ticker: string;
+  companyName: string | null;
+  marketCapUsd: number | null;
+  price: {
+    close: number;
+    observedAt: Date;
+    sourceUrl: string;
+  } | null;
+  zacks: {
+    forwardPe: number | null;
+    rank: string | null;
+    observedAt: Date;
+    sourceUrl: string;
+  } | null;
+  earnings: EarningsSnapshotView['upcoming'];
+};
+
+const usd = (value: number | null): string =>
+  value === null
+    ? 'n/a'
+    : value >= 1_000_000_000
+      ? `$${(value / 1_000_000_000).toFixed(2)}bn`
+      : value >= 1_000_000
+        ? `$${(value / 1_000_000).toFixed(2)}m`
+        : `$${earningsNumber(value)}`;
+
+export const renderStockValuation = (value: StockValuationView): string => {
+  const forwardPe = value.zacks?.forwardPe ?? null;
+  const earningsYield =
+    forwardPe !== null && forwardPe > 0 ? 100 / forwardPe : null;
+  const consensus = value.earnings;
+  return [
+    `⚖️ <b>${htmlText(value.ticker, 30)} VALUATION &amp; CONSENSUS</b>`,
+    value.companyName ? htmlText(value.companyName, 200) : '',
+    '<b>Observed market data</b>',
+    value.price
+      ? `• Price: ${usd(value.price.close)} · as of ${htmlText(value.price.observedAt.toISOString(), 40)}\n  ${sourceLink('PRICE', value.price.sourceUrl)}`
+      : '• Price: n/a — no stored market snapshot for this watchlist yet.',
+    `• Market capitalization: ${usd(value.marketCapUsd)}`,
+    '<b>Provider valuation</b>',
+    value.zacks
+      ? [
+          `• Forward P/E: ${earningsNumber(forwardPe)}${earningsYield === null ? '' : ` · implied forward earnings yield ${earningsYield.toFixed(1)}%`}`,
+          `• Zacks rank: ${htmlText(value.zacks.rank ?? 'n/a', 80)}`,
+          `• Observed: ${htmlText(value.zacks.observedAt.toISOString(), 40)} · ${sourceLink('ZACKS', value.zacks.sourceUrl)}`,
+        ].join('\n')
+      : '• Forward P/E and rank: n/a — no stored Zacks snapshot for this watchlist yet.',
+    '<b>Next earnings expectations</b>',
+    consensus
+      ? [
+          `• Report date: ${earningsDate(consensus.earningsDate)}`,
+          `• Consensus EPS: ${earningsNumber(consensus.consensusEps)} · Whisper EPS: ${earningsNumber(consensus.whisperEps)}`,
+          `• Revenue estimate: ${usd(consensus.revenueEstimate)}`,
+        ].join('\n')
+      : '• No stored upcoming consensus estimate. Refresh live sources with /thesis SYMBOL.',
+    '<b>How to read this</b>',
+    forwardPe === null
+      ? 'There is not enough valuation data for a multiple-based comparison. A missing number is not evidence that the stock is cheap or expensive.'
+      : 'Forward P/E is a provider estimate, not a valuation verdict. Compare its growth, margins, cyclicality, balance-sheet risk, and peer multiples before treating it as cheap or expensive. A consensus beat can still be priced in.',
+    '<i>Research only. These are delayed/provider observations, not real-time quotes, a price target, or a trade instruction.</i>',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+};
+
 export const renderStockThesis = (state: StockThesisState): string => {
   const availableSignals = state.signalGroups.filter(
     ({ availability, score }) => availability === 'AVAILABLE' && score !== 0,

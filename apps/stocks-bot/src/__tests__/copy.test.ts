@@ -32,6 +32,7 @@ describe('stocks bot command copy', () => {
       'news',
       'opportunities',
       'pause',
+      'peers',
       'reconcile',
       'remove_stock',
       'replay',
@@ -56,6 +57,7 @@ describe('stocks bot command copy', () => {
       'stocks_tickers',
       'thesis',
       'validate',
+      'valuation',
     ]);
   });
 

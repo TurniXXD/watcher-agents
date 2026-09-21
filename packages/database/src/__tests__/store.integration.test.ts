@@ -1069,6 +1069,57 @@ integration('WatcherStore with PostgreSQL', () => {
         revenueSurprise: 0.1851,
       },
     });
+
+    await database.stock.update({
+      where: { chatConfigId_symbol: { chatConfigId: chat.id, symbol: 'MU' } },
+      data: { marketCap: 160_000_000_000 },
+    });
+    await store.prepareItemsForRun(
+      'STOCKS',
+      run.id,
+      [
+        {
+          ...watchItem('mu-price'),
+          id: 'PRICE:mu-price',
+          source: 'PRICE',
+          externalId: 'mu-price',
+          title: 'MU market price 145.23',
+          url: 'https://stooq.com/q/?s=mu.us',
+          sourceType: 'MARKET_DATA',
+          primarySource: false,
+          category: 'PRICE_SNAPSHOT',
+          normalizedFacts: {
+            open: 140,
+            high: 147,
+            low: 139,
+            close: 145.23,
+            volume: 10_000,
+          },
+        },
+        {
+          ...watchItem('mu-zacks'),
+          id: 'ZACKS:mu-zacks',
+          source: 'ZACKS',
+          externalId: 'mu-zacks',
+          title: 'MU Zacks 2-Buy',
+          url: 'https://www.zacks.com/stock/quote/MU',
+          sourceType: 'ANALYST',
+          primarySource: false,
+          category: 'ANALYST_SNAPSHOT',
+          normalizedFacts: { forwardPe: '12.5', rankText: 'Buy' },
+        },
+      ],
+      5,
+    );
+    await expect(
+      store.getStockValuationSnapshot(chat.id, 'MU'),
+    ).resolves.toMatchObject({
+      ticker: 'MU',
+      marketCapUsd: 160_000_000_000,
+      price: { close: 145.23 },
+      zacks: { forwardPe: 12.5, rank: 'Buy' },
+      earnings: { consensusEps: 31.17 },
+    });
   });
 
   it('deduplicates the same SEC event reported by a second source', async () => {

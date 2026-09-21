@@ -7,9 +7,18 @@ export type CompanyIntelligenceEndpoint = {
   relatedTicker?: string;
 };
 
+export type CompanyIntelligencePeer = {
+  name: string;
+  ticker?: string;
+  relationship: 'COMPETITIVE_PEER' | 'ADJACENT_INFRASTRUCTURE';
+  role: string;
+  watchFor: string;
+};
+
 export type CompanyIntelligenceProfile = {
   symbol: string;
   focus: string;
+  peers: readonly CompanyIntelligencePeer[];
   endpoints: readonly CompanyIntelligenceEndpoint[];
 };
 
@@ -27,6 +36,23 @@ export const companyIntelligenceProfiles: ReadonlyMap<
     {
       symbol: 'CRDO',
       focus: 'high-speed connectivity for AI and cloud infrastructure',
+      peers: [
+        {
+          name: 'Marvell',
+          ticker: 'MRVL',
+          relationship: 'COMPETITIVE_PEER',
+          role: 'data-center networking and connectivity peer',
+          watchFor: 'optical, networking, and AI data-center demand commentary',
+        },
+        {
+          name: 'Astera Labs',
+          ticker: 'ALAB',
+          relationship: 'COMPETITIVE_PEER',
+          role: 'AI connectivity-fabric peer',
+          watchFor:
+            'AI platform design wins, connectivity demand, and supply outlook',
+        },
+      ],
       endpoints: [
         {
           name: 'Credo investor relations',
@@ -54,6 +80,22 @@ export const companyIntelligenceProfiles: ReadonlyMap<
     {
       symbol: 'MU',
       focus: 'DRAM, HBM, NAND and AI memory demand',
+      peers: [
+        {
+          name: 'SK hynix',
+          relationship: 'COMPETITIVE_PEER',
+          role: 'HBM and DRAM memory peer',
+          watchFor:
+            'HBM capacity, pricing, customer qualification, and supply commentary',
+        },
+        {
+          name: 'Kioxia',
+          relationship: 'COMPETITIVE_PEER',
+          role: 'NAND flash memory peer',
+          watchFor:
+            'NAND pricing, production discipline, and enterprise storage demand',
+        },
+      ],
       endpoints: [
         {
           name: 'Micron newsroom',
@@ -79,6 +121,23 @@ export const companyIntelligenceProfiles: ReadonlyMap<
     {
       symbol: 'SNDK',
       focus: 'NAND flash, enterprise storage and AI data infrastructure',
+      peers: [
+        {
+          name: 'Kioxia',
+          relationship: 'COMPETITIVE_PEER',
+          role: 'NAND flash memory peer',
+          watchFor:
+            'NAND pricing, production discipline, and enterprise demand',
+        },
+        {
+          name: 'Western Digital',
+          ticker: 'WDC',
+          relationship: 'COMPETITIVE_PEER',
+          role: 'storage and flash-market peer',
+          watchFor:
+            'enterprise storage demand, flash pricing, and margin commentary',
+        },
+      ],
       endpoints: [
         {
           name: 'Sandisk investor relations',
@@ -105,6 +164,24 @@ export const companyIntelligenceProfiles: ReadonlyMap<
     {
       symbol: 'DOCN',
       focus: 'AI-native cloud, GPU infrastructure and developer cloud demand',
+      peers: [
+        {
+          name: 'CoreWeave',
+          ticker: 'CRWV',
+          relationship: 'ADJACENT_INFRASTRUCTURE',
+          role: 'GPU-cloud and AI infrastructure peer',
+          watchFor:
+            'GPU capacity, AI workload demand, customer concentration, and capex',
+        },
+        {
+          name: 'Cloudflare',
+          ticker: 'NET',
+          relationship: 'ADJACENT_INFRASTRUCTURE',
+          role: 'developer cloud and edge-infrastructure peer',
+          watchFor:
+            'developer demand, AI product adoption, and infrastructure margins',
+        },
+      ],
       endpoints: [
         {
           name: 'DigitalOcean investor relations',

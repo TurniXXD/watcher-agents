@@ -20,6 +20,7 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /news SYMBOL RANGE [--json] — saved stock news by publication time; JSON exports full stored details
 /opportunities — stocks with elevated attention or favorable asymmetry
 /pause — pause scheduled runs
+/peers SYMBOL — show the curated peer and sector context map for supported AI-infrastructure stocks
 /reconcile — run the comprehensive daily reconciliation now
 /remove_stock SYMBOL — remove a stock
 /replay SYMBOL DATE — reconstruct only information known by that date
@@ -44,7 +45,8 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /stocks — list stocks
 /stocks_tickers — list only enabled ticker symbols
 /thesis SYMBOL — refresh live sources for one ticker, then show its updated persistent thesis and scores
-/validate — backtest stored theses, alerts, and signals against stored prices`;
+/validate — backtest stored theses, alerts, and signals against stored prices
+/valuation SYMBOL — show stored price, provider forward P/E, market cap, and earnings consensus`;
 
 export const stocksAbout = `*Stocks Watcher*
 

@@ -24,8 +24,10 @@ import {
   renderRunProgress,
   renderStockDashboard,
   renderStockDecisionCard,
+  renderStockPeerMap,
   renderStockSourceList,
   renderStockThesis,
+  renderStockValuation,
   renderWatcherHealth,
   sendSplitMessage,
   stockSymbolSchema,
@@ -67,6 +69,7 @@ import {
   renderStockSchedules,
 } from './schedule-management.js';
 import { renderThesisNotReady } from './thesis-refresh.js';
+import { companyIntelligenceProfileFor } from './sources/company-intelligence/profiles.js';
 
 type StockCompany = {
   symbol: string;
@@ -630,6 +633,60 @@ export const createStocksBot = (
       renderEarningsSnapshot(snapshot, {
         research: thesis ? parseStoredStockThesis(thesis) : null,
       }),
+    );
+  });
+  bot.command('peers', async (ctx) => {
+    const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
+    const current = await chat(ctx.chat.id);
+    const stock = (await store.listStocks(current.id)).find(
+      ({ symbol: configuredSymbol }) => configuredSymbol === symbol,
+    );
+    if (!stock) {
+      await ctx.reply(
+        `${symbol} is not on this watchlist. Add it with /add_stock ${symbol} first.`,
+      );
+      return;
+    }
+    const profile = companyIntelligenceProfileFor(symbol);
+    if (!profile) {
+      await ctx.reply(
+        `No curated peer map exists for ${symbol} yet. It is currently available for CRDO, MU, SNDK, and DOCN.`,
+      );
+      return;
+    }
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderStockPeerMap({
+        ticker: profile.symbol,
+        focus: profile.focus,
+        peers: profile.peers,
+      }),
+    );
+  });
+  bot.command('valuation', async (ctx) => {
+    const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
+    const current = await chat(ctx.chat.id);
+    const stock = (await store.listStocks(current.id)).find(
+      ({ symbol: configuredSymbol }) => configuredSymbol === symbol,
+    );
+    if (!stock) {
+      await ctx.reply(
+        `${symbol} is not on this watchlist. Add it with /add_stock ${symbol} first.`,
+      );
+      return;
+    }
+    const snapshot = await store.getStockValuationSnapshot(current.id, symbol);
+    if (!snapshot) {
+      await ctx.reply(
+        `No valuation snapshot exists for ${symbol} yet. Run /thesis ${symbol} to collect enabled live sources first.`,
+      );
+      return;
+    }
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderStockValuation(snapshot),
     );
   });
   bot.command('advanced', async (ctx) => {
