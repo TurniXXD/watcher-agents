@@ -1,6 +1,7 @@
 import { load } from 'cheerio';
 import { z } from 'zod';
 import type { EventCategory, EventSource, RawEvent } from '../domain/types.js';
+import { isPlaceholderEventTitle } from '../domain/normalization.js';
 import { parseJsonLdEvents } from './json-ld.js';
 import {
   absoluteUrl,
@@ -57,6 +58,7 @@ export const parseCeitecResponse = (
     if (!parsed.success) return [];
     const item = parsed.data;
     const title = item.title ?? item.title_en ?? item.title_cs ?? undefined;
+    if (!title || isPlaceholderEventTitle(title)) return [];
     const candidate = eventCandidate({
       externalId: String(item.id),
       title,

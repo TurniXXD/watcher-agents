@@ -88,6 +88,35 @@ export type StockValuationSnapshot = {
   earnings: EarningsSnapshot['upcoming'];
 };
 
+export type StockReactionContext = {
+  ticker: string;
+  event: {
+    id: string;
+    title: string;
+    eventType: string;
+    materiality: string;
+    detectedAt: Date;
+    occurredAt: Date | null;
+    source: string;
+    sourceUrl: string;
+  };
+  baseline: {
+    close: number;
+    observedAt: Date;
+  } | null;
+  reaction: {
+    close: number;
+    observedAt: Date;
+    dailyReturnPercent: number | null;
+    relativeVolume: number | null;
+    priceAnomaly: boolean;
+    volumeAnomaly: boolean;
+    unexplained: boolean;
+    primaryDriverId: string | null;
+  } | null;
+  status: 'PENDING' | 'CONFIRMED' | 'UNEXPLAINED' | 'OBSERVED';
+};
+
 const dateFact = (value: unknown): Date | null => {
   if (typeof value !== 'string') return null;
   const date = new Date(value);
@@ -226,10 +255,7 @@ export class StockReportStore {
         select: { symbol: true, companyName: true, marketCap: true },
       }),
       this.db.marketSnapshot.findFirst({
-        where: {
-          ticker: symbol,
-          processedItem: { eventObservations: observationForChat },
-        },
+        where: { ticker: symbol },
         orderBy: { observedAt: 'desc' },
         select: {
           close: true,
@@ -277,6 +303,118 @@ export class StockReportStore {
           }
         : null,
       earnings: earnings?.upcoming ?? null,
+    };
+  }
+
+  public async getStockReactionContext(
+    chatConfigId: string,
+    ticker: string,
+  ): Promise<StockReactionContext | null> {
+    const symbol = ticker.trim().toUpperCase();
+    const event = await this.db.canonicalEvent.findFirst({
+      where: {
+        ticker: symbol,
+        materiality: { in: ['MEDIUM', 'HIGH', 'EXTREME'] },
+        eventType: {
+          notIn: [
+            'PRICE_ANOMALY',
+            'VOLUME_ANOMALY',
+            'OPTIONS_ANOMALY',
+            'OFF_EXCHANGE_ANOMALY',
+          ],
+        },
+        observations: {
+          some: { run: { watcherConfig: { chatConfigId } } },
+        },
+      },
+      orderBy: { firstDetectedAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        eventType: true,
+        materiality: true,
+        firstDetectedAt: true,
+        occurredAt: true,
+        firstPublicAt: true,
+        primaryEvidence: {
+          select: { source: true, sourceUrl: true, url: true },
+        },
+      },
+    });
+    if (!event) return null;
+
+    const anchorAt =
+      event.occurredAt ?? event.firstPublicAt ?? event.firstDetectedAt;
+    const baselineStart = new Date(anchorAt.getTime() - 24 * 60 * 60_000);
+    const reactionEnd = new Date(anchorAt.getTime() + 48 * 60 * 60_000);
+    const [baseline, reaction] = await Promise.all([
+      this.db.marketSnapshot.findFirst({
+        where: {
+          ticker: symbol,
+          observedAt: { gte: baselineStart, lte: anchorAt },
+        },
+        orderBy: { observedAt: 'desc' },
+        select: { close: true, observedAt: true },
+      }),
+      this.db.marketSnapshot.findFirst({
+        where: {
+          ticker: symbol,
+          observedAt: { gt: anchorAt, lte: reactionEnd },
+        },
+        orderBy: { observedAt: 'asc' },
+        select: {
+          close: true,
+          observedAt: true,
+          dailyReturnPercent: true,
+          relativeVolume: true,
+          priceAnomaly: true,
+          volumeAnomaly: true,
+          unexplained: true,
+          primaryDriverId: true,
+        },
+      }),
+    ]);
+    const status = !reaction
+      ? 'PENDING'
+      : reaction.primaryDriverId === event.id
+        ? 'CONFIRMED'
+        : reaction.unexplained
+          ? 'UNEXPLAINED'
+          : 'OBSERVED';
+    return {
+      ticker: symbol,
+      event: {
+        id: event.id,
+        title: event.title,
+        eventType: event.eventType,
+        materiality: event.materiality,
+        detectedAt: event.firstDetectedAt,
+        occurredAt: event.occurredAt,
+        source: event.primaryEvidence.source,
+        sourceUrl: event.primaryEvidence.sourceUrl ?? event.primaryEvidence.url,
+      },
+      baseline: baseline
+        ? { close: Number(baseline.close), observedAt: baseline.observedAt }
+        : null,
+      reaction: reaction
+        ? {
+            close: Number(reaction.close),
+            observedAt: reaction.observedAt,
+            dailyReturnPercent:
+              reaction.dailyReturnPercent === null
+                ? null
+                : Number(reaction.dailyReturnPercent),
+            relativeVolume:
+              reaction.relativeVolume === null
+                ? null
+                : Number(reaction.relativeVolume),
+            priceAnomaly: reaction.priceAnomaly,
+            volumeAnomaly: reaction.volumeAnomaly,
+            unexplained: reaction.unexplained,
+            primaryDriverId: reaction.primaryDriverId,
+          }
+        : null,
+      status,
     };
   }
 

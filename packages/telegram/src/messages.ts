@@ -575,6 +575,199 @@ export const renderStockValuation = (value: StockValuationView): string => {
     .join('\n\n');
 };
 
+export type StockReactionView = {
+  ticker: string;
+  event: {
+    title: string;
+    eventType: string;
+    materiality: string;
+    detectedAt: Date;
+    occurredAt: Date | null;
+    source: string;
+    sourceUrl: string;
+  };
+  baseline: { close: number; observedAt: Date } | null;
+  reaction: {
+    close: number;
+    observedAt: Date;
+    dailyReturnPercent: number | null;
+    relativeVolume: number | null;
+    priceAnomaly: boolean;
+    volumeAnomaly: boolean;
+    unexplained: boolean;
+    primaryDriverId: string | null;
+  } | null;
+  status: 'PENDING' | 'CONFIRMED' | 'UNEXPLAINED' | 'OBSERVED';
+};
+
+const reactionStatusText: Record<StockReactionView['status'], string> = {
+  PENDING:
+    'Waiting for a post-event stored price observation. Do not treat the headline as a trade trigger yet.',
+  CONFIRMED:
+    'A stored market observation is explicitly linked to this event. That confirms timing, not causality or a durable trend.',
+  UNEXPLAINED:
+    'The market move is material but is still marked unexplained. Do not attribute it to this headline without more evidence.',
+  OBSERVED:
+    'A post-event market observation exists, but it is not explicitly attributed to this event. Treat it as context, not proof of cause and effect.',
+};
+
+export const renderStockReaction = (value: StockReactionView): string => {
+  const movePercent =
+    value.baseline && value.reaction && value.baseline.close !== 0
+      ? (value.reaction.close / value.baseline.close - 1) * 100
+      : null;
+  const reaction = value.reaction;
+  const anomalies = reaction
+    ? [
+        reaction.priceAnomaly ? 'price anomaly' : '',
+        reaction.volumeAnomaly ? 'volume anomaly' : '',
+      ].filter(Boolean)
+    : [];
+  return [
+    `📈 <b>${htmlText(value.ticker, 30)} PRICE-REACTION GUARD</b>`,
+    '<b>Latest material driver</b>',
+    `${htmlText(value.event.title, 500)}\n${htmlText(value.event.eventType, 60)} · ${htmlText(value.event.materiality, 30)} materiality\nDetected: ${htmlText(value.event.detectedAt.toISOString(), 40)}${value.event.occurredAt ? ` · occurred: ${htmlText(value.event.occurredAt.toISOString(), 40)}` : ''}\n${sourceLink(value.event.source, value.event.sourceUrl)}`,
+    '<b>Stored market evidence</b>',
+    value.baseline
+      ? `• Before event: ${usd(value.baseline.close)} · ${htmlText(value.baseline.observedAt.toISOString(), 40)}`
+      : '• Before event: n/a — no stored observation in the preceding 24 hours.',
+    reaction
+      ? [
+          `• First post-event observation: ${usd(reaction.close)} · ${htmlText(reaction.observedAt.toISOString(), 40)}`,
+          `• Change from stored baseline: ${movePercent === null ? 'n/a' : `${movePercent >= 0 ? '+' : ''}${movePercent.toFixed(2)}%`}`,
+          `• Provider daily move: ${reaction.dailyReturnPercent === null ? 'n/a' : `${reaction.dailyReturnPercent >= 0 ? '+' : ''}${reaction.dailyReturnPercent.toFixed(2)}%`} · relative volume: ${reaction.relativeVolume === null ? 'n/a' : `${reaction.relativeVolume.toFixed(2)}×`}`,
+          anomalies.length
+            ? `• Flags: ${htmlText(anomalies.join(', '), 120)}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : '• No post-event market observation has been stored within the 48-hour reaction window yet.',
+    '<b>Guard result</b>',
+    reactionStatusText[value.status],
+    '<i>Research only. This is a timing and attribution check over stored provider data, not a real-time quote, price target, or trade instruction.</i>',
+  ].join('\n\n');
+};
+
+export type PaperPositionView = {
+  id: string;
+  ticker: string;
+  status: 'OPEN' | 'CLOSED';
+  openedAt: Date;
+  closedAt: Date | null;
+  horizonDays: number;
+  amountCzk: number;
+  entryPrice: number;
+  entryPriceObservedAt: Date;
+  exitPrice: number | null;
+  exitPriceObservedAt: Date | null;
+  latestPrice: number | null;
+  latestPriceObservedAt: Date | null;
+  returnPercent: number | null;
+  notionalProfitCzk: number | null;
+  horizonElapsed: boolean;
+  thesis: {
+    verdict: string | null;
+    confidence: number | null;
+    attentionScore: number | null;
+  };
+};
+
+const formatCzk = (value: number): string =>
+  `${new Intl.NumberFormat('cs-CZ').format(Math.round(value))} Kč`;
+
+const paperPositionLines = (
+  position: PaperPositionView,
+  ordinal: number | null,
+): string[] => {
+  const latest = position.exitPrice ?? position.latestPrice;
+  const latestAt =
+    position.exitPriceObservedAt ?? position.latestPriceObservedAt;
+  const result =
+    position.returnPercent === null
+      ? 'n/a — no later stored price'
+      : `${position.returnPercent >= 0 ? '+' : ''}${position.returnPercent.toFixed(2)}% · ${position.notionalProfitCzk === null ? 'n/a' : `${position.notionalProfitCzk >= 0 ? '+' : ''}${formatCzk(position.notionalProfitCzk)}`}`;
+  const thesis = [
+    position.thesis.verdict,
+    position.thesis.confidence === null
+      ? null
+      : `confidence ${Math.round(position.thesis.confidence * 100)}%`,
+    position.thesis.attentionScore === null
+      ? null
+      : `attention ${position.thesis.attentionScore}/100`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return [
+    `<b>${ordinal === null ? '' : `${ordinal}. `}${htmlText(position.ticker, 30)}</b> · ${htmlText(position.status, 20)}`,
+    `Notional: ${formatCzk(position.amountCzk)} · horizon: ${position.horizonDays}d${position.horizonElapsed && position.status === 'OPEN' ? ' · horizon reached' : ''}`,
+    `Entry: ${usd(position.entryPrice)} · ${htmlText(position.entryPriceObservedAt.toISOString(), 40)}`,
+    latest
+      ? `${position.status === 'CLOSED' ? 'Exit' : 'Latest stored'}: ${usd(latest)}${latestAt ? ` · ${htmlText(latestAt.toISOString(), 40)}` : ''}`
+      : 'Latest stored: n/a',
+    `Paper result: ${result}`,
+    thesis ? `Opening thesis: ${htmlText(thesis, 160)}` : '',
+  ].filter(Boolean);
+};
+
+export const renderPaperPortfolio = (
+  positions: PaperPositionView[],
+): string => {
+  if (!positions.length) {
+    return [
+      '🧾 <b>PAPER PORTFOLIO</b>',
+      'No paper positions yet. Create one with <code>/paper_open SYMBOL --amount-czk AMOUNT --days DAYS</code>.',
+      '<i>This is a research ledger only; it never places an order.</i>',
+    ].join('\n\n');
+  }
+  const open = positions.filter(({ status }) => status === 'OPEN');
+  const closed = positions.filter(({ status }) => status === 'CLOSED');
+  const blocks = [
+    ...open.map((position, index) =>
+      paperPositionLines(position, index + 1).join('\n'),
+    ),
+    ...closed.map((position) => paperPositionLines(position, null).join('\n')),
+  ];
+  const marked = positions.filter(
+    ({ returnPercent }) => returnPercent !== null,
+  );
+  const totalNotional = marked.reduce(
+    (sum, position) => sum + position.amountCzk,
+    0,
+  );
+  const totalProfit = marked.reduce(
+    (sum, position) => sum + (position.notionalProfitCzk ?? 0),
+    0,
+  );
+  return [
+    '🧾 <b>PAPER PORTFOLIO</b>',
+    `Open: ${open.length} · closed: ${closed.length} · marked: ${marked.length}`,
+    marked.length
+      ? `Marked notional result: ${totalProfit >= 0 ? '+' : ''}${formatCzk(totalProfit)} on ${formatCzk(totalNotional)} tracked notional`
+      : 'Marked notional result: n/a — later stored prices are needed.',
+    blocks.join('\n\n──────────\n\n'),
+    '<i>Open-position numbers are for /paper_close NUMBER. This research ledger never places an order. Results use the percentage change in the stored underlying price applied to the CZK research notional; they do not include FX, spreads, fees, tax, dividends, or real-time execution. This is not financial advice or a broker connection.</i>',
+  ].join('\n\n');
+};
+
+export const renderPaperPositionOpened = (
+  position: PaperPositionView,
+): string =>
+  [
+    '🧾 <b>PAPER POSITION OPENED</b>',
+    paperPositionLines(position, 1).join('\n'),
+    '<i>Nothing was bought. This records a research hypothesis against the stored entry price so it can be evaluated later.</i>',
+  ].join('\n\n');
+
+export const renderPaperPositionClosed = (
+  position: PaperPositionView,
+): string =>
+  [
+    '🧾 <b>PAPER POSITION CLOSED</b>',
+    paperPositionLines(position, null).join('\n'),
+    '<i>Nothing was sold. Closing freezes the paper outcome at the latest stored price observation.</i>',
+  ].join('\n\n');
+
 export const renderStockThesis = (state: StockThesisState): string => {
   const availableSignals = state.signalGroups.filter(
     ({ availability, score }) => availability === 'AVAILABLE' && score !== 0,

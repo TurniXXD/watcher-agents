@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { BriefingEvent, BriefingEventRepository } from '@watcher/core';
 import type { RawEvent } from '../domain/types.js';
+import { isPlaceholderEventTitle } from '../domain/normalization.js';
 import { scoreEvent } from './relevance.js';
 import type {
   BrnoEventMessageType,
@@ -110,6 +111,7 @@ export class BriefingBrnoEventPublisher implements BrnoEventPublisher {
     sourceId: string,
   ): Promise<void> {
     if (type !== 'event.high_relevance' && type !== 'event.cancelled') return;
+    if (isPlaceholderEventTitle(event.title)) return;
     const briefingEvent = brnoBriefingEvent(type, event, sourceId);
     if (type === 'event.high_relevance') {
       const existing = await this.events.list({

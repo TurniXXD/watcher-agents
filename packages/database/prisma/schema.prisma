@@ -81,6 +81,11 @@ enum MonitoringMode {
   EVENT_MODE
 }
 
+enum PaperPositionStatus {
+  OPEN
+  CLOSED
+}
+
 enum CanonicalEventType {
   EARNINGS
   GUIDANCE
@@ -811,6 +816,7 @@ model TelegramChat {
   newsFeeds               NewsFeed[]
   newsTopics              NewsTopic[]
   newsCategoryPreferences NewsCategoryPreference[]
+  paperPositions          PaperPosition[]
 
   @@unique([kind, chatId])
 }
@@ -1381,6 +1387,29 @@ model Stock {
 
   @@unique([chatConfigId, symbol])
   @@index([monitoringMode, nextHighResolutionCheckAt])
+}
+
+model PaperPosition {
+  id                   String              @id @default(uuid())
+  chatConfigId         String
+  ticker               String
+  status               PaperPositionStatus @default(OPEN)
+  openedAt             DateTime            @default(now())
+  closedAt             DateTime?
+  horizonDays          Int
+  amountCzk            Decimal             @db.Decimal(18, 2)
+  entryPrice           Decimal             @db.Decimal(24, 8)
+  entryPriceObservedAt DateTime
+  exitPrice            Decimal?            @db.Decimal(24, 8)
+  exitPriceObservedAt  DateTime?
+  thesisSnapshot       Json                @default("{}")
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  chatConfig           TelegramChat        @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
+
+  @@index([chatConfigId, status, openedAt])
+  @@index([chatConfigId, ticker, status])
+  @@map("paper_positions")
 }
 
 model DiscoveryScan {

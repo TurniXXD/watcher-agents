@@ -14,6 +14,8 @@ import {
   renderStockDecisionCard,
   renderStockDigest,
   renderStockPeerMap,
+  renderStockReaction,
+  renderPaperPortfolio,
   renderStockValuation,
   renderWatcherHealth,
   splitTelegramMessage,
@@ -77,6 +79,70 @@ describe('Telegram utilities', () => {
     expect(text).toContain('Market capitalization: $160.00bn');
     expect(text).toContain('not a valuation verdict');
     expect(text).toContain('not real-time quotes');
+  });
+
+  it('renders a price-reaction guard without asserting causal certainty', () => {
+    const text = renderStockReaction({
+      ticker: 'MU',
+      event: {
+        title: 'Micron reports earnings',
+        eventType: 'EARNINGS',
+        materiality: 'HIGH',
+        detectedAt: new Date('2026-09-21T12:00:00Z'),
+        occurredAt: new Date('2026-09-21T11:30:00Z'),
+        source: 'EARNINGS_WHISPERS',
+        sourceUrl: 'https://www.earningswhispers.com/stocks/MU',
+      },
+      baseline: {
+        close: 100,
+        observedAt: new Date('2026-09-21T11:00:00Z'),
+      },
+      reaction: {
+        close: 106,
+        observedAt: new Date('2026-09-21T12:15:00Z'),
+        dailyReturnPercent: 6,
+        relativeVolume: 2.4,
+        priceAnomaly: true,
+        volumeAnomaly: true,
+        unexplained: false,
+        primaryDriverId: 'event-id',
+      },
+      status: 'CONFIRMED',
+    });
+
+    expect(text).toContain('<b>MU PRICE-REACTION GUARD</b>');
+    expect(text).toContain('Change from stored baseline: +6.00%');
+    expect(text).toContain('explicitly linked to this event');
+    expect(text).toContain('not causality or a durable trend');
+  });
+
+  it('renders paper positions as a no-execution research ledger', () => {
+    const text = renderPaperPortfolio([
+      {
+        id: 'paper-1',
+        ticker: 'MU',
+        status: 'OPEN',
+        openedAt: new Date('2026-09-21T12:00:00Z'),
+        closedAt: null,
+        horizonDays: 30,
+        amountCzk: 10_000,
+        entryPrice: 100,
+        entryPriceObservedAt: new Date('2026-09-21T12:00:00Z'),
+        exitPrice: null,
+        exitPriceObservedAt: null,
+        latestPrice: 105,
+        latestPriceObservedAt: new Date('2026-09-22T12:00:00Z'),
+        returnPercent: 5,
+        notionalProfitCzk: 500,
+        horizonElapsed: false,
+        thesis: { verdict: 'WATCH', confidence: 0.6, attentionScore: 70 },
+      },
+    ]);
+
+    expect(text).toContain('<b>PAPER PORTFOLIO</b>');
+    expect(text).toContain('Paper result: +5.00% · +500 Kč');
+    expect(text).toContain('Open-position numbers are for /paper_close NUMBER');
+    expect(text).toContain('never places an order');
   });
 
   it('renders an earnings setup and latest result without implying a trade action', () => {

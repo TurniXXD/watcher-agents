@@ -65,4 +65,20 @@ describe('Brno briefing publisher', () => {
 
     expect(save).not.toHaveBeenCalled();
   });
+
+  it('never publishes a placeholder title into the briefing stream', async () => {
+    const save = vi.fn(async () => ({ event: {}, created: true }));
+    const publisher = new BriefingBrnoEventPublisher({
+      save,
+      list: vi.fn(async () => []),
+    } as unknown as BriefingEventRepository);
+
+    await publisher.publish(
+      'event.high_relevance',
+      { ...event, title: 'NCBR Seminar: TBA' },
+      'ceitec',
+    );
+
+    expect(save).not.toHaveBeenCalled();
+  });
 });

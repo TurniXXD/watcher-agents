@@ -249,6 +249,8 @@ Stocks bot:
 - `/event_replay SYMBOL [FROM] [TO]` for the chronological event and thesis-transition stream
 - `/validate` to match stored theses, alerts, and signals to stored price outcomes
 - `/backtest`, `/calibration`, and `/signal_performance` for validation reports
+- `/reaction SYMBOL` to distinguish a stored post-event price observation from a confirmed event-to-reaction link or an unexplained move
+- `/paper_open SYMBOL --amount-czk AMOUNT [--days DAYS]`, `/paper_portfolio`, and `/paper_close NUMBER` for a persistent, no-execution paper ledger that preserves the entry thesis and evaluates it only against stored prices
 - `/reconcile` to run the comprehensive recovery scan now
 - `/catalysts [SYMBOL]` to list active and upcoming catalyst records with evidence
 - `/earnings SYMBOL` to show the stored next-report setup and latest EPS/revenue expectation-versus-actual comparison; run `/thesis SYMBOL` first when no source snapshot is stored

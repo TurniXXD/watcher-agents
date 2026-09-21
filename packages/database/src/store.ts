@@ -53,6 +53,7 @@ import {
 } from './source-health-store.js';
 import { eventNeedsAnalysis, StockEventStore } from './stock-event-store.js';
 import { StockReportStore } from './stock-report-store.js';
+import { PaperPortfolioStore } from './paper-portfolio-store.js';
 import { ConfigurationStore } from './configuration-store.js';
 
 const DEFAULT_SCHEDULE = '0 8 * * *';
@@ -114,6 +115,7 @@ export class WatcherStore implements PipelineRepository {
   private readonly stockEvents: StockEventStore;
   private readonly sourceHealth: SourceHealthStore;
   private readonly stockReports: StockReportStore;
+  private readonly paperPortfolio: PaperPortfolioStore;
   private readonly configuration: ConfigurationStore;
   private readonly alertAttentionThreshold: number;
   private readonly notificationPolicy: StockNotificationPolicy;
@@ -146,6 +148,7 @@ export class WatcherStore implements PipelineRepository {
       maximumBackoffMs: options.sourceBackoffMaximumMs ?? 6 * 60 * 60_000,
     });
     this.stockReports = new StockReportStore(db);
+    this.paperPortfolio = new PaperPortfolioStore(db);
     this.configuration = new ConfigurationStore(db);
     this.alertAttentionThreshold = options.alertAttentionThreshold ?? 85;
     this.notificationPolicy = {
@@ -933,6 +936,34 @@ export class WatcherStore implements PipelineRepository {
 
   public getStockValuationSnapshot(chatConfigId: string, ticker: string) {
     return this.stockReports.getStockValuationSnapshot(chatConfigId, ticker);
+  }
+
+  public getStockReactionContext(chatConfigId: string, ticker: string) {
+    return this.stockReports.getStockReactionContext(chatConfigId, ticker);
+  }
+
+  public openPaperPosition(
+    chatConfigId: string,
+    ticker: string,
+    amountCzk: number,
+    horizonDays: number,
+    now?: Date,
+  ) {
+    return this.paperPortfolio.openPosition(
+      chatConfigId,
+      ticker,
+      amountCzk,
+      horizonDays,
+      now,
+    );
+  }
+
+  public listPaperPositions(chatConfigId: string, now?: Date) {
+    return this.paperPortfolio.listPositions(chatConfigId, now);
+  }
+
+  public closePaperPosition(chatConfigId: string, ordinal: number, now?: Date) {
+    return this.paperPortfolio.closePosition(chatConfigId, ordinal, now);
   }
 
   public async claimPendingAlerts(watcherConfigId: string, now = new Date()) {

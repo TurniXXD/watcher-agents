@@ -25,6 +25,10 @@ import {
   renderStockDashboard,
   renderStockDecisionCard,
   renderStockPeerMap,
+  renderStockReaction,
+  renderPaperPortfolio,
+  renderPaperPositionClosed,
+  renderPaperPositionOpened,
   renderStockSourceList,
   renderStockThesis,
   renderStockValuation,
@@ -70,6 +74,10 @@ import {
 } from './schedule-management.js';
 import { renderThesisNotReady } from './thesis-refresh.js';
 import { companyIntelligenceProfileFor } from './sources/company-intelligence/profiles.js';
+import {
+  parsePaperCloseOrdinal,
+  parsePaperOpenRequest,
+} from './paper-portfolio.js';
 
 type StockCompany = {
   symbol: string;
@@ -687,6 +695,89 @@ export const createStocksBot = (
       ctx.api,
       BigInt(ctx.chat.id),
       renderStockValuation(snapshot),
+    );
+  });
+  bot.command('reaction', async (ctx) => {
+    const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
+    const current = await chat(ctx.chat.id);
+    const stock = (await store.listStocks(current.id)).find(
+      ({ symbol: configuredSymbol }) => configuredSymbol === symbol,
+    );
+    if (!stock) {
+      await ctx.reply(
+        `${symbol} is not on this watchlist. Add it with /add_stock ${symbol} first.`,
+      );
+      return;
+    }
+    const reaction = await store.getStockReactionContext(current.id, symbol);
+    if (!reaction) {
+      await ctx.reply(
+        `No material event with chat-scoped evidence exists for ${symbol} yet. Run /thesis ${symbol} to collect live sources, then wait for a stored price observation.`,
+      );
+      return;
+    }
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderStockReaction(reaction),
+    );
+  });
+  bot.command('paper_open', async (ctx) => {
+    const request = parsePaperOpenRequest(commandArgument(ctx.message?.text));
+    const symbol = stockSymbolSchema.parse(request.symbol);
+    const current = await chat(ctx.chat.id);
+    const result = await store.openPaperPosition(
+      current.id,
+      symbol,
+      request.amountCzk,
+      request.days,
+    );
+    if (result.status === 'NOT_WATCHED') {
+      await ctx.reply(
+        `${symbol} is not an enabled watched stock. Add or enable it before creating a paper position.`,
+      );
+      return;
+    }
+    if (result.status === 'NO_STORED_PRICE') {
+      await ctx.reply(
+        `No stored price exists for ${symbol} yet. Run /thesis ${symbol}, wait for a market snapshot, then open the paper position.`,
+      );
+      return;
+    }
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderPaperPositionOpened(result.position),
+    );
+  });
+  bot.command('paper_portfolio', async (ctx) => {
+    const current = await chat(ctx.chat.id);
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderPaperPortfolio(await store.listPaperPositions(current.id)),
+    );
+  });
+  bot.command('paper_close', async (ctx) => {
+    const ordinal = parsePaperCloseOrdinal(commandArgument(ctx.message?.text));
+    const current = await chat(ctx.chat.id);
+    const result = await store.closePaperPosition(current.id, ordinal);
+    if (result.status === 'NOT_FOUND') {
+      await ctx.reply(
+        `No open paper position #${ordinal} exists. Check /paper_portfolio for the current open-position numbers.`,
+      );
+      return;
+    }
+    if (result.status === 'NO_STORED_PRICE') {
+      await ctx.reply(
+        'The position could not be closed because no stored market price is available. Refresh its live evidence first.',
+      );
+      return;
+    }
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderPaperPositionClosed(result.position),
     );
   });
   bot.command('advanced', async (ctx) => {

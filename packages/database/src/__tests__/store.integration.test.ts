@@ -1120,6 +1120,24 @@ integration('WatcherStore with PostgreSQL', () => {
       zacks: { forwardPe: 12.5, rank: 'Buy' },
       earnings: { consensusEps: 31.17 },
     });
+
+    const opened = await store.openPaperPosition(chat.id, 'MU', 10_000, 30);
+    expect(opened).toMatchObject({
+      status: 'OPENED',
+      position: {
+        ticker: 'MU',
+        amountCzk: 10_000,
+        entryPrice: 145.23,
+        thesis: { verdict: null },
+      },
+    });
+    await expect(store.listPaperPositions(chat.id)).resolves.toMatchObject([
+      { ticker: 'MU', status: 'OPEN', entryPrice: 145.23 },
+    ]);
+    await expect(store.closePaperPosition(chat.id, 1)).resolves.toMatchObject({
+      status: 'CLOSED',
+      position: { ticker: 'MU', status: 'CLOSED', exitPrice: 145.23 },
+    });
   });
 
   it('deduplicates the same SEC event reported by a second source', async () => {

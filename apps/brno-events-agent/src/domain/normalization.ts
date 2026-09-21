@@ -9,6 +9,15 @@ export const normalizeText = (value: string): string =>
     .replace(/[^a-z0-9]+/gu, ' ')
     .trim();
 
+/** Rejects provider placeholders until the organiser publishes a real title. */
+export const isPlaceholderEventTitle = (value: string): boolean => {
+  const normalized = normalizeText(value);
+  return (
+    /(?:^| )(?:tba|tbd)(?: |$)/u.test(normalized) ||
+    normalized.includes('to be announced')
+  );
+};
+
 export const canonicalUrl = (value: string): string => {
   const url = new URL(value);
   url.hash = '';

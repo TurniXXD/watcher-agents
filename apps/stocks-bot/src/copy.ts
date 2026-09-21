@@ -19,8 +19,12 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /list_sources — list available sources and provider links
 /news SYMBOL RANGE [--json] — saved stock news by publication time; JSON exports full stored details
 /opportunities — stocks with elevated attention or favorable asymmetry
+/paper_close NUMBER — close an open paper position at the latest stored price
+/paper_open SYMBOL --amount-czk AMOUNT [--days DAYS] — record a no-execution paper position using the latest stored price
+/paper_portfolio — show open and closed paper positions and their stored-price outcomes
 /pause — pause scheduled runs
 /peers SYMBOL — show the curated peer and sector context map for supported AI-infrastructure stocks
+/reaction SYMBOL — check whether stored post-event price data confirms, contradicts, or cannot yet explain the latest material driver
 /reconcile — run the comprehensive daily reconciliation now
 /remove_stock SYMBOL — remove a stock
 /replay SYMBOL DATE — reconstruct only information known by that date

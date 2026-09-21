@@ -176,6 +176,35 @@ describe('Brno event sources', () => {
     });
   });
 
+  it('drops CEITEC entries whose title is still a placeholder', () => {
+    const events = parseCeitecResponse(
+      {
+        data: [
+          {
+            id: 5696,
+            title_en: 'NCBR Seminar: TBA',
+            date_from: '2026-09-22T08:00:00.000Z',
+          },
+          {
+            id: 5697,
+            title_en: 'NCBR Seminar: To be announced',
+            date_from: '2026-09-23T08:00:00.000Z',
+          },
+          {
+            id: 5698,
+            title_en: 'NCBR Seminar: Protein Engineering',
+            date_from: '2026-09-24T08:00:00.000Z',
+          },
+        ],
+      },
+      'https://www.ceitec.eu/events/',
+      ['science'],
+    );
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.title).toBe('NCBR Seminar: Protein Engineering');
+  });
+
   it('falls back to CEITEC JSON-LD when its API is unavailable', async () => {
     vi.useFakeTimers();
     const fetcher = vi
