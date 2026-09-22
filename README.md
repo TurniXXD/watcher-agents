@@ -86,6 +86,18 @@ To stop the application without deleting data:
 docker compose down
 ```
 
+## Transport Opportunity Bot
+
+`apps/transport-bot` is a private Telegram decision engine for a single van operator. It normalizes a configured JSON request feed, rejects loads that cannot be proven to fit, routes viable candidates over an OSRM-compatible road service, and shows only jobs that pass the operator's profit, profit/hour, empty-distance, detour, and confidence thresholds. The same evaluator is used by manual searches and scheduled proactive discovery.
+
+The bot provides mobile buttons for finding jobs, planning a trip, finding a geographically useful return load, editing the vehicle, preferences, and detailed cost rates. Planned-trip recommendations charge only additional distance and time beyond the baseline journey. Notifications expose fuel, wear, maintenance, tyres, oil, insurance, driver, toll, and other costs; depreciation/wear remains an estimate rather than an accounting assertion. Unknown cargo size or weight is never treated as compatible.
+
+Fuel defaults to the official European Commission Weekly Oil Bulletin diesel price converted to CZK with the Czech National Bank daily rate. The last successful value is persisted and explicitly marked stale when refresh fails; a Telegram cost edit can override it. Geocoding and routes are cached in PostgreSQL. For production, set `TRANSPORT_OSRM_URL` to an OSRM-compatible service with an appropriate SLA—the public project server is only the development default.
+
+The first request provider is a replaceable normalized JSON feed. `TRANSPORT_REQUEST_FEED_URL` must return either an array or `{ "requests": [...] }`. Each item uses `externalId`, `source`, optional `sourceUrl`, optional `pickup` and `delivery` (`address`, `latitude`, `longitude`), optional pickup/delivery windows (`from`, `to`), `cargo.description` plus any known weight/dimensions/volume/pallet count, optional `offeredPrice`, a three-letter `currency`, `publishedAt`, optional `expiresAt`, and `raw`. Missing fields must be omitted, never fabricated. An optional bearer token is read from `TRANSPORT_REQUEST_FEED_TOKEN`.
+
+The MVP deliberately does not bid, accept jobs, or contact customers. It retains normalized and original observations, disappearance/expiry state, opportunities, rejection reasons, planned trips, and cost/routing inputs for later historical analysis.
+
 ## Local workspace development
 
 Install and generate the Prisma client:
@@ -105,6 +117,7 @@ pnpm --filter @watcher/news-bot dev
 pnpm --filter @watcher/mu-clubs-monitor dev
 pnpm --filter @watcher/brno-events-agent dev
 pnpm --filter @watcher/maintenance-agent dev
+pnpm --filter @watcher/transport-bot dev
 ```
 
 The standard repository checks are:
@@ -125,108 +138,115 @@ Use `pnpm db:migrate -- --name <migration-name>` during schema development. Comm
 
 Every application variable is represented in `.env.example`.
 
-| Name                                                | Used by               | Meaning                                                                                       |
-| --------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------- |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | PostgreSQL            | Local Compose database initialization                                                         |
-| `DATABASE_URL`                                      | migrations, all bots  | PostgreSQL connection URL                                                                     |
-| `STOCKS_TELEGRAM_TOKEN`                             | stocks bot            | BotFather token for the stocks bot                                                            |
-| `PUBLICATIONS_TELEGRAM_TOKEN`                       | publications bot      | BotFather token for the publications bot                                                      |
-| `NEWS_TELEGRAM_TOKEN`                               | news bot              | Distinct BotFather token for the Czech and Global news profiles                               |
-| `BRIEFING_TELEGRAM_TOKEN`                           | briefing bot          | Distinct BotFather token for the personal morning briefing bot                                |
-| `MAINTENANCE_TELEGRAM_TOKEN`                        | maintenance agent     | BotFather token used for private reports and one-time project update announcements            |
-| `MAINTENANCE_API_TOKEN`                             | maintenance agent     | Bearer token protecting every `/maintenance/*` endpoint                                       |
-| `MAINTENANCE_ENABLED`                               | maintenance agent     | Enables periodic evaluation; manual API and Telegram runs remain available                    |
-| `MAINTENANCE_HOST`, `MAINTENANCE_PORT`              | maintenance agent     | Internal HTTP listener; Compose publishes port 4030 to host loopback only                     |
-| `MAINTENANCE_HEALTH_INTERVAL_MINUTES`               | maintenance agent     | Lightweight health cadence; defaults to 360 minutes                                           |
-| `MAINTENANCE_ANALYSIS_INTERVAL_MINUTES`             | maintenance agent     | Deep daily analysis cadence; defaults to 1440 minutes                                         |
-| `MAINTENANCE_WEEKLY_ANALYSIS_ENABLED`               | maintenance agent     | Enables the 30-day trend evaluation                                                           |
-| `MAINTENANCE_WEEKLY_INTERVAL_MINUTES`               | maintenance agent     | Weekly trend cadence; defaults to 10080 minutes                                               |
-| `MAINTENANCE_JITTER_MAX_SECONDS`                    | maintenance agent     | Maximum startup jitter to avoid a load spike; defaults to 300 seconds                         |
-| `MAINTENANCE_AGENT_STATUS_STALE_MINUTES`            | maintenance agent     | Stale-run threshold for `/status`; defaults to 1560 minutes                                   |
-| `MAINTENANCE_AGENT_STATUS_ERROR_LOOKBACK_MINUTES`   | maintenance agent     | Recent-error lookback for `/status`; defaults to 1440 minutes                                 |
-| `MAINTENANCE_SELF_REVIEW_ENABLED`                   | maintenance agent     | Includes basic self telemetry when enabled; defaults to false                                 |
-| `MAINTENANCE_CHANGELOG_PATH`                        | maintenance agent     | Runtime path to the append-only project update Markdown file                                  |
-| `MAINTENANCE_RESOURCE_MONITOR_ENABLED`              | maintenance agent     | Enables server capacity warnings and debug run delivery; defaults to true                     |
-| `MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS`          | maintenance agent     | CPU/RAM/GPU sample and completed-run polling cadence; defaults to 30000 ms                    |
-| `MAINTENANCE_CPU_WARNING_PERCENT`                   | maintenance agent     | Sustained server CPU warning threshold; defaults to 90                                        |
-| `MAINTENANCE_MEMORY_WARNING_PERCENT`                | maintenance agent     | Sustained server/container memory warning threshold; defaults to 90                           |
-| `MAINTENANCE_GPU_WARNING_PERCENT`                   | maintenance agent     | Sustained GPU utilization or VRAM warning threshold; defaults to 90                           |
-| `MAINTENANCE_CAPACITY_SUSTAINED_SAMPLES`            | maintenance agent     | Consecutive over-threshold samples required before warning; defaults to 3                     |
-| `MAINTENANCE_CAPACITY_ALERT_COOLDOWN_MINUTES`       | maintenance agent     | Minimum interval between repeated warnings; defaults to 30 minutes                            |
-| `MAINTENANCE_NVIDIA_SMI_PATH`                       | maintenance agent     | NVIDIA telemetry executable; GPU remains unavailable when no NVIDIA/AMD interface is exposed  |
-| `MU_CLUBS_API_TOKEN`                                | MU Clubs, briefing    | Bearer token protecting its API and allowing Briefing Bot to invoke a manual run              |
-| `BRNO_EVENTS_API_TOKEN`                             | Brno Events, briefing | Bearer token protecting its API and allowing Briefing Bot to invoke all or one source         |
-| `BRIEFING_BRNO_EVENTS_URL`                          | briefing bot          | Internal Brno Events API URL; defaults to `http://brno-events-agent:4020`                     |
-| `BRIEFING_MU_CLUBS_URL`                             | briefing bot          | Internal MU Clubs API URL; defaults to `http://mu-clubs-monitor:4010`                         |
-| `BRIEFING_AGENT_TRIGGER_TIMEOUT_MS`                 | briefing bot          | Timeout for synchronous producer triggers; defaults to `180000` milliseconds                  |
-| `MU_CLUBS_HOST`, `MU_CLUBS_PORT`                    | MU Clubs monitor      | Internal HTTP listener; Compose publishes port 4010 to host loopback only                     |
-| `MU_CLUBS_MONITOR_INTERVAL_MINUTES`                 | MU Clubs monitor      | Scheduled monitor cadence                                                                     |
-| `INSTAGRAM_CACHE_TTL_MINUTES`                       | shared Instagram      | Reuse window for public profile and post results                                              |
-| `INSTAGRAM_MIN_REQUEST_INTERVAL_MS`                 | shared Instagram      | Minimum delay between public Instagram requests                                               |
-| `INSTAGRAM_MAX_POSTS_PER_FETCH`                     | shared Instagram      | Hard cap on posts requested per profile                                                       |
-| `TELEGRAM_ALLOWED_USER_IDS`                         | all bots              | Comma-separated Telegram numeric user IDs; every command and callback is denied unless listed |
-| `OLLAMA_URL`                                        | all bots              | Ollama base URL                                                                               |
-| `OLLAMA_MODEL`                                      | all bots              | Installed Ollama model name                                                                   |
-| `OLLAMA_KEEP_ALIVE`                                 | all bots              | How long Ollama keeps the model loaded; defaults to `5m`                                      |
-| `OLLAMA_MAX_ITEMS_PER_RUN`                          | watcher producers     | Maximum new items analyzed in one run; Publications additionally enforces a hard cap of 15    |
-| `OLLAMA_NUM_CTX`                                    | watcher producers     | Per-request context size; defaults to `4096`                                                  |
-| `BRIEFING_OLLAMA_NUM_CTX`                           | briefing bot          | Briefing script context size; defaults to `8192` without increasing producer requests         |
-| `BRIEFING_EMBEDDING_MODEL`                          | stocks, briefing      | Shared Ollama model for bounded stock-event and briefing-story similarity; empty disables it  |
-| `BRIEFING_EMBEDDING_MIN_SIMILARITY`                 | stocks, briefing      | Shared minimum cosine similarity for a semantic candidate; defaults to `0.82`                 |
-| `BRIEFING_EMBEDDING_WINDOW_HOURS`                   | stocks, briefing      | Shared maximum time distance between semantic candidates; defaults to `96` hours              |
-| `BRIEFING_SCHEDULER_MAX_DELAY_MINUTES`              | briefing bot          | Late-delivery grace window; older missed briefings are skipped; defaults to `10` minutes      |
-| `BRIEFING_FRESHNESS_MAX_AGE_MINUTES`                | briefing bot          | Maximum accepted age of a producer run before scheduled delivery; defaults to `1560` minutes  |
-| `BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES`           | briefing bot          | Warning cadence while strict freshness waiting postpones delivery; defaults to `20` minutes   |
-| `BRIEFING_FRESHNESS_POLL_INTERVAL_MS`               | briefing bot          | Poll interval while waiting for producer freshness; defaults to `30000` milliseconds          |
-| `OLLAMA_NUM_PREDICT`                                | watcher producers     | Maximum generated tokens per analysis; defaults to `768`                                      |
-| `OLLAMA_FULL_ANALYSIS_NUM_PREDICT`                  | stocks bot            | Output-token cap for the larger thesis/scenario response; defaults to `1536`                  |
-| `OLLAMA_RETRIES`                                    | watcher producers     | Retry count after a failed or invalid response; defaults to `1`                               |
-| `OLLAMA_THINK`                                      | watcher producers     | Enables model thinking output; defaults to `false` to avoid unnecessary compute               |
-| `OLLAMA_TIMEOUT_MS`                                 | watcher producers     | Per-attempt timeout, from 10–180 seconds; defaults to 120 seconds                             |
-| `SEC_USER_AGENT`                                    | stocks bot            | SEC-compliant app name and contact address                                                    |
-| `DEFAULT_TIMEZONE`                                  | all bots              | IANA timezone used for a newly created watcher or briefing setting                            |
-| `LOG_LEVEL`                                         | all bots              | Pino log level, normally `info`                                                               |
-| `STOCK_EVENT_COOLDOWN_MINUTES`                      | stocks bot            | Same-event analysis cooldown; defaults to 360 minutes                                         |
-| `STOCK_TICKER_ANALYSIS_COOLDOWN_MINUTES`            | stocks bot            | Same-ticker analysis cooldown; defaults to 30 minutes                                         |
-| `SOURCE_BACKOFF_BASE_SECONDS`                       | watcher producers     | Initial source-failure backoff; defaults to 60 seconds                                        |
-| `SOURCE_BACKOFF_MAX_MINUTES`                        | watcher producers     | Maximum exponential source backoff; defaults to 360 minutes                                   |
-| `SOURCE_MAX_CONCURRENCY`                            | watcher producers     | Global ceiling for concurrent external source requests per watcher; defaults to 8             |
-| `ALERT_ATTENTION_THRESHOLD`                         | stocks bot            | Attention score that creates a live alert when crossed; defaults to 85                        |
-| `STOCK_ALERT_BATCH_WINDOW_MINUTES`                  | stocks bot            | Accumulation delay for non-extreme alert batches; defaults to 60 minutes                      |
-| `STOCK_NOTIFICATION_START_HOUR`                     | stocks bot            | First local hour when queued stock alerts may be delivered; defaults to 7                     |
-| `STOCK_NOTIFICATION_END_HOUR`                       | stocks bot            | Local hour at which stock alerts begin waiting for morning; defaults to 22                    |
-| `STOCK_EXTREME_IMMEDIATE`                           | stocks bot            | Allows rare EXTREME alerts to bypass the batch window; defaults to true                       |
-| `RECONCILIATION_INTERVAL_MINUTES`                   | stocks bot            | Interval for comprehensive recovery scans; defaults to one day                                |
-| `VALIDATION_MIN_SAMPLE_SIZE`                        | stocks bot            | Completed 30-day samples required to mark signal statistics adequate; defaults to 20          |
-| `ALPHA_VANTAGE_API_KEY`                             | stocks bot            | Optional Alpha Vantage key for discovery and institutional holdings                           |
-| `ALPHA_VANTAGE_OPTIONS_ENABLED`                     | stocks bot            | Enables premium realtime option-chain requests; defaults to `false`                           |
-| `QUIVER_API_TOKEN`                                  | stocks bot            | Optional Quiver bearer token; leaving it empty disables Quiver requests                       |
-| `ALPACA_PAPER_API_KEY`, `ALPACA_PAPER_API_SECRET`   | stocks bot            | Optional paired **Paper-only** API credentials for the read-only `/alpaca` command            |
-| `PRICE_ANOMALY_THRESHOLD_PERCENT`                   | stocks bot            | Absolute daily-return anomaly threshold; defaults to 4%                                       |
-| `GAP_ANOMALY_THRESHOLD_PERCENT`                     | stocks bot            | Absolute opening-gap anomaly threshold; defaults to 3%                                        |
-| `RELATIVE_VOLUME_ANOMALY_THRESHOLD`                 | stocks bot            | Relative-volume anomaly multiplier; defaults to 3                                             |
-| `VOLATILITY_EXPANSION_THRESHOLD`                    | stocks bot            | Current-move versus historical-volatility multiplier; defaults to 2                           |
-| `MARKET_BASELINE_MIN_SNAPSHOTS`                     | stocks bot            | Minimum stored volume snapshots before relative-volume detection; defaults to 5               |
-| `OPTIONS_VOLUME_OI_ANOMALY_THRESHOLD`               | stocks bot            | Contract option-volume/open-interest anomaly ratio; defaults to 2                             |
-| `OPTIONS_VOLUME_BASELINE_MULTIPLIER`                | stocks bot            | Aggregate options-volume anomaly versus recent baseline; defaults to 3                        |
-| `OPTIONS_BASELINE_MIN_SNAPSHOTS`                    | stocks bot            | Prior option snapshots required for an aggregate-volume baseline; defaults to 3               |
-| `INSTITUTIONAL_CHANGE_THRESHOLD_PERCENT`            | stocks bot            | Absolute institutional holdings-change threshold; defaults to 5%                              |
-| `SHORT_INTEREST_CHANGE_THRESHOLD_PERCENT`           | stocks bot            | Absolute reported short-interest change threshold; defaults to 10%                            |
-| `SHORT_INTEREST_DAYS_TO_COVER_THRESHOLD`            | stocks bot            | Days-to-cover threshold for a short-interest anomaly; defaults to 5                           |
-| `DISCOVERY_MARKET_DATA_ENTITLEMENT`                 | stocks bot            | `EOD`, `DELAYED`, or `REALTIME`; must match the key's market-data entitlement                 |
-| `STOCKS_MONITOR_SCHEDULE`                           | stocks bot            | Cron schedule for watched-stock news checks; defaults to every five minutes                   |
-| `DISCOVERY_WEEKLY_SCHEDULE`                         | stocks bot            | Sunday market-wide discovery report, default 15:00 local time                                 |
-| `DISCOVERY_MOVE_THRESHOLD_PERCENT`                  | stocks bot            | Minimum absolute move for a discovery candidate; defaults to 4%                               |
-| `DISCOVERY_MIN_PRICE`                               | stocks bot            | Minimum candidate price; defaults to 2                                                        |
-| `DISCOVERY_MIN_VOLUME`                              | stocks bot            | Minimum current snapshot volume; defaults to 100,000                                          |
-| `DISCOVERY_MIN_DOLLAR_VOLUME`                       | stocks bot            | Minimum price × volume; defaults to 1,000,000                                                 |
-| `DISCOVERY_MAX_CANDIDATES`                          | stocks bot            | Maximum candidates investigated per market-wide scan; defaults to 10                          |
-| `DISCOVERY_SUPPORTED_EXCHANGES`                     | stocks bot            | Comma-separated SEC exchange names accepted by discovery                                      |
-| `DISCOVERY_EXCLUDE_OTC`                             | stocks bot            | Reject SEC profiles whose exchange contains `OTC`; defaults to true                           |
-| `DISCOVERY_INVESTIGATION_MINUTES`                   | stocks bot            | Time allowed for a temporary investigation; defaults to 90 minutes                            |
-| `DISCOVERY_HIGH_RESOLUTION_INTERVAL_MINUTES`        | stocks bot            | Interval for SEC/IR/GDELT/TradingView/price checks while escalated; defaults to 5 minutes     |
-| `DISCOVERY_EVENT_MODE_MINUTES`                      | stocks bot            | Duration of event-mode polling after material evidence; defaults to 120 minutes               |
-| `DISCOVERY_WATCH_DAYS`                              | stocks bot            | Watch lifetime after automatic promotion; defaults to 14 days                                 |
+| Name                                                    | Used by               | Meaning                                                                                       |
+| ------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------- |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`     | PostgreSQL            | Local Compose database initialization                                                         |
+| `DATABASE_URL`                                          | migrations, all bots  | PostgreSQL connection URL                                                                     |
+| `STOCKS_TELEGRAM_TOKEN`                                 | stocks bot            | BotFather token for the stocks bot                                                            |
+| `TRANSPORT_TELEGRAM_TOKEN`                              | transport bot         | BotFather token for the private transport-opportunity bot                                     |
+| `TRANSPORT_REQUEST_FEED_URL`                            | transport bot         | HTTPS endpoint returning normalized transport requests                                        |
+| `TRANSPORT_REQUEST_FEED_TOKEN`                          | transport bot         | Optional bearer token for the configured request feed                                         |
+| `TRANSPORT_OSRM_URL`                                    | transport bot         | OSRM-compatible road-routing base URL; use a production service outside development           |
+| `TRANSPORT_DISCOVERY_INTERVAL_MINUTES`                  | transport bot         | Scheduled opportunity discovery cadence; defaults to 15 minutes                               |
+| `TRANSPORT_FUEL_BULLETIN_URL`, `TRANSPORT_CNB_RATE_URL` | transport bot         | Optional overrides for the official fuel workbook and CZK exchange-rate endpoints             |
+| `TRANSPORT_HEALTH_PORT`                                 | transport bot         | Readiness listener; defaults to 4040                                                          |
+| `PUBLICATIONS_TELEGRAM_TOKEN`                           | publications bot      | BotFather token for the publications bot                                                      |
+| `NEWS_TELEGRAM_TOKEN`                                   | news bot              | Distinct BotFather token for the Czech and Global news profiles                               |
+| `BRIEFING_TELEGRAM_TOKEN`                               | briefing bot          | Distinct BotFather token for the personal morning briefing bot                                |
+| `MAINTENANCE_TELEGRAM_TOKEN`                            | maintenance agent     | BotFather token used for private reports and one-time project update announcements            |
+| `MAINTENANCE_API_TOKEN`                                 | maintenance agent     | Bearer token protecting every `/maintenance/*` endpoint                                       |
+| `MAINTENANCE_ENABLED`                                   | maintenance agent     | Enables periodic evaluation; manual API and Telegram runs remain available                    |
+| `MAINTENANCE_HOST`, `MAINTENANCE_PORT`                  | maintenance agent     | Internal HTTP listener; Compose publishes port 4030 to host loopback only                     |
+| `MAINTENANCE_HEALTH_INTERVAL_MINUTES`                   | maintenance agent     | Lightweight health cadence; defaults to 360 minutes                                           |
+| `MAINTENANCE_ANALYSIS_INTERVAL_MINUTES`                 | maintenance agent     | Deep daily analysis cadence; defaults to 1440 minutes                                         |
+| `MAINTENANCE_WEEKLY_ANALYSIS_ENABLED`                   | maintenance agent     | Enables the 30-day trend evaluation                                                           |
+| `MAINTENANCE_WEEKLY_INTERVAL_MINUTES`                   | maintenance agent     | Weekly trend cadence; defaults to 10080 minutes                                               |
+| `MAINTENANCE_JITTER_MAX_SECONDS`                        | maintenance agent     | Maximum startup jitter to avoid a load spike; defaults to 300 seconds                         |
+| `MAINTENANCE_AGENT_STATUS_STALE_MINUTES`                | maintenance agent     | Stale-run threshold for `/status`; defaults to 1560 minutes                                   |
+| `MAINTENANCE_AGENT_STATUS_ERROR_LOOKBACK_MINUTES`       | maintenance agent     | Recent-error lookback for `/status`; defaults to 1440 minutes                                 |
+| `MAINTENANCE_SELF_REVIEW_ENABLED`                       | maintenance agent     | Includes basic self telemetry when enabled; defaults to false                                 |
+| `MAINTENANCE_CHANGELOG_PATH`                            | maintenance agent     | Runtime path to the append-only project update Markdown file                                  |
+| `MAINTENANCE_RESOURCE_MONITOR_ENABLED`                  | maintenance agent     | Enables server capacity warnings and debug run delivery; defaults to true                     |
+| `MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS`              | maintenance agent     | CPU/RAM/GPU sample and completed-run polling cadence; defaults to 30000 ms                    |
+| `MAINTENANCE_CPU_WARNING_PERCENT`                       | maintenance agent     | Sustained server CPU warning threshold; defaults to 90                                        |
+| `MAINTENANCE_MEMORY_WARNING_PERCENT`                    | maintenance agent     | Sustained server/container memory warning threshold; defaults to 90                           |
+| `MAINTENANCE_GPU_WARNING_PERCENT`                       | maintenance agent     | Sustained GPU utilization or VRAM warning threshold; defaults to 90                           |
+| `MAINTENANCE_CAPACITY_SUSTAINED_SAMPLES`                | maintenance agent     | Consecutive over-threshold samples required before warning; defaults to 3                     |
+| `MAINTENANCE_CAPACITY_ALERT_COOLDOWN_MINUTES`           | maintenance agent     | Minimum interval between repeated warnings; defaults to 30 minutes                            |
+| `MAINTENANCE_NVIDIA_SMI_PATH`                           | maintenance agent     | NVIDIA telemetry executable; GPU remains unavailable when no NVIDIA/AMD interface is exposed  |
+| `MU_CLUBS_API_TOKEN`                                    | MU Clubs, briefing    | Bearer token protecting its API and allowing Briefing Bot to invoke a manual run              |
+| `BRNO_EVENTS_API_TOKEN`                                 | Brno Events, briefing | Bearer token protecting its API and allowing Briefing Bot to invoke all or one source         |
+| `BRIEFING_BRNO_EVENTS_URL`                              | briefing bot          | Internal Brno Events API URL; defaults to `http://brno-events-agent:4020`                     |
+| `BRIEFING_MU_CLUBS_URL`                                 | briefing bot          | Internal MU Clubs API URL; defaults to `http://mu-clubs-monitor:4010`                         |
+| `BRIEFING_AGENT_TRIGGER_TIMEOUT_MS`                     | briefing bot          | Timeout for synchronous producer triggers; defaults to `180000` milliseconds                  |
+| `MU_CLUBS_HOST`, `MU_CLUBS_PORT`                        | MU Clubs monitor      | Internal HTTP listener; Compose publishes port 4010 to host loopback only                     |
+| `MU_CLUBS_MONITOR_INTERVAL_MINUTES`                     | MU Clubs monitor      | Scheduled monitor cadence                                                                     |
+| `INSTAGRAM_CACHE_TTL_MINUTES`                           | shared Instagram      | Reuse window for public profile and post results                                              |
+| `INSTAGRAM_MIN_REQUEST_INTERVAL_MS`                     | shared Instagram      | Minimum delay between public Instagram requests                                               |
+| `INSTAGRAM_MAX_POSTS_PER_FETCH`                         | shared Instagram      | Hard cap on posts requested per profile                                                       |
+| `TELEGRAM_ALLOWED_USER_IDS`                             | all bots              | Comma-separated Telegram numeric user IDs; every command and callback is denied unless listed |
+| `OLLAMA_URL`                                            | all bots              | Ollama base URL                                                                               |
+| `OLLAMA_MODEL`                                          | all bots              | Installed Ollama model name                                                                   |
+| `OLLAMA_KEEP_ALIVE`                                     | all bots              | How long Ollama keeps the model loaded; defaults to `5m`                                      |
+| `OLLAMA_MAX_ITEMS_PER_RUN`                              | watcher producers     | Maximum new items analyzed in one run; Publications additionally enforces a hard cap of 15    |
+| `OLLAMA_NUM_CTX`                                        | watcher producers     | Per-request context size; defaults to `4096`                                                  |
+| `BRIEFING_OLLAMA_NUM_CTX`                               | briefing bot          | Briefing script context size; defaults to `8192` without increasing producer requests         |
+| `BRIEFING_EMBEDDING_MODEL`                              | stocks, briefing      | Shared Ollama model for bounded stock-event and briefing-story similarity; empty disables it  |
+| `BRIEFING_EMBEDDING_MIN_SIMILARITY`                     | stocks, briefing      | Shared minimum cosine similarity for a semantic candidate; defaults to `0.82`                 |
+| `BRIEFING_EMBEDDING_WINDOW_HOURS`                       | stocks, briefing      | Shared maximum time distance between semantic candidates; defaults to `96` hours              |
+| `BRIEFING_SCHEDULER_MAX_DELAY_MINUTES`                  | briefing bot          | Late-delivery grace window; older missed briefings are skipped; defaults to `10` minutes      |
+| `BRIEFING_FRESHNESS_MAX_AGE_MINUTES`                    | briefing bot          | Maximum accepted age of a producer run before scheduled delivery; defaults to `1560` minutes  |
+| `BRIEFING_FRESHNESS_WAIT_TIMEOUT_MINUTES`               | briefing bot          | Warning cadence while strict freshness waiting postpones delivery; defaults to `20` minutes   |
+| `BRIEFING_FRESHNESS_POLL_INTERVAL_MS`                   | briefing bot          | Poll interval while waiting for producer freshness; defaults to `30000` milliseconds          |
+| `OLLAMA_NUM_PREDICT`                                    | watcher producers     | Maximum generated tokens per analysis; defaults to `768`                                      |
+| `OLLAMA_FULL_ANALYSIS_NUM_PREDICT`                      | stocks bot            | Output-token cap for the larger thesis/scenario response; defaults to `1536`                  |
+| `OLLAMA_RETRIES`                                        | watcher producers     | Retry count after a failed or invalid response; defaults to `1`                               |
+| `OLLAMA_THINK`                                          | watcher producers     | Enables model thinking output; defaults to `false` to avoid unnecessary compute               |
+| `OLLAMA_TIMEOUT_MS`                                     | watcher producers     | Per-attempt timeout, from 10–180 seconds; defaults to 120 seconds                             |
+| `SEC_USER_AGENT`                                        | stocks bot            | SEC-compliant app name and contact address                                                    |
+| `DEFAULT_TIMEZONE`                                      | all bots              | IANA timezone used for a newly created watcher or briefing setting                            |
+| `LOG_LEVEL`                                             | all bots              | Pino log level, normally `info`                                                               |
+| `STOCK_EVENT_COOLDOWN_MINUTES`                          | stocks bot            | Same-event analysis cooldown; defaults to 360 minutes                                         |
+| `STOCK_TICKER_ANALYSIS_COOLDOWN_MINUTES`                | stocks bot            | Same-ticker analysis cooldown; defaults to 30 minutes                                         |
+| `SOURCE_BACKOFF_BASE_SECONDS`                           | watcher producers     | Initial source-failure backoff; defaults to 60 seconds                                        |
+| `SOURCE_BACKOFF_MAX_MINUTES`                            | watcher producers     | Maximum exponential source backoff; defaults to 360 minutes                                   |
+| `SOURCE_MAX_CONCURRENCY`                                | watcher producers     | Global ceiling for concurrent external source requests per watcher; defaults to 8             |
+| `ALERT_ATTENTION_THRESHOLD`                             | stocks bot            | Attention score that creates a live alert when crossed; defaults to 85                        |
+| `STOCK_ALERT_BATCH_WINDOW_MINUTES`                      | stocks bot            | Accumulation delay for non-extreme alert batches; defaults to 60 minutes                      |
+| `STOCK_NOTIFICATION_START_HOUR`                         | stocks bot            | First local hour when queued stock alerts may be delivered; defaults to 7                     |
+| `STOCK_NOTIFICATION_END_HOUR`                           | stocks bot            | Local hour at which stock alerts begin waiting for morning; defaults to 22                    |
+| `STOCK_EXTREME_IMMEDIATE`                               | stocks bot            | Allows rare EXTREME alerts to bypass the batch window; defaults to true                       |
+| `RECONCILIATION_INTERVAL_MINUTES`                       | stocks bot            | Interval for comprehensive recovery scans; defaults to one day                                |
+| `VALIDATION_MIN_SAMPLE_SIZE`                            | stocks bot            | Completed 30-day samples required to mark signal statistics adequate; defaults to 20          |
+| `ALPHA_VANTAGE_API_KEY`                                 | stocks bot            | Optional Alpha Vantage key for discovery and institutional holdings                           |
+| `ALPHA_VANTAGE_OPTIONS_ENABLED`                         | stocks bot            | Enables premium realtime option-chain requests; defaults to `false`                           |
+| `QUIVER_API_TOKEN`                                      | stocks bot            | Optional Quiver bearer token; leaving it empty disables Quiver requests                       |
+| `ALPACA_PAPER_API_KEY`, `ALPACA_PAPER_API_SECRET`       | stocks bot            | Optional paired **Paper-only** API credentials for the read-only `/alpaca` command            |
+| `PRICE_ANOMALY_THRESHOLD_PERCENT`                       | stocks bot            | Absolute daily-return anomaly threshold; defaults to 4%                                       |
+| `GAP_ANOMALY_THRESHOLD_PERCENT`                         | stocks bot            | Absolute opening-gap anomaly threshold; defaults to 3%                                        |
+| `RELATIVE_VOLUME_ANOMALY_THRESHOLD`                     | stocks bot            | Relative-volume anomaly multiplier; defaults to 3                                             |
+| `VOLATILITY_EXPANSION_THRESHOLD`                        | stocks bot            | Current-move versus historical-volatility multiplier; defaults to 2                           |
+| `MARKET_BASELINE_MIN_SNAPSHOTS`                         | stocks bot            | Minimum stored volume snapshots before relative-volume detection; defaults to 5               |
+| `OPTIONS_VOLUME_OI_ANOMALY_THRESHOLD`                   | stocks bot            | Contract option-volume/open-interest anomaly ratio; defaults to 2                             |
+| `OPTIONS_VOLUME_BASELINE_MULTIPLIER`                    | stocks bot            | Aggregate options-volume anomaly versus recent baseline; defaults to 3                        |
+| `OPTIONS_BASELINE_MIN_SNAPSHOTS`                        | stocks bot            | Prior option snapshots required for an aggregate-volume baseline; defaults to 3               |
+| `INSTITUTIONAL_CHANGE_THRESHOLD_PERCENT`                | stocks bot            | Absolute institutional holdings-change threshold; defaults to 5%                              |
+| `SHORT_INTEREST_CHANGE_THRESHOLD_PERCENT`               | stocks bot            | Absolute reported short-interest change threshold; defaults to 10%                            |
+| `SHORT_INTEREST_DAYS_TO_COVER_THRESHOLD`                | stocks bot            | Days-to-cover threshold for a short-interest anomaly; defaults to 5                           |
+| `DISCOVERY_MARKET_DATA_ENTITLEMENT`                     | stocks bot            | `EOD`, `DELAYED`, or `REALTIME`; must match the key's market-data entitlement                 |
+| `STOCKS_MONITOR_SCHEDULE`                               | stocks bot            | Cron schedule for watched-stock news checks; defaults to every five minutes                   |
+| `DISCOVERY_WEEKLY_SCHEDULE`                             | stocks bot            | Sunday market-wide discovery report, default 15:00 local time                                 |
+| `DISCOVERY_MOVE_THRESHOLD_PERCENT`                      | stocks bot            | Minimum absolute move for a discovery candidate; defaults to 4%                               |
+| `DISCOVERY_MIN_PRICE`                                   | stocks bot            | Minimum candidate price; defaults to 2                                                        |
+| `DISCOVERY_MIN_VOLUME`                                  | stocks bot            | Minimum current snapshot volume; defaults to 100,000                                          |
+| `DISCOVERY_MIN_DOLLAR_VOLUME`                           | stocks bot            | Minimum price × volume; defaults to 1,000,000                                                 |
+| `DISCOVERY_MAX_CANDIDATES`                              | stocks bot            | Maximum candidates investigated per market-wide scan; defaults to 10                          |
+| `DISCOVERY_SUPPORTED_EXCHANGES`                         | stocks bot            | Comma-separated SEC exchange names accepted by discovery                                      |
+| `DISCOVERY_EXCLUDE_OTC`                                 | stocks bot            | Reject SEC profiles whose exchange contains `OTC`; defaults to true                           |
+| `DISCOVERY_INVESTIGATION_MINUTES`                       | stocks bot            | Time allowed for a temporary investigation; defaults to 90 minutes                            |
+| `DISCOVERY_HIGH_RESOLUTION_INTERVAL_MINUTES`            | stocks bot            | Interval for SEC/IR/GDELT/TradingView/price checks while escalated; defaults to 5 minutes     |
+| `DISCOVERY_EVENT_MODE_MINUTES`                          | stocks bot            | Duration of event-mode polling after material evidence; defaults to 120 minutes               |
+| `DISCOVERY_WATCH_DAYS`                                  | stocks bot            | Watch lifetime after automatic promotion; defaults to 14 days                                 |
 
 Infrastructure secrets cannot be edited through Telegram. Telegram-editable schedules, watchlists, query lists, news feeds/topics, and source switches are persisted in PostgreSQL.
 

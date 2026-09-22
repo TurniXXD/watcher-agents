@@ -30,6 +30,7 @@ required_files=(
   # service definition. Its credentials are validated only when it is started.
   deploy/runtime/study-bot.env
   deploy/runtime/maintenance-agent.env
+  deploy/runtime/transport-bot.env
 )
 
 required_env_values=(
@@ -70,6 +71,10 @@ required_env_values=(
   "deploy/runtime/maintenance-agent.env:MAINTENANCE_API_TOKEN"
   "deploy/runtime/maintenance-agent.env:MAINTENANCE_TELEGRAM_TOKEN"
   "deploy/runtime/maintenance-agent.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/transport-bot.env:DATABASE_URL"
+  "deploy/runtime/transport-bot.env:TRANSPORT_TELEGRAM_TOKEN"
+  "deploy/runtime/transport-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/transport-bot.env:TRANSPORT_REQUEST_FEED_URL"
 )
 
 study_bot_env_values=(
@@ -292,7 +297,7 @@ create_database_backup() {
 }
 
 echo "Pulling release $IMAGE_TAG..."
-compose_candidate pull postgres migrate stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent
+compose_candidate pull postgres migrate stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot
 
 if [[ -n "$(compose_candidate ps --status running -q postgres)" ]] && database_exists; then
   echo "Backing up the running database before changing its container image..."
@@ -349,20 +354,20 @@ if ! compose_candidate up \
   --remove-orphans \
   --wait \
   --wait-timeout 180 \
-  stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent; then
+  stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot; then
   echo "Release failed its container health checks." >&2
   dump_briefing_container_network
 
   if [[ -f "$RELEASE_FILE" ]] && ! cmp -s "$CANDIDATE_FILE" "$RELEASE_FILE"; then
     echo "Restoring the previous healthy application image..."
-    compose_release pull stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent
+    compose_release pull stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot
     compose_release up \
       -d \
       --force-recreate \
       --remove-orphans \
       --wait \
       --wait-timeout 180 \
-      stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent
+      stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot
   elif [[ -f "$RELEASE_FILE" ]]; then
     echo "Previous release matches the failed candidate; skipping an ineffective rollback." >&2
   fi

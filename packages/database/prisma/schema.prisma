@@ -1420,15 +1420,15 @@ model PaperPosition {
 }
 
 model PortfolioRiskProfile {
-  id                        String                  @id @default(uuid())
-  chatConfigId              String                  @unique
-  tolerance                 PortfolioRiskTolerance  @default(BALANCED)
-  maxSinglePositionPercent  Int                     @default(20)
-  maxSectorPercent          Int                     @default(40)
-  maxTotalPaperNotionalCzk  Int?
-  createdAt                 DateTime                @default(now())
-  updatedAt                 DateTime                @updatedAt
-  chatConfig                TelegramChat            @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
+  id                       String                 @id @default(uuid())
+  chatConfigId             String                 @unique
+  tolerance                PortfolioRiskTolerance @default(BALANCED)
+  maxSinglePositionPercent Int                    @default(20)
+  maxSectorPercent         Int                    @default(40)
+  maxTotalPaperNotionalCzk Int?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  chatConfig               TelegramChat           @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
 
   @@map("portfolio_risk_profiles")
 }
@@ -2111,4 +2111,137 @@ model StudyFlashcardDeck {
   job           StudyProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@map("study_flashcard_decks")
+}
+
+model TransportUser {
+  id                 String                 @id @default(uuid())
+  telegramChatId     BigInt                 @unique
+  vehicleProfile     Json?
+  costSettings       Json?
+  preferences        Json?
+  conversation       Json?
+  onboardingComplete Boolean                @default(false)
+  automaticDiscovery Boolean                @default(true)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  plannedTrips       TransportPlannedTrip[]
+  opportunities      TransportOpportunity[]
+  rejections         TransportRejection[]
+
+  @@index([automaticDiscovery, onboardingComplete])
+  @@map("transport_users")
+}
+
+model TransportRequestObservation {
+  id            String                 @id @default(uuid())
+  source        String
+  externalId    String
+  sourceUrl     String?
+  normalized    Json
+  raw           Json
+  contentHash   String
+  publishedAt   DateTime
+  expiresAt     DateTime?
+  firstSeenAt   DateTime               @default(now())
+  lastSeenAt    DateTime               @default(now())
+  disappearedAt DateTime?
+  opportunities TransportOpportunity[]
+  rejections    TransportRejection[]
+
+  @@unique([source, externalId])
+  @@index([disappearedAt, expiresAt, publishedAt])
+  @@map("transport_request_observations")
+}
+
+model TransportPlannedTrip {
+  id            String                 @id @default(uuid())
+  userId        String
+  trip          Json
+  status        String                 @default("ACTIVE")
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  user          TransportUser          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunities TransportOpportunity[]
+
+  @@index([userId, status, createdAt])
+  @@map("transport_planned_trips")
+}
+
+model TransportOpportunity {
+  id            String                      @id @default(uuid())
+  userId        String
+  requestId     String
+  plannedTripId String?
+  kind          String
+  score         Float
+  confidence    String
+  compatibility String
+  route         Json
+  economics     Json
+  warnings      Json
+  notifiedAt    DateTime?
+  ignoredAt     DateTime?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  user          TransportUser               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request       TransportRequestObservation @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  plannedTrip   TransportPlannedTrip?       @relation(fields: [plannedTripId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, requestId, kind, plannedTripId])
+  @@index([userId, notifiedAt, ignoredAt, score])
+  @@map("transport_opportunities")
+}
+
+model TransportRejection {
+  id          String                      @id @default(uuid())
+  userId      String
+  requestId   String
+  code        String
+  explanation String
+  context     Json?
+  createdAt   DateTime                    @default(now())
+  user        TransportUser               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request     TransportRequestObservation @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([userId, requestId, createdAt])
+  @@index([code, createdAt])
+  @@map("transport_rejections")
+}
+
+model TransportRouteCache {
+  cacheKey  String   @id
+  route     Json
+  provider  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@map("transport_route_cache")
+}
+
+model TransportGeocodingCache {
+  query     String   @id
+  location  Json
+  provider  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@map("transport_geocoding_cache")
+}
+
+model TransportFuelPriceCache {
+  country         String
+  fuel            String
+  pricePerLiter   Float
+  currency        String
+  source          String
+  sourceUpdatedAt DateTime
+  fetchedAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@id([country, fuel])
+  @@map("transport_fuel_price_cache")
 }
