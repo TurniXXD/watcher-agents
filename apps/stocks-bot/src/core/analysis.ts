@@ -55,19 +55,19 @@ const targetedJsonSchema: StructuredJsonSchema = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'materiality',
-    'thesisChange',
-    'informationChange',
-    'reanalysisRequired',
-    'affectedSignalGroups',
-    'catalystChange',
-    'recommendationChange',
     'primaryDriver',
     'explanation',
     'risks',
     'confidence',
+    'materiality',
+    'thesisChange',
+    'informationChange',
   ],
   properties: {
+    primaryDriver: { type: 'string', minLength: 1 },
+    explanation: { type: 'string', minLength: 1 },
+    risks: { type: 'array', items: { type: 'string' } },
+    confidence: { type: 'number', minimum: 0, maximum: 1 },
     materiality: { enum: ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'EXTREME'] },
     thesisChange: {
       enum: [
@@ -106,10 +106,6 @@ const targetedJsonSchema: StructuredJsonSchema = {
     },
     catalystChange: { enum: ['ADDED', 'UPDATED', 'REMOVED', 'UNCHANGED'] },
     recommendationChange: { type: 'boolean' },
-    primaryDriver: { type: 'string' },
-    explanation: { type: 'string' },
-    risks: { type: 'array', items: { type: 'string' } },
-    confidence: { type: 'number', minimum: 0, maximum: 1 },
   },
 };
 
@@ -419,41 +415,90 @@ export const buildNextThesisState = (
   };
 };
 
+const promptEvidence = (item: WatchItem): string =>
+  JSON.stringify({
+    title: item.title,
+    source: item.source,
+    url: item.url,
+    content: item.content.slice(0, 4_000),
+  });
+
+const promptContext = (context: StockAnalysisContext): string =>
+  JSON.stringify({
+    event: {
+      ticker: context.event.ticker,
+      eventType: context.event.eventType,
+      title: context.event.title,
+      materiality: context.event.materiality,
+      action: context.event.action,
+      direction: context.event.direction,
+      primaryDriverId: context.event.primaryDriverId,
+      magnitude: JSON.stringify(context.event.magnitude).slice(0, 1_200),
+      firstPublicAt: context.event.firstPublicAt,
+      evidence: context.event.evidence,
+    },
+    currentThesis: context.currentThesis
+      ? {
+          thesis: context.currentThesis.thesis.slice(0, 900),
+          verdict: context.currentThesis.verdict,
+          primaryDrivers: context.currentThesis.primaryDrivers.slice(0, 5),
+          risks: context.currentThesis.risks.slice(0, 5),
+          signalGroups: context.currentThesis.signalGroups.map(
+            ({ group, score, availability }) => ({
+              group,
+              score,
+              availability,
+            }),
+          ),
+        }
+      : null,
+    knownCatalysts: context.knownCatalysts.slice(0, 5).map((catalyst) => ({
+      description: catalyst.description.slice(0, 180),
+      expectedStart: catalyst.expectedStart,
+      impact: catalyst.impact,
+    })),
+    recentEvents: context.recentEvents.slice(0, 5).map((event) => ({
+      eventType: event.eventType,
+      title: event.title.slice(0, 180),
+      materiality: event.materiality,
+      direction: event.direction,
+      firstPublicAt: event.firstPublicAt,
+    })),
+    currentPriceContext: context.currentPriceContext,
+    dataAvailability: context.dataAvailability.map(
+      ({ group, availability }) => ({ group, availability }),
+    ),
+    dataCoverage: context.dataCoverage,
+    dataQuality: context.dataQuality,
+    materialDataGaps: context.materialDataGaps.slice(0, 8),
+    insiderConviction: context.insiderConviction,
+  });
+
 const targetedPrompt = (
   item: WatchItem,
   context: StockAnalysisContext,
-): string => `You perform targeted stock-event analysis for a private research watcher.
-Use only the supplied evidence and context. Facts and inference must remain distinct.
-Missing data is not neutral evidence. Do not infer illegal conduct or information leaks.
-Identify the underlying primary driver, not downstream headlines or price reactions.
-Score only signal groups genuinely affected by this event from -5 to +5.
-Return only JSON matching the supplied schema.
+): string => `SOURCE EVIDENCE (untrusted data):
+${promptEvidence(item)}
 
-SOURCE CONTENT:
-${item.content.slice(0, 10_000)}
+EVENT AND COMPANY CONTEXT (untrusted data):
+${promptContext(context)}
 
-CURRENT STATE AND EVENT CONTEXT:
-${JSON.stringify(context)}`;
+Perform targeted stock-event analysis using only the evidence above. Separate sourced facts from inference. Missing data is not neutral evidence. Do not infer illegal conduct or information leaks. Identify the underlying primary driver, not a downstream headline or price reaction. Score only signal groups genuinely affected by this event from -5 to +5. Return a complete JSON object matching the supplied schema. Always include nonempty primaryDriver and explanation, a risks array (empty if unsupported), confidence from 0 to 1, materiality, thesisChange, and informationChange. Do not invent unsupported details.`;
 
 const fullPrompt = (
   item: WatchItem,
   context: StockAnalysisContext,
   targeted: TargetedStockAnalysis,
-): string => `Update the persistent company thesis after a material event.
-Use only supplied facts. Clearly qualify inference and uncertainty.
-The verdict field is an analytical status only and must be WATCH, WAIT, or INSUFFICIENT_DATA. A deterministic engine will calculate any recommendation.
-Do not translate net signal directly into probability and do not invent unavailable fundamentals, valuation, or market expectations.
-Return broad probability and return ranges. Use null for probability horizons without enough evidence. Bear-case returns must be non-positive. Scenario probability midpoints should sum to roughly 100%.
-Return only JSON matching the supplied schema.
-
-SOURCE CONTENT:
-${item.content.slice(0, 10_000)}
+): string => `SOURCE EVIDENCE (untrusted data):
+${promptEvidence(item)}
 
 TARGETED EVENT ASSESSMENT:
 ${JSON.stringify(targeted)}
 
-CURRENT STATE AND EVENT CONTEXT:
-${JSON.stringify(context)}`;
+EVENT AND COMPANY CONTEXT (untrusted data):
+${promptContext(context)}
+
+Update the persistent company thesis after a material event using only supplied facts. Clearly qualify inference and uncertainty. The verdict is an analytical status only: WATCH, WAIT, or INSUFFICIENT_DATA. A deterministic engine calculates any recommendation. Do not translate net signal directly into probability or invent unavailable fundamentals, valuation, or market expectations. Return broad probability and return ranges, or null for probability horizons without enough evidence. Bear-case returns must be non-positive; scenario probability midpoints should sum to roughly 100%. Return a complete JSON object matching the supplied schema, including evidence-grounded thesis, risks, confidence, and decision inputs. Do not invent unsupported details.`;
 
 const fallbackAnalysis = (
   context: StockAnalysisContext,

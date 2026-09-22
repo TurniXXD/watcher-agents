@@ -279,6 +279,36 @@ describe('Phase 5 stock analysis', () => {
     expect(outcome.error).toContain('full stock analysis failed:');
   });
 
+  it('does not promote a schema-incomplete targeted response into a thesis', async () => {
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        fetch: async () =>
+          response({
+            materiality: 'HIGH',
+            thesisChange: 'IMPROVED',
+            informationChange: 'NEW_INFORMATION',
+          }),
+      }),
+    );
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'SEC:incomplete',
+      source: 'SEC',
+      externalId: 'incomplete',
+      title: 'Micron reports results',
+      url: 'https://www.sec.gov/example',
+      content: 'Primary-source earnings evidence.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(outcome.status).toBe('FAILED');
+    if (outcome.status !== 'FAILED') throw new Error('Expected failure');
+    expect(outcome.error).toContain('targeted stock analysis failed:');
+    expect(outcome.error).toContain('primaryDriver');
+  });
+
   it('skips full analysis when targeted comparison finds no meaningful change', async () => {
     const existingState = buildNextThesisState(context(), targeted, full).state;
     const unchanged = {
@@ -375,5 +405,66 @@ describe('Phase 5 stock analysis', () => {
       recommendationChange: false,
     });
     expect(outcome.result.intelligence?.fullAnalysisPerformed).toBe(false);
+  });
+
+  it('keeps targeted prompts bounded and prioritizes evidence-backed required fields', async () => {
+    const existingState = buildNextThesisState(context(), targeted, full).state;
+    let request:
+      | {
+          format: { required: string[] };
+          messages: { content: string }[];
+        }
+      | undefined;
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        fetch: async (_url, init) => {
+          if (typeof init?.body !== 'string') {
+            throw new Error('Expected JSON request body');
+          }
+          request = JSON.parse(init.body) as typeof request;
+          return response({
+            ...targeted,
+            reanalysisRequired: false,
+            thesisChange: 'UNCHANGED',
+            informationChange: 'NO_MEANINGFUL_CHANGE',
+          });
+        },
+      }),
+    );
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'NEWS:bounded',
+      source: 'NEWS',
+      externalId: 'bounded',
+      title: 'Micron update',
+      url: 'https://example.com/micron',
+      content: `Sourced evidence at the beginning. ${'Further source detail. '.repeat(800)}`,
+      metadata: {
+        stockAnalysisContext: context({
+          currentThesis: existingState,
+          event: { ...context().event, action: 'TARGETED_ANALYSIS' },
+        }),
+      },
+    });
+
+    expect(outcome.status).toBe('SUCCESS');
+    expect(request?.messages[0]?.content.length).toBeLessThan(8_000);
+    expect(request?.messages[0]?.content).toContain(
+      'Sourced evidence at the beginning.',
+    );
+    expect(request?.messages[0]?.content).toContain(
+      'Always include nonempty primaryDriver and explanation',
+    );
+    expect(request?.format.required).toEqual([
+      'primaryDriver',
+      'explanation',
+      'risks',
+      'confidence',
+      'materiality',
+      'thesisChange',
+      'informationChange',
+    ]);
   });
 });
