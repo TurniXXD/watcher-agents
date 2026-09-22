@@ -37,7 +37,11 @@ const marketPoint = (
   const low = numberValue(observation.normalizedFacts.low);
   const close = numberValue(observation.normalizedFacts.close);
   const volume = numberValue(observation.normalizedFacts.volume);
-  const at = observation.eventAt ?? observation.publishedAt;
+  // A market quote is still useful when the upstream payload omits its market
+  // timestamp. The normalized ingestion time is a durable, UTC fallback and
+  // prevents silently dropping an otherwise valid price snapshot.
+  const at =
+    observation.eventAt ?? observation.publishedAt ?? observation.discoveredAt;
   if (
     !at ||
     open === null ||
