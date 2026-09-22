@@ -64,6 +64,7 @@ jobs:
             test -f deploy/presets/brno-events-agent.env.example
             test -f deploy/presets/briefing-bot.env.example
             test -f deploy/presets/maintenance-agent.env.example
+            test -f deploy/presets/transport-bot.env.example
             production_compose_ready=true
           fi
 
@@ -176,6 +177,7 @@ jobs:
             cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
             cp deploy/presets/study-bot.env.example deploy/runtime/study-bot.env
             cp deploy/presets/maintenance-agent.env.example deploy/runtime/maintenance-agent.env
+            cp deploy/presets/transport-bot.env.example deploy/runtime/transport-bot.env
             chmod 600 deploy/runtime/*.env
 
             IMAGE_REGISTRY=ghcr.io \

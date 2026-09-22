@@ -136,6 +136,7 @@ Runtime credentials are intentionally not uploaded by GitHub Actions. Create the
 | `deploy/runtime/briefing-bot.env`      | Morning briefing bot credentials                                |
 | `deploy/runtime/study-bot.env`         | Optional Study Bot, Anki export, and object-storage credentials |
 | `deploy/runtime/maintenance-agent.env` | Maintenance API, Telegram, and scheduler values                 |
+| `deploy/runtime/transport-bot.env`     | Transport bot credentials, request feed, and routing settings   |
 
 You can copy the readable examples from `deploy/presets`, or render all files from environment variables:
 
@@ -153,6 +154,7 @@ cp deploy/presets/brno-events-agent.env.example deploy/runtime/brno-events-agent
 cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
 cp deploy/presets/study-bot.env.example deploy/runtime/study-bot.env
 cp deploy/presets/maintenance-agent.env.example deploy/runtime/maintenance-agent.env
+cp deploy/presets/transport-bot.env.example deploy/runtime/transport-bot.env
 chmod 600 deploy/runtime/*.env
 ```
 
