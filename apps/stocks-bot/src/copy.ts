@@ -32,6 +32,7 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /replay SYMBOL DATE — reconstruct only information known by that date
 /reset_stocks CONFIRM — remove every stock from this watchlist; historical research is retained
 /resume — resume scheduled runs
+/risk_profile [PROFILE] [--max-position PERCENT] [--max-sector PERCENT] [--max-total-czk AMOUNT|none] — view or set paper-portfolio warning limits
 /run — run now
 /run_discovery — run the market-wide discovery report now; it never changes your watchlist
 /schedule [CRON[; CRON...]] [TIMEZONE] — view or replace all schedules

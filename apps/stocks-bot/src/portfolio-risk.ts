@@ -1,5 +1,8 @@
 import { htmlText } from '@watcher/telegram';
-import type { PaperPositionView } from '@watcher/database';
+import type {
+  PaperPositionView,
+  PortfolioRiskProfileView,
+} from '@watcher/database';
 
 type DashboardRiskContext = {
   stock: { symbol: string; sector?: string | null };
@@ -12,6 +15,7 @@ type DashboardRiskContext = {
 type RiskLevel = 'HIGH' | 'MEDIUM';
 
 export type PortfolioRiskSnapshot = {
+  profile: PortfolioRiskProfileView;
   totalNotionalCzk: number;
   openPositionCount: number;
   tickerCount: number;
@@ -45,9 +49,17 @@ const marketDataAgeHours = (
     : null;
 };
 
+const defaultProfile: PortfolioRiskProfileView = {
+  tolerance: 'BALANCED',
+  maxSinglePositionPercent: 20,
+  maxSectorPercent: 40,
+  maxTotalPaperNotionalCzk: null,
+};
+
 export const assessPortfolioRisk = (
   paperPositions: PaperPositionView[],
   dashboard: DashboardRiskContext[],
+  profile: PortfolioRiskProfileView = defaultProfile,
   now = new Date(),
 ): PortfolioRiskSnapshot => {
   const open = paperPositions.filter(({ status }) => status === 'OPEN');
@@ -110,15 +122,18 @@ export const assessPortfolioRisk = (
     .sort((left, right) => right.weightPercent - left.weightPercent);
   const warnings: PortfolioRiskSnapshot['warnings'] = [];
   for (const position of positions) {
-    if (position.weightPercent >= 25) {
+    if (position.weightPercent >= profile.maxSinglePositionPercent) {
       warnings.push({
         level: 'HIGH',
-        message: `${position.ticker} is ${position.weightPercent.toFixed(0)}% of open paper notional.`,
+        message: `${position.ticker} is ${position.weightPercent.toFixed(0)}% of open paper notional, at or above your ${profile.maxSinglePositionPercent}% limit.`,
       });
-    } else if (position.weightPercent >= 15) {
+    } else if (
+      position.weightPercent >=
+      profile.maxSinglePositionPercent * 0.8
+    ) {
       warnings.push({
         level: 'MEDIUM',
-        message: `${position.ticker} is ${position.weightPercent.toFixed(0)}% of open paper notional.`,
+        message: `${position.ticker} is ${position.weightPercent.toFixed(0)}% of open paper notional, approaching your ${profile.maxSinglePositionPercent}% limit.`,
       });
     }
     if (
@@ -149,12 +164,26 @@ export const assessPortfolioRisk = (
     }
   }
   for (const sector of sectorConcentration) {
-    if (sector.weightPercent >= 50) {
+    if (sector.weightPercent >= profile.maxSectorPercent) {
       warnings.push({
         level: 'HIGH',
-        message: `${sector.sector} represents ${sector.weightPercent.toFixed(0)}% of open paper notional.`,
+        message: `${sector.sector} represents ${sector.weightPercent.toFixed(0)}% of open paper notional, at or above your ${profile.maxSectorPercent}% limit.`,
+      });
+    } else if (sector.weightPercent >= profile.maxSectorPercent * 0.8) {
+      warnings.push({
+        level: 'MEDIUM',
+        message: `${sector.sector} represents ${sector.weightPercent.toFixed(0)}% of open paper notional, approaching your ${profile.maxSectorPercent}% limit.`,
       });
     }
+  }
+  if (
+    profile.maxTotalPaperNotionalCzk !== null &&
+    totalNotionalCzk >= profile.maxTotalPaperNotionalCzk
+  ) {
+    warnings.push({
+      level: 'HIGH',
+      message: `Open paper notional is ${formatCzk(totalNotionalCzk)}, at or above your declared ${formatCzk(profile.maxTotalPaperNotionalCzk)} limit.`,
+    });
   }
   if (concentrationHhi >= 0.25 && positions.length > 1) {
     warnings.push({
@@ -163,6 +192,7 @@ export const assessPortfolioRisk = (
     });
   }
   return {
+    profile,
     totalNotionalCzk,
     openPositionCount: open.length,
     tickerCount: positions.length,
@@ -187,6 +217,7 @@ export const renderPortfolioRisk = (risk: PortfolioRiskSnapshot): string => {
   return [
     '🛡️ <b>PORTFOLIO RISK</b>',
     `Open paper positions: ${risk.openPositionCount} across ${risk.tickerCount} tickers · notional ${formatCzk(risk.totalNotionalCzk)}`,
+    `Profile: ${risk.profile.tolerance.toLowerCase()} · ticker limit ${risk.profile.maxSinglePositionPercent}% · sector limit ${risk.profile.maxSectorPercent}%${risk.profile.maxTotalPaperNotionalCzk === null ? '' : ` · total limit ${formatCzk(risk.profile.maxTotalPaperNotionalCzk)}`}`,
     `Concentration: HHI ${risk.concentrationHhi.toFixed(2)} · largest ${risk.positions[0]?.ticker ?? 'n/a'} ${risk.positions[0]?.weightPercent.toFixed(0) ?? '0'}%`,
     '<b>Exposure</b>',
     risk.positions

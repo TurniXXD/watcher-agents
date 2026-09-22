@@ -54,6 +54,10 @@ import {
 import { eventNeedsAnalysis, StockEventStore } from './stock-event-store.js';
 import { StockReportStore } from './stock-report-store.js';
 import { PaperPortfolioStore } from './paper-portfolio-store.js';
+import {
+  PortfolioRiskProfileStore,
+  type PortfolioRiskProfileUpdate,
+} from './portfolio-risk-profile-store.js';
 import { ConfigurationStore } from './configuration-store.js';
 
 const DEFAULT_SCHEDULE = '0 8 * * *';
@@ -116,6 +120,7 @@ export class WatcherStore implements PipelineRepository {
   private readonly sourceHealth: SourceHealthStore;
   private readonly stockReports: StockReportStore;
   private readonly paperPortfolio: PaperPortfolioStore;
+  private readonly portfolioRiskProfile: PortfolioRiskProfileStore;
   private readonly configuration: ConfigurationStore;
   private readonly alertAttentionThreshold: number;
   private readonly notificationPolicy: StockNotificationPolicy;
@@ -149,6 +154,7 @@ export class WatcherStore implements PipelineRepository {
     });
     this.stockReports = new StockReportStore(db);
     this.paperPortfolio = new PaperPortfolioStore(db);
+    this.portfolioRiskProfile = new PortfolioRiskProfileStore(db);
     this.configuration = new ConfigurationStore(db);
     this.alertAttentionThreshold = options.alertAttentionThreshold ?? 85;
     this.notificationPolicy = {
@@ -964,6 +970,17 @@ export class WatcherStore implements PipelineRepository {
 
   public closePaperPosition(chatConfigId: string, ordinal: number, now?: Date) {
     return this.paperPortfolio.closePosition(chatConfigId, ordinal, now);
+  }
+
+  public getPortfolioRiskProfile(chatConfigId: string) {
+    return this.portfolioRiskProfile.get(chatConfigId);
+  }
+
+  public updatePortfolioRiskProfile(
+    chatConfigId: string,
+    input: PortfolioRiskProfileUpdate,
+  ) {
+    return this.portfolioRiskProfile.update(chatConfigId, input);
   }
 
   public async claimPendingAlerts(watcherConfigId: string, now = new Date()) {

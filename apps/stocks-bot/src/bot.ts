@@ -81,6 +81,11 @@ import {
 import { assessPortfolioRisk, renderPortfolioRisk } from './portfolio-risk.js';
 import { renderAlpacaPaperPortfolio } from './alpaca-paper.js';
 import type { AlpacaPaperClient } from './alpaca-paper.js';
+import {
+  parsePortfolioRiskProfileRequest,
+  portfolioRiskProfileUsage,
+  renderPortfolioRiskProfile,
+} from './portfolio-risk-profile.js';
 
 type StockCompany = {
   symbol: string;
@@ -764,14 +769,36 @@ export const createStocksBot = (
   });
   bot.command('portfolio_risk', async (ctx) => {
     const current = await chat(ctx.chat.id);
-    const [positions, dashboard] = await Promise.all([
+    const [positions, dashboard, profile] = await Promise.all([
       store.listPaperPositions(current.id),
       store.getStockDashboard(current.id),
+      store.getPortfolioRiskProfile(current.id),
     ]);
     await sendSplitMessage(
       ctx.api,
       BigInt(ctx.chat.id),
-      renderPortfolioRisk(assessPortfolioRisk(positions, dashboard)),
+      renderPortfolioRisk(assessPortfolioRisk(positions, dashboard, profile)),
+    );
+  });
+  bot.command('risk_profile', async (ctx) => {
+    const current = await chat(ctx.chat.id);
+    let request;
+    try {
+      request = parsePortfolioRiskProfileRequest(
+        commandArgument(ctx.message?.text),
+      );
+    } catch {
+      await ctx.reply(portfolioRiskProfileUsage);
+      return;
+    }
+    const profile =
+      request.status === 'VIEW'
+        ? await store.getPortfolioRiskProfile(current.id)
+        : await store.updatePortfolioRiskProfile(current.id, request.profile);
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderPortfolioRiskProfile(profile),
     );
   });
   bot.command('alpaca', async (ctx) => {

@@ -86,6 +86,12 @@ enum PaperPositionStatus {
   CLOSED
 }
 
+enum PortfolioRiskTolerance {
+  CONSERVATIVE
+  BALANCED
+  AGGRESSIVE
+}
+
 enum CanonicalEventType {
   EARNINGS
   GUIDANCE
@@ -817,6 +823,7 @@ model TelegramChat {
   newsTopics              NewsTopic[]
   newsCategoryPreferences NewsCategoryPreference[]
   paperPositions          PaperPosition[]
+  portfolioRiskProfile    PortfolioRiskProfile?
 
   @@unique([kind, chatId])
 }
@@ -1410,6 +1417,20 @@ model PaperPosition {
   @@index([chatConfigId, status, openedAt])
   @@index([chatConfigId, ticker, status])
   @@map("paper_positions")
+}
+
+model PortfolioRiskProfile {
+  id                        String                  @id @default(uuid())
+  chatConfigId              String                  @unique
+  tolerance                 PortfolioRiskTolerance  @default(BALANCED)
+  maxSinglePositionPercent  Int                     @default(20)
+  maxSectorPercent          Int                     @default(40)
+  maxTotalPaperNotionalCzk  Int?
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
+  chatConfig                TelegramChat            @relation(fields: [chatConfigId], references: [id], onDelete: Cascade)
+
+  @@map("portfolio_risk_profiles")
 }
 
 model DiscoveryScan {

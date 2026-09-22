@@ -24,6 +24,7 @@ export * from './stock-event-vector-store.js';
 export * from './stock-news-store.js';
 export * from './stock-report-store.js';
 export * from './paper-portfolio-store.js';
+export * from './portfolio-risk-profile-store.js';
 export * from './telegram-outbox-store.js';
 export * from './source-health-store.js';
 export * from './resource-lease-store.js';

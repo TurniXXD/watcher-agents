@@ -35,6 +35,7 @@ describe('portfolio risk', () => {
           thesis: { confidence: 0.4, dataCoverage: 40 },
         },
       ],
+      undefined,
       new Date('2026-09-21T12:00:00Z'),
     );
 
@@ -54,5 +55,36 @@ describe('portfolio risk', () => {
     );
     expect(renderPortfolioRisk(snapshot)).toContain('PORTFOLIO RISK');
     expect(renderPortfolioRisk(snapshot)).toContain('HHI 0.68');
+  });
+
+  it('uses declared portfolio limits rather than generic limits', () => {
+    const snapshot = assessPortfolioRisk(
+      [position('MU', 30_000), position('SNDK', 70_000)],
+      [
+        {
+          stock: { symbol: 'MU', sector: 'Semiconductors' },
+          thesis: { confidence: 0.8, dataCoverage: 90 },
+        },
+        {
+          stock: { symbol: 'SNDK', sector: 'Semiconductors' },
+          thesis: { confidence: 0.8, dataCoverage: 90 },
+        },
+      ],
+      {
+        tolerance: 'CONSERVATIVE',
+        maxSinglePositionPercent: 25,
+        maxSectorPercent: 50,
+        maxTotalPaperNotionalCzk: 90_000,
+      },
+      new Date('2026-09-21T12:00:00Z'),
+    );
+
+    expect(snapshot.warnings.map(({ message }) => message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('SNDK is 70%'),
+        expect.stringContaining('Semiconductors represents 100%'),
+        expect.stringContaining('100 000 Kč'),
+      ]),
+    );
   });
 });

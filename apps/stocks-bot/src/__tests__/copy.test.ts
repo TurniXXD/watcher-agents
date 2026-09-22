@@ -44,6 +44,7 @@ describe('stocks bot command copy', () => {
       'replay',
       'reset_stocks',
       'resume',
+      'risk_profile',
       'run',
       'run_discovery',
       'schedule',

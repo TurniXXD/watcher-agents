@@ -1140,6 +1140,30 @@ integration('WatcherStore with PostgreSQL', () => {
     });
   });
 
+  it('persists a per-chat paper portfolio risk profile', async () => {
+    const chat = await store.ensureChat('STOCKS', 790n);
+
+    await expect(store.getPortfolioRiskProfile(chat.id)).resolves.toEqual({
+      tolerance: 'BALANCED',
+      maxSinglePositionPercent: 20,
+      maxSectorPercent: 40,
+      maxTotalPaperNotionalCzk: null,
+    });
+    await expect(
+      store.updatePortfolioRiskProfile(chat.id, {
+        tolerance: 'CONSERVATIVE',
+        maxSinglePositionPercent: 10,
+        maxSectorPercent: 25,
+        maxTotalPaperNotionalCzk: 100_000,
+      }),
+    ).resolves.toEqual({
+      tolerance: 'CONSERVATIVE',
+      maxSinglePositionPercent: 10,
+      maxSectorPercent: 25,
+      maxTotalPaperNotionalCzk: 100_000,
+    });
+  });
+
   it('deduplicates the same SEC event reported by a second source', async () => {
     const firstChat = await store.ensureChat('STOCKS', 781n);
     const firstRun = await store.claimRun(

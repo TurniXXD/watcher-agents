@@ -253,6 +253,7 @@ Stocks bot:
 - `/reaction SYMBOL` to distinguish a stored post-event price observation from a confirmed event-to-reaction link or an unexplained move
 - `/paper_open SYMBOL --amount-czk AMOUNT [--days DAYS]`, `/paper_portfolio`, and `/paper_close NUMBER` for a persistent, no-execution paper ledger that preserves the entry thesis and evaluates it only against stored prices
 - `/portfolio_risk` to audit paper-notional concentration, sector overlap, research coverage, stale stored prices, and reached holding horizons before acting on a research signal
+- `/risk_profile [PROFILE]` to persist conservative, balanced, or aggressive paper-portfolio warning limits; custom ticker, sector, and total-notional limits only adjust warnings and never execute a trade
 - `/alpaca` to view an optional Alpaca **Paper** account, its positions, and its five latest orders; it is read-only and cannot submit, modify, or cancel orders
 - `/reconcile` to run the comprehensive recovery scan now
 - `/catalysts [SYMBOL]` to list active and upcoming catalyst records with evidence
