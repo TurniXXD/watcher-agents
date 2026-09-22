@@ -40,6 +40,7 @@ import { createStocksBot } from './bot.js';
 import { StockDiscoveryCoordinator } from './discovery.js';
 import { DiscoveryCatalystAnalyzer } from './discovery-catalyst.js';
 import { renderWeeklyDiscoveryReport } from './discovery-report.js';
+import { AlpacaPaperClient } from './alpaca-paper.js';
 import { env } from './env.js';
 import { StockReconciliationCoordinator } from './reconciliation.js';
 import { createStocksRunner } from './watcher.js';
@@ -199,6 +200,13 @@ const deliverAlertBatch = async (
   }
 };
 const discoveryEnabled = Boolean(env.ALPHA_VANTAGE_API_KEY);
+const alpacaPaper =
+  env.ALPACA_PAPER_API_KEY && env.ALPACA_PAPER_API_SECRET
+    ? new AlpacaPaperClient({
+        apiKey: env.ALPACA_PAPER_API_KEY,
+        apiSecret: env.ALPACA_PAPER_API_SECRET,
+      })
+    : undefined;
 const bot = createStocksBot(
   env.STOCKS_TELEGRAM_TOKEN,
   parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS),
@@ -230,6 +238,7 @@ const bot = createStocksBot(
   },
   env.DEFAULT_TIMEZONE,
   env.STOCKS_MONITOR_SCHEDULE,
+  alpacaPaper,
   (error) => logger.error({ err: error }, 'Telegram update failed'),
 );
 const runner = createStocksRunner(

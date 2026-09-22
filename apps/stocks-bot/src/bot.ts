@@ -79,6 +79,8 @@ import {
   parsePaperOpenRequest,
 } from './paper-portfolio.js';
 import { assessPortfolioRisk, renderPortfolioRisk } from './portfolio-risk.js';
+import { renderAlpacaPaperPortfolio } from './alpaca-paper.js';
+import type { AlpacaPaperClient } from './alpaca-paper.js';
 
 type StockCompany = {
   symbol: string;
@@ -164,6 +166,7 @@ export const createStocksBot = (
   reconcileNow: (configId: string, chatId: bigint) => Promise<RunExecution>,
   timezone: string,
   monitoringSchedule: string,
+  alpacaPaper: AlpacaPaperClient | undefined,
   reportError: (error: unknown) => void,
 ): Bot => {
   const bot = new Bot(token);
@@ -770,6 +773,27 @@ export const createStocksBot = (
       BigInt(ctx.chat.id),
       renderPortfolioRisk(assessPortfolioRisk(positions, dashboard)),
     );
+  });
+  bot.command('alpaca', async (ctx) => {
+    await chat(ctx.chat.id);
+    if (!alpacaPaper) {
+      await ctx.reply(
+        'Alpaca Paper is not configured. Add both ALPACA_PAPER_API_KEY and ALPACA_PAPER_API_SECRET to the stocks-bot runtime environment, then restart that bot.',
+      );
+      return;
+    }
+    try {
+      await sendSplitMessage(
+        ctx.api,
+        BigInt(ctx.chat.id),
+        renderAlpacaPaperPortfolio(await alpacaPaper.getPortfolio()),
+      );
+    } catch (error) {
+      reportError(error);
+      await ctx.reply(
+        'Alpaca Paper data could not be loaded. Check that the paper API keys are valid and the account is active; no order was sent.',
+      );
+    }
   });
   bot.command('paper_close', async (ctx) => {
     const ordinal = parsePaperCloseOrdinal(commandArgument(ctx.message?.text));

@@ -201,6 +201,7 @@ Every application variable is represented in `.env.example`.
 | `ALPHA_VANTAGE_API_KEY`                             | stocks bot            | Optional Alpha Vantage key for discovery and institutional holdings                           |
 | `ALPHA_VANTAGE_OPTIONS_ENABLED`                     | stocks bot            | Enables premium realtime option-chain requests; defaults to `false`                           |
 | `QUIVER_API_TOKEN`                                  | stocks bot            | Optional Quiver bearer token; leaving it empty disables Quiver requests                       |
+| `ALPACA_PAPER_API_KEY`, `ALPACA_PAPER_API_SECRET`   | stocks bot            | Optional paired **Paper-only** API credentials for the read-only `/alpaca` command            |
 | `PRICE_ANOMALY_THRESHOLD_PERCENT`                   | stocks bot            | Absolute daily-return anomaly threshold; defaults to 4%                                       |
 | `GAP_ANOMALY_THRESHOLD_PERCENT`                     | stocks bot            | Absolute opening-gap anomaly threshold; defaults to 3%                                        |
 | `RELATIVE_VOLUME_ANOMALY_THRESHOLD`                 | stocks bot            | Relative-volume anomaly multiplier; defaults to 3                                             |
@@ -252,6 +253,7 @@ Stocks bot:
 - `/reaction SYMBOL` to distinguish a stored post-event price observation from a confirmed event-to-reaction link or an unexplained move
 - `/paper_open SYMBOL --amount-czk AMOUNT [--days DAYS]`, `/paper_portfolio`, and `/paper_close NUMBER` for a persistent, no-execution paper ledger that preserves the entry thesis and evaluates it only against stored prices
 - `/portfolio_risk` to audit paper-notional concentration, sector overlap, research coverage, stale stored prices, and reached holding horizons before acting on a research signal
+- `/alpaca` to view an optional Alpaca **Paper** account, its positions, and its five latest orders; it is read-only and cannot submit, modify, or cancel orders
 - `/reconcile` to run the comprehensive recovery scan now
 - `/catalysts [SYMBOL]` to list active and upcoming catalyst records with evidence
 - `/earnings SYMBOL` to show the stored next-report setup and latest EPS/revenue expectation-versus-actual comparison; run `/thesis SYMBOL` first when no source snapshot is stored
