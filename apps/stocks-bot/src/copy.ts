@@ -24,6 +24,7 @@ export const stocksHelp = `/about — what the stocks bot does and how to use it
 /paper_portfolio — show open and closed paper positions and their stored-price outcomes
 /pause — pause scheduled runs
 /peers SYMBOL — show the curated peer and sector context map for supported AI-infrastructure stocks
+/portfolio_risk — audit paper-position concentration, sector overlap, stale prices, and research coverage
 /reaction SYMBOL — check whether stored post-event price data confirms, contradicts, or cannot yet explain the latest material driver
 /reconcile — run the comprehensive daily reconciliation now
 /remove_stock SYMBOL — remove a stock

@@ -36,6 +36,7 @@ describe('stocks bot command copy', () => {
       'paper_portfolio',
       'pause',
       'peers',
+      'portfolio_risk',
       'reaction',
       'reconcile',
       'remove_stock',

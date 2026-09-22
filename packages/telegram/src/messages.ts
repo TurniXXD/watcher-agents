@@ -1005,6 +1005,7 @@ export type StockDashboardEntry = {
   stock: {
     symbol: string;
     companyName: string | null;
+    sector?: string | null;
     monitoringTier: string;
     monitoringMode: string;
     attentionScore: number;

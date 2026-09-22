@@ -78,6 +78,7 @@ import {
   parsePaperCloseOrdinal,
   parsePaperOpenRequest,
 } from './paper-portfolio.js';
+import { assessPortfolioRisk, renderPortfolioRisk } from './portfolio-risk.js';
 
 type StockCompany = {
   symbol: string;
@@ -756,6 +757,18 @@ export const createStocksBot = (
       ctx.api,
       BigInt(ctx.chat.id),
       renderPaperPortfolio(await store.listPaperPositions(current.id)),
+    );
+  });
+  bot.command('portfolio_risk', async (ctx) => {
+    const current = await chat(ctx.chat.id);
+    const [positions, dashboard] = await Promise.all([
+      store.listPaperPositions(current.id),
+      store.getStockDashboard(current.id),
+    ]);
+    await sendSplitMessage(
+      ctx.api,
+      BigInt(ctx.chat.id),
+      renderPortfolioRisk(assessPortfolioRisk(positions, dashboard)),
     );
   });
   bot.command('paper_close', async (ctx) => {
