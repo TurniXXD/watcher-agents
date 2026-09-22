@@ -224,7 +224,7 @@ docker compose \
   --env-file deploy/runtime/compose.env \
   --env-file .release.env \
   -f docker-compose.production.yml \
-  logs --tail 200 stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot
+  logs --tail 200 stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot
 ```
 
 Backups are stored in `/opt/watcher/backups` and retained for 14 days by default. Override `BACKUP_RETENTION_DAYS` only when invoking `deploy/deploy.sh` manually.
@@ -240,3 +240,4 @@ To redeploy an older application version, run `deploy-vps` manually from a branc
 - **Missing runtime value:** add the reported key to the reported file. For example, if `news-bot.env` is missing `NEWS_TELEGRAM_TOKEN`, add a distinct BotFather token to `/opt/watcher/deploy/runtime/news-bot.env`, run `chmod 600 /opt/watcher/deploy/runtime/news-bot.env`, and redeploy.
 - **Ollama is unreachable:** ensure Ollama listens on an address reachable from Docker and keep `OLLAMA_URL=http://host.docker.internal:11434`; production Compose provides the Linux host-gateway mapping. Deployment now verifies this mapping before rollout and force-recreates application containers so a container created from an older Compose configuration cannot retain a missing host alias.
 - **A rollout fails:** the workflow prints Compose status plus migration and bot logs. Also inspect `/opt/watcher/backups` before attempting database recovery.
+- **Transport bot restarts during rollout:** inspect `docker compose --env-file deploy/runtime/compose.env --env-file .release.env -f docker-compose.production.yml logs --tail 200 transport-bot` on the VPS. The deploy script also prints its logs before rollback, preserving the startup error from the failed candidate image.

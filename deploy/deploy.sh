@@ -356,6 +356,8 @@ if ! compose_candidate up \
   --wait-timeout 180 \
   stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot; then
   echo "Release failed its container health checks." >&2
+  echo "=== transport bot logs before rollback ===" >&2
+  compose_candidate logs --tail 200 transport-bot >&2 || true
   dump_briefing_container_network
 
   if [[ -f "$RELEASE_FILE" ]] && ! cmp -s "$CANDIDATE_FILE" "$RELEASE_FILE"; then

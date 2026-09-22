@@ -234,6 +234,10 @@ jobs:
               echo '=== maintenance agent logs ==='
               IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
                 docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 maintenance-agent || true
+              echo
+              echo '=== transport bot logs ==='
+              IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
+                docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 transport-bot || true
             }
 
             trap 'dump_logs' ERR
