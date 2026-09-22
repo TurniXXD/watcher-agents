@@ -310,7 +310,6 @@ export class BriefingCoordinator {
               periodEnd,
               priorityKeywords: configuration.settings.priorityKeywords,
               mutedKeywords: configuration.settings.mutedKeywords,
-              includePreviouslyMentioned: endOfDay,
             }),
           ),
           this.dependencies.watcherHealth.list(subscriptions),

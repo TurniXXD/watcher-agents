@@ -37,7 +37,6 @@ export type StoryEngineInput = {
   periodEnd: Date;
   priorityKeywords?: readonly string[];
   mutedKeywords?: readonly string[];
-  includePreviouslyMentioned?: boolean;
 };
 
 const comparableSummary = (value: string): string =>
@@ -59,6 +58,17 @@ const shouldSuppress = (
   if (cluster.status === 'UNCHANGED') return 'UNCHANGED';
   if (cluster.status === 'RESOLVED' && cluster.importance < 70) {
     return 'LOW_VALUE_RESOLUTION';
+  }
+  if (
+    previous &&
+    cluster.status !== 'RESOLVED' &&
+    cluster.events.every(
+      (event) =>
+        Date.parse(event.detectedAt) <= Date.parse(previous.lastMentionedAt) &&
+        Date.parse(event.updatedAt) <= Date.parse(previous.lastMentionedAt),
+    )
+  ) {
+    return 'UNCHANGED';
   }
   if (
     previous &&
@@ -202,7 +212,7 @@ export class StoryEngine {
     const selected = clustered.flatMap((cluster) => {
       const prior = previous.get(cluster.id);
       const suppression = shouldSuppress(cluster, prior);
-      if (suppression === 'UNCHANGED' && !input.includePreviouslyMentioned) {
+      if (suppression === 'UNCHANGED') {
         unchangedSuppressed += 1;
         return [];
       }

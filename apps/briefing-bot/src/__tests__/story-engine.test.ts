@@ -295,21 +295,68 @@ describe('StoryEngine', () => {
       selected: 1,
     });
 
-    const recap = await engine.collect({
+    const evening = await engine.collect({
       telegramChatId: 42n,
       subscriptions: ['stocks', 'medical'],
       periodStart: new Date('2026-09-05T22:00:00.000Z'),
       periodEnd: new Date('2026-09-06T20:00:00.000Z'),
-      includePreviouslyMentioned: true,
     });
 
-    expect(recap.stories.map(({ title }) => title)).toContain(
+    expect(evening.stories.map(({ title }) => title)).not.toContain(
       'Unchanged earnings date',
     );
-    expect(recap.metrics).toMatchObject({
-      unchangedSuppressed: 0,
+    expect(evening.metrics).toMatchObject({
+      unchangedSuppressed: 1,
       resolvedSuppressed: 1,
-      selected: 2,
+      selected: 1,
+    });
+  });
+
+  it('does not repeat morning news at night without fresh event evidence', async () => {
+    const news = event('morning-news', {
+      watcherBot: 'news',
+      category: 'NEWS_BUSINESS',
+      title: 'Company announces investment',
+      summary: 'A morning report says the company plans an investment.',
+      detectedAt: '2026-09-06T06:00:00.000Z',
+      updatedAt: '2026-09-06T06:00:00.000Z',
+    });
+    const id = clusterBriefingEvents([news])[0]!.id;
+    const morningSummary = news.summary;
+    const engine = new StoryEngine(
+      { save: vi.fn(), list: vi.fn(async () => [news]) },
+      {
+        list: vi.fn(async () => [
+          {
+            storyId: id,
+            firstMentionedAt: '2026-09-06T08:00:00.000Z',
+            lastMentionedAt: '2026-09-06T08:00:00.000Z',
+            lastSummary: morningSummary,
+            importance: news.importance,
+            status: 'NEW' as const,
+          },
+        ]),
+      },
+    );
+    const input = {
+      telegramChatId: 42n,
+      subscriptions: ['news'] as const,
+      periodStart: new Date('2026-09-05T22:00:00.000Z'),
+      periodEnd: new Date('2026-09-06T20:00:00.000Z'),
+    };
+
+    news.summary = 'The company now confirmed the investment timetable.';
+    const unchanged = await engine.collect(input);
+    expect(unchanged.stories).toHaveLength(0);
+    expect(unchanged.metrics.unchangedSuppressed).toBe(1);
+
+    news.updatedAt = '2026-09-06T16:00:00.000Z';
+    const updated = await engine.collect(input);
+    expect(updated.stories).toHaveLength(1);
+    expect(updated.stories[0]).toMatchObject({
+      id,
+      previouslyMentioned: true,
+      summary: 'The company now confirmed the investment timetable.',
     });
   });
 

@@ -349,7 +349,7 @@ describe('BriefingCoordinator', () => {
     expect(setup.deliveryInputs[0]).not.toHaveProperty('audio');
   });
 
-  it('uses the local day for an evening recap and prepares tomorrow', async () => {
+  it('uses the local day for evening updates and prepares tomorrow', async () => {
     const evening = new Date('2026-09-06T18:00:00.000Z');
     const setup = dependencies({ currentTime: evening });
     const coordinator = new BriefingCoordinator(setup.value);
@@ -363,7 +363,6 @@ describe('BriefingCoordinator', () => {
       expect.objectContaining({
         periodStart: new Date('2026-09-05T22:00:00.000Z'),
         periodEnd: evening,
-        includePreviouslyMentioned: true,
       }),
     );
     const scriptInput = setup.value.scripts.generate.mock.calls[0]?.[0];

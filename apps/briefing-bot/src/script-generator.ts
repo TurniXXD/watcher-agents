@@ -121,16 +121,16 @@ const promptFor = (input: ScriptGenerationInput): string => {
   const period = briefingDayPeriodPresentation(input.dayPeriod);
   const endOfDay = isEndOfDayBriefing(input.dayPeriod);
   const requiredOrder = endOfDay
-    ? "brief greeting; tomorrow's local weather forecast; a clearly labeled summary of today's developments; detailed stories in descending importance; tomorrow's calendar; up to three concrete things to prepare for tomorrow; brief closing"
+    ? "brief greeting; tomorrow's local weather forecast; a clearly labeled preview of new or materially changed developments since the last briefing; detailed new stories in descending importance; tomorrow's calendar; up to three concrete things to prepare for tomorrow; brief closing"
     : `brief greeting appropriate for ${period.temporalPhrase}; local weather; today's calendar; a short preview of the prepared developments; detailed stories in descending importance; up to three things to watch ${period.watchHorizon}; brief closing`;
   return `You are creating a spoken personal ${input.dayPeriod} intelligence briefing at ${input.localTime} local time.
 Write mostly natural English intended to be spoken aloud. Use only the supplied JSON data and do not independently research or invent facts.
 The JSON response fields must be spoken prose only and must support this exact assembled order: ${requiredOrder}.
 The local day period is authoritative. Never call this a morning, afternoon, evening, or night briefing other than ${input.dayPeriod}, and do not use a greeting for another part of the day.
-${endOfDay ? "This is an end-of-day briefing. Summarize what happened today, including important supplied developments even if they were mentioned earlier, then describe what awaits the user tomorrow. The supplied weather forecast and Calendar window are for tomorrow, never today. Do not present tomorrow's conditions or events as current or as having happened already." : ''}
-Do not mention internal bot or database names. Combine the supplied cross-domain perspectives into one coherent story while preserving medical, investment, news, and student-community interpretations. For major stories explain what happened, why it matters, what changed, and what to watch next. Use previousSummary only for natural continuity.
+${endOfDay ? "This is an end-of-day briefing. Report only supplied developments that are new or materially changed since the previous briefing; do not repeat morning news or recap unchanged stories. If there are no such developments, say so briefly and focus on tomorrow's weather, Calendar, and preparation. The supplied weather forecast and Calendar window are for tomorrow, never today. Do not present tomorrow's conditions or events as current or as having happened already." : ''}
+Do not mention internal bot or database names. Combine the supplied cross-domain perspectives into one coherent story while preserving medical, investment, news, and student-community interpretations. For major stories explain what happened, why it matters, what changed, and what to watch next. Use previousSummary only to explain a material change, never to recap old facts.
 If weather or Calendar status is UNAVAILABLE, briefly say it could not be retrieved; never describe it as empty. If DISABLED, omit that section by returning null. If Calendar is AVAILABLE with zero events, it is safe to say the calendar is clear. If there are no stories, explain briefly that there are no new subscribed watcher developments; do not add fake news.
-Use the supplied actionAgenda for concrete preparation, deadlines, conflicts, or follow-up. Mention dataQuality briefly only when it is non-empty, without provider error strings or implementation details. ${endOfDay ? 'For previously mentioned stories, use previousSummary only as context for a concise recap and do not claim that an unchanged fact is new.' : 'When previousSummary exists, explicitly explain only the meaningful change since the earlier briefing.'}
+Use the supplied actionAgenda for concrete preparation, deadlines, conflicts, or follow-up. Mention dataQuality briefly only when it is non-empty, without provider error strings or implementation details. When previousSummary exists, explain only the meaningful new development since the earlier briefing; never repeat the previous summary as news.
 Preserve Calendar event titles and story titles in their original language. Write each Czech Calendar event or Czech story title as its own Czech sentence without translating it; keep surrounding narration and non-Czech events in English. This language boundary is required so the speech engine can select the correct voice.
 Avoid URLs, markdown, raw field names, filler, excessive numbers, repeated conclusions, and difficult ticker-only phrasing. Stay below ${input.wordBudget} words and never exceed ${input.maximumWords} words. The preferred duration is ${input.targetDurationMinutes} minutes and the hard maximum is ${input.maximumDurationMinutes} minutes, but do not add filler.
 
@@ -163,7 +163,7 @@ const assemble = (
     ? [
         greeting,
         sections.weather,
-        `Today in review. ${sections.newsPreview}`,
+        `Latest developments. ${sections.newsPreview}`,
         ...sections.topStories,
         sections.calendar ? `Tomorrow. ${sections.calendar}` : undefined,
         watch,
@@ -218,6 +218,13 @@ const finalizeScript = (
   const calendarScript = calendarSection
     ? normalizeForSpeech(calendarSection, normalizationInput)
     : undefined;
+  const englishPhrases = [
+    ...input.calendar.events.map(({ title }) => title),
+    ...input.stories.flatMap(({ title, entities }) => [
+      title,
+      ...entities.map(({ name }) => name),
+    ]),
+  ].map((phrase) => normalizeForSpeech(phrase, normalizationInput));
   return {
     displayScript,
     ttsScript,
@@ -225,6 +232,7 @@ const finalizeScript = (
       ttsScript,
       calendarScript,
       input.calendar.events,
+      englishPhrases,
     ),
     wordCount: words(displayScript).length,
     metrics,
@@ -288,7 +296,7 @@ export const fallbackBriefingScript = (
         : undefined,
     ...(endOfDay
       ? [
-          `Today in review. ${storyIntro}`,
+          `Latest developments. ${storyIntro}`,
           ...stories,
           calendarSection ? `Tomorrow. ${calendarSection}` : undefined,
         ]

@@ -250,6 +250,35 @@ describe('Phase 5 stock analysis', () => {
     });
   });
 
+  it('identifies which analysis stage failed without creating a thesis', async () => {
+    let call = 0;
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        fetch: async () =>
+          ++call === 1
+            ? response(targeted)
+            : Response.json({ message: { content: 'invalid JSON' } }),
+      }),
+    );
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'SEC:full-failure',
+      source: 'SEC',
+      externalId: 'full-failure',
+      title: 'Micron reports results',
+      url: 'https://www.sec.gov/example',
+      content: 'Primary-source earnings evidence.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(call).toBe(2);
+    expect(outcome.status).toBe('FAILED');
+    if (outcome.status !== 'FAILED') throw new Error('Expected failure');
+    expect(outcome.error).toContain('full stock analysis failed:');
+  });
+
   it('skips full analysis when targeted comparison finds no meaningful change', async () => {
     const existingState = buildNextThesisState(context(), targeted, full).state;
     const unchanged = {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderThesisNotReady } from '../thesis-refresh.js';
 
 describe('renderThesisNotReady', () => {
-  it('explains the evidence gate and gives specific recovery guidance', () => {
+  it('shows analysis failure categories and tells the user to repair and retry', () => {
     const text = renderThesisNotReady('MU', {
       durationMs: 85_000,
       fetchedCount: 25,
@@ -60,11 +60,11 @@ describe('renderThesisNotReady', () => {
     expect(text).toContain('1m 25s');
     expect(text).toContain('did not create a usable canonical company event');
     expect(text).toContain('2 analysis attempts failed (NEWS, SEC)');
+    expect(text).toContain('NEWS: Ollama request timed out');
+    expect(text).toContain('SEC: structured output was incomplete or invalid');
     expect(text).toContain('EARNINGS_WHISPERS');
-    expect(text).toContain(
-      'Historical snapshots alone are intentionally not promoted',
-    );
-    expect(text).toContain('More waiting would not by itself fix this run');
-    expect(text).toContain('run /thesis MU');
+    expect(text).toContain('Fix the analysis failure shown above');
+    expect(text).toContain('Failed events remain retryable');
+    expect(text).not.toContain('wait for material company news');
   });
 });

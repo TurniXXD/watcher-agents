@@ -647,6 +647,7 @@ export class StockIntelligenceAnalyzer implements Analyzer {
     if (!parsedContext.success) {
       return this.ollama.analyze(kind, item, signal);
     }
+    let stage: 'targeted' | 'full' | 'scoring' = 'targeted';
     try {
       const context = parsedContext.data;
       const targetedGeneration =
@@ -662,6 +663,7 @@ export class StockIntelligenceAnalyzer implements Analyzer {
         context.event.action === 'FULL_ANALYSIS' ||
         context.event.action === 'IMMEDIATE_ANALYSIS' ||
         targeted.reanalysisRequired;
+      stage = 'full';
       const fullGeneration = fullRequired
         ? await this.ollama.generateStructuredWithMetrics(
             fullPrompt(item, context, targeted),
@@ -672,6 +674,7 @@ export class StockIntelligenceAnalyzer implements Analyzer {
           )
         : null;
       const full = fullGeneration?.result ?? null;
+      stage = 'scoring';
       const display = full ?? fallbackAnalysis(context, targeted);
       const scored = buildNextThesisState(context, targeted, full);
       const decision = full?.decisionInputs
@@ -724,7 +727,7 @@ export class StockIntelligenceAnalyzer implements Analyzer {
     } catch (error) {
       return {
         status: 'FAILED',
-        error: errorMessage(error),
+        error: `${stage} stock analysis failed: ${errorMessage(error)}`,
       };
     }
   }

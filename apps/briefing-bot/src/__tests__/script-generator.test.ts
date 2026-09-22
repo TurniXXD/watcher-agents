@@ -254,14 +254,14 @@ describe('BriefingScriptGenerator', () => {
     expect(result.displayScript).toContain('Good evening.');
     expect(result.displayScript).toContain('your evening briefing');
     expect(result.displayScript).not.toContain('morning');
-    expect(result.displayScript).toContain('Today in review.');
+    expect(result.displayScript).toContain('Latest developments.');
     expect(result.displayScript).toContain(
       'Tomorrow. Your calendar is clear tomorrow.',
     );
-    expect(result.displayScript.indexOf('Today in review.')).toBeLessThan(
+    expect(result.displayScript.indexOf('Latest developments.')).toBeLessThan(
       result.displayScript.indexOf('Tomorrow.'),
     );
-    expect(prompt).toContain('Summarize what happened today');
+    expect(prompt).toContain('do not repeat morning news');
     expect(prompt).toContain(
       'The supplied weather forecast and Calendar window are for tomorrow',
     );
@@ -279,6 +279,20 @@ describe('BriefingScriptGenerator', () => {
     expect(
       result.ttsSegments.find(({ language }) => language === 'cs')?.text,
     ).toContain('Nábor 2026');
+  });
+
+  it('uses the English voice for a company name inside a Czech story sentence', () => {
+    const czechStory = story('mixed-language', 80);
+    czechStory.title = 'Nábor nových členů';
+    czechStory.summary = 'Dnes se řeší Merck.';
+
+    const result = fallbackBriefingScript(input([czechStory]));
+
+    expect(
+      result.ttsSegments.some(
+        ({ text, language }) => language === 'en' && text.includes('Merck.'),
+      ),
+    ).toBe(true);
   });
 });
 
