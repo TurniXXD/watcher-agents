@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stocksAbout, stocksHelp } from '../copy.js';
+import { stocksAboutPages, stocksHelp } from '../copy.js';
 
 const commandNames = (help: string): string[] =>
   help
@@ -68,11 +68,17 @@ describe('stocks bot command copy', () => {
     ]);
   });
 
-  it('keeps the Markdown about message detailed and Telegram-sized', () => {
-    expect(stocksAbout).toContain('*What it does*');
-    expect(stocksAbout).toContain('*Key advantages*');
-    expect(stocksAbout).toContain('*How to use it*');
-    expect(stocksAbout).toContain('`/add_stock SYMBOL`');
-    expect(stocksAbout.length).toBeLessThanOrEqual(4096);
+  it('explains the workflow and monitoring strategies in Telegram-sized pages', () => {
+    const guide = stocksAboutPages.join('\n\n');
+
+    expect(stocksAboutPages).toHaveLength(3);
+    expect(stocksAboutPages.every((page) => page.length <= 4096)).toBe(true);
+    expect(guide).toContain('`/add_stock MU`');
+    expect(guide).toContain('`/thesis MU`');
+    expect(guide).toContain('THESIS NOT READY');
+    expect(guide).toContain('`CORE`');
+    expect(guide).toContain('`EVENT_MODE`');
+    expect(guide).toContain('`/risk_profile balanced`');
+    expect(guide).toContain('Žádný z těchto příkazů neposílá obchod');
   });
 });

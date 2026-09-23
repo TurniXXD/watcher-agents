@@ -47,7 +47,7 @@ import {
 } from '@watcher/core';
 import type { DiscoveryExecution } from './discovery.js';
 import { registerValidationCommands } from './validation-commands.js';
-import { scheduleExample, stocksAbout, stocksHelp } from './copy.js';
+import { scheduleExample, stocksAboutPages, stocksHelp } from './copy.js';
 import {
   renderStockList,
   renderStockTickers,
@@ -216,10 +216,12 @@ export const createStocksBot = (
   });
   bot.command('about', async (ctx) => {
     await chat(ctx.chat.id);
-    await ctx.reply(stocksAbout, {
-      parse_mode: 'Markdown',
-      link_preview_options: { is_disabled: true },
-    });
+    for (const page of stocksAboutPages) {
+      await ctx.reply(page, {
+        parse_mode: 'Markdown',
+        link_preview_options: { is_disabled: true },
+      });
+    }
   });
   bot.command('status', async (ctx) => {
     const current = await chat(ctx.chat.id);

@@ -254,7 +254,7 @@ Maintenance Ollama anomaly settings are `OLLAMA_CPU_ALERT_PERCENT=150`, `OLLAMA_
 
 ## Telegram commands
 
-Stocks and Publications support `/about`, `/start`, `/help`, `/status`, `/list_sources`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. News supports the common lifecycle commands plus profile-aware feed and topic configuration. `/help` prints an alphabetized command list, while `/about` explains each bot's purpose and workflow.
+Stocks and Publications support `/about`, `/start`, `/help`, `/status`, `/list_sources`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. News supports the common lifecycle commands plus profile-aware feed and topic configuration. `/help` prints an alphabetized command list. Stocks `/about` sends a three-part Czech beginner's guide covering setup, thesis interpretation, monitoring tiers and modes, practical research workflows, scheduling, and paper-only risk profiles; other bots' `/about` messages explain their purpose and workflow.
 
 Manual `/run` requests first send one progress message, then update that message with `editMessageText` while sources are fetched, items are prepared, and Ollama analyses run. Run digests use Telegram formatting with clear item separators, labeled summary and detail sections, bullet lists, source links, and total run time. Link previews are disabled to keep multi-item digests compact.
 
