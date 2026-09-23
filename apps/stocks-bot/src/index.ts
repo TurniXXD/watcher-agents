@@ -207,6 +207,8 @@ const alpacaPaper =
         apiSecret: env.ALPACA_PAPER_API_SECRET,
       })
     : undefined;
+const shutdownController = new AbortController();
+const pendingThesisTasks = new Set<Promise<void>>();
 const bot = createStocksBot(
   env.STOCKS_TELEGRAM_TOKEN,
   parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS),
@@ -240,6 +242,14 @@ const bot = createStocksBot(
   env.STOCKS_MONITOR_SCHEDULE,
   alpacaPaper,
   (error) => logger.error({ err: error }, 'Telegram update failed'),
+  shutdownController.signal,
+  (task) => {
+    pendingThesisTasks.add(task);
+    const removeTask = () => {
+      pendingThesisTasks.delete(task);
+    };
+    void task.then(removeTask, removeTask);
+  },
 );
 const runner = createStocksRunner(
   store,
@@ -498,6 +508,7 @@ const alertScheduler = new PersistentScheduler(
 
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'Shutting down');
+  shutdownController.abort();
   readiness.markApplicationStopping();
   await Promise.all([
     scheduler.stop(),
@@ -507,6 +518,7 @@ const shutdown = async (signal: string): Promise<void> => {
     alertScheduler.stop(),
     telegramOutboxScheduler.stop(),
   ]);
+  await Promise.allSettled([...pendingThesisTasks]);
   await bot.stop();
   await readiness.stop();
   await database.$disconnect();

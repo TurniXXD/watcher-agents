@@ -73,6 +73,8 @@ import {
   renderStockSchedules,
 } from './schedule-management.js';
 import { renderThesisNotReady } from './thesis-refresh.js';
+import { runThesisWhenAvailable } from './thesis-execution.js';
+import { createThesisProgress } from './thesis-progress.js';
 import { companyIntelligenceProfileFor } from './sources/company-intelligence/profiles.js';
 import {
   parsePaperCloseOrdinal,
@@ -173,9 +175,12 @@ export const createStocksBot = (
   monitoringSchedule: string,
   alpacaPaper: AlpacaPaperClient | undefined,
   reportError: (error: unknown) => void,
+  shutdownSignal?: AbortSignal,
+  trackBackgroundTask?: (task: Promise<void>) => void,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
+  const activeThesisRequests = new Set<string>();
 
   const chat = async (chatId: number) =>
     store.ensureChat('STOCKS', BigInt(chatId), timezone, monitoringSchedule);
@@ -313,68 +318,97 @@ export const createStocksBot = (
       );
       return;
     }
+    const requestKey = `${ctx.chat.id}:${symbol}`;
+    if (activeThesisRequests.has(requestKey)) {
+      await ctx.reply(
+        `A live thesis refresh for ${symbol} is already waiting or running. Its progress message will keep updating.`,
+      );
+      return;
+    }
+    activeThesisRequests.add(requestKey);
     const initialProgress = renderRunProgress({
       percent: 0,
-      step: `Refreshing live sources for ${symbol}`,
+      step: `Checking watcher availability for ${symbol}`,
     });
-    const progressMessage = await ctx.reply(initialProgress);
-    let lastProgress = initialProgress;
-    const onProgress: ProgressReporter = async (progress) => {
-      const text = renderRunProgress(progress);
-      if (text === lastProgress) return;
-      lastProgress = text;
-      await ctx.api.editMessageText(
-        ctx.chat.id,
-        progressMessage.message_id,
-        text,
-      );
-    };
-    const execution = await runNow(
-      current.watcherConfig!.id,
-      BigInt(ctx.chat.id),
-      {
-        onProgress,
-        targetKeys: new Set([symbol]),
-        initializeStockThesisFor: new Set([symbol]),
-        notify: false,
+    let progressMessage: Awaited<ReturnType<typeof ctx.reply>>;
+    try {
+      progressMessage = await ctx.reply(initialProgress);
+    } catch (error) {
+      activeThesisRequests.delete(requestKey);
+      throw error;
+    }
+    const editProgress = (text: string) =>
+      ctx.api.editMessageText(ctx.chat.id, progressMessage.message_id, text);
+    const progress = createThesisProgress({
+      initialText: initialProgress,
+      edit: async (text) => {
+        await editProgress(text);
       },
-    );
-    if (execution.status === 'BUSY') {
-      await ctx.api.editMessageText(
-        ctx.chat.id,
-        progressMessage.message_id,
-        `A watcher run is already in progress. Live thesis refresh for ${symbol} was not started; retry when it finishes.`,
-      );
-      return;
-    }
-    if (execution.status === 'FAILED') {
-      await ctx.api.editMessageText(
-        ctx.chat.id,
-        progressMessage.message_id,
-        `Live thesis refresh for ${symbol} failed after ${formatRunDuration(execution.durationMs)}: ${execution.error}`,
-      );
-      return;
-    }
-    const thesis = await store.getStockThesis(symbol);
-    if (!thesis) {
-      const result = execution.result;
-      await ctx.api.editMessageText(
-        ctx.chat.id,
-        progressMessage.message_id,
-        renderThesisNotReady(symbol, result),
-      );
-      return;
-    }
-    const parsed = parseStoredStockThesis(thesis);
-    await ctx.api.editMessageText(
-      ctx.chat.id,
-      progressMessage.message_id,
-      renderStockThesis(parsed),
-      {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-      },
-    );
+      onError: reportError,
+    });
+    const task = (async () => {
+      try {
+        let execution: Exclude<RunExecution, { status: 'BUSY' }>;
+        try {
+          execution = await runThesisWhenAvailable({
+            execute: () =>
+              runNow(current.watcherConfig!.id, BigInt(ctx.chat.id), {
+                onProgress: progress.onProgress,
+                targetKeys: new Set([symbol]),
+                initializeStockThesisFor: new Set([symbol]),
+                notify: false,
+                ...(shutdownSignal ? { signal: shutdownSignal } : {}),
+              }),
+            onBusy: () => progress.waiting(symbol),
+            ...(shutdownSignal ? { signal: shutdownSignal } : {}),
+          });
+        } catch (error) {
+          await progress.stop();
+          if (!shutdownSignal?.aborted) reportError(error);
+          await editProgress(
+            shutdownSignal?.aborted
+              ? `Live thesis refresh for ${symbol} was interrupted by bot shutdown. Run /thesis ${symbol} again after restart.`
+              : `Live thesis refresh for ${symbol} could not be started. Check /health and the stocks-bot log.`,
+          );
+          return;
+        }
+        await progress.stop();
+        if (execution.status === 'FAILED') {
+          await editProgress(
+            `Live thesis refresh for ${symbol} failed after ${formatRunDuration(execution.durationMs)}: ${execution.error}`,
+          );
+          return;
+        }
+        const thesis = await store.getStockThesis(symbol);
+        if (!thesis) {
+          await editProgress(renderThesisNotReady(symbol, execution.result));
+          return;
+        }
+        await ctx.api.editMessageText(
+          ctx.chat.id,
+          progressMessage.message_id,
+          renderStockThesis(parseStoredStockThesis(thesis)),
+          {
+            parse_mode: 'HTML',
+            link_preview_options: { is_disabled: true },
+          },
+        );
+      } catch (error) {
+        reportError(error);
+        await progress.stop();
+        try {
+          await editProgress(
+            `Live thesis refresh for ${symbol} could not be completed. Check /health and the stocks-bot log.`,
+          );
+        } catch (editError) {
+          reportError(editError);
+        }
+      } finally {
+        activeThesisRequests.delete(requestKey);
+        await progress.stop();
+      }
+    })().catch(reportError);
+    trackBackgroundTask?.(task);
   });
   bot.command('decision', async (ctx) => {
     const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
