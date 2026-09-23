@@ -70,7 +70,15 @@ export const createStocksRunner = (
 ): WatcherRunner => {
   const price = new StooqPriceSource();
   const investorRelations = new InvestorRelationsSource();
-  const companyIntelligence = new CompanyIntelligenceSource();
+  const companyIntelligence = new CompanyIntelligenceSource(
+    undefined,
+    undefined,
+    (issue) =>
+      logger?.warn(
+        { source: 'COMPANY_INTELLIGENCE', ...issue },
+        'Company intelligence endpoint degraded',
+      ),
+  );
   const news = new GdeltNewsSource();
   const tradingViewNews = new TradingViewNewsSource();
   const finviz = new FinvizInsiderSource();

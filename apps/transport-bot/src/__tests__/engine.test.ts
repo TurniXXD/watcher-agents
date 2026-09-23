@@ -8,6 +8,11 @@ import type {
   VehicleProfile,
 } from '../types.js';
 
+const futureDate = (hoursFromNow: number): Date =>
+  new Date(Date.now() + hoursFromNow * 60 * 60_000);
+const pickupFrom = futureDate(2);
+const pickupTo = futureDate(3);
+
 const vehicle: VehicleProfile = {
   manufacturer: 'VW',
   model: 'Transporter',
@@ -53,12 +58,12 @@ const job: TransportRequest = {
   pickup: { address: 'Brno', latitude: 49.2, longitude: 16.61 },
   delivery: { address: 'Jihlava', latitude: 49.4, longitude: 15.59 },
   pickupWindow: {
-    from: new Date('2026-09-23T13:00:00Z'),
-    to: new Date('2026-09-23T14:00:00Z'),
+    from: pickupFrom,
+    to: pickupTo,
   },
   deliveryWindow: {
-    from: new Date('2026-09-23T14:00:00Z'),
-    to: new Date('2026-09-23T16:00:00Z'),
+    from: futureDate(3),
+    to: futureDate(5),
   },
   cargo: {
     description: 'EUR pallet',
@@ -91,8 +96,8 @@ describe('opportunity engine', () => {
       origin: vehicle.base,
       destination: { address: 'Prague', latitude: 50.08, longitude: 14.43 },
       departureWindow: {
-        from: new Date('2026-09-23T13:00:00Z'),
-        to: new Date('2026-09-23T14:00:00Z'),
+        from: pickupFrom,
+        to: pickupTo,
       },
       maximumDetourKm: 30,
       maximumAdditionalMinutes: 60,

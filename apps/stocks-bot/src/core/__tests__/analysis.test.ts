@@ -3,7 +3,7 @@ import type {
   StockAnalysisContext,
   TargetedStockAnalysis,
 } from '@watcher/core';
-import { OllamaProvider } from '@watcher/llm';
+import { OllamaProvider, type StructuredAttemptDiagnostic } from '@watcher/llm';
 import { describe, expect, it } from 'vitest';
 import {
   buildNextThesisState,
@@ -307,6 +307,121 @@ describe('Phase 5 stock analysis', () => {
     if (outcome.status !== 'FAILED') throw new Error('Expected failure');
     expect(outcome.error).toContain('targeted stock analysis failed:');
     expect(outcome.error).toContain('primaryDriver');
+  });
+
+  it('repairs the observed company-intelligence field failures before creating a thesis', async () => {
+    const diagnostics: StructuredAttemptDiagnostic[] = [];
+    const requests: Array<{ options: { temperature: number } }> = [];
+    let call = 0;
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 1,
+        onStructuredAttempt: (attempt) => diagnostics.push(attempt),
+        fetch: async (_url, init) => {
+          if (typeof init?.body !== 'string') {
+            throw new Error('Expected JSON request body');
+          }
+          requests.push(
+            JSON.parse(init.body) as {
+              options: { temperature: number };
+            },
+          );
+          call += 1;
+          return response(
+            call === 1
+              ? {
+                  materiality: 'LOW',
+                  thesisChange: 'UNCHANGED',
+                  informationChange: 'NO_MEANINGFUL_CHANGE',
+                  explanation: '',
+                  risks: [],
+                  confidence: -0.1,
+                }
+              : call === 2
+                ? targeted
+                : full,
+          );
+        },
+      }),
+    );
+
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'COMPANY_INTELLIGENCE:logged-shape',
+      source: 'COMPANY_INTELLIGENCE',
+      externalId: 'logged-shape',
+      title: 'Issuer announcement',
+      url: 'https://example.com/release',
+      content: 'Evidence-backed issuer announcement.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(outcome.status).toBe('SUCCESS');
+    expect(call).toBe(3);
+    expect(requests.every(({ options }) => options.temperature === 0)).toBe(
+      true,
+    );
+    expect(
+      diagnostics.map(({ label, outcome: result }) => [label, result]),
+    ).toEqual([
+      ['stock_targeted', 'INVALID_SCHEMA'],
+      ['stock_targeted', 'VALID'],
+      ['stock_full', 'VALID'],
+    ]);
+    expect(diagnostics[0]?.schemaPaths).toEqual(
+      expect.arrayContaining(['primaryDriver', 'explanation', 'confidence']),
+    );
+    expect(diagnostics[0]).not.toHaveProperty('content');
+  });
+
+  it('accepts a sourced thesis without unsupported scenario inputs', async () => {
+    const requests: Array<{
+      format: { required: string[] };
+      messages: Array<{ content: string }>;
+    }> = [];
+    let call = 0;
+    const withoutScenarios = { ...full };
+    delete withoutScenarios.decisionInputs;
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        fetch: async (_url, init) => {
+          if (typeof init?.body !== 'string') {
+            throw new Error('Expected JSON request body');
+          }
+          requests.push(
+            JSON.parse(init.body) as {
+              format: { required: string[] };
+              messages: Array<{ content: string }>;
+            },
+          );
+          return response(++call === 1 ? targeted : withoutScenarios);
+        },
+      }),
+    );
+
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'TRADINGVIEW_NEWS:limited-evidence',
+      source: 'TRADINGVIEW_NEWS',
+      externalId: 'limited-evidence',
+      title: 'New company evidence',
+      url: 'https://example.com/story',
+      content: 'Sourced company facts without supported return probabilities.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(outcome.status).toBe('SUCCESS');
+    if (outcome.status !== 'SUCCESS' || !('intelligence' in outcome.result)) {
+      throw new Error('Expected stock intelligence result');
+    }
+    expect(outcome.result.intelligence?.decision).toBeNull();
+    expect(requests[1]?.format.required).not.toContain('decisionInputs');
+    expect(requests[1]?.messages[0]?.content).toContain(
+      'omit decisionInputs entirely if the evidence cannot support',
+    );
   });
 
   it('skips full analysis when targeted comparison finds no meaningful change', async () => {

@@ -5,6 +5,7 @@ export type CompanyIntelligenceEndpoint = {
   url: string;
   relationship: CompanyIntelligenceRelationship;
   relatedTicker?: string;
+  articlePathPrefix?: string;
 };
 
 export type CompanyIntelligencePeer = {
@@ -102,6 +103,7 @@ export const companyIntelligenceProfiles: ReadonlyMap<
           url: 'https://www.micron.com/about/press/news',
           relationship: 'SUBJECT',
           relatedTicker: 'MU',
+          articlePathPrefix: '/about/press/news/',
         },
         {
           name: 'SK hynix press',

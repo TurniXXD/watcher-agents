@@ -290,6 +290,20 @@ export type OllamaOptions = {
   caller?: string;
   priority?: OllamaRequestPriority;
   coordinator?: OllamaRequestCoordinator;
+  onStructuredAttempt?: (attempt: StructuredAttemptDiagnostic) => void;
+};
+
+export type StructuredAttemptDiagnostic = {
+  model: string;
+  label: string;
+  attempt: number;
+  outcome: 'VALID' | 'INVALID_JSON' | 'INVALID_SCHEMA' | 'REQUEST_FAILED';
+  inputChars: number;
+  outputChars: number;
+  numPredict: number;
+  completionTokens: number | null;
+  reachedTokenLimit: boolean;
+  schemaPaths: string[];
 };
 
 export type OllamaEmbeddingOptions = {
@@ -388,6 +402,8 @@ export type StructuredGeneration<T> = {
 type StructuredGenerationOptions = {
   numPredict?: number;
   normalize?: (value: unknown) => unknown;
+  diagnosticLabel?: string;
+  temperature?: number;
 };
 
 const unknownRecord = (value: unknown): Record<string, unknown> =>
@@ -713,8 +729,32 @@ export class OllamaProvider implements Analyzer {
       generation.numPredict ?? this.options.numPredict ?? 768;
 
     for (let attempt = 0; attempt <= this.#retries; attempt += 1) {
+      const numPredict = Math.min(configuredNumPredict * 2 ** attempt, 8_192);
+      let outcome: StructuredAttemptDiagnostic['outcome'] = 'REQUEST_FAILED';
+      let outputChars = 0;
+      let completionTokens: number | null = null;
+      let reachedTokenLimit = false;
+      let schemaPaths: string[] = [];
+      let inputChars = 0;
+      const reportAttempt = (): void => {
+        try {
+          this.options.onStructuredAttempt?.({
+            model: this.options.model,
+            label: generation.diagnosticLabel ?? 'generic',
+            attempt: attempt + 1,
+            outcome,
+            inputChars,
+            outputChars,
+            numPredict,
+            completionTokens,
+            reachedTokenLimit,
+            schemaPaths,
+          });
+        } catch {
+          // Diagnostic logging must never change an analysis outcome.
+        }
+      };
       try {
-        const numPredict = Math.min(configuredNumPredict * 2 ** attempt, 8_192);
         const messages = [
           { role: 'user', content: prompt },
           ...(invalidContent && invalidReason
@@ -733,6 +773,10 @@ export class OllamaProvider implements Analyzer {
               ]
             : []),
         ];
+        inputChars = messages.reduce(
+          (sum, message) => sum + message.content.length,
+          0,
+        );
         const execute = async (coordinatorSignal?: AbortSignal) => {
           const response = await this.#fetch(
             `${this.options.url.replace(/\/$/, '')}/api/chat`,
@@ -747,7 +791,7 @@ export class OllamaProvider implements Analyzer {
                 format,
                 messages,
                 options: {
-                  temperature: 0.1,
+                  temperature: generation.temperature ?? 0.1,
                   num_ctx: this.options.numCtx ?? 4096,
                   num_predict: numPredict,
                 },
@@ -791,7 +835,9 @@ export class OllamaProvider implements Analyzer {
             )
           : await execute();
         invalidContent = payload.message.content;
-        const reachedTokenLimit =
+        outputChars = invalidContent.length;
+        completionTokens = payload.eval_count ?? null;
+        reachedTokenLimit =
           payload.done_reason === 'length' ||
           (payload.eval_count !== undefined &&
             payload.eval_count >= numPredict);
@@ -799,6 +845,7 @@ export class OllamaProvider implements Analyzer {
         try {
           json = parseStructuredJson(payload.message.content);
         } catch (error) {
+          outcome = 'INVALID_JSON';
           const truncated =
             error instanceof TruncatedStructuredOutputError ||
             reachedTokenLimit;
@@ -813,12 +860,21 @@ export class OllamaProvider implements Analyzer {
         try {
           result = schema.parse(normalizedJson);
         } catch (error) {
+          outcome = 'INVALID_SCHEMA';
+          schemaPaths =
+            error instanceof z.ZodError
+              ? [
+                  ...new Set(error.issues.map(({ path }) => path.join('.'))),
+                ].slice(0, 12)
+              : [];
           previousWasTruncated = reachedTokenLimit;
           invalidReason = reachedTokenLimit
             ? `output reached its ${numPredict}-token limit before completing the required JSON fields: ${errorMessage(error)}`
             : errorMessage(error);
           throw error;
         }
+        outcome = 'VALID';
+        reportAttempt();
         return {
           result,
           metrics: {
@@ -838,6 +894,7 @@ export class OllamaProvider implements Analyzer {
           },
         };
       } catch (error) {
+        reportAttempt();
         lastError = errorWithCauses(error);
         if (attempt < this.#retries && isTransientFetchFailure(error)) {
           await new Promise((resolve) =>

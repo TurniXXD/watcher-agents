@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SourceHttpError } from '@watcher/core';
 import { GdeltNewsSource } from '../gdelt.js';
 
 const requestUrl = (input: RequestInfo | URL): string =>
@@ -81,5 +82,30 @@ describe('shared GdeltNewsSource', () => {
       /^GDELT returned a non-JSON response: Parentheses are invalid/,
     );
     expect((error as Error).message).toMatch(/^.{1,540}$/u);
+  });
+
+  it('preserves the provider retry time on HTTP 429 without repeated requests', async () => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response('rate limited', {
+          status: 429,
+          headers: { 'retry-after': '120' },
+        }),
+    );
+    const source = new GdeltNewsSource(fetcher);
+
+    let failure: unknown;
+    try {
+      await source.fetch({ query: 'Micron Technology' });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(SourceHttpError);
+    if (!(failure instanceof SourceHttpError)) {
+      throw new Error('Expected a source HTTP error');
+    }
+    expect(failure.status).toBe(429);
+    expect(failure.retryAt?.getTime()).toBeGreaterThan(Date.now());
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 });

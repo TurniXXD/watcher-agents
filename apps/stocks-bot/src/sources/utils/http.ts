@@ -59,13 +59,14 @@ export const fetchPublicText = async (
   initialUrl: string,
   signal?: AbortSignal,
   resolvePublicUrl: typeof assertPublicHttpUrlResolved = assertPublicHttpUrlResolved,
+  accept = 'application/atom+xml,application/rss+xml',
 ): Promise<string> =>
   retryTransient(
     async () => {
       let url = await resolvePublicUrl(initialUrl);
       for (let redirects = 0; redirects <= 5; redirects += 1) {
         const response = await fetcher(url, {
-          headers: { accept: 'application/atom+xml,application/rss+xml' },
+          headers: { accept },
           redirect: 'manual',
           signal: signal
             ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])

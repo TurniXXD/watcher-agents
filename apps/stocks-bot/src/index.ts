@@ -167,6 +167,14 @@ const ollama = new OllamaProvider({
   caller: 'stocks-bot',
   priority: 'normal',
   coordinator: ollamaCoordinator,
+  onStructuredAttempt: (attempt) => {
+    const details = { event: 'structured_analysis_attempt', ...attempt };
+    if (attempt.outcome === 'VALID') {
+      logger.info(details, 'Structured analysis attempt accepted');
+    } else {
+      logger.warn(details, 'Structured analysis attempt rejected');
+    }
+  },
 });
 const analyzer = new StockIntelligenceAnalyzer(
   ollama,

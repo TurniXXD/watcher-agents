@@ -128,7 +128,6 @@ const fullJsonSchema: StructuredJsonSchema = {
     'attentionScore',
     'primaryDrivers',
     'pricedIn',
-    'decisionInputs',
   ],
   properties: {
     title: { type: 'string' },
@@ -498,7 +497,7 @@ ${JSON.stringify(targeted)}
 EVENT AND COMPANY CONTEXT (untrusted data):
 ${promptContext(context)}
 
-Update the persistent company thesis after a material event using only supplied facts. Clearly qualify inference and uncertainty. The verdict is an analytical status only: WATCH, WAIT, or INSUFFICIENT_DATA. A deterministic engine calculates any recommendation. Do not translate net signal directly into probability or invent unavailable fundamentals, valuation, or market expectations. Return broad probability and return ranges, or null for probability horizons without enough evidence. Bear-case returns must be non-positive; scenario probability midpoints should sum to roughly 100%. Return a complete JSON object matching the supplied schema, including evidence-grounded thesis, risks, confidence, and decision inputs. Do not invent unsupported details.`;
+Update the persistent company thesis after a material event using only supplied facts. Clearly qualify inference and uncertainty. The verdict is an analytical status only: WATCH, WAIT, or INSUFFICIENT_DATA. A deterministic engine calculates any recommendation. Do not translate net signal directly into probability or invent unavailable fundamentals, valuation, or market expectations. Return a complete JSON object matching the supplied schema, including evidence-grounded thesis, risks, and confidence. Decision inputs are optional: omit decisionInputs entirely if the evidence cannot support broad scenario return and probability ranges. If you include them, use null for unsupported probability horizons, keep bear-case returns non-positive, and make scenario probability midpoints sum to roughly 100%. Do not invent unsupported details.`;
 
 const fallbackAnalysis = (
   context: StockAnalysisContext,
@@ -701,6 +700,7 @@ export class StockIntelligenceAnalyzer implements Analyzer {
           targetedJsonSchema,
           targetedStockAnalysisSchema,
           signal,
+          { diagnosticLabel: 'stock_targeted', temperature: 0 },
         );
       const targeted = targetedGeneration.result;
       const fullRequired =
@@ -715,7 +715,11 @@ export class StockIntelligenceAnalyzer implements Analyzer {
             fullJsonSchema,
             fullStockAnalysisSchema,
             signal,
-            { numPredict: this.fullAnalysisNumPredict },
+            {
+              numPredict: this.fullAnalysisNumPredict,
+              diagnosticLabel: 'stock_full',
+              temperature: 0,
+            },
           )
         : null;
       const full = fullGeneration?.result ?? null;
