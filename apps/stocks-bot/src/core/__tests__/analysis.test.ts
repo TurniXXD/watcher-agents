@@ -375,6 +375,90 @@ describe('Phase 5 stock analysis', () => {
     expect(diagnostics[0]).not.toHaveProperty('content');
   });
 
+  it('accepts explicit text inside stock field objects and percent confidence', async () => {
+    const diagnostics: StructuredAttemptDiagnostic[] = [];
+    let call = 0;
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        onStructuredAttempt: (attempt) => diagnostics.push(attempt),
+        fetch: async () =>
+          response(
+            ++call === 1
+              ? {
+                  targeted: {
+                    ...targeted,
+                    primaryDriver: { description: 'Earnings surprise' },
+                    risks: [{ risk: 'Demand could weaken.' }],
+                    confidence: 80,
+                  },
+                }
+              : {
+                  fullAnalysis: {
+                    ...full,
+                    risks: [{ description: 'Demand could weaken.' }],
+                    confidence: '80%',
+                  },
+                },
+          ),
+      }),
+    );
+
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'TRADINGVIEW_NEWS:object-fields',
+      source: 'TRADINGVIEW_NEWS',
+      externalId: 'object-fields',
+      title: 'Micron reports results',
+      url: 'https://example.com/story',
+      content: 'Source-backed earnings evidence.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(outcome.status).toBe('SUCCESS');
+    expect(call).toBe(2);
+    expect(diagnostics.map(({ outcome: result }) => result)).toEqual([
+      'VALID',
+      'VALID',
+    ]);
+    if (outcome.status !== 'SUCCESS' || !('intelligence' in outcome.result)) {
+      throw new Error('Expected stock intelligence result');
+    }
+    expect(outcome.result.intelligence?.targeted.primaryDriver).toBe(
+      'Earnings surprise',
+    );
+    expect(outcome.result.intelligence?.targeted.risks).toEqual([
+      'Demand could weaken.',
+    ]);
+  });
+
+  it('still rejects a risk object without explicit risk text', async () => {
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        fetch: async () =>
+          response({ ...targeted, risks: [{ direction: 'negative' }] }),
+      }),
+    );
+
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'TRADINGVIEW_NEWS:unsupported-risk',
+      source: 'TRADINGVIEW_NEWS',
+      externalId: 'unsupported-risk',
+      title: 'Micron reports results',
+      url: 'https://example.com/story',
+      content: 'Source-backed earnings evidence.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(outcome.status).toBe('FAILED');
+    if (outcome.status !== 'FAILED') throw new Error('Expected failure');
+    expect(outcome.error).toContain('risks');
+  });
+
   it('accepts a sourced thesis without unsupported scenario inputs', async () => {
     const requests: Array<{
       format: { required: string[] };

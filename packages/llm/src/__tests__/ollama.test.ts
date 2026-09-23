@@ -575,6 +575,46 @@ describe('OllamaProvider', () => {
     );
   });
 
+  it('names every invalid field compactly in the repair request', async () => {
+    const required = ['one', 'two', 'three', 'four', 'five', 'six', 'seven'];
+    const schema = z.object(
+      Object.fromEntries(required.map((key) => [key, z.string()])),
+    );
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ message: { content: '{}' } }))
+      .mockResolvedValueOnce(
+        Response.json({
+          message: {
+            content: JSON.stringify(
+              Object.fromEntries(required.map((key) => [key, key])),
+            ),
+          },
+        }),
+      );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      retries: 1,
+      fetch: mockFetch,
+    });
+
+    await provider.generateStructured('Return required fields.', {}, schema);
+
+    const secondCall = mockFetch.mock.calls[1] as unknown as
+      [RequestInfo | URL, RequestInit?] | undefined;
+    const body = secondCall?.[1]?.body;
+    if (typeof body !== 'string') {
+      throw new Error('Expected Ollama request body to be a string');
+    }
+    const request = JSON.parse(body) as {
+      messages: Array<{ content: string }>;
+    };
+    for (const key of required) {
+      expect(request.messages[2]?.content).toContain(`${key}:`);
+    }
+  });
+
   it('repairs a truncated response with a larger output budget', async () => {
     const mockFetch = vi
       .fn()

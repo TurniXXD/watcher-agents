@@ -103,6 +103,17 @@ Return the complete corrected JSON object now. Output only JSON: no Markdown fen
 Every required property must be present and non-null. Use an empty array when no list items are supported by the source. Integer score fields must be whole numbers within their documented range.
 Validation failure: ${reason.slice(0, 1_000)}`;
 
+const compactValidationReason = (error: unknown): string =>
+  error instanceof z.ZodError
+    ? error.issues
+        .slice(0, 12)
+        .map((issue) => {
+          const path = issue.path.join('.') || '(root)';
+          return `${path}: ${issue.message.slice(0, 95)}`;
+        })
+        .join('; ')
+    : errorMessage(error);
+
 const errorWithCauses = (error: unknown): string => {
   const details: string[] = [];
   let current: unknown = error;
@@ -869,8 +880,8 @@ export class OllamaProvider implements Analyzer {
               : [];
           previousWasTruncated = reachedTokenLimit;
           invalidReason = reachedTokenLimit
-            ? `output reached its ${numPredict}-token limit before completing the required JSON fields: ${errorMessage(error)}`
-            : errorMessage(error);
+            ? `output reached its ${numPredict}-token limit before completing the required JSON fields: ${compactValidationReason(error)}`
+            : compactValidationReason(error);
           throw error;
         }
         outcome = 'VALID';

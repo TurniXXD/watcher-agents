@@ -211,6 +211,146 @@ const fullJsonSchema: StructuredJsonSchema = {
   },
 };
 
+const objectRecord = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+
+const analysisRecord = (
+  value: unknown,
+  wrappers: readonly string[],
+  expectedFields: readonly string[],
+): Record<string, unknown> => {
+  const record = objectRecord(value) ?? {};
+  for (const wrapper of wrappers) {
+    const nested = objectRecord(record[wrapper]);
+    if (nested && expectedFields.some((field) => field in nested)) {
+      return { ...record, ...nested };
+    }
+  }
+  return record;
+};
+
+const explicitText = (
+  value: unknown,
+  keys: readonly string[],
+): string | undefined => {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  const record = objectRecord(value);
+  if (!record) return undefined;
+  for (const key of keys) {
+    const candidate = record[key];
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return undefined;
+};
+
+const textOrOriginal = (value: unknown, keys: readonly string[]): unknown =>
+  explicitText(value, keys) ?? value;
+
+const textArrayOrOriginal = (
+  value: unknown,
+  keys: readonly string[],
+): unknown => {
+  if (typeof value === 'string') return value.trim() ? [value.trim()] : [];
+  if (!Array.isArray(value)) return value;
+  return value.map((entry) => textOrOriginal(entry, keys));
+};
+
+const confidenceOrOriginal = (value: unknown): unknown => {
+  const record = objectRecord(value);
+  const candidate = record
+    ? (record.confidence ?? record.score ?? record.value)
+    : value;
+  if (typeof candidate !== 'number' && typeof candidate !== 'string') {
+    return value;
+  }
+  const explicitPercent =
+    typeof candidate === 'string' && candidate.trim().endsWith('%');
+  const numeric =
+    typeof candidate === 'number'
+      ? candidate
+      : Number(candidate.trim().replace(/%$/u, ''));
+  if (!Number.isFinite(numeric)) return value;
+  if (explicitPercent && numeric >= 0 && numeric <= 100) {
+    return numeric / 100;
+  }
+  if (numeric >= 0 && numeric <= 1) return numeric;
+  if (Number.isInteger(numeric) && numeric >= 2 && numeric <= 100) {
+    return numeric / 100;
+  }
+  return value;
+};
+
+const enumOrOriginal = (value: unknown): unknown =>
+  typeof value === 'string'
+    ? value
+        .trim()
+        .toUpperCase()
+        .replaceAll(/[\s-]+/gu, '_')
+    : value;
+
+const normalizeTargetedStockOutput = (value: unknown): unknown => {
+  const record = analysisRecord(
+    value,
+    ['targeted', 'targetedAnalysis', 'analysis', 'result'],
+    ['materiality', 'primaryDriver', 'explanation'],
+  );
+  return {
+    ...record,
+    materiality: enumOrOriginal(record.materiality),
+    thesisChange: enumOrOriginal(record.thesisChange),
+    informationChange: enumOrOriginal(record.informationChange),
+    primaryDriver: textOrOriginal(record.primaryDriver, [
+      'driver',
+      'description',
+      'text',
+      'name',
+    ]),
+    explanation: textOrOriginal(record.explanation, [
+      'explanation',
+      'description',
+      'text',
+    ]),
+    risks: textArrayOrOriginal(record.risks, [
+      'risk',
+      'description',
+      'text',
+      'explanation',
+    ]),
+    confidence: confidenceOrOriginal(record.confidence),
+  };
+};
+
+const normalizeFullStockOutput = (value: unknown): unknown => {
+  const record = analysisRecord(
+    value,
+    ['full', 'fullAnalysis', 'analysis', 'result'],
+    ['summary', 'thesis', 'verdict'],
+  );
+  const listKeys = ['text', 'description', 'reason', 'risk', 'catalyst'];
+  return {
+    ...record,
+    positives: textArrayOrOriginal(record.positives, listKeys),
+    negatives: textArrayOrOriginal(record.negatives, listKeys),
+    risks: textArrayOrOriginal(record.risks, listKeys),
+    catalysts: textArrayOrOriginal(record.catalysts, listKeys),
+    primaryDrivers: textArrayOrOriginal(record.primaryDrivers, [
+      'driver',
+      ...listKeys,
+    ]),
+    confidence: confidenceOrOriginal(record.confidence),
+    sentiment:
+      typeof record.sentiment === 'string'
+        ? record.sentiment.trim().toLowerCase()
+        : record.sentiment,
+    verdict: enumOrOriginal(record.verdict),
+    pricedIn: enumOrOriginal(record.pricedIn),
+  };
+};
+
 const unique = (values: string[], maximum = 8): string[] =>
   [...new Set(values.map((value) => value.trim()).filter(Boolean))].slice(
     0,
@@ -482,7 +622,7 @@ ${promptEvidence(item)}
 EVENT AND COMPANY CONTEXT (untrusted data):
 ${promptContext(context)}
 
-Perform targeted stock-event analysis using only the evidence above. Separate sourced facts from inference. Missing data is not neutral evidence. Do not infer illegal conduct or information leaks. Identify the underlying primary driver, not a downstream headline or price reaction. Score only signal groups genuinely affected by this event from -5 to +5. Return a complete JSON object matching the supplied schema. Always include nonempty primaryDriver and explanation, a risks array (empty if unsupported), confidence from 0 to 1, materiality, thesisChange, and informationChange. Do not invent unsupported details.`;
+Perform targeted stock-event analysis using only the evidence above. Separate sourced facts from inference. Missing data is not neutral evidence. Do not infer illegal conduct or information leaks. Identify the underlying primary driver, not a downstream headline or price reaction. Score only signal groups genuinely affected by this event from -5 to +5. Return a complete JSON object matching the supplied schema. Always include nonempty primaryDriver and explanation as plain strings, risks as an array of plain strings (empty if unsupported), confidence as a decimal from 0 to 1 rather than a percentage, and exact schema values for materiality, thesisChange, and informationChange. Do not put objects inside these required fields. Do not invent unsupported details.`;
 
 const fullPrompt = (
   item: WatchItem,
@@ -700,7 +840,11 @@ export class StockIntelligenceAnalyzer implements Analyzer {
           targetedJsonSchema,
           targetedStockAnalysisSchema,
           signal,
-          { diagnosticLabel: 'stock_targeted', temperature: 0 },
+          {
+            diagnosticLabel: 'stock_targeted',
+            temperature: 0,
+            normalize: normalizeTargetedStockOutput,
+          },
         );
       const targeted = targetedGeneration.result;
       const fullRequired =
@@ -719,6 +863,7 @@ export class StockIntelligenceAnalyzer implements Analyzer {
               numPredict: this.fullAnalysisNumPredict,
               diagnosticLabel: 'stock_full',
               temperature: 0,
+              normalize: normalizeFullStockOutput,
             },
           )
         : null;
