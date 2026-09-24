@@ -237,6 +237,40 @@ const dependencies = (
 };
 
 describe('BriefingCoordinator', () => {
+  it('includes watchlist earnings even when there are no new stock stories', async () => {
+    const setup = dependencies();
+    const list = vi.fn(async () => [
+      {
+        id: 'earnings-1',
+        ticker: 'MU',
+        companyName: 'Micron Technology',
+        description: 'Quarterly results',
+        expectedStart: new Date('2026-09-20T20:00:00.000Z'),
+        exactDateKnown: true,
+        impact: 'HIGH',
+        source: 'COMPANY',
+        sourceUrl: 'https://example.com/mu',
+      },
+    ]);
+    const coordinator = new BriefingCoordinator({
+      ...setup.value,
+      earningsCalendar: { list },
+    });
+
+    await coordinator.generate(123n, 'MANUAL');
+
+    expect(list).toHaveBeenCalledOnce();
+    const scriptInput = setup.value.scripts.generate.mock.calls[0]?.[0];
+    expect(scriptInput?.earnings).toMatchObject({
+      status: 'AVAILABLE',
+      events: [{ ticker: 'MU', daysUntil: 14 }],
+    });
+    expect(setup.deliveryInputs[0]?.index).toMatchObject({
+      earnings: { status: 'AVAILABLE', events: [{ ticker: 'MU' }] },
+      stockNews: [],
+    });
+  });
+
   it('allows a manual briefing before optional onboarding is complete', async () => {
     const setup = dependencies({ onboardingCompleted: false });
     const coordinator = new BriefingCoordinator(setup.value);

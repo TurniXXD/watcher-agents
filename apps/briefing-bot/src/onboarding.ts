@@ -58,6 +58,7 @@ Personal Morning Briefing is a private, self-hosted Telegram assistant that turn
 
 *What it does*
 • Combines new stock, medical-publication, news, and club events from the watchers you subscribe to.
+• With Stocks subscribed, shows only highly relevant stock news and known exact watchlist earnings dates over the next 14 days in every briefing.
 • Adds optional weather and Google Calendar context for the day ahead.
 • Deduplicates related reports, groups them into stories, and preserves continuity with earlier developments.
 • Prioritizes urgent and personally relevant items while respecting priority and muted topics.

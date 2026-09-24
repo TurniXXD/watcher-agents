@@ -99,6 +99,29 @@ describe('briefing duration planning', () => {
 });
 
 describe('BriefingScriptGenerator', () => {
+  it('speaks confirmed watchlist earnings in the fallback script even without stories', () => {
+    const script = fallbackBriefingScript({
+      ...input([]),
+      earnings: {
+        status: 'AVAILABLE',
+        events: [
+          {
+            ticker: 'MU',
+            companyName: 'Micron Technology',
+            date: '2026-09-20',
+            dateLabel: 'Sep 20',
+            daysUntil: 14,
+          },
+        ],
+      },
+    });
+
+    expect(script.displayScript).toContain('Micron Technology, MU, on Sep 20.');
+    expect(script.displayScript.indexOf('Micron Technology')).toBeLessThan(
+      script.displayScript.indexOf('There are no new subscribed'),
+    );
+  });
+
   it('assembles validated spoken sections in the required order', async () => {
     let prompt = '';
     const model = {

@@ -433,6 +433,166 @@ describe('Phase 5 stock analysis', () => {
     ]);
   });
 
+  it('normalizes explicit targeted enum labels without inventing missing classifications', async () => {
+    const diagnostics: StructuredAttemptDiagnostic[] = [];
+    const requests: Array<{
+      format: { properties: Record<string, unknown> };
+      messages: Array<{ content: string }>;
+    }> = [];
+    let call = 0;
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        onStructuredAttempt: (attempt) => diagnostics.push(attempt),
+        fetch: async (_url, init) => {
+          if (typeof init?.body !== 'string')
+            throw new Error('Missing request body');
+          requests.push(
+            JSON.parse(init.body) as {
+              format: { properties: Record<string, unknown> };
+              messages: Array<{ content: string }>;
+            },
+          );
+          return response(
+            ++call === 1
+              ? {
+                  ...targeted,
+                  thesisChange: { classification: 'improved' },
+                  informationChange: { label: 'new information' },
+                }
+              : full,
+          );
+        },
+      }),
+    );
+
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'SEC:enum-objects',
+      source: 'SEC',
+      externalId: 'enum-objects',
+      title: 'Micron reports results',
+      url: 'https://www.sec.gov/example',
+      content: 'Primary-source earnings evidence.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(outcome.status).toBe('SUCCESS');
+    if (outcome.status !== 'SUCCESS' || !('intelligence' in outcome.result)) {
+      throw new Error('Expected stock intelligence result');
+    }
+    expect(outcome.result.intelligence?.targeted).toMatchObject({
+      thesisChange: 'IMPROVED',
+      informationChange: 'NEW_INFORMATION',
+    });
+    expect(diagnostics.map(({ outcome: result }) => result)).toEqual([
+      'VALID',
+      'VALID',
+    ]);
+    expect(requests[0]?.format.properties.thesisChange).toMatchObject({
+      type: 'string',
+    });
+    expect(requests[0]?.messages[0]?.content).toContain(
+      'These two properties are mandatory',
+    );
+  });
+
+  it('logs only field kinds when targeted enum values are missing and keeps analysis failed', async () => {
+    const diagnostics: StructuredAttemptDiagnostic[] = [];
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        onStructuredAttempt: (attempt) => diagnostics.push(attempt),
+        fetch: async () =>
+          response({
+            ...targeted,
+            thesisChange: null,
+            informationChange: null,
+          }),
+      }),
+    );
+
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'SEC:missing-enums',
+      source: 'SEC',
+      externalId: 'missing-enums',
+      title: 'Micron reports results',
+      url: 'https://www.sec.gov/example',
+      content: 'Primary-source earnings evidence.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(outcome.status).toBe('FAILED');
+    expect(diagnostics[0]).toMatchObject({
+      outcome: 'INVALID_SCHEMA',
+      schemaFieldKinds: { thesisChange: 'null', informationChange: 'null' },
+    });
+    expect(diagnostics[0]).not.toHaveProperty('content');
+  });
+
+  it('repairs only missing change classifications with a separate evidence-bound call', async () => {
+    const diagnostics: StructuredAttemptDiagnostic[] = [];
+    let targetedCalls = 0;
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 2,
+        onStructuredAttempt: (attempt) => diagnostics.push(attempt),
+        fetch: async (_url, init) => {
+          if (typeof init?.body !== 'string')
+            throw new Error('Missing request body');
+          const request = JSON.parse(init.body) as {
+            format: { required: string[] };
+          };
+          if (request.format.required.length === 2) {
+            return response({
+              thesisChange: 'IMPROVED',
+              informationChange: 'NEW_INFORMATION',
+            });
+          }
+          if (request.format.required.includes('primaryDriver')) {
+            targetedCalls += 1;
+            return response({
+              ...targeted,
+              thesisChange: null,
+              informationChange: null,
+            });
+          }
+          return response(full);
+        },
+      }),
+    );
+
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'SEC:enum-repair',
+      source: 'SEC',
+      externalId: 'enum-repair',
+      title: 'Micron reports results',
+      url: 'https://www.sec.gov/example',
+      content: 'Primary-source earnings evidence.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(outcome.status).toBe('SUCCESS');
+    expect(targetedCalls).toBe(3);
+    expect(
+      diagnostics.map(({ label, outcome: result }) => [label, result]),
+    ).toEqual([
+      ['stock_targeted', 'INVALID_SCHEMA'],
+      ['stock_targeted', 'INVALID_SCHEMA'],
+      ['stock_targeted', 'INVALID_SCHEMA'],
+      ['stock_targeted_change_repair', 'VALID'],
+      ['stock_full', 'VALID'],
+    ]);
+    if (outcome.status !== 'SUCCESS')
+      throw new Error('Expected successful repair');
+    expect(outcome.metrics?.llmCallCount).toBe(5);
+  });
+
   it('still rejects a risk object without explicit risk text', async () => {
     const analyzer = new StockIntelligenceAnalyzer(
       new OllamaProvider({

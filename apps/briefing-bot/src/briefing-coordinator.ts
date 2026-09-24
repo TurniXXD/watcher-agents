@@ -49,6 +49,11 @@ import {
 import type { WeatherProvider } from './weather.js';
 import { renderSpokenWeather } from './weather.js';
 import { waitForFreshWatcherRuns } from './briefing-freshness.js';
+import {
+  loadWatchlistEarnings,
+  type WatchlistEarningsContext,
+  type WatchlistEarningsSource,
+} from './stock-context.js';
 import type { AgentTriggerRunner } from './agent-triggers.js';
 import {
   ProcessResourceTracker,
@@ -95,6 +100,7 @@ export class BriefingCoordinator {
       watcherTrigger?: Pick<AgentTriggerRunner, 'trigger'>;
       telemetry?: AgentTelemetryRecorder;
       calendar?: CalendarProvider;
+      earningsCalendar?: WatchlistEarningsSource;
       logger?: WatcherLogger;
       ttsAttempts?: number;
       freshness?: {
@@ -272,48 +278,65 @@ export class BriefingCoordinator {
         { briefingRunId: started.run.id },
         'Loading briefing context and watcher events',
       );
-      const [weatherResult, calendarResult, storiesResult, watcherHealth] =
-        await Promise.all([
-          measured(() =>
-            loadBriefingWeather(
-              configuration,
-              this.dependencies.weather,
-              this.dependencies.logger,
-              {
-                date: dateParts(
-                  calendarDayWindow(
-                    presentationTime,
-                    configuration.settings.timezone,
-                    endOfDay ? 1 : 0,
-                  ).start,
+      const [
+        weatherResult,
+        calendarResult,
+        storiesResult,
+        watcherHealth,
+        earnings,
+      ] = await Promise.all([
+        measured(() =>
+          loadBriefingWeather(
+            configuration,
+            this.dependencies.weather,
+            this.dependencies.logger,
+            {
+              date: dateParts(
+                calendarDayWindow(
+                  presentationTime,
                   configuration.settings.timezone,
-                ).date,
-                label: endOfDay ? 'tomorrow' : 'today',
-              },
-            ),
+                  endOfDay ? 1 : 0,
+                ).start,
+                configuration.settings.timezone,
+              ).date,
+              label: endOfDay ? 'tomorrow' : 'today',
+            },
           ),
-          measured(() =>
-            loadBriefingCalendar(
+        ),
+        measured(() =>
+          loadBriefingCalendar(
+            telegramChatId,
+            configuration,
+            this.dependencies.calendar,
+            this.dependencies.logger,
+            presentationTime,
+            endOfDay ? 1 : 0,
+          ),
+        ),
+        measured(() =>
+          this.dependencies.storyEngine.collect({
+            telegramChatId,
+            subscriptions,
+            periodStart,
+            periodEnd,
+            priorityKeywords: configuration.settings.priorityKeywords,
+            mutedKeywords: configuration.settings.mutedKeywords,
+          }),
+        ),
+        this.dependencies.watcherHealth.list(subscriptions),
+        subscriptions.includes('stocks') && this.dependencies.earningsCalendar
+          ? loadWatchlistEarnings(
+              this.dependencies.earningsCalendar,
               telegramChatId,
-              configuration,
-              this.dependencies.calendar,
+              now,
+              configuration.settings.timezone,
               this.dependencies.logger,
-              presentationTime,
-              endOfDay ? 1 : 0,
-            ),
-          ),
-          measured(() =>
-            this.dependencies.storyEngine.collect({
-              telegramChatId,
-              subscriptions,
-              periodStart,
-              periodEnd,
-              priorityKeywords: configuration.settings.priorityKeywords,
-              mutedKeywords: configuration.settings.mutedKeywords,
-            }),
-          ),
-          this.dependencies.watcherHealth.list(subscriptions),
-        ]);
+            )
+          : Promise.resolve({
+              status: 'DISABLED',
+              events: [],
+            } as WatchlistEarningsContext),
+      ]);
       const weather = weatherResult.value;
       const calendar = calendarResult.value;
       const storyResult = storiesResult.value;
@@ -370,6 +393,8 @@ export class BriefingCoordinator {
           weatherDurationMs: weatherResult.durationMs,
           calendarStatus: calendar.status,
           calendarEventCount: calendar.value.length,
+          earningsStatus: earnings.status,
+          upcomingEarningsCount: earnings.events.length,
           calendarDurationMs: calendarResult.durationMs,
           watcherEventsDurationMs: storiesResult.durationMs,
           storyMetrics: storyResult.metrics,
@@ -413,6 +438,7 @@ export class BriefingCoordinator {
             : {}),
         },
         stories: selectedStories,
+        earnings,
         actionAgenda,
         dataQuality,
         targetDurationMinutes: duration.plannedMinutes,
@@ -515,10 +541,19 @@ export class BriefingCoordinator {
           dayPeriod,
           ...(place ? { location: place } : {}),
           calendar: { status: calendar.status, count: calendar.value.length },
-          topics: selectedStories.map(({ sourceUrls, title }) => ({
-            title,
-            ...(sourceUrls[0] ? { url: sourceUrls[0] } : {}),
-          })),
+          earnings,
+          stockNews: selectedStories
+            .filter(({ watcherBots }) => watcherBots.includes('stocks'))
+            .map(({ sourceUrls, title }) => ({
+              title,
+              ...(sourceUrls[0] ? { url: sourceUrls[0] } : {}),
+            })),
+          topics: selectedStories
+            .filter(({ watcherBots }) => !watcherBots.includes('stocks'))
+            .map(({ sourceUrls, title }) => ({
+              title,
+              ...(sourceUrls[0] ? { url: sourceUrls[0] } : {}),
+            })),
         },
         displayScript: script.displayScript,
         sendTranscript: configuration.settings.sendTranscript,
@@ -568,6 +603,7 @@ export class BriefingCoordinator {
       const contextDegraded =
         weather.status === 'UNAVAILABLE' ||
         calendar.status === 'UNAVAILABLE' ||
+        earnings.status === 'UNAVAILABLE' ||
         coverage.percentage < 100;
       const status =
         delivery.status === 'FAILED'

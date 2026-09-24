@@ -1168,6 +1168,7 @@ export class WatcherStore implements PipelineRepository {
 
   public async listUpcomingEarningsReminderCandidates(
     chatConfigId: string,
+    window?: { from: Date; through: Date },
   ): Promise<EarningsReminderCandidate[]> {
     const stocks = await this.db.stock.findMany({
       where: { chatConfigId, enabled: true },
@@ -1182,11 +1183,14 @@ export class WatcherStore implements PipelineRepository {
         ticker: { in: stocks.map(({ symbol }) => symbol) },
         catalystType: CatalystType.EARNINGS,
         status: CatalystStatus.UPCOMING,
-        expectedStart: { not: null },
+        expectedStart: {
+          not: null,
+          ...(window ? { gte: window.from, lt: window.through } : {}),
+        },
         exactDateKnown: true,
       },
       orderBy: [{ expectedStart: 'asc' }, { impact: 'desc' }],
-      take: 200,
+      ...(!window ? { take: 200 } : {}),
       include: {
         event: {
           select: {

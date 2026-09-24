@@ -44,10 +44,7 @@ const materialityScore = (materiality: RunEventSummary['materiality']) =>
 
 const isMeaningful = (event: RunEventSummary): boolean =>
   event.decision === 'ANALYZE' &&
-  (event.materiality === 'HIGH' ||
-    event.materiality === 'EXTREME' ||
-    event.action === 'FULL_ANALYSIS' ||
-    event.action === 'IMMEDIATE_ANALYSIS');
+  (event.materiality === 'HIGH' || event.materiality === 'EXTREME');
 
 const itemTicker = (metadata: Record<string, unknown>): string | undefined =>
   typeof metadata.symbol === 'string'
@@ -180,13 +177,18 @@ export const stockBriefingEvents = (
     const analyzed = result.analyses.find(
       ({ item, outcome }) =>
         outcome.status === 'SUCCESS' &&
-        itemTicker(item.metadata) === event.ticker,
+        itemTicker(item.metadata) === event.ticker &&
+        (!event.sourceUrl || item.url === event.sourceUrl),
     );
-    if (!analyzed || analyzed.outcome.status !== 'SUCCESS') return [];
-    const analysis = stockAnalysisSchema.safeParse(analyzed.outcome.result);
-    if (!analysis.success) return [];
+    const analysis =
+      analyzed?.outcome.status === 'SUCCESS'
+        ? stockAnalysisSchema.safeParse(analyzed.outcome.result)
+        : undefined;
+    const hasAnalysis = analysis?.success === true;
+    const sourceUrl = event.sourceUrl ?? analyzed?.item.url;
+    if (!sourceUrl || (!hasAnalysis && !event.sourceUrl)) return [];
     const timestamp = now.toISOString();
-    const sourceDate = analyzed.item.eventAt ?? analyzed.item.publishedAt;
+    const sourceDate = analyzed?.item.eventAt ?? analyzed?.item.publishedAt;
     const urgency = Math.max(
       materialityScore(event.materiality),
       event.action === 'IMMEDIATE_ANALYSIS' ? 100 : 0,
@@ -197,7 +199,7 @@ export const stockBriefingEvents = (
         watcherBot: 'stocks',
         externalEventId: event.eventId,
         ...(sourceDate ? { occurredAt: sourceDate.toISOString() } : {}),
-        ...(analyzed.item.publishedAt
+        ...(analyzed?.item.publishedAt
           ? { publishedAt: analyzed.item.publishedAt.toISOString() }
           : {}),
         detectedAt: timestamp,
@@ -206,25 +208,31 @@ export const stockBriefingEvents = (
         category: stockCategory(event.eventType),
         subcategory: event.eventType,
         title: event.title.slice(0, 500),
-        summary: analysis.data.summary.slice(0, 10_000),
+        summary: hasAnalysis
+          ? analysis.data.summary.slice(0, 10_000)
+          : `Source headline for ${event.ticker}: ${event.title.slice(0, 500)}. Targeted analysis did not complete; no investment conclusion is available.`,
         importance: Math.max(
           materialityScore(event.materiality),
-          analysis.data.importance * 10,
+          hasAnalysis ? analysis.data.importance * 10 : 0,
         ),
         novelty: 100,
         relevance: 100,
         urgency,
         actionable:
-          event.action === 'FULL_ANALYSIS' ||
-          event.action === 'IMMEDIATE_ANALYSIS',
-        ...(event.action === 'FULL_ANALYSIS' ||
-        event.action === 'IMMEDIATE_ANALYSIS'
+          hasAnalysis &&
+          (event.action === 'FULL_ANALYSIS' ||
+            event.action === 'IMMEDIATE_ANALYSIS'),
+        ...(hasAnalysis &&
+        (event.action === 'FULL_ANALYSIS' ||
+          event.action === 'IMMEDIATE_ANALYSIS')
           ? { action: `Review ${event.ticker} before the next market session` }
           : {}),
         entities: [
           {
             type: 'company',
-            name: companyName(event.ticker, analyzed.item.metadata),
+            name: analyzed
+              ? companyName(event.ticker, analyzed.item.metadata)
+              : event.ticker,
             ticker: event.ticker,
           },
         ],
@@ -232,9 +240,11 @@ export const stockBriefingEvents = (
           ...(event.eventTypes ?? [event.eventType]),
           ...(event.direction ? [event.direction] : []),
         ],
-        sourceUrls: [analyzed.item.url],
-        primarySource: analyzed.item.source,
-        confidence: briefingConfidenceFromScore(analysis.data.confidence),
+        sourceUrls: [sourceUrl],
+        primarySource: analyzed?.item.source ?? 'CANONICAL_EVENT',
+        confidence: hasAnalysis
+          ? briefingConfidenceFromScore(analysis.data.confidence)
+          : 'MEDIUM',
         status: 'NEW',
         deduplicationKey: `stocks:${event.eventId}`,
         relatedEventIds: [event.eventId],
@@ -242,6 +252,7 @@ export const stockBriefingEvents = (
           materiality: event.materiality,
           sourceAction: event.action,
           decision: event.decision,
+          ...(!hasAnalysis ? { analysisUnavailable: true } : {}),
           ...(event.direction ? { direction: event.direction } : {}),
         },
       },

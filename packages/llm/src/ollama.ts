@@ -312,9 +312,26 @@ export type StructuredAttemptDiagnostic = {
   inputChars: number;
   outputChars: number;
   numPredict: number;
+  promptTokens: number | null;
   completionTokens: number | null;
   reachedTokenLimit: boolean;
   schemaPaths: string[];
+  schemaFieldKinds?: Record<string, string>;
+};
+
+const valueKindAtPath = (
+  value: unknown,
+  path: readonly PropertyKey[],
+): string => {
+  let current: unknown = value;
+  for (const part of path) {
+    if (current === null || typeof current !== 'object') return 'missing';
+    current = (current as Record<string, unknown>)[String(part)];
+  }
+  if (current === undefined) return 'missing';
+  if (current === null) return 'null';
+  if (Array.isArray(current)) return 'array';
+  return typeof current;
 };
 
 export type OllamaEmbeddingOptions = {
@@ -415,6 +432,7 @@ type StructuredGenerationOptions = {
   normalize?: (value: unknown) => unknown;
   diagnosticLabel?: string;
   temperature?: number;
+  onAttempt?: (attempt: StructuredAttemptDiagnostic) => void;
 };
 
 const unknownRecord = (value: unknown): Record<string, unknown> =>
@@ -743,26 +761,38 @@ export class OllamaProvider implements Analyzer {
       const numPredict = Math.min(configuredNumPredict * 2 ** attempt, 8_192);
       let outcome: StructuredAttemptDiagnostic['outcome'] = 'REQUEST_FAILED';
       let outputChars = 0;
+      let promptTokens: number | null = null;
       let completionTokens: number | null = null;
       let reachedTokenLimit = false;
       let schemaPaths: string[] = [];
+      let schemaFieldKinds: Record<string, string> = {};
       let inputChars = 0;
       const reportAttempt = (): void => {
+        const diagnostic: StructuredAttemptDiagnostic = {
+          model: this.options.model,
+          label: generation.diagnosticLabel ?? 'generic',
+          attempt: attempt + 1,
+          outcome,
+          inputChars,
+          outputChars,
+          numPredict,
+          promptTokens,
+          completionTokens,
+          reachedTokenLimit,
+          schemaPaths,
+          ...(Object.keys(schemaFieldKinds).length > 0
+            ? { schemaFieldKinds }
+            : {}),
+        };
         try {
-          this.options.onStructuredAttempt?.({
-            model: this.options.model,
-            label: generation.diagnosticLabel ?? 'generic',
-            attempt: attempt + 1,
-            outcome,
-            inputChars,
-            outputChars,
-            numPredict,
-            completionTokens,
-            reachedTokenLimit,
-            schemaPaths,
-          });
+          this.options.onStructuredAttempt?.(diagnostic);
         } catch {
           // Diagnostic logging must never change an analysis outcome.
+        }
+        try {
+          generation.onAttempt?.(diagnostic);
+        } catch {
+          // Per-call diagnostics must never change an analysis outcome.
         }
       };
       try {
@@ -847,6 +877,7 @@ export class OllamaProvider implements Analyzer {
           : await execute();
         invalidContent = payload.message.content;
         outputChars = invalidContent.length;
+        promptTokens = payload.prompt_eval_count ?? null;
         completionTokens = payload.eval_count ?? null;
         reachedTokenLimit =
           payload.done_reason === 'length' ||
@@ -878,6 +909,17 @@ export class OllamaProvider implements Analyzer {
                   ...new Set(error.issues.map(({ path }) => path.join('.'))),
                 ].slice(0, 12)
               : [];
+          schemaFieldKinds =
+            error instanceof z.ZodError
+              ? Object.fromEntries(
+                  error.issues
+                    .slice(0, 12)
+                    .map(({ path }) => [
+                      path.join('.'),
+                      valueKindAtPath(normalizedJson, path),
+                    ]),
+                )
+              : {};
           previousWasTruncated = reachedTokenLimit;
           invalidReason = reachedTokenLimit
             ? `output reached its ${numPredict}-token limit before completing the required JSON fields: ${compactValidationReason(error)}`

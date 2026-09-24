@@ -6,6 +6,7 @@ import type { WatcherLogger } from '@watcher/core';
 import { escapeHtml, optionalSourceLink } from '@watcher/telegram';
 import type { TtsResult } from './tts.js';
 import type { BriefingTelegramTransport } from './telegram-transport.js';
+import type { WatchlistEarningsContext } from './stock-context.js';
 import {
   briefingDayPeriodPresentation,
   type BriefingDayPeriod,
@@ -42,6 +43,8 @@ export type BriefingIndex = {
   location?: string;
   audioDurationSeconds?: number;
   calendar: { status: 'AVAILABLE' | 'UNAVAILABLE' | 'DISABLED'; count: number };
+  earnings?: WatchlistEarningsContext;
+  stockNews?: readonly BriefingIndexTopic[];
   topics: readonly BriefingIndexTopic[];
 };
 
@@ -94,6 +97,54 @@ export const renderBriefingIndex = (index: BriefingIndex): string => {
   } else if (index.calendar.status === 'UNAVAILABLE') {
     append('🗓 Calendar unavailable');
   }
+  if (index.earnings?.status === 'AVAILABLE') {
+    const earnings = index.earnings.events;
+    append('', '<b>📈 Watchlist earnings · next 14 days:</b>');
+    if (earnings.length === 0) {
+      append('None scheduled.');
+    } else {
+      const byDate = new Map<string, string[]>();
+      for (const earning of earnings) {
+        const tickers = byDate.get(earning.dateLabel) ?? [];
+        tickers.push(earning.ticker);
+        byDate.set(earning.dateLabel, tickers);
+      }
+      let shown = 0;
+      for (const [dateLabel, tickers] of byDate) {
+        if (
+          !append(
+            `• ${escapeHtml(dateLabel)} · ${tickers.map(escapeHtml).join(', ')}`,
+          )
+        )
+          break;
+        shown += tickers.length;
+      }
+      if (shown < earnings.length) {
+        append(`• +${earnings.length - shown} more on the watchlist`);
+      }
+    }
+  } else if (index.earnings?.status === 'UNAVAILABLE') {
+    append(
+      '',
+      '<b>📈 Watchlist earnings · next 14 days:</b>',
+      'Temporarily unavailable.',
+    );
+  }
+  if (index.stockNews?.length) {
+    let added = false;
+    for (const topic of index.stockNews) {
+      const url = topic.url;
+      const safeUrl = url && /^https?:\/\//iu.test(url) ? url : undefined;
+      const line = `• ${optionalSourceLink(topic.title, safeUrl)}`;
+      if (
+        !(added
+          ? append(line)
+          : append('', '<b>Highly relevant stock news:</b>', line))
+      )
+        break;
+      added = true;
+    }
+  }
   let topicAdded = false;
   for (const topic of index.topics.slice(0, 8)) {
     const topicLine = `• ${optionalSourceLink(topic.title, topic.url)}`;
@@ -126,17 +177,7 @@ export class BriefingDeliveryService {
   ): Promise<BriefingDeliveryResult> {
     const failedChannels: BriefingDeliveryChannelId[] = [];
     if (!input.audio) {
-      const fallback = await this.attempt(input.runId, 'TEXT_FALLBACK', () =>
-        this.telegram.sendPlainText(input.telegramChatId, input.displayScript),
-      );
-      if (!fallback.success) failedChannels.push('TEXT_FALLBACK');
-      return {
-        status: fallback.success ? 'PARTIAL' : 'FAILED',
-        ...(fallback.messageId
-          ? { fallbackMessageId: fallback.messageId }
-          : {}),
-        failedChannels,
-      };
+      return this.deliverTextFallback(input, failedChannels);
     }
     const audio = input.audio;
 
@@ -149,17 +190,7 @@ export class BriefingDeliveryService {
     ]);
     if (!voice.success) {
       failedChannels.push('VOICE');
-      const fallback = await this.attempt(input.runId, 'TEXT_FALLBACK', () =>
-        this.telegram.sendPlainText(input.telegramChatId, input.displayScript),
-      );
-      if (!fallback.success) failedChannels.push('TEXT_FALLBACK');
-      return {
-        status: fallback.success ? 'PARTIAL' : 'FAILED',
-        ...(fallback.messageId
-          ? { fallbackMessageId: fallback.messageId }
-          : {}),
-        failedChannels,
-      };
+      return this.deliverTextFallback(input, failedChannels);
     }
 
     const index = await this.attempt(input.runId, 'INDEX', async () => [
@@ -183,6 +214,29 @@ export class BriefingDeliveryService {
     return {
       status: failedChannels.length === 0 ? 'SUCCESS' : 'PARTIAL',
       ...(voice.messageId ? { voiceMessageId: voice.messageId } : {}),
+      ...(index.messageId ? { indexMessageId: index.messageId } : {}),
+      failedChannels,
+    };
+  }
+
+  private async deliverTextFallback(
+    input: BriefingDeliveryInput,
+    failedChannels: BriefingDeliveryChannelId[],
+  ): Promise<BriefingDeliveryResult> {
+    const fallback = await this.attempt(input.runId, 'TEXT_FALLBACK', () =>
+      this.telegram.sendPlainText(input.telegramChatId, input.displayScript),
+    );
+    if (!fallback.success) failedChannels.push('TEXT_FALLBACK');
+    const index = await this.attempt(input.runId, 'INDEX', async () => [
+      await this.telegram.sendIndex(input.telegramChatId, {
+        html: renderBriefingIndex(input.index),
+        feedbackRunId: input.runId,
+      }),
+    ]);
+    if (!index.success) failedChannels.push('INDEX');
+    return {
+      status: fallback.success || index.success ? 'PARTIAL' : 'FAILED',
+      ...(fallback.messageId ? { fallbackMessageId: fallback.messageId } : {}),
       ...(index.messageId ? { indexMessageId: index.messageId } : {}),
       failedChannels,
     };

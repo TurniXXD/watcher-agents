@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { CalendarEvent } from './calendar.js';
 import type { BriefingStoryCluster } from './story-types.js';
 import type { TtsSegment } from './tts.js';
+import type { WatchlistEarningsContext } from './stock-context.js';
 import {
   briefingDayPeriodPresentation,
   type BriefingDayPeriod,
@@ -78,6 +79,7 @@ export type ScriptGenerationInput = {
     insights?: readonly string[];
   };
   stories: readonly BriefingStoryCluster[];
+  earnings?: WatchlistEarningsContext;
   targetDurationMinutes: number;
   maximumDurationMinutes: number;
   wordBudget: number;
@@ -131,6 +133,7 @@ ${endOfDay ? "This is an end-of-day briefing. Report only supplied developments 
 Do not mention internal bot or database names. Combine the supplied cross-domain perspectives into one coherent story while preserving medical, investment, news, and student-community interpretations. For major stories explain what happened, why it matters, what changed, and what to watch next. Use previousSummary only to explain a material change, never to recap old facts.
 If weather or Calendar status is UNAVAILABLE, briefly say it could not be retrieved; never describe it as empty. If DISABLED, omit that section by returning null. If Calendar is AVAILABLE with zero events, it is safe to say the calendar is clear. If there are no stories, explain briefly that there are no new subscribed watcher developments; do not add fake news.
 Use the supplied actionAgenda for concrete preparation, deadlines, conflicts, or follow-up. Mention dataQuality briefly only when it is non-empty, without provider error strings or implementation details. When previousSummary exists, explain only the meaningful new development since the earlier briefing; never repeat the previous summary as news.
+Do not discuss the watchlist earnings calendar in generated fields; a verified earnings section is inserted separately after generation. Do not treat a scheduled earnings date as a reported earnings result.
 Preserve Calendar event titles and story titles in their original language. Write each Czech Calendar event or Czech story title as its own Czech sentence without translating it; keep surrounding narration and non-Czech events in English. This language boundary is required so the speech engine can select the correct voice.
 Avoid URLs, markdown, raw field names, filler, excessive numbers, repeated conclusions, and difficult ticker-only phrasing. Stay below ${input.wordBudget} words and never exceed ${input.maximumWords} words. The preferred duration is ${input.targetDurationMinutes} minutes and the hard maximum is ${input.maximumDurationMinutes} minutes, but do not add filler.
 
@@ -155,6 +158,7 @@ const assemble = (
 ): string => {
   const period = briefingDayPeriodPresentation(input.dayPeriod);
   const greeting = `${period.greeting}. Here is your ${input.dayPeriod} briefing for ${input.date}.`;
+  const earnings = earningsSection(input.earnings);
   const watch =
     sections.watchToday.length > 0
       ? `Things to watch ${period.watchHorizon}. ${sections.watchToday.join(' ')}`
@@ -163,6 +167,7 @@ const assemble = (
     ? [
         greeting,
         sections.weather,
+        earnings,
         `Latest developments. ${sections.newsPreview}`,
         ...sections.topStories,
         sections.calendar ? `Tomorrow. ${sections.calendar}` : undefined,
@@ -173,6 +178,7 @@ const assemble = (
         greeting,
         sections.weather,
         sections.calendar,
+        earnings,
         sections.newsPreview,
         ...sections.topStories,
         watch,
@@ -181,6 +187,27 @@ const assemble = (
   return orderedSections
     .filter((section): section is string => Boolean(section))
     .join('\n\n');
+};
+
+const earningsSection = (
+  context: WatchlistEarningsContext | undefined,
+): string | undefined => {
+  if (!context || context.status === 'DISABLED') return undefined;
+  if (context.status === 'UNAVAILABLE') {
+    return 'Watchlist earnings dates for the next two weeks are temporarily unavailable.';
+  }
+  if (context.events.length === 0) {
+    return 'No exact earnings dates are currently listed for your watchlist in the next two weeks.';
+  }
+  const spoken = context.events.slice(0, 10);
+  const remaining = context.events.length - spoken.length;
+  const listed = spoken
+    .map(
+      ({ companyName, ticker, dateLabel }) =>
+        `${companyName ?? ticker}, ${ticker}, on ${dateLabel}.`,
+    )
+    .join(' ');
+  return `Reported watchlist earnings dates in the next two weeks. ${listed}${remaining > 0 ? ` ${remaining} more are listed in the accompanying message.` : ''}`;
 };
 
 const words = (value: string): string[] => value.trim().split(/\s+/);
@@ -294,6 +321,7 @@ export const fallbackBriefingScript = (
       : input.weather.status === 'UNAVAILABLE'
         ? `I couldn't retrieve the weather ${period.temporalPhrase}.`
         : undefined,
+    earningsSection(input.earnings),
     ...(endOfDay
       ? [
           `Latest developments. ${storyIntro}`,

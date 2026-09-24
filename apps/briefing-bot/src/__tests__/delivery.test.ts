@@ -95,6 +95,39 @@ const transport = (): BriefingTelegramTransport => ({
 });
 
 describe('BriefingDeliveryService', () => {
+  it('shows earnings before highly relevant stock news and other topics', () => {
+    const index = input().index;
+    const html = renderBriefingIndex({
+      ...index,
+      earnings: {
+        status: 'AVAILABLE',
+        events: [
+          {
+            ticker: 'MU',
+            companyName: 'Micron',
+            date: '2026-09-20',
+            dateLabel: 'Sep 20',
+            daysUntil: 14,
+            sourceUrl: 'https://example.com/earnings',
+          },
+        ],
+      },
+      stockNews: [
+        { title: 'Material Micron filing', url: 'https://example.com/filing' },
+      ],
+    });
+
+    expect(html).toContain('Watchlist earnings · next 14 days:');
+    expect(html).toContain('Sep 20 · MU');
+    expect(html).toContain('Highly relevant stock news:');
+    expect(html.indexOf('Sep 20 · MU')).toBeLessThan(
+      html.indexOf('Material Micron filing'),
+    );
+    expect(html.indexOf('Material Micron filing')).toBeLessThan(
+      html.indexOf('Topics:'),
+    );
+  });
+
   it('sends the voice and its readable index as separate idempotent messages', async () => {
     const attempts = new MemoryAttempts();
     const telegram = transport();
@@ -144,6 +177,7 @@ describe('BriefingDeliveryService', () => {
     expect(result).toEqual({
       status: 'PARTIAL',
       fallbackMessageId: '103',
+      indexMessageId: '102',
       failedChannels: ['VOICE'],
     });
     expect(telegram.sendVoice).toHaveBeenCalledTimes(3);
@@ -223,6 +257,7 @@ describe('BriefingDeliveryService', () => {
     expect(await service.deliver(request)).toEqual({
       status: 'PARTIAL',
       fallbackMessageId: '103',
+      indexMessageId: '102',
       failedChannels: [],
     });
     expect(telegram.sendVoice).not.toHaveBeenCalled();

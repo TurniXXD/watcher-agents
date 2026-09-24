@@ -19,7 +19,11 @@ import {
   type WatchItem,
   type WatcherKind,
 } from '@watcher/core';
-import type { OllamaProvider, StructuredJsonSchema } from '@watcher/llm';
+import type {
+  OllamaProvider,
+  StructuredGeneration,
+  StructuredJsonSchema,
+} from '@watcher/llm';
 import { evaluateDecision } from './decision.js';
 
 const rangeJsonSchema = {
@@ -68,8 +72,12 @@ const targetedJsonSchema: StructuredJsonSchema = {
     explanation: { type: 'string', minLength: 1 },
     risks: { type: 'array', items: { type: 'string' } },
     confidence: { type: 'number', minimum: 0, maximum: 1 },
-    materiality: { enum: ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'EXTREME'] },
+    materiality: {
+      type: 'string',
+      enum: ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'EXTREME'],
+    },
     thesisChange: {
+      type: 'string',
       enum: [
         'STRONGLY_IMPROVED',
         'IMPROVED',
@@ -79,6 +87,7 @@ const targetedJsonSchema: StructuredJsonSchema = {
       ],
     },
     informationChange: {
+      type: 'string',
       enum: [
         'NEW_INFORMATION',
         'UPDATED_INFORMATION',
@@ -106,6 +115,43 @@ const targetedJsonSchema: StructuredJsonSchema = {
     },
     catalystChange: { enum: ['ADDED', 'UPDATED', 'REMOVED', 'UNCHANGED'] },
     recommendationChange: { type: 'boolean' },
+  },
+};
+
+const targetedChangeSchema = targetedStockAnalysisSchema.pick({
+  thesisChange: true,
+  informationChange: true,
+});
+const targetedWithoutChangesSchema = targetedStockAnalysisSchema.omit({
+  thesisChange: true,
+  informationChange: true,
+});
+
+const targetedChangeJsonSchema: StructuredJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['thesisChange', 'informationChange'],
+  properties: {
+    thesisChange: {
+      type: 'string',
+      enum: [
+        'STRONGLY_IMPROVED',
+        'IMPROVED',
+        'UNCHANGED',
+        'DETERIORATED',
+        'STRONGLY_DETERIORATED',
+      ],
+    },
+    informationChange: {
+      type: 'string',
+      enum: [
+        'NEW_INFORMATION',
+        'UPDATED_INFORMATION',
+        'INVALIDATED_INFORMATION',
+        'PRICE_ONLY_CHANGE',
+        'NO_MEANINGFUL_CHANGE',
+      ],
+    },
   },
 };
 
@@ -292,6 +338,9 @@ const enumOrOriginal = (value: unknown): unknown =>
         .replaceAll(/[\s-]+/gu, '_')
     : value;
 
+const enumTextOrOriginal = (value: unknown, keys: readonly string[]): unknown =>
+  enumOrOriginal(textOrOriginal(value, keys));
+
 const normalizeTargetedStockOutput = (value: unknown): unknown => {
   const record = analysisRecord(
     value,
@@ -301,8 +350,22 @@ const normalizeTargetedStockOutput = (value: unknown): unknown => {
   return {
     ...record,
     materiality: enumOrOriginal(record.materiality),
-    thesisChange: enumOrOriginal(record.thesisChange),
-    informationChange: enumOrOriginal(record.informationChange),
+    thesisChange: enumTextOrOriginal(record.thesisChange, [
+      'thesisChange',
+      'classification',
+      'value',
+      'label',
+      'change',
+      'status',
+    ]),
+    informationChange: enumTextOrOriginal(record.informationChange, [
+      'informationChange',
+      'classification',
+      'value',
+      'label',
+      'change',
+      'status',
+    ]),
     primaryDriver: textOrOriginal(record.primaryDriver, [
       'driver',
       'description',
@@ -321,6 +384,32 @@ const normalizeTargetedStockOutput = (value: unknown): unknown => {
       'explanation',
     ]),
     confidence: confidenceOrOriginal(record.confidence),
+  };
+};
+
+const normalizeTargetedChangeOutput = (value: unknown): unknown => {
+  const record = analysisRecord(
+    value,
+    ['changes', 'classification', 'analysis', 'result'],
+    ['thesisChange', 'informationChange'],
+  );
+  return {
+    thesisChange: enumTextOrOriginal(record.thesisChange, [
+      'thesisChange',
+      'classification',
+      'value',
+      'label',
+      'change',
+      'status',
+    ]),
+    informationChange: enumTextOrOriginal(record.informationChange, [
+      'informationChange',
+      'classification',
+      'value',
+      'label',
+      'change',
+      'status',
+    ]),
   };
 };
 
@@ -622,7 +711,30 @@ ${promptEvidence(item)}
 EVENT AND COMPANY CONTEXT (untrusted data):
 ${promptContext(context)}
 
-Perform targeted stock-event analysis using only the evidence above. Separate sourced facts from inference. Missing data is not neutral evidence. Do not infer illegal conduct or information leaks. Identify the underlying primary driver, not a downstream headline or price reaction. Score only signal groups genuinely affected by this event from -5 to +5. Return a complete JSON object matching the supplied schema. Always include nonempty primaryDriver and explanation as plain strings, risks as an array of plain strings (empty if unsupported), confidence as a decimal from 0 to 1 rather than a percentage, and exact schema values for materiality, thesisChange, and informationChange. Do not put objects inside these required fields. Do not invent unsupported details.`;
+Perform targeted stock-event analysis using only the evidence above. Separate sourced facts from inference. Missing data is not neutral evidence. Do not infer illegal conduct or information leaks. Identify the underlying primary driver, not a downstream headline or price reaction. Score only signal groups genuinely affected by this event from -5 to +5. Return a complete JSON object matching the supplied schema. Always include nonempty primaryDriver and explanation as plain strings, risks as an array of plain strings (empty if unsupported), confidence as a decimal from 0 to 1 rather than a percentage, and exact schema values for materiality, thesisChange, and informationChange. For thesisChange choose exactly one string: STRONGLY_IMPROVED, IMPROVED, UNCHANGED, DETERIORATED, STRONGLY_DETERIORATED. For informationChange choose exactly one string: NEW_INFORMATION, UPDATED_INFORMATION, INVALIDATED_INFORMATION, PRICE_ONLY_CHANGE, NO_MEANINGFUL_CHANGE. These two properties are mandatory even if the current thesis is absent. Use UNCHANGED or NO_MEANINGFUL_CHANGE only when the supplied evidence genuinely supports no meaningful change; missing evidence is not proof of neutrality. Do not put objects inside these required fields. Do not invent unsupported details.`;
+
+const targetedChangePrompt = (
+  item: WatchItem,
+  context: StockAnalysisContext,
+  partial: Pick<
+    TargetedStockAnalysis,
+    'materiality' | 'primaryDriver' | 'explanation' | 'affectedSignalGroups'
+  >,
+): string => `SOURCE EVIDENCE (untrusted data):
+${promptEvidence(item)}
+
+EVENT AND COMPANY CONTEXT (untrusted data):
+${promptContext(context)}
+
+PREVIOUS TARGETED DRAFT (untrusted assessment, not a conclusion):
+${JSON.stringify({
+  materiality: partial.materiality,
+  primaryDriver: partial.primaryDriver,
+  explanation: partial.explanation,
+  affectedSignalGroups: partial.affectedSignalGroups,
+})}
+
+Classify only the two required fields using the source evidence. Return exactly one JSON object with thesisChange and informationChange as plain enum strings, no other fields. thesisChange must be STRONGLY_IMPROVED, IMPROVED, UNCHANGED, DETERIORATED, or STRONGLY_DETERIORATED. informationChange must be NEW_INFORMATION, UPDATED_INFORMATION, INVALIDATED_INFORMATION, PRICE_ONLY_CHANGE, or NO_MEANINGFUL_CHANGE. UNCHANGED means no evidence-supported directional change; it is not proof that no change exists. Do not invent unsupported details.`;
 
 const fullPrompt = (
   item: WatchItem,
@@ -834,8 +946,14 @@ export class StockIntelligenceAnalyzer implements Analyzer {
     let stage: 'targeted' | 'full' | 'scoring' = 'targeted';
     try {
       const context = parsedContext.data;
-      const targetedGeneration =
-        await this.ollama.generateStructuredWithMetrics(
+      let lastTargetedResponse: unknown;
+      let targetedAttempts = 0;
+      let targetedPromptTokens = 0;
+      let targetedCompletionTokens = 0;
+      const targetedStartedAt = Date.now();
+      let targetedGeneration: StructuredGeneration<TargetedStockAnalysis>;
+      try {
+        targetedGeneration = await this.ollama.generateStructuredWithMetrics(
           targetedPrompt(item, context),
           targetedJsonSchema,
           targetedStockAnalysisSchema,
@@ -843,9 +961,60 @@ export class StockIntelligenceAnalyzer implements Analyzer {
           {
             diagnosticLabel: 'stock_targeted',
             temperature: 0,
-            normalize: normalizeTargetedStockOutput,
+            normalize: (value) => {
+              lastTargetedResponse = normalizeTargetedStockOutput(value);
+              return lastTargetedResponse;
+            },
+            onAttempt: ({ promptTokens, completionTokens }) => {
+              targetedAttempts += 1;
+              targetedPromptTokens += promptTokens ?? 0;
+              targetedCompletionTokens += completionTokens ?? 0;
+            },
           },
         );
+      } catch (originalError) {
+        const validation =
+          targetedStockAnalysisSchema.safeParse(lastTargetedResponse);
+        const enumOnlyFailure =
+          !validation.success &&
+          validation.error.issues.length > 0 &&
+          validation.error.issues.every(({ path }) =>
+            ['thesisChange', 'informationChange'].includes(String(path[0])),
+          );
+        const partial =
+          targetedWithoutChangesSchema.safeParse(lastTargetedResponse);
+        if (!enumOnlyFailure || !partial.success) throw originalError;
+
+        const repaired = await this.ollama.generateStructuredWithMetrics(
+          targetedChangePrompt(item, context, partial.data),
+          targetedChangeJsonSchema,
+          targetedChangeSchema,
+          signal,
+          {
+            numPredict: 256,
+            diagnosticLabel: 'stock_targeted_change_repair',
+            temperature: 0,
+            normalize: normalizeTargetedChangeOutput,
+          },
+        );
+        targetedGeneration = {
+          result: targetedStockAnalysisSchema.parse({
+            ...partial.data,
+            ...repaired.result,
+          }),
+          metrics: {
+            ...repaired.metrics,
+            durationMs: Date.now() - targetedStartedAt,
+            llmCallCount:
+              targetedAttempts + (repaired.metrics.llmCallCount ?? 1),
+            promptTokens:
+              targetedPromptTokens + (repaired.metrics.promptTokens ?? 0),
+            completionTokens:
+              targetedCompletionTokens +
+              (repaired.metrics.completionTokens ?? 0),
+          },
+        };
+      }
       const targeted = targetedGeneration.result;
       const fullRequired =
         context.currentThesis === null ||

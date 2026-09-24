@@ -15,6 +15,7 @@ import {
   NewsConfigurationStore,
   createDatabaseClient,
   ResourceLeaseStore,
+  WatcherStore,
 } from '@watcher/database';
 import { OllamaEmbeddingProvider, OllamaProvider } from '@watcher/llm';
 import { parseAllowedUserIds } from '@watcher/telegram';
@@ -56,6 +57,7 @@ logger.info(
   'Briefing bot configuration loaded',
 );
 const database = createDatabaseClient(env.DATABASE_URL);
+const stockStore = new WatcherStore(database);
 const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);
 const configuration = new BriefingConfigurationStore(database);
 const calendarStore = new CalendarIntegrationStore(database);
@@ -228,6 +230,14 @@ runtime.coordinator = new BriefingCoordinator({
   resources: resourceLeases,
   weather: new OpenMeteoWeatherProvider(),
   watcherHealth: briefingWatcherHealth,
+  earningsCalendar: {
+    list: async (telegramChatId, window) => {
+      const chat = await stockStore.getChat('STOCKS', telegramChatId);
+      return chat
+        ? stockStore.listUpcomingEarningsReminderCandidates(chat.id, window)
+        : [];
+    },
+  },
   watcherTrigger: agentTriggers,
   telemetry: new AgentTelemetryStore(database),
   ...(calendarProvider ? { calendar: calendarProvider } : {}),

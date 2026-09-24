@@ -219,6 +219,29 @@ describe('SemanticStoryMatcher', () => {
 });
 
 describe('StoryEngine', () => {
+  it('keeps only highly relevant stock news and excludes legacy earnings reminders', async () => {
+    const repository: BriefingEventRepository = {
+      save: vi.fn(),
+      list: vi.fn(async () => [
+        event('material'),
+        event('minor', { importance: 65 }),
+        event('irrelevant', { relevance: 60 }),
+        event('reminder', { subcategory: 'EARNINGS_REMINDER' }),
+      ]),
+    };
+    const engine = new StoryEngine(repository, { list: vi.fn(async () => []) });
+
+    const result = await engine.collect({
+      telegramChatId: 42n,
+      subscriptions: ['stocks'],
+      periodStart: new Date('2026-09-05T05:00:00.000Z'),
+      periodEnd: new Date('2026-09-06T06:00:00.000Z'),
+    });
+
+    expect(result.stories).toHaveLength(1);
+    expect(result.stories[0]?.eventIds).toEqual(['material']);
+  });
+
   it('ranks useful stories and suppresses unchanged and minor resolutions', async () => {
     const developing = event('developing', {
       watcherBot: 'medical',
@@ -237,6 +260,7 @@ describe('StoryEngine', () => {
       tags: ['earnings'],
     });
     const resolved = event('resolved', {
+      watcherBot: 'medical',
       title: 'Minor issue resolved',
       summary: 'A low-value operational issue is closed.',
       status: 'RESOLVED',
@@ -426,6 +450,7 @@ describe('StoryEngine', () => {
 
   it('boosts configured priorities and reduces non-urgent muted topics', async () => {
     const priority = event('priority', {
+      watcherBot: 'medical',
       title: 'Micron memory outlook',
       summary: 'A modest Micron update.',
       importance: 50,
@@ -433,6 +458,7 @@ describe('StoryEngine', () => {
       entities: [{ type: 'company', name: 'Micron', ticker: 'MU' }],
     });
     const muted = event('muted', {
+      watcherBot: 'news',
       title: 'Football transfer report',
       summary: 'A high-scoring sports update.',
       category: 'NEWS_SPORT',
@@ -450,7 +476,7 @@ describe('StoryEngine', () => {
 
     const result = await engine.collect({
       telegramChatId: 42n,
-      subscriptions: ['stocks', 'news'],
+      subscriptions: ['medical', 'news'],
       periodStart: new Date('2026-09-05T05:00:00.000Z'),
       periodEnd: new Date('2026-09-06T06:00:00.000Z'),
       priorityKeywords: ['Micron'],

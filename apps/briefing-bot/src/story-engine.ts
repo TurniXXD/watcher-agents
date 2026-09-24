@@ -158,6 +158,13 @@ export class StoryEngine {
           )
         : [];
     const retrieved = rawEvents.filter((event) => {
+      if (event.watcherBot === 'stocks') {
+        return (
+          event.subcategory !== 'EARNINGS_REMINDER' &&
+          event.importance >= 80 &&
+          event.relevance >= 80
+        );
+      }
       if (event.watcherBot !== 'news') return true;
       const scope = event.subcategory;
       const category = newsCategorySchema.safeParse(

@@ -76,6 +76,28 @@ const result = (): PipelineResult => ({
 });
 
 describe('stock briefing publisher', () => {
+  it('publishes only a sourced high-materiality headline when analysis fails', () => {
+    const failed = result();
+    failed.analyses = [];
+    failed.intelligence!.events[0]!.sourceUrl =
+      'https://www.sec.gov/Archives/example';
+    const [headline] = stockBriefingEvents(failed);
+
+    expect(briefingEventSchema.parse(headline)).toMatchObject({
+      title: 'Phase III trial succeeded',
+      actionable: false,
+      confidence: 'MEDIUM',
+      sourceUrls: ['https://www.sec.gov/Archives/example'],
+      metadata: { analysisUnavailable: true },
+    });
+    expect(headline?.summary).toContain(
+      'no investment conclusion is available',
+    );
+    expect(headline?.summary).not.toContain(
+      'materially changes the company thesis',
+    );
+  });
+
   it('maps only meaningful analyzed canonical events', () => {
     const events = stockBriefingEvents(
       result(),
