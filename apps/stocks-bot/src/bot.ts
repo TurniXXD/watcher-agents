@@ -78,6 +78,10 @@ import { runThesisWhenAvailable } from './thesis-execution.js';
 import { createThesisProgress } from './thesis-progress.js';
 import { companyIntelligenceProfileFor } from './sources/company-intelligence/profiles.js';
 import {
+  renderSecCashflow,
+  type SecCashflowClient,
+} from './sources/sec-cashflow.js';
+import {
   parsePaperCloseOrdinal,
   parsePaperOpenRequest,
 } from './paper-portfolio.js';
@@ -188,6 +192,7 @@ export const createStocksBot = (
     ownerTelegramUserId: number;
     client: Pick<Trading212Client, 'getPortfolio'>;
   },
+  secCashflow?: Pick<SecCashflowClient, 'getCashflow'>,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
@@ -752,6 +757,45 @@ export const createStocksBot = (
       BigInt(ctx.chat.id),
       renderStockValuation(snapshot),
     );
+  });
+  bot.command('cashflow', async (ctx) => {
+    const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));
+    const current = await chat(ctx.chat.id);
+    const stock = (await store.listStocks(current.id)).find(
+      ({ symbol: configuredSymbol }) => configuredSymbol === symbol,
+    );
+    if (!stock) {
+      await ctx.reply(
+        `${symbol} is not on this watchlist. Add it with /add_stock ${symbol} first.`,
+      );
+      return;
+    }
+    if (!secCashflow) {
+      await ctx.reply('SEC cash-flow data source is not configured.');
+      return;
+    }
+    try {
+      const resolved = stock.cik ? stock : await withCompany(stock);
+      if (!resolved.cik) {
+        await ctx.reply(
+          `SEC CIK pro ${symbol} není dostupný; cash flow nelze bezpečně přiřadit firmě.`,
+        );
+        return;
+      }
+      const report = await secCashflow.getCashflow(
+        symbol,
+        resolved.cik,
+        shutdownSignal,
+      );
+      for (const part of splitTelegramMessage(renderSecCashflow(report))) {
+        await ctx.reply(part, { link_preview_options: { is_disabled: true } });
+      }
+    } catch (error) {
+      reportError(error);
+      await ctx.reply(
+        `Cash flow pro ${symbol} se teď nepodařilo načíst ze SEC. Zkuste příkaz později; pokud problém trvá, zkontrolujte log stocks-bota a SEC_USER_AGENT.`,
+      );
+    }
   });
   bot.command('reaction', async (ctx) => {
     const symbol = stockSymbolSchema.parse(commandArgument(ctx.message?.text));

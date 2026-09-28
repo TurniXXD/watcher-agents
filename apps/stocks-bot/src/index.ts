@@ -42,6 +42,7 @@ import { DiscoveryCatalystAnalyzer } from './discovery-catalyst.js';
 import { renderWeeklyDiscoveryReport } from './discovery-report.js';
 import { AlpacaPaperClient } from './alpaca-paper.js';
 import { Trading212Client } from './trading212.js';
+import { SecCashflowClient } from './sources/sec-cashflow.js';
 import { env } from './env.js';
 import { StockReconciliationCoordinator } from './reconciliation.js';
 import { createStocksRunner } from './watcher.js';
@@ -283,6 +284,7 @@ const bot = createStocksBot(
     void task.then(removeTask, removeTask);
   },
   trading212,
+  new SecCashflowClient(env.SEC_USER_AGENT),
 );
 const runner = createStocksRunner(
   store,

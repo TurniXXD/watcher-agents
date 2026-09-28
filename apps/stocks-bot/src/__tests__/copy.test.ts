@@ -11,6 +11,9 @@ describe('stocks bot command copy', () => {
   it('lists every help command alphabetically', () => {
     const commands = commandNames(stocksHelp);
 
+    expect(`📈 Stocks Watcher\n\n${stocksHelp}`.length).toBeLessThanOrEqual(
+      4096,
+    );
     expect(commands).toEqual([...commands].sort());
     expect(commands).toEqual([
       'about',
@@ -21,6 +24,7 @@ describe('stocks bot command copy', () => {
       'alpaca',
       'backtest',
       'calibration',
+      'cashflow',
       'catalysts',
       'dashboard',
       'decision',
@@ -78,6 +82,7 @@ describe('stocks bot command copy', () => {
     expect(stocksAboutPages.every((page) => page.length <= 4096)).toBe(true);
     expect(guide).toContain('`/add_stock MU`');
     expect(guide).toContain('`/thesis MU`');
+    expect(guide).toContain('`/cashflow MU`');
     expect(guide).toContain('THESIS NOT READY');
     expect(guide).toContain('`CORE`');
     expect(guide).toContain('`EVENT_MODE`');

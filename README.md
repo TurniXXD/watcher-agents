@@ -288,6 +288,7 @@ Stocks bot:
 - `/earnings SYMBOL` to show the stored next-report setup and latest EPS/revenue expectation-versus-actual comparison; run `/thesis SYMBOL` first when no source snapshot is stored
 - `/peers SYMBOL` to show the curated peer and sector context map for CRDO, MU, SNDK, and DOCN; it never asserts an unverified customer or supplier relationship
 - `/valuation SYMBOL` to show stored price, market capitalization, provider forward P/E, and earnings consensus without treating a multiple as a buy/sell conclusion
+- `/cashflow SYMBOL` to fetch the watched company's latest standardized SEC Company Facts cash-flow figures: latest interim fiscal-year-to-date period and up to three annual periods, with operating/investing/financing cash flow, capex, and calculated free cash flow when both inputs are available; each period includes the filing date and SEC accession
 - `/advanced [SYMBOL]` to inspect the latest options, institutional, short-interest, FDA, and clinical-trial data
 - `/thesis SYMBOL` to show the latest persistent thesis, decision state, scenarios, coverage, and signal scores
 - `/discovery` to show scanner state, active investigations, and recent signals
@@ -301,6 +302,8 @@ Stocks bot:
 - `/sources` to toggle each stock source globally for all current and future stocks, including advanced and optional Quiver datasets
 - `/list_sources` to list available stock sources and provider links
 - `/news SYMBOL RANGE [--json]` to list only saved stock-news articles by publication time, newest first; use `24h`, `3d`, `7d`, `30d`, or explicit ISO `FROM TO` timestamps. `--json` uploads a JSON document containing full stored descriptions and analysis instead of sending the compact Telegram digest.
+
+`/cashflow` reads the official [SEC Company Facts API](https://www.sec.gov/search-filings/edgar-application-programming-interfaces) on demand using `SEC_USER_AGENT`; it does not depend on an Ollama analysis or persist a separate financial snapshot. The interim line is fiscal-year-to-date, never an inferred standalone quarter. Free cash flow is operating cash flow minus reported capex from the same filing and period; missing capex remains unavailable rather than zero. Standardized US-GAAP tags are not available for every issuer, particularly some foreign filers.
 
 ### Trading 212 portfolio setup
 

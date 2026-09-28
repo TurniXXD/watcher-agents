@@ -9,6 +9,7 @@ export const stocksHelp = `/about — český průvodce používáním a strateg
 /alpaca — read-only Alpaca Paper account, positions, and last five orders
 /backtest — return/hit-rate/MFE/MAE validation report
 /calibration — predicted vs realized 30-day probability buckets
+/cashflow SYMBOL — latest SEC-reported operating, investing, financing, capex, and free cash flow
 /catalysts [SYMBOL] — list active and upcoming catalysts
 /dashboard — current state of every enabled stock
 /decision SYMBOL — show the latest evidence-linked research decision card
@@ -91,7 +92,7 @@ Režimy: \`LOW_RESOLUTION\` šetří kontroly, \`NORMAL\` je výchozí, \`HIGH_R
   `*Stocks Watcher · průvodce 3/3*
 
 *Tři praktické postupy*
-• *Dlouhodobý přehled:* přidejte firmu, označte ji \`CORE\`, sledujte \`/dashboard\`, \`/earnings MU\`, \`/valuation MU\` a změny teze. Cena nebo násobek ocenění samy o sobě nejsou verdikt.
+• *Dlouhodobý přehled:* přidejte firmu, označte ji \`CORE\`, sledujte \`/dashboard\`, \`/earnings MU\`, \`/valuation MU\`, \`/cashflow MU\` a změny teze. Cena nebo násobek ocenění samy o sobě nejsou verdikt.
 • *Události a katalyzátory:* použijte \`/catalysts MU\`, \`/alerts\`, \`/news MU 7d\` a \`/event_replay MU\`. \`/reaction MU\` rozlišuje pozorovaný pohyb ceny od prokázané reakce na událost.
 • *Hledání nápadů:* \`/opportunities\` ukáže zvýšenou pozornost nebo zajímavou asymetrii. Volitelný \`/run_discovery\` vyžaduje nakonfigurovaný zdroj a nic sám nepřidá; vybranou firmu přidejte ručně.
 
