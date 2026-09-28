@@ -3,6 +3,7 @@ import {
   AgentScheduleStore,
   AgentTelemetryStore,
   BriefingDeliveryStore,
+  BriefingGoalStore,
   BriefingConfigurationStore,
   BriefingRunStore,
   BriefingScheduleStore,
@@ -60,6 +61,7 @@ const database = createDatabaseClient(env.DATABASE_URL);
 const stockStore = new WatcherStore(database);
 const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);
 const configuration = new BriefingConfigurationStore(database);
+const goals = new BriefingGoalStore(database);
 const calendarStore = new CalendarIntegrationStore(database);
 const resourceLeases = new ResourceLeaseStore(database);
 const briefingRuns = new BriefingRunStore(database);
@@ -172,6 +174,7 @@ const bot = createBriefingBot(
   logger,
   agentSchedules,
   agentTriggers,
+  goals,
 );
 const scriptModel = new OllamaProvider({
   url: env.OLLAMA_URL,
@@ -214,6 +217,7 @@ const delivery = new BriefingDeliveryService(
 );
 runtime.coordinator = new BriefingCoordinator({
   configuration,
+  goals,
   runs: briefingRuns,
   storyStates: briefingStoryStates,
   storyEngine: new StoryEngine(

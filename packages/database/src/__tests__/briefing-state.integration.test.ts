@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { BriefingConfigurationStore } from '../briefing-configuration-store.js';
 import { BriefingDeliveryStore } from '../briefing-delivery-store.js';
+import { BriefingGoalStore } from '../briefing-goal-store.js';
 import { BriefingRunStore } from '../briefing-run-store.js';
 import { BriefingScheduleStore } from '../briefing-schedule-store.js';
 import { defaultBriefingScheduleSpec } from '../briefing-schedule-spec.js';
@@ -22,6 +23,7 @@ integration('briefing persistent state', () => {
   const stories = new BriefingStoryStore(database);
   const calendar = new CalendarIntegrationStore(database);
   const deliveries = new BriefingDeliveryStore(database);
+  const goals = new BriefingGoalStore(database);
   const watcherHealth = new BriefingWatcherHealthStore(database);
 
   beforeEach(async () => {
@@ -66,6 +68,37 @@ integration('briefing persistent state', () => {
     ]);
     expect(second.settings.id).toBe(first.settings.id);
     expect(await database.briefingSubscription.count()).toBe(5);
+  });
+
+  it('keeps personal goals private to a chat and persists the goals delivery channel', async () => {
+    await configuration.ensure(201n);
+    await configuration.ensure(202n);
+    const first = await goals.add(201n, {
+      title: 'Finish my degree',
+      dueOn: '2027-06-30',
+    });
+    await goals.add(202n, { title: 'Run a marathon', dueOn: '2027-05-01' });
+
+    expect(await goals.list(201n)).toEqual([first]);
+    expect(await goals.remove(202n, first.id)).toBe(false);
+    expect(await goals.list(201n)).toEqual([first]);
+    expect(await goals.remove(201n, first.id)).toBe(true);
+
+    const run = await runs.start(201n, {
+      idempotencyKey: 'manual:201:goals',
+      type: 'MANUAL',
+      periodStart: new Date('2026-09-27T05:00:00.000Z'),
+      periodEnd: new Date('2026-09-28T05:00:00.000Z'),
+      subscriptions: [],
+      targetDurationSeconds: 420,
+      maximumDurationSeconds: 900,
+    });
+    const attempt = await deliveries.start(run.run.id, 'GOALS');
+    await deliveries.succeed(attempt.id, '777');
+    expect(await deliveries.successful(run.run.id, 'GOALS')).toMatchObject({
+      telegramMessageId: '777',
+      status: 'SUCCESS',
+    });
   });
 
   it('validates settings as one consistent aggregate', async () => {

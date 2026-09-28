@@ -6,14 +6,20 @@ import {
 import type {
   BriefingConfiguration,
   BriefingConfigurationStore,
+  BriefingGoalStore,
   BriefingVoiceId,
 } from '@watcher/database';
 import {
   briefingVoiceIdSchema,
+  briefingGoalInputSchema,
   briefingOnboardingStepSchema,
   defaultBriefingScheduleSpec,
 } from '@watcher/database';
-import { authorizationMiddleware, commandArgument } from '@watcher/telegram';
+import {
+  authorizationMiddleware,
+  commandArgument,
+  splitTelegramMessage,
+} from '@watcher/telegram';
 import { Bot, InlineKeyboard, Keyboard, type Context } from 'grammy';
 import {
   briefingAbout,
@@ -33,6 +39,7 @@ import {
   AgentTriggerError,
   type AgentTriggerRunner,
 } from './agent-triggers.js';
+import { renderGoalsMessage } from './goals.js';
 
 type VoicePreview = (context: Context, voice: BriefingVoiceId) => Promise<void>;
 export type BriefingCommandRunner = (
@@ -150,6 +157,7 @@ export const createBriefingBot = (
   logger?: WatcherLogger,
   scheduleReader?: AgentScheduleReader,
   agentTriggers?: AgentTriggerRunner,
+  goals?: Pick<BriefingGoalStore, 'add' | 'list' | 'remove'>,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
@@ -318,6 +326,81 @@ export const createBriefingBot = (
     await context.reply(
       renderConfiguration(await store.ensure(BigInt(context.chat.id))),
     );
+  });
+  bot.command('goal_add', async (context) => {
+    if (context.chat.type !== 'private') {
+      await context.reply(
+        'Manage personal goals in a private chat with this bot.',
+      );
+      return;
+    }
+    if (!goals) {
+      await context.reply('Goal tracking is not configured.');
+      return;
+    }
+    const argument = commandArgument(context.message?.text).trim();
+    const match = /^(\d{4}-\d{2}-\d{2})\s+(.+)$/su.exec(argument);
+    const parsed = briefingGoalInputSchema.safeParse({
+      dueOn: match?.[1],
+      title: match?.[2],
+    });
+    if (!parsed.success) {
+      await context.reply(
+        'Usage: /goal_add YYYY-MM-DD Goal title\nExample: /goal_add 2027-06-30 Finish my degree',
+      );
+      return;
+    }
+    const chatId = BigInt(context.chat.id);
+    await store.ensure(chatId);
+    const goal = await goals.add(chatId, parsed.data);
+    await context.reply(
+      `✅ Goal #${goal.id} saved: ${goal.title} · ${goal.dueOn}. Remove it with /goal_remove ${goal.id}.`,
+    );
+  });
+  bot.command('goal_remove', async (context) => {
+    if (context.chat.type !== 'private') {
+      await context.reply(
+        'Manage personal goals in a private chat with this bot.',
+      );
+      return;
+    }
+    if (!goals) {
+      await context.reply('Goal tracking is not configured.');
+      return;
+    }
+    const argument = commandArgument(context.message?.text).trim();
+    const id = Number(argument);
+    if (!/^\d+$/u.test(argument) || !Number.isSafeInteger(id) || id < 1) {
+      await context.reply('Usage: /goal_remove ID\nFind the ID with /goals.');
+      return;
+    }
+    const removed = await goals.remove(BigInt(context.chat.id), id);
+    await context.reply(
+      removed ? `🗑 Goal #${id} removed.` : `Goal #${id} was not found.`,
+    );
+  });
+  bot.command('goals', async (context) => {
+    if (context.chat.type !== 'private') {
+      await context.reply(
+        'Manage personal goals in a private chat with this bot.',
+      );
+      return;
+    }
+    if (!goals) {
+      await context.reply('Goal tracking is not configured.');
+      return;
+    }
+    const chatId = BigInt(context.chat.id);
+    const configuration = await store.ensure(chatId);
+    const message = renderGoalsMessage(
+      await goals.list(chatId),
+      configuration.settings.timezone,
+      new Date(),
+      Number.MAX_SAFE_INTEGER,
+    );
+    for (const part of splitTelegramMessage(message)) {
+      await context.reply(part);
+    }
   });
   bot.command('subscriptions', async (context) => {
     await context.reply(

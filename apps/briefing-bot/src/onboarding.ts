@@ -63,6 +63,7 @@ Personal Morning Briefing is a private, self-hosted Telegram assistant that turn
 • Deduplicates related reports, groups them into stories, and preserves continuity with earlier developments.
 • Prioritizes urgent and personally relevant items while respecting priority and muted topics.
 • Generates an audio briefing with Piper and can optionally send a text transcript.
+• Sends a separate list of your 10 nearest goal deadlines after morning and evening briefings, with a calendar-day countdown.
 • Uses feedback on delivered stories to improve later briefings.
 
 *Key advantages*
@@ -78,6 +79,7 @@ Personal Morning Briefing is a private, self-hosted Telegram assistant that turn
 4. Connect Google Calendar with \`/calendar_connect\` if you want today's events included; this step is optional.
 5. Generate an immediate briefing with \`/briefing\`, or a short verification with \`/briefing_test\`.
 6. Use \`/settings\` to review the current configuration and \`/help\` for every command.
+7. Add a personal deadline with \`/goal_add YYYY-MM-DD Goal title\`, review it with \`/goals\`, and remove it with \`/goal_remove ID\`.
 
 _Important:_ The briefing summarizes available data and may be incomplete. Review linked primary sources before making medical, financial, or other consequential decisions.`;
 
@@ -96,6 +98,9 @@ export const briefingHelp = [
   '/calendar_disconnect — disconnect Google Calendar',
   '/calendar_refresh — refresh Calendar status',
   '/calendar_status — show Calendar status',
+  '/goal_add YYYY-MM-DD Goal title — add a personal deadline',
+  '/goal_remove ID — remove one of your goals',
+  '/goals — show all goals, deadlines, and day countdowns',
   '/help — show commands',
   '/location — show saved location',
   '/location_clear — disable location',

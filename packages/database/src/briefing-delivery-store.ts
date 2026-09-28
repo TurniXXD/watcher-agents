@@ -10,6 +10,7 @@ export const deliveryChannelSchema = z.enum([
   'INDEX',
   'TRANSCRIPT',
   'TEXT_FALLBACK',
+  'GOALS',
 ]);
 
 export type BriefingDeliveryChannelId = z.infer<typeof deliveryChannelSchema>;

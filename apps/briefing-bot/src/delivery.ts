@@ -55,6 +55,7 @@ export type BriefingDeliveryInput = {
   index: BriefingIndex;
   displayScript: string;
   sendTranscript: boolean;
+  goalsMessage?: string;
 };
 
 export type BriefingDeliveryResult = {
@@ -62,6 +63,7 @@ export type BriefingDeliveryResult = {
   voiceMessageId?: string;
   indexMessageId?: string;
   fallbackMessageId?: string;
+  goalsMessageId?: string;
   failedChannels: BriefingDeliveryChannelId[];
 };
 
@@ -177,7 +179,10 @@ export class BriefingDeliveryService {
   ): Promise<BriefingDeliveryResult> {
     const failedChannels: BriefingDeliveryChannelId[] = [];
     if (!input.audio) {
-      return this.deliverTextFallback(input, failedChannels);
+      return this.deliverGoals(
+        input,
+        await this.deliverTextFallback(input, failedChannels),
+      );
     }
     const audio = input.audio;
 
@@ -190,7 +195,10 @@ export class BriefingDeliveryService {
     ]);
     if (!voice.success) {
       failedChannels.push('VOICE');
-      return this.deliverTextFallback(input, failedChannels);
+      return this.deliverGoals(
+        input,
+        await this.deliverTextFallback(input, failedChannels),
+      );
     }
 
     const index = await this.attempt(input.runId, 'INDEX', async () => [
@@ -211,11 +219,33 @@ export class BriefingDeliveryService {
       if (!transcript.success) failedChannels.push('TRANSCRIPT');
     }
 
-    return {
+    return this.deliverGoals(input, {
       status: failedChannels.length === 0 ? 'SUCCESS' : 'PARTIAL',
       ...(voice.messageId ? { voiceMessageId: voice.messageId } : {}),
       ...(index.messageId ? { indexMessageId: index.messageId } : {}),
       failedChannels,
+    });
+  }
+
+  private async deliverGoals(
+    input: BriefingDeliveryInput,
+    briefing: BriefingDeliveryResult,
+  ): Promise<BriefingDeliveryResult> {
+    const message = input.goalsMessage;
+    if (!message || briefing.status === 'FAILED') return briefing;
+    const goals = await this.attempt(input.runId, 'GOALS', () =>
+      this.telegram.sendPlainText(input.telegramChatId, message),
+    );
+    if (!goals.success) {
+      return {
+        ...briefing,
+        status: 'PARTIAL',
+        failedChannels: [...briefing.failedChannels, 'GOALS'],
+      };
+    }
+    return {
+      ...briefing,
+      ...(goals.messageId ? { goalsMessageId: goals.messageId } : {}),
     };
   }
 

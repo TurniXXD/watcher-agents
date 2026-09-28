@@ -159,6 +159,78 @@ describe('BriefingDeliveryService', () => {
     );
   });
 
+  it('sends goals after every briefing message and does not resend successful channels', async () => {
+    const attempts = new MemoryAttempts();
+    const telegram = transport();
+    const service = new BriefingDeliveryService(attempts, telegram);
+    const request = { ...input(), goalsMessage: '🎯 Your goals' };
+
+    const first = await service.deliver(request);
+    await service.deliver(request);
+
+    expect(first).toMatchObject({ status: 'SUCCESS', goalsMessageId: '103' });
+    expect(attempts.records.map(({ channel }) => channel)).toEqual([
+      'VOICE',
+      'INDEX',
+      'TRANSCRIPT',
+      'GOALS',
+    ]);
+    expect(
+      vi.mocked(telegram.sendPlainText).mock.calls.map((call) => call[1]),
+    ).toEqual([request.displayScript, request.goalsMessage]);
+  });
+
+  it('marks a failed goals message partial and retries only that channel', async () => {
+    const attempts = new MemoryAttempts();
+    const telegram = transport();
+    const request = {
+      ...input(),
+      sendTranscript: false,
+      goalsMessage: '🎯 Your goals',
+    };
+    vi.mocked(telegram.sendPlainText)
+      .mockRejectedValueOnce(new Error('Telegram goals send failed'))
+      .mockResolvedValueOnce(['104']);
+    const service = new BriefingDeliveryService(attempts, telegram, {
+      maxAttempts: 1,
+    });
+
+    expect(await service.deliver(request)).toMatchObject({
+      status: 'PARTIAL',
+      failedChannels: ['GOALS'],
+    });
+    expect(await service.deliver(request)).toMatchObject({
+      status: 'SUCCESS',
+      goalsMessageId: '104',
+    });
+    expect(telegram.sendVoice).toHaveBeenCalledTimes(1);
+    expect(telegram.sendIndex).toHaveBeenCalledTimes(1);
+    expect(telegram.sendPlainText).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not send goals when no briefing message could be delivered', async () => {
+    const attempts = new MemoryAttempts();
+    const telegram = transport();
+    vi.mocked(telegram.sendVoice).mockRejectedValue(new Error('Voice failed'));
+    vi.mocked(telegram.sendIndex).mockRejectedValue(new Error('Index failed'));
+    vi.mocked(telegram.sendPlainText).mockRejectedValue(
+      new Error('Text failed'),
+    );
+    const service = new BriefingDeliveryService(attempts, telegram, {
+      maxAttempts: 1,
+    });
+    const request = {
+      ...input(),
+      goalsMessage: '🎯 Your goals',
+      sendTranscript: false,
+    };
+
+    expect((await service.deliver(request)).status).toBe('FAILED');
+    expect(attempts.records.map(({ channel }) => channel)).not.toContain(
+      'GOALS',
+    );
+  });
+
   it('retries a failed voice upload exponentially and falls back to text', async () => {
     const attempts = new MemoryAttempts();
     const telegram = transport();

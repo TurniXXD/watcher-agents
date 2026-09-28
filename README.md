@@ -82,6 +82,8 @@ Before a scheduled delivery, the Briefing Bot requests one immediate run from ev
 
 With the Stocks subscription enabled, every briefing includes known exact earnings dates for enabled watchlist stocks from today through the next 14 local calendar days, even if no new stories were found. Only high-materiality, highly relevant stock events enter the news section. If targeted analysis fails, a sourced headline may appear without an investment conclusion. An unavailable earnings lookup is reported as unavailable, not as an empty calendar. The older one-week and one-day reminders remain stored but do not repeat as separate briefing stories.
 
+The Briefing Bot also stores private, per-chat goals in PostgreSQL; manage them in a private Telegram chat. Add one with `/goal_add YYYY-MM-DD Goal title` (for example `/goal_add 2027-06-30 Finish my degree`), review the complete list with `/goals`, and remove it by its displayed numeric ID with `/goal_remove ID`. After each morning or evening scheduled or manual briefing, it sends a separate final message with the 10 nearest upcoming deadlines and their remaining calendar days in the chat's configured timezone; overdue goals follow upcoming ones. Test and afternoon/night briefings do not send this extra message. If no goals are saved, the message explains how to add one. Goal delivery is tracked independently: a Telegram failure marks the run partial, and `/goals` can be used to retrieve the list manually.
+
 To stop the application without deleting data:
 
 ```bash
@@ -335,6 +337,7 @@ Personal Morning Briefing bot:
 
 - `/start` to begin or resume persisted onboarding; Google Calendar is an optional integration and does not block setup
 - `/briefing` and `/briefing_test` to generate a full or short briefing now
+- `/goal_add YYYY-MM-DD Goal title`, `/goal_remove ID`, and `/goals` to manage private goals and their deadline countdowns
 - `/briefing_settings`, `/briefing_time HH:mm[;HH:mm|weekly:DAY:HH:mm]`, `/briefing_duration MINUTES`, `/briefing_max_duration MINUTES`, and `/briefing_transcript on|off`
 - `/subscriptions`, `/subscribe WATCHER`, `/unsubscribe WATCHER`, `/subscribe_all`, and `/unsubscribe_all`
 - `/location_set CITY`, `/location_clear`, and `/location_status`

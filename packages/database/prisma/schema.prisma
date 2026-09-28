@@ -389,6 +389,7 @@ enum BriefingDeliveryChannel {
   INDEX
   TRANSCRIPT
   TEXT_FALLBACK
+  GOALS
 }
 
 enum BriefingDeliveryStatus {
@@ -618,6 +619,7 @@ model BriefingSettings {
   storyStates            BriefingStoryState[]
   calendarIntegration    CalendarIntegrationState?
   feedback               BriefingFeedback[]
+  goals                  BriefingGoal[]
 
   @@index([onboardingComplete, nextBriefingAt])
   @@map("briefing_settings")
@@ -635,6 +637,19 @@ model BriefingSubscription {
   @@unique([settingsId, watcherBot])
   @@index([settingsId, enabled])
   @@map("briefing_subscriptions")
+}
+
+model BriefingGoal {
+  id         Int              @id @default(autoincrement())
+  settingsId String
+  title      String           @db.VarChar(160)
+  dueOn      DateTime         @db.Date
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  settings   BriefingSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@index([settingsId, dueOn, id])
+  @@map("briefing_goals")
 }
 
 model BriefingLocation {

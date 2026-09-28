@@ -237,6 +237,63 @@ const dependencies = (
 };
 
 describe('BriefingCoordinator', () => {
+  it.each([
+    ['morning', '2026-09-06T05:00:00.000Z'],
+    ['evening', '2026-09-06T18:00:00.000Z'],
+  ])('adds the goals message after a %s briefing', async (_period, time) => {
+    const currentTime = new Date(time);
+    const setup = dependencies({ currentTime });
+    const goals = {
+      list: vi.fn(async () => [
+        { id: 7, title: 'Finish my degree', dueOn: '2026-09-16' },
+      ]),
+    };
+    const coordinator = new BriefingCoordinator({ ...setup.value, goals });
+
+    await coordinator.generate(123n, 'SCHEDULED', currentTime);
+
+    expect(goals.list).toHaveBeenCalledWith(123n);
+    expect(setup.deliveryInputs[0]?.goalsMessage).toContain(
+      '#7 Finish my degree — 16.09.2026 (in 10 days)',
+    );
+  });
+
+  it('does not append goals to test or afternoon briefings', async () => {
+    const goals = { list: vi.fn(async () => []) };
+    const afternoon = dependencies({
+      currentTime: new Date('2026-09-06T13:00:00.000Z'),
+    });
+    await new BriefingCoordinator({ ...afternoon.value, goals }).generate(
+      123n,
+      'SCHEDULED',
+      new Date('2026-09-06T13:00:00.000Z'),
+    );
+    const test = dependencies();
+    await new BriefingCoordinator({ ...test.value, goals }).generate(
+      123n,
+      'TEST',
+    );
+
+    expect(goals.list).not.toHaveBeenCalled();
+    expect(afternoon.deliveryInputs[0]?.goalsMessage).toBeUndefined();
+    expect(test.deliveryInputs[0]?.goalsMessage).toBeUndefined();
+  });
+
+  it('keeps briefing delivery working when goal loading fails', async () => {
+    const setup = dependencies();
+    const goals = {
+      list: vi.fn(async () => Promise.reject(new Error('DB unavailable'))),
+    };
+    const coordinator = new BriefingCoordinator({ ...setup.value, goals });
+
+    const result = await coordinator.generate(123n, 'SCHEDULED', now);
+
+    expect(result.run.status).toBe('PARTIAL');
+    expect(setup.deliveryInputs[0]?.goalsMessage).toContain(
+      'Goals are temporarily unavailable',
+    );
+  });
+
   it('includes watchlist earnings even when there are no new stock stories', async () => {
     const setup = dependencies();
     const list = vi.fn(async () => [

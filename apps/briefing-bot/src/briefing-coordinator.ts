@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { WatcherLogger } from '@watcher/core';
 import type {
   BriefingConfigurationStore,
+  BriefingGoalStore,
   BriefingRunRecord,
   BriefingRunStore,
   BriefingStoryStore,
@@ -49,6 +50,7 @@ import {
 import type { WeatherProvider } from './weather.js';
 import { renderSpokenWeather } from './weather.js';
 import { waitForFreshWatcherRuns } from './briefing-freshness.js';
+import { renderGoalsMessage } from './goals.js';
 import {
   loadWatchlistEarnings,
   type WatchlistEarningsContext,
@@ -101,6 +103,7 @@ export class BriefingCoordinator {
       telemetry?: AgentTelemetryRecorder;
       calendar?: CalendarProvider;
       earningsCalendar?: WatchlistEarningsSource;
+      goals?: Pick<BriefingGoalStore, 'list'>;
       logger?: WatcherLogger;
       ttsAttempts?: number;
       freshness?: {
@@ -523,6 +526,29 @@ export class BriefingCoordinator {
       }
 
       await progress('Delivering to Telegram', 90);
+      let goalsMessage: string | undefined;
+      let goalsUnavailable = false;
+      if (
+        this.dependencies.goals &&
+        type !== 'TEST' &&
+        (dayPeriod === 'morning' || dayPeriod === 'evening')
+      ) {
+        try {
+          goalsMessage = renderGoalsMessage(
+            await this.dependencies.goals.list(telegramChatId),
+            configuration.settings.timezone,
+            this.dependencies.now?.() ?? new Date(),
+          );
+        } catch (error) {
+          goalsUnavailable = true;
+          goalsMessage =
+            '🎯 Goals are temporarily unavailable. Use /goals to check them later.';
+          this.dependencies.logger?.warn(
+            { err: error, briefingRunId: started.run.id },
+            'Briefing goals could not be loaded',
+          );
+        }
+      }
       this.dependencies.logger?.info(
         {
           briefingRunId: started.run.id,
@@ -557,6 +583,7 @@ export class BriefingCoordinator {
         },
         displayScript: script.displayScript,
         sendTranscript: configuration.settings.sendTranscript,
+        ...(goalsMessage ? { goalsMessage } : {}),
       });
       const telegramUploadDurationMs = Date.now() - deliveryStartedAt;
       this.dependencies.logger?.info(
@@ -604,6 +631,7 @@ export class BriefingCoordinator {
         weather.status === 'UNAVAILABLE' ||
         calendar.status === 'UNAVAILABLE' ||
         earnings.status === 'UNAVAILABLE' ||
+        goalsUnavailable ||
         coverage.percentage < 100;
       const status =
         delivery.status === 'FAILED'
