@@ -41,6 +41,7 @@ import { StockDiscoveryCoordinator } from './discovery.js';
 import { DiscoveryCatalystAnalyzer } from './discovery-catalyst.js';
 import { renderWeeklyDiscoveryReport } from './discovery-report.js';
 import { AlpacaPaperClient } from './alpaca-paper.js';
+import { Trading212Client } from './trading212.js';
 import { env } from './env.js';
 import { StockReconciliationCoordinator } from './reconciliation.js';
 import { createStocksRunner } from './watcher.js';
@@ -50,6 +51,16 @@ import {
 } from './briefing-publisher.js';
 
 const logger = createLogger('stocks-bot', env.LOG_LEVEL);
+const allowedUserIds = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
+if (
+  env.TRADING212_API_KEY &&
+  env.TRADING212_TELEGRAM_USER_ID &&
+  !allowedUserIds.has(env.TRADING212_TELEGRAM_USER_ID)
+) {
+  throw new Error(
+    'TRADING212_TELEGRAM_USER_ID must also be listed in TELEGRAM_ALLOWED_USER_IDS.',
+  );
+}
 const database = createDatabaseClient(env.DATABASE_URL);
 const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);
 const stockEmbeddingProvider = env.BRIEFING_EMBEDDING_MODEL
@@ -215,11 +226,24 @@ const alpacaPaper =
         apiSecret: env.ALPACA_PAPER_API_SECRET,
       })
     : undefined;
+const trading212 =
+  env.TRADING212_API_KEY &&
+  env.TRADING212_API_SECRET &&
+  env.TRADING212_TELEGRAM_USER_ID
+    ? {
+        ownerTelegramUserId: env.TRADING212_TELEGRAM_USER_ID,
+        client: new Trading212Client({
+          apiKey: env.TRADING212_API_KEY,
+          apiSecret: env.TRADING212_API_SECRET,
+          environment: env.TRADING212_ENVIRONMENT,
+        }),
+      }
+    : undefined;
 const shutdownController = new AbortController();
 const pendingThesisTasks = new Set<Promise<void>>();
 const bot = createStocksBot(
   env.STOCKS_TELEGRAM_TOKEN,
-  parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS),
+  allowedUserIds,
   store,
   stockNews,
   validationStore,
@@ -258,6 +282,7 @@ const bot = createStocksBot(
     };
     void task.then(removeTask, removeTask);
   },
+  trading212,
 );
 const runner = createStocksRunner(
   store,

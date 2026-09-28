@@ -136,6 +136,13 @@ const schema = z
     ),
     ALPACA_PAPER_API_KEY: optionalSecret,
     ALPACA_PAPER_API_SECRET: optionalSecret,
+    TRADING212_API_KEY: optionalSecret,
+    TRADING212_API_SECRET: optionalSecret,
+    TRADING212_ENVIRONMENT: z.enum(['LIVE', 'DEMO']).default('LIVE'),
+    TRADING212_TELEGRAM_USER_ID: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.coerce.number().int().positive().safe().optional(),
+    ),
     PRICE_ANOMALY_THRESHOLD_PERCENT: z.coerce.number().positive().default(4),
     GAP_ANOMALY_THRESHOLD_PERCENT: z.coerce.number().positive().default(3),
     RELATIVE_VOLUME_ANOMALY_THRESHOLD: z.coerce.number().min(1).default(3),
@@ -230,6 +237,22 @@ const schema = z
         code: z.ZodIssueCode.custom,
         path: ['ALPACA_PAPER_API_SECRET'],
         message: 'Set both Alpaca Paper API credentials or neither.',
+      });
+    }
+    if (
+      Boolean(value.TRADING212_API_KEY) !== Boolean(value.TRADING212_API_SECRET)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TRADING212_API_SECRET'],
+        message: 'Set both Trading 212 API credentials or neither.',
+      });
+    }
+    if (value.TRADING212_API_KEY && !value.TRADING212_TELEGRAM_USER_ID) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TRADING212_TELEGRAM_USER_ID'],
+        message: 'Set the private Telegram owner ID for Trading 212.',
       });
     }
   });

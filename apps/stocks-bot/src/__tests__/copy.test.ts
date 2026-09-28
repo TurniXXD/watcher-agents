@@ -5,7 +5,7 @@ const commandNames = (help: string): string[] =>
   help
     .split('\n')
     .filter((line) => line.startsWith('/'))
-    .map((line) => line.match(/^\/([a-z_]+)/)?.[1] ?? '');
+    .map((line) => line.match(/^\/([a-z0-9_]+)/u)?.[1] ?? '');
 
 describe('stocks bot command copy', () => {
   it('lists every help command alphabetically', () => {
@@ -63,6 +63,9 @@ describe('stocks bot command copy', () => {
       'stocks',
       'stocks_tickers',
       'thesis',
+      'trading212',
+      'trading212_report',
+      'trading212_setup',
       'validate',
       'valuation',
     ]);

@@ -34,6 +34,7 @@ import {
   renderStockValuation,
   renderWatcherHealth,
   sendSplitMessage,
+  splitTelegramMessage,
   stockSymbolSchema,
 } from '@watcher/telegram';
 import { Bot, InputFile } from 'grammy';
@@ -83,6 +84,12 @@ import {
 import { assessPortfolioRisk, renderPortfolioRisk } from './portfolio-risk.js';
 import { renderAlpacaPaperPortfolio } from './alpaca-paper.js';
 import type { AlpacaPaperClient } from './alpaca-paper.js';
+import {
+  canViewTrading212,
+  renderTrading212Positions,
+  renderTrading212Report,
+  type Trading212Client,
+} from './trading212.js';
 import {
   parsePortfolioRiskProfileRequest,
   portfolioRiskProfileUsage,
@@ -177,6 +184,10 @@ export const createStocksBot = (
   reportError: (error: unknown) => void,
   shutdownSignal?: AbortSignal,
   trackBackgroundTask?: (task: Promise<void>) => void,
+  trading212?: {
+    ownerTelegramUserId: number;
+    client: Pick<Trading212Client, 'getPortfolio'>;
+  },
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
@@ -857,6 +868,54 @@ export const createStocksBot = (
         'Alpaca Paper data could not be loaded. Check that the paper API keys are valid and the account is active; no order was sent.',
       );
     }
+  });
+  bot.command(['trading212', 'trading212_report'], async (ctx) => {
+    if (!trading212) {
+      await ctx.reply(
+        'Trading 212 není nastaveno. Vytvořte read-only API key a secret v Trading 212, uložte je spolu s TRADING212_TELEGRAM_USER_ID do stocks-bot runtime env a restartujte bota.',
+      );
+      return;
+    }
+    if (
+      !canViewTrading212(
+        ctx.from?.id,
+        ctx.chat.id,
+        ctx.chat.type,
+        trading212.ownerTelegramUserId,
+      )
+    ) {
+      await ctx.reply(
+        'Trading 212 report je dostupný jen vlastníkovi v soukromém chatu.',
+      );
+      return;
+    }
+    try {
+      const portfolio = await trading212.client.getPortfolio();
+      const text = ctx.message?.text?.startsWith('/trading212_report')
+        ? renderTrading212Report(portfolio)
+        : renderTrading212Positions(portfolio);
+      for (const part of splitTelegramMessage(text)) {
+        await ctx.reply(part, { link_preview_options: { is_disabled: true } });
+      }
+    } catch (error) {
+      reportError(error);
+      await ctx.reply(
+        'Trading 212 data se nepodařilo načíst. Zkontrolujte oprávnění klíče, LIVE/DEMO účet, IP omezení a log stocks-bota. Žádný obchod nebyl odeslán.',
+      );
+    }
+  });
+  bot.command('trading212_setup', async (ctx) => {
+    if (ctx.chat.type !== 'private' || ctx.chat.id !== ctx.from?.id) {
+      await ctx.reply('Otevřete soukromý chat s tímto botem.');
+      return;
+    }
+    await ctx.reply(
+      [
+        `Vaše Telegram user ID pro TRADING212_TELEGRAM_USER_ID: ${ctx.from.id}`,
+        `Integrace: ${trading212 ? 'nakonfigurována' : 'nenakonfigurována'}`,
+        'Trading 212 → Settings → API (Beta) → Generate API key. Vyberte pouze čtení účtu a portfolia. API Key a jednorázově zobrazený API Secret uložte jen do deploy/runtime/stocks-bot.env na VPS; neposílejte je do Telegramu.',
+      ].join('\n'),
+    );
   });
   bot.command('paper_close', async (ctx) => {
     const ordinal = parsePaperCloseOrdinal(commandArgument(ctx.message?.text));
