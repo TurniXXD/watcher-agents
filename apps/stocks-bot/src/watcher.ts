@@ -13,10 +13,12 @@ import {
   CompanyIntelligenceSource,
   companyIntelligenceProfileFor,
   EarningsWhispersSource,
+  FederalRegisterSource,
   FinraShortInterestSource,
   FinvizInsiderSource,
   GdeltNewsSource,
   InvestorRelationsSource,
+  OfficialAgencyNewsSource,
   QuiverSource,
   StockClinicalTrialsSource,
   StockFdaSource,
@@ -70,6 +72,16 @@ export const createStocksRunner = (
 ): WatcherRunner => {
   const price = new StooqPriceSource();
   const investorRelations = new InvestorRelationsSource();
+  const federalRegister = new FederalRegisterSource(
+    undefined,
+    (documentNumber, error) =>
+      logger?.warn(
+        { source: 'FEDERAL_REGISTER', documentNumber, error },
+        'Federal Register document could not be fetched',
+      ),
+  );
+  const ftc = new OfficialAgencyNewsSource('FTC');
+  const doj = new OfficialAgencyNewsSource('DOJ');
   const companyIntelligence = new CompanyIntelligenceSource(
     undefined,
     undefined,
@@ -86,7 +98,12 @@ export const createStocksRunner = (
   const earningsWhispers = new EarningsWhispersSource();
   const shortInterest = new FinraShortInterestSource();
   const clinicalTrials = new StockClinicalTrialsSource();
-  const fda = new StockFdaSource();
+  const fda = new StockFdaSource(undefined, (endpoint, error) =>
+    logger?.warn(
+      { source: 'FDA', endpoint, error },
+      'openFDA enforcement endpoint degraded',
+    ),
+  );
   const alphaInstitutional = advancedSources.alphaVantageApiKey
     ? new AlphaVantageInstitutionalSource(advancedSources.alphaVantageApiKey)
     : undefined;
@@ -143,9 +160,10 @@ export const createStocksRunner = (
     if (!chat) {
       return [];
     }
-    const stocks = await Promise.all(
-      (await store.listStocks(chat.id)).map(withCompany),
-    );
+    const stocks: StockEntry[] = [];
+    for (const stock of await store.listStocks(chat.id)) {
+      stocks.push(await withCompany(stock));
+    }
     return stocks
       .filter((stock) => stock.enabled)
       .flatMap((stock) =>
@@ -160,6 +178,34 @@ export const createStocksRunner = (
                   target,
                   config: { symbol: stock.symbol, cik: stock.cik ?? undefined },
                 },
+                ...(stock.companyName
+                  ? [
+                      {
+                        source: federalRegister,
+                        target,
+                        config: {
+                          symbol: stock.symbol,
+                          companyName: stock.companyName,
+                        },
+                      },
+                      {
+                        source: ftc,
+                        target,
+                        config: {
+                          symbol: stock.symbol,
+                          companyName: stock.companyName,
+                        },
+                      },
+                      {
+                        source: doj,
+                        target,
+                        config: {
+                          symbol: stock.symbol,
+                          companyName: stock.companyName,
+                        },
+                      },
+                    ]
+                  : []),
               ];
             }
             if (entry.source === StockSourceType.PRICE) {
@@ -276,6 +322,7 @@ export const createStocksRunner = (
                   config: {
                     symbol: stock.symbol,
                     companyName: stock.companyName,
+                    industry: stock.industry,
                   },
                 },
               ];

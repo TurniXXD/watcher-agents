@@ -138,4 +138,48 @@ describe('SecEdgarSource', () => {
       footnotes: 'Pursuant to a Rule 10b5-1 trading plan.',
     });
   });
+
+  it('skips routine forms and classifies foreign reports, offerings, and beneficial ownership', async () => {
+    const forms = ['3', '6-K', 'S-3', 'SC 13D', '8-K/A'];
+    const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+      requestUrl(input).includes('/submissions/')
+        ? Response.json({
+            name: 'MICRON TECHNOLOGY INC',
+            filings: {
+              recent: {
+                accessionNumber: forms.map(
+                  (_, index) => `0000000000-26-00000${index + 1}`,
+                ),
+                filingDate: forms.map(() => '2026-09-24'),
+                form: forms,
+                primaryDocument: forms.map(
+                  (_, index) => `document-${index}.html`,
+                ),
+                primaryDocDescription: forms.map((form) => `${form} filing`),
+              },
+            },
+          })
+        : new Response('<html><body>Company filing text.</body></html>'),
+    );
+    const source = new SecEdgarSource('Watcher/1.0 admin@example.com', fetcher);
+
+    const items = await source.fetch({
+      symbol: 'MU',
+      cik: '723125',
+      maxItems: 4,
+    });
+
+    expect(items.map((item) => item.normalizedFacts?.form)).toEqual([
+      '6-K',
+      'S-3',
+      'SC 13D',
+      '8-K/A',
+    ]);
+    expect(items.map((item) => item.category)).toEqual([
+      'COMPANY_EVENT',
+      'FINANCING',
+      'OWNERSHIP',
+      'COMPANY_EVENT',
+    ]);
+  });
 });

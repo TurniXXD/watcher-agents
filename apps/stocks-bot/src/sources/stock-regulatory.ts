@@ -6,10 +6,12 @@ import {
   type WatchItem,
 } from '@watcher/core';
 import { z } from 'zod';
+import { companyMention } from './company-mention.js';
 
 export type StockRegulatoryConfig = {
   symbol: string;
   companyName?: string | null;
+  industry?: string | null;
   maxItems?: number;
 };
 
@@ -87,10 +89,27 @@ const fdaResponseSchema = z.object({
   ),
 });
 
+const fdaEnforcementSchema = z.object({
+  results: z.array(
+    z.object({
+      recall_number: z.string().min(1),
+      recalling_firm: z.string().min(1),
+      product_description: z.string().min(1),
+      reason_for_recall: z.string().min(1),
+      report_date: z.string().min(1),
+      classification: z.string().optional(),
+      status: z.string().optional(),
+    }),
+  ),
+});
+
 const requestJson = async (
   fetcher: typeof fetch,
   url: URL,
-  schema: typeof clinicalResponseSchema | typeof fdaResponseSchema,
+  schema:
+    | typeof clinicalResponseSchema
+    | typeof fdaResponseSchema
+    | typeof fdaEnforcementSchema,
   signal?: AbortSignal,
 ): Promise<unknown> => {
   const response = await fetcher(url, {
@@ -194,7 +213,106 @@ export class StockFdaSource implements Source<StockRegulatoryConfig> {
     rateLimitPerMinute: 40,
     priority: 95,
   };
-  public constructor(private readonly fetcher: typeof fetch = fetch) {}
+  public constructor(
+    private readonly fetcher: typeof fetch = fetch,
+    private readonly onEndpointError?: (
+      endpoint: string,
+      error: unknown,
+    ) => void,
+  ) {}
+
+  async #recalls(
+    config: StockRegulatoryConfig,
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<WatchItem[]> {
+    if (
+      !/biotech|pharma|drug|medical|health\s*care|diagnostic/i.test(
+        config.industry ?? '',
+      )
+    ) {
+      return [];
+    }
+    const maxItems = Math.max(1, Math.min(config.maxItems ?? 10, 20));
+    const symbol = config.symbol.trim().toUpperCase();
+    const endpoints = ['drug', 'device'] as const;
+    const outcomes = await Promise.allSettled(
+      endpoints.map(async (kind) => {
+        const url = new URL(`https://api.fda.gov/${kind}/enforcement.json`);
+        url.searchParams.set('search', `recalling_firm:"${query}"`);
+        url.searchParams.set('sort', 'report_date:desc');
+        url.searchParams.set('limit', String(maxItems));
+        const payload = await requestJson(
+          this.fetcher,
+          url,
+          fdaEnforcementSchema,
+          signal,
+        );
+        if (!payload) return [];
+        return (
+          payload as z.infer<typeof fdaEnforcementSchema>
+        ).results.flatMap((recall): WatchItem[] => {
+          if (!companyMention(recall.recalling_firm, query)) return [];
+          const publishedAt = parseDate(recall.report_date);
+          if (!publishedAt) return [];
+          const externalId = `${kind}:${recall.recall_number}`;
+          const recordUrl = new URL(url);
+          recordUrl.searchParams.set(
+            'search',
+            `recall_number:"${recall.recall_number}"`,
+          );
+          recordUrl.searchParams.delete('sort');
+          recordUrl.searchParams.delete('limit');
+          return [
+            {
+              id: `${this.id}:${externalId}`,
+              source: this.id,
+              externalId,
+              title: `${symbol} FDA ${kind} recall ${recall.recall_number}`,
+              url: recordUrl.toString(),
+              publishedAt,
+              eventAt: publishedAt,
+              content: `Product: ${recall.product_description}. Reason: ${recall.reason_for_recall}. Classification: ${recall.classification ?? 'not reported'}. Status: ${recall.status ?? 'not reported'}. Recalling firm: ${recall.recalling_firm}.`,
+              sourceType: 'REGULATORY',
+              primarySource: true,
+              category: 'REGULATORY_ACTION',
+              normalizedFacts: {
+                recallNumber: recall.recall_number,
+                product: recall.product_description,
+                reason: recall.reason_for_recall,
+                classification: recall.classification,
+                status: recall.status,
+                recallingFirm: recall.recalling_firm,
+                reportDate: recall.report_date,
+              },
+              entities: [symbol, recall.recalling_firm],
+              reliability: 0.95,
+              metadata: { symbol, provider: 'openFDA', endpoint: kind },
+            },
+          ];
+        });
+      }),
+    );
+    const items: WatchItem[] = [];
+    for (const [index, outcome] of outcomes.entries()) {
+      if (outcome.status === 'fulfilled') {
+        items.push(...outcome.value);
+      } else {
+        if (signal?.aborted) throw outcome.reason;
+        this.onEndpointError?.(endpoints[index] ?? 'unknown', outcome.reason);
+      }
+    }
+    if (outcomes.every((outcome) => outcome.status === 'rejected')) {
+      throw new Error('Both openFDA enforcement endpoints failed');
+    }
+    return items
+      .sort(
+        (left, right) =>
+          (right.publishedAt?.getTime() ?? 0) -
+          (left.publishedAt?.getTime() ?? 0),
+      )
+      .slice(0, maxItems);
+  }
 
   public async fetch(
     config: StockRegulatoryConfig,
@@ -207,14 +325,18 @@ export class StockFdaSource implements Source<StockRegulatoryConfig> {
       search: `sponsor_name:"${query}"`,
       limit: String(Math.max(1, Math.min(config.maxItems ?? 10, 20))),
     }).toString();
-    const payload = await requestJson(
-      this.fetcher,
-      url,
-      fdaResponseSchema,
-      signal,
-    );
-    if (!payload) return [];
-    return (payload as z.infer<typeof fdaResponseSchema>).results
+    let payload: unknown = null;
+    let approvalError: unknown;
+    try {
+      payload = await requestJson(this.fetcher, url, fdaResponseSchema, signal);
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      approvalError = error;
+      this.onEndpointError?.('drugsfda', error);
+    }
+    const decisions = (
+      payload ? (payload as z.infer<typeof fdaResponseSchema>).results : []
+    )
       .flatMap((application) => {
         const products = application.products ?? [];
         const productNames = products
@@ -271,5 +393,24 @@ export class StockFdaSource implements Source<StockRegulatoryConfig> {
           (left.publishedAt?.getTime() ?? 0),
       )
       .slice(0, Math.max(1, Math.min(config.maxItems ?? 10, 20)));
+    let recalls: WatchItem[] = [];
+    let recallError: unknown;
+    try {
+      recalls = await this.#recalls(config, query, signal);
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      recallError = error;
+    }
+    if (decisions.length === 0 && recalls.length === 0) {
+      if (approvalError)
+        throw approvalError instanceof Error
+          ? approvalError
+          : new Error('Drugs@FDA request failed', { cause: approvalError });
+      if (recallError)
+        throw recallError instanceof Error
+          ? recallError
+          : new Error('openFDA recall requests failed', { cause: recallError });
+    }
+    return [...decisions, ...recalls];
   }
 }

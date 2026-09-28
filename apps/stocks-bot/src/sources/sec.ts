@@ -33,20 +33,29 @@ export type SecCompanyProfile = SecCompany & {
 };
 
 const filingCategory = (form: string): string => {
-  if (form === '4' || form === '144') {
+  const baseForm = form.replace(/\/A$/, '');
+  if (baseForm === '4' || baseForm === '144') {
     return 'INSIDER_TRANSACTION';
   }
-  if (form === '10-Q' || form === '10-K') {
+  if (['10-Q', '10-K', '20-F', '40-F'].includes(baseForm)) {
     return 'EARNINGS';
   }
-  if (form === '8-K') {
+  if (['8-K', '6-K'].includes(baseForm)) {
     return 'COMPANY_EVENT';
   }
-  if (form === '13D' || form === '13G') {
+  if (/^SC 13[DG]$/.test(baseForm)) {
     return 'OWNERSHIP';
+  }
+  if (/^(?:S-[13]|424B\d*|F-[13])$/.test(baseForm)) {
+    return 'FINANCING';
   }
   return 'REGULATORY';
 };
+
+const materialFiling = (form: string): boolean =>
+  /^(?:8-K|10-Q|10-K|6-K|20-F|40-F|4|144|S-[13]|F-[13]|424B\d*|SC 13[DG]|DEFM14A|DEF 14A)(?:\/A)?$/.test(
+    form,
+  );
 
 const xmlValue = (xml: string, tag: string): string | undefined => {
   const match = xml.match(
@@ -114,6 +123,12 @@ export class SecEdgarSource implements Source<SecConfig> {
     costPerRequestUsd: 0,
     rateLimitPerMinute: 600,
     priority: 100,
+    requestPolicy: {
+      providerKey: 'sec-edgar',
+      maxConcurrency: 1,
+      minimumSpacingMs: 120,
+      sharedRateLimitBackoff: true,
+    },
   };
   #tickerCache: z.infer<typeof tickersSchema> | undefined;
   readonly #submissionCache = new Map<
@@ -223,18 +238,18 @@ export class SecEdgarSource implements Source<SecConfig> {
     ).padStart(10, '0');
     const submission = await this.#submissionFor(cik, signal);
     const recent = submission.filings.recent;
-    const maxItems = Math.min(config.maxItems ?? 5, 10);
+    const maxItems = Math.max(1, Math.min(config.maxItems ?? 10, 20));
     const items: WatchItem[] = [];
 
     for (
       let index = 0;
-      index < Math.min(recent.accessionNumber.length, maxItems);
+      index < recent.accessionNumber.length && items.length < maxItems;
       index += 1
     ) {
       const accession = recent.accessionNumber[index];
       const primaryDocument = recent.primaryDocument[index];
       const form = recent.form[index];
-      if (!accession || !primaryDocument || !form) {
+      if (!accession || !primaryDocument || !form || !materialFiling(form)) {
         continue;
       }
       const accessionPlain = accession.replaceAll('-', '');
@@ -272,7 +287,7 @@ export class SecEdgarSource implements Source<SecConfig> {
           form,
           accession,
           cik,
-          ...(form === '4' ? form4Facts(rawDocument) : {}),
+          ...(form === '4' || form === '4/A' ? form4Facts(rawDocument) : {}),
         },
         entities: [submission.name, config.symbol.toUpperCase()],
         reliability: 1,

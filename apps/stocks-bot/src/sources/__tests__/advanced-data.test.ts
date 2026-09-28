@@ -237,4 +237,53 @@ describe('advanced stock data sources', () => {
       },
     ]);
   });
+
+  it('adds verified drug recalls for life-science companies without mixing unrelated firms', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.includes('drugsfda.json'))
+        return new Response('{}', { status: 404 });
+      if (url.includes('/device/enforcement.json'))
+        return new Response('{}', { status: 404 });
+      return Response.json({
+        results: [
+          {
+            recall_number: 'D-001-2026',
+            recalling_firm: 'Acme Bio, Inc.',
+            product_description: 'Example drug',
+            reason_for_recall: 'Label mix-up',
+            report_date: '20260922',
+            classification: 'Class II',
+            status: 'Ongoing',
+          },
+          {
+            recall_number: 'D-002-2026',
+            recalling_firm: 'Other Pharma',
+            product_description: 'Unrelated drug',
+            reason_for_recall: 'Other issue',
+            report_date: '20260922',
+          },
+        ],
+      });
+    });
+    const source = new StockFdaSource(fetcher);
+
+    const items = await source.fetch({
+      symbol: 'ACME',
+      companyName: 'Acme Bio',
+      industry: 'Pharmaceuticals',
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      externalId: 'drug:D-001-2026',
+      category: 'REGULATORY_ACTION',
+      normalizedFacts: { reason: 'Label mix-up', classification: 'Class II' },
+    });
+  });
 });
