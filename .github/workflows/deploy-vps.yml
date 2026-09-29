@@ -132,6 +132,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
 
       - name: Validate VPS configuration
         shell: bash
@@ -173,10 +174,34 @@ jobs:
           ping: ${{ secrets.DEPLOY_HOST }}
           tags: ${{ vars.TS_TAG || 'tag:ci' }}
 
+      - name: Prepare release announcement
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          previous_sha="$(ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "if [ -f '$DEPLOY_PATH/.release.env' ]; then sed -n 's/^IMAGE_TAG=//p' '$DEPLOY_PATH/.release.env'; fi")"
+          if [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]] && \
+             git cat-file -e "$previous_sha^{commit}" && \
+             git merge-base --is-ancestor "$previous_sha" "$RELEASE_SHA"; then
+            notes="$(git log --max-count=20 --format='• %s' "$previous_sha..$RELEASE_SHA" | cut -c 1-180)"
+          else
+            notes="$(git log --max-count=1 --format='• %s' "$RELEASE_SHA" | cut -c 1-180)"
+          fi
+          if [[ -z "$notes" ]]; then
+            notes='• Opětovné nasazení stejné verze.'
+          fi
+          printf '%s\n%s\n' "$RELEASE_SHA" "$notes" > release-announcement.txt
+
       - name: Upload production deployment files
         shell: bash
         run: |
           set -euo pipefail
+
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "install -d -m 755 '$DEPLOY_PATH/deploy/release'"
 
           scp -P "$DEPLOY_PORT" \
             docker-compose.production.yml \
@@ -187,6 +212,9 @@ jobs:
           scp -P "$DEPLOY_PORT" \
             deploy/deploy.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy.sh.next"
+          scp -P "$DEPLOY_PORT" \
+            release-announcement.txt \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy/release/next.txt"
 
       - name: Update Watcher services on server
         shell: bash

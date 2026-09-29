@@ -22,7 +22,7 @@ import {
   QuiverSource,
   StockClinicalTrialsSource,
   StockFdaSource,
-  StooqPriceSource,
+  NasdaqPriceSource,
   TradingViewNewsSource,
   ZacksSource,
   type SecEdgarSource,
@@ -70,7 +70,7 @@ export const createStocksRunner = (
   ) => Promise<void>,
   telemetry?: AgentTelemetryRecorder,
 ): WatcherRunner => {
-  const price = new StooqPriceSource();
+  const price = new NasdaqPriceSource();
   const investorRelations = new InvestorRelationsSource();
   const federalRegister = new FederalRegisterSource(
     undefined,

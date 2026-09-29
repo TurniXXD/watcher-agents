@@ -51,9 +51,10 @@ export const renderStockSourceList = (): string =>
       url: 'https://www.earningswhispers.com/',
     },
     {
-      name: 'Stooq',
-      description: 'Public price snapshots when ticker coverage exists.',
-      url: 'https://stooq.com/',
+      name: 'Nasdaq',
+      description:
+        'Public daily OHLCV price snapshots when ticker coverage exists.',
+      url: 'https://www.nasdaq.com/market-activity/stocks',
     },
     {
       name: 'Alpha Vantage Market Movers',

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EarningsWhispersSource } from '../earnings-whispers.js';
 import { FinvizInsiderSource } from '../finviz.js';
-import { StooqPriceSource } from '../price.js';
+import { NasdaqPriceSource } from '../price.js';
 import { TradingViewNewsSource } from '../tradingview-news.js';
 import { ZacksSource } from '../zacks.js';
 
@@ -64,13 +64,96 @@ describe('FinvizInsiderSource', () => {
   });
 });
 
-describe('StooqPriceSource', () => {
-  it('treats missing Stooq coverage as no price item', async () => {
-    const source = new StooqPriceSource(
-      vi.fn(async () => new Response('', { status: 404 })),
+describe('NasdaqPriceSource', () => {
+  it('normalizes the latest dated daily OHLCV bar for persistent market snapshots', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      void input;
+      return Response.json({
+        data: {
+          symbol: 'MU',
+          tradesTable: {
+            rows: [
+              {
+                date: '09/24/2026',
+                close: '$1,080.53',
+                volume: '22,069,920',
+                open: '$1,049.75',
+                high: '$1,081.04',
+                low: '$1,044.00',
+              },
+              {
+                date: '09/25/2026',
+                close: '$1,082.28',
+                volume: '20,947,930',
+                open: '$1,095.83',
+                high: '$1,108.72',
+                low: '$1,073.00',
+              },
+            ],
+          },
+        },
+        status: { rCode: 200 },
+      });
+    });
+    const source = new NasdaqPriceSource(
+      fetcher,
+      () => new Date('2026-09-28T12:00:00Z'),
     );
 
-    await expect(source.fetch({ symbol: 'MU' })).resolves.toEqual([]);
+    const [item] = await source.fetch({ symbol: 'mu' });
+
+    expect(item).toMatchObject({
+      source: 'PRICE',
+      category: 'PRICE_SNAPSHOT',
+      externalId: 'MU:2026-09-25',
+      normalizedFacts: {
+        open: 1_095.83,
+        high: 1_108.72,
+        low: 1_073,
+        close: 1_082.28,
+        volume: 20_947_930,
+      },
+    });
+    expect(item?.publishedAt?.toISOString()).toBe('2026-09-25T00:00:00.000Z');
+    expect(requestUrl(fetcher.mock.calls[0]![0])).toContain(
+      'api.nasdaq.com/api/quote/MU/historical',
+    );
+  });
+
+  it('reads live quote and market cap independently without fabricating missing values', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      return Response.json(
+        url.includes('/info?')
+          ? {
+              data: {
+                symbol: 'MU',
+                primaryData: { lastSalePrice: '$1,052.95' },
+              },
+              status: { rCode: 200 },
+            }
+          : {
+              data: {
+                symbol: 'MU',
+                summaryData: {
+                  MarketCap: { value: '1,190,357,793,291' },
+                },
+              },
+              status: { rCode: 200 },
+            },
+      );
+    });
+    const source = new NasdaqPriceSource(
+      fetcher,
+      () => new Date('2026-09-28T20:48:00Z'),
+    );
+
+    await expect(source.getLatestQuote('MU')).resolves.toMatchObject({
+      close: 1_052.95,
+      observedAt: new Date('2026-09-28T20:48:00Z'),
+    });
+    await expect(source.getMarketCap('MU')).resolves.toBe(1_190_357_793_291);
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });
 

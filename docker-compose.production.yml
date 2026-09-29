@@ -294,6 +294,7 @@ services:
     environment:
       NODE_ENV: production
       MAINTENANCE_HOST: 0.0.0.0
+      MAINTENANCE_RELEASE_PATH: /app/release/current.txt
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:
@@ -301,6 +302,7 @@ services:
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
+      - ./deploy/release:/app/release:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -78,6 +78,7 @@ export type StockValuationSnapshot = {
     close: number;
     observedAt: Date;
     sourceUrl: string;
+    sourceLabel?: string;
   } | null;
   zacks: {
     forwardPe: number | null;
@@ -283,6 +284,7 @@ export class StockReportStore {
     if (!stock) return null;
     const zacksFacts = zacks ? jsonObject(zacks.normalizedFacts) : {};
     const rank = stringFact(zacksFacts.rankText);
+    const zacksPrice = nullableNumber(zacksFacts.price);
     return {
       ticker: stock.symbol,
       companyName: stock.companyName,
@@ -293,7 +295,14 @@ export class StockReportStore {
             observedAt: price.observedAt,
             sourceUrl: price.processedItem.sourceUrl ?? price.processedItem.url,
           }
-        : null,
+        : zacks && zacksPrice !== null && zacksPrice > 0
+          ? {
+              close: zacksPrice,
+              observedAt: zacks.discoveredAt,
+              sourceUrl: zacks.sourceUrl ?? zacks.url,
+              sourceLabel: 'ZACKS',
+            }
+          : null,
       zacks: zacks
         ? {
             forwardPe: nullableNumber(zacksFacts.forwardPe),

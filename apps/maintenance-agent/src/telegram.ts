@@ -267,3 +267,51 @@ export const announceChangelog = async (
     }
   }
 };
+
+export const announceRelease = async (
+  bot: Bot,
+  store: MaintenanceStore,
+  allowedIds: ReadonlySet<number>,
+  path: string,
+  logger: WatcherLogger,
+): Promise<void> => {
+  let content: string;
+  try {
+    content = await readFile(path, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      logger.warn(
+        { err: error, path },
+        'Release announcement could not be read',
+      );
+    }
+    return;
+  }
+  const [sha, ...lines] = content.trim().split('\n');
+  if (!sha || !/^[0-9a-f]{40}$/.test(sha)) {
+    logger.warn({ path }, 'Release announcement has an invalid commit SHA');
+    return;
+  }
+  const body = lines.join('\n').trim().slice(0, 3_500);
+  const message = `🚀 Watcher release ${sha.slice(0, 12)} je nasazený a prošel kontrolou zdraví.\n\n${body || 'Nová verze aplikace byla úspěšně nasazena.'}`;
+  const hash = `release:${sha}`;
+  for (const chatId of allowedIds) {
+    if (
+      !(await store.claimChangeAnnouncement(
+        hash,
+        BigInt(chatId),
+        `Release ${sha.slice(0, 12)}`,
+      ))
+    ) {
+      continue;
+    }
+    try {
+      await bot.api.sendMessage(chatId, message, {
+        link_preview_options: { is_disabled: true },
+      });
+    } catch (error) {
+      await store.releaseChangeAnnouncement(hash, BigInt(chatId));
+      logger.warn({ err: error, chatId, sha }, 'Release announcement failed');
+    }
+  }
+};

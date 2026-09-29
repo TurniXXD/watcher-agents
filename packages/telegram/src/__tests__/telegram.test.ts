@@ -78,7 +78,30 @@ describe('Telegram utilities', () => {
     expect(text).toContain('implied forward earnings yield 8.0%');
     expect(text).toContain('Market capitalization: $160.00bn');
     expect(text).toContain('not a valuation verdict');
-    expect(text).toContain('not real-time quotes');
+    expect(text).toContain('not guaranteed real-time quotes');
+  });
+
+  it('labels on-demand Nasdaq quote and market cap as retrieval-time observations', () => {
+    const text = renderStockValuation({
+      ticker: 'MU',
+      companyName: 'Micron Technology',
+      marketCapUsd: 1_190_357_793_291,
+      marketCapSourceUrl: 'https://www.nasdaq.com/market-activity/stocks/mu',
+      marketCapRetrievedAt: new Date('2026-09-28T20:48:00Z'),
+      price: {
+        close: 1_052.95,
+        observedAt: new Date('2026-09-28T20:48:00Z'),
+        sourceUrl: 'https://www.nasdaq.com/market-activity/stocks/mu',
+        sourceLabel: 'NASDAQ',
+        timestampMeaning: 'RETRIEVED',
+      },
+      zacks: null,
+      earnings: null,
+    });
+
+    expect(text).toContain('Price: $1,052.95 · retrieved at');
+    expect(text).toContain('Market capitalization: $1190.36bn · retrieved at');
+    expect(text).toContain('NASDAQ');
   });
 
   it('renders a price-reaction guard without asserting causal certainty', () => {

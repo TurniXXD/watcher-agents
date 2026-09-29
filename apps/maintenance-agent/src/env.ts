@@ -43,6 +43,7 @@ const schema = z.object({
   MAINTENANCE_CHANGELOG_PATH: z
     .string()
     .default('/app/docs/maintenance-changelog.md'),
+  MAINTENANCE_RELEASE_PATH: z.string().default('/app/release/current.txt'),
   MAINTENANCE_RESOURCE_MONITOR_ENABLED: z.stringbool().default(true),
   MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS: z.coerce
     .number()

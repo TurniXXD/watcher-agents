@@ -105,6 +105,12 @@ for required_file in "${required_files[@]}"; do
   fi
 done
 
+release_announcement="deploy/release/next.txt"
+if [[ ! -f "$release_announcement" ]] || [[ "$(head -n 1 "$release_announcement")" != "$IMAGE_TAG" ]]; then
+  echo "Missing or mismatched release announcement for $IMAGE_TAG." >&2
+  exit 1
+fi
+
 missing_piper_voice_files=()
 for voice_file in "${required_piper_voice_files[@]}"; do
   if [[ ! -r "$voice_file" ]]; then
@@ -391,6 +397,7 @@ if [[ "$study_bot_configured" == true ]]; then
 fi
 
 mv "$CANDIDATE_FILE" "$RELEASE_FILE"
+mv "$release_announcement" deploy/release/current.txt
 docker image prune -f --filter 'until=168h' >/dev/null
 compose_release ps
 echo "Release $IMAGE_TAG is healthy."

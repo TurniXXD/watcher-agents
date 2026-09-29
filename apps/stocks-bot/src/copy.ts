@@ -5,7 +5,7 @@ export const stocksHelp = `/about — český průvodce používáním a strateg
 /add_stock SYMBOL — add a stock using the global source settings
 /advanced [SYMBOL] — latest options, institutional, short-interest, FDA, and trial data
 /alerts — recently generated live alerts
-/allocation [--amount-czk AMOUNT] [--days DAYS] — rank stored research and optionally calculate a Czech-koruna research allocation
+/allocation [--amount-czk AMOUNT] [--days DAYS] — rank research and calculate optional CZK allocation
 /alpaca — read-only Alpaca Paper account, positions, and last five orders
 /backtest — return/hit-rate/MFE/MAE validation report
 /calibration — predicted vs realized 30-day probability buckets
@@ -33,7 +33,7 @@ export const stocksHelp = `/about — český průvodce používáním a strateg
 /replay SYMBOL DATE — reconstruct only information known by that date
 /reset_stocks CONFIRM — remove every stock from this watchlist; historical research is retained
 /resume — resume scheduled runs
-/risk_profile [PROFILE] [--max-position PERCENT] [--max-sector PERCENT] [--max-total-czk AMOUNT|none] — view or set paper-portfolio warning limits
+/risk_profile [PROFILE] [limits] — view or set paper-portfolio warning limits
 /run — run now
 /run_discovery — run the market-wide discovery report now; it never changes your watchlist
 /schedule [CRON[; CRON...]] [TIMEZONE] — view or replace all schedules
@@ -55,9 +55,10 @@ export const stocksHelp = `/about — český průvodce používáním a strateg
 /thesis SYMBOL — refresh live sources for one ticker, then show its updated persistent thesis and scores
 /trading212 — read-only Trading 212 account summary and every open position
 /trading212_report — read-only Trading 212 allocation and P/L report
+/trading212_schedule [on|off|status] — timed positions
 /trading212_setup — show your Telegram ID and setup guidance for Trading 212
 /validate — backtest stored theses, alerts, and signals against stored prices
-/valuation SYMBOL — show stored price, provider forward P/E, market cap, and earnings consensus`;
+/valuation SYMBOL — refresh Nasdaq price and market cap, plus stored forward P/E and earnings consensus`;
 
 export const stocksAboutPages = [
   `*Stocks Watcher · průvodce 1/3*
@@ -103,7 +104,7 @@ Novinky pro sledované akcie se běžně kontrolují po 5 minutách; plán urču
 \`/paper_open MU --amount-czk 10000\` zaznamená modelovou pozici bez odeslání pokynu. \`/paper_portfolio\` ukáže vývoj podle uložených cen; \`/portfolio_risk\` upozorní na koncentraci a stará data. Například \`/risk_profile balanced\` (nebo \`conservative\` či \`aggressive\`) mění jen hranice těchto varování, nikoli strategii teze nebo skutečný účet. \`/validate\` a \`/backtest\` porovnají starší výstupy s dostupnými výsledky.
 
 *Skutečné pozice Trading 212 (volitelné)*
-Po bezpečném nastavení read-only API klíče ukáže \`/trading212\` otevřené pozice a hodnoty účtu, \`/trading212_report\` souhrn podílů a zisku či ztráty. \`/trading212_setup\` zobrazí vaše Telegram ID pro nastavení přístupu. Funguje jen vlastníkovi v soukromém chatu; nejde o papírové portfolio a bot nikdy neposílá obchodní příkazy.
+Po bezpečném nastavení read-only API klíče ukáže \`/trading212\` otevřené pozice a hodnoty účtu, \`/trading212_report\` souhrn podílů a zisku či ztráty. \`/trading212_schedule on\` zapne stejné pozice v pracovní dny před otevřením (09:25) a po otevření (09:35) trhu v New Yorku; \`off\` je vypne. \`/trading212_setup\` zobrazí vaše Telegram ID pro nastavení přístupu. Funguje jen vlastníkovi v soukromém chatu; nejde o papírové portfolio a bot nikdy neposílá obchodní příkazy.
 
 _Výstupy jsou podklady k vlastnímu rozhodnutí, nikoli investiční doporučení. Žádný z těchto příkazů neposílá obchod._ Další příkazy: \`/help\`.`,
 ] as const;

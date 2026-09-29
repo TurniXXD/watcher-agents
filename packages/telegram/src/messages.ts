@@ -513,10 +513,14 @@ export type StockValuationView = {
   ticker: string;
   companyName: string | null;
   marketCapUsd: number | null;
+  marketCapSourceUrl?: string;
+  marketCapRetrievedAt?: Date;
   price: {
     close: number;
     observedAt: Date;
     sourceUrl: string;
+    sourceLabel?: string;
+    timestampMeaning?: 'RETRIEVED';
   } | null;
   zacks: {
     forwardPe: number | null;
@@ -546,9 +550,9 @@ export const renderStockValuation = (value: StockValuationView): string => {
     value.companyName ? htmlText(value.companyName, 200) : '',
     '<b>Observed market data</b>',
     value.price
-      ? `• Price: ${usd(value.price.close)} · as of ${htmlText(value.price.observedAt.toISOString(), 40)}\n  ${sourceLink('PRICE', value.price.sourceUrl)}`
+      ? `• Price: ${usd(value.price.close)} · ${value.price.timestampMeaning === 'RETRIEVED' ? 'retrieved at' : 'as of'} ${htmlText(value.price.observedAt.toISOString(), 40)}\n  ${sourceLink(value.price.sourceLabel ?? 'PRICE', value.price.sourceUrl)}`
       : '• Price: n/a — no stored market snapshot for this watchlist yet.',
-    `• Market capitalization: ${usd(value.marketCapUsd)}`,
+    `• Market capitalization: ${usd(value.marketCapUsd)}${value.marketCapRetrievedAt ? ` · retrieved at ${htmlText(value.marketCapRetrievedAt.toISOString(), 40)}` : ''}${value.marketCapSourceUrl ? `\n  ${sourceLink('NASDAQ', value.marketCapSourceUrl)}` : ''}`,
     '<b>Provider valuation</b>',
     value.zacks
       ? [
@@ -569,7 +573,7 @@ export const renderStockValuation = (value: StockValuationView): string => {
     forwardPe === null
       ? 'There is not enough valuation data for a multiple-based comparison. A missing number is not evidence that the stock is cheap or expensive.'
       : 'Forward P/E is a provider estimate, not a valuation verdict. Compare its growth, margins, cyclicality, balance-sheet risk, and peer multiples before treating it as cheap or expensive. A consensus beat can still be priced in.',
-    '<i>Research only. These are delayed/provider observations, not real-time quotes, a price target, or a trade instruction.</i>',
+    '<i>Research only. Provider observations may be delayed and are not guaranteed real-time quotes, a price target, or a trade instruction.</i>',
   ]
     .filter(Boolean)
     .join('\n\n');

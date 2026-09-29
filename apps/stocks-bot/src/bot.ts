@@ -9,6 +9,7 @@ import {
   type StockNewsStore,
   type WatcherStore,
   type ValidationStore,
+  type Trading212ScheduleStore,
 } from '@watcher/database';
 import {
   authorizationMiddleware,
@@ -77,6 +78,7 @@ import { renderThesisNotReady } from './thesis-refresh.js';
 import { runThesisWhenAvailable } from './thesis-execution.js';
 import { createThesisProgress } from './thesis-progress.js';
 import { companyIntelligenceProfileFor } from './sources/company-intelligence/profiles.js';
+import type { NasdaqPriceSource } from './sources/price.js';
 import {
   renderSecCashflow,
   type SecCashflowClient,
@@ -193,6 +195,8 @@ export const createStocksBot = (
     client: Pick<Trading212Client, 'getPortfolio'>;
   },
   secCashflow?: Pick<SecCashflowClient, 'getCashflow'>,
+  nasdaq?: Pick<NasdaqPriceSource, 'getLatestQuote' | 'getMarketCap'>,
+  trading212Schedule?: Pick<Trading212ScheduleStore, 'enabled' | 'setEnabled'>,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
@@ -752,10 +756,40 @@ export const createStocksBot = (
       );
       return;
     }
+    let livePrice: Awaited<ReturnType<NasdaqPriceSource['getLatestQuote']>> =
+      null;
+    let liveMarketCap: number | null = null;
+    if (nasdaq) {
+      const [quote, marketCap] = await Promise.allSettled([
+        nasdaq.getLatestQuote(symbol, shutdownSignal),
+        nasdaq.getMarketCap(symbol, shutdownSignal),
+      ]);
+      if (quote.status === 'fulfilled') livePrice = quote.value;
+      else reportError(quote.reason);
+      if (marketCap.status === 'fulfilled') liveMarketCap = marketCap.value;
+      else reportError(marketCap.reason);
+    }
+    const retrievedAt = new Date();
     await sendSplitMessage(
       ctx.api,
       BigInt(ctx.chat.id),
-      renderStockValuation(snapshot),
+      renderStockValuation({
+        ...snapshot,
+        price: livePrice
+          ? {
+              ...livePrice,
+              sourceLabel: 'NASDAQ',
+              timestampMeaning: 'RETRIEVED',
+            }
+          : snapshot.price,
+        marketCapUsd: liveMarketCap ?? snapshot.marketCapUsd,
+        ...(liveMarketCap !== null
+          ? {
+              marketCapSourceUrl: `https://www.nasdaq.com/market-activity/stocks/${encodeURIComponent(symbol.toLowerCase())}`,
+              marketCapRetrievedAt: retrievedAt,
+            }
+          : {}),
+      }),
     );
   });
   bot.command('cashflow', async (ctx) => {
@@ -959,6 +993,41 @@ export const createStocksBot = (
         `Integrace: ${trading212 ? 'nakonfigurována' : 'nenakonfigurována'}`,
         'Trading 212 → Settings → API (Beta) → Generate API key. Vyberte pouze čtení účtu a portfolia. API Key a jednorázově zobrazený API Secret uložte jen do deploy/runtime/stocks-bot.env na VPS; neposílejte je do Telegramu.',
       ].join('\n'),
+    );
+  });
+  bot.command('trading212_schedule', async (ctx) => {
+    if (!trading212 || !trading212Schedule) {
+      await ctx.reply(
+        'Trading 212 není nastaveno. Nejdřív použijte /trading212_setup.',
+      );
+      return;
+    }
+    if (
+      !canViewTrading212(
+        ctx.from?.id,
+        ctx.chat.id,
+        ctx.chat.type,
+        trading212.ownerTelegramUserId,
+      )
+    ) {
+      await ctx.reply(
+        'Plán Trading 212 smí měnit jen vlastník v soukromém chatu.',
+      );
+      return;
+    }
+    const argument = commandArgument(ctx.message?.text).trim().toLowerCase();
+    if (argument === 'on' || argument === 'off') {
+      await trading212Schedule.setEnabled(
+        BigInt(ctx.chat.id),
+        argument === 'on',
+      );
+    } else if (argument && argument !== 'status') {
+      await ctx.reply('Použití: /trading212_schedule [on|off|status]');
+      return;
+    }
+    const enabled = await trading212Schedule.enabled(BigInt(ctx.chat.id));
+    await ctx.reply(
+      `Trading 212 automatické pozice: ${enabled ? 'zapnuto' : 'vypnuto'}.\nPracovní dny v 09:25 a 09:35 času New Yorku (před a po běžném otevření trhu). Příkaz /trading212_schedule off další odesílání vypne.`,
     );
   });
   bot.command('paper_close', async (ctx) => {

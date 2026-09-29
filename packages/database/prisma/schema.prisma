@@ -789,6 +789,14 @@ model TelegramOutboxMessage {
   @@map("telegram_outbox_messages")
 }
 
+model Trading212Schedule {
+  chatId    BigInt   @id
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@map("trading212_schedules")
+}
+
 model BriefingStoryState {
   id                String              @id @default(uuid())
   settingsId        String

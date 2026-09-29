@@ -18,6 +18,7 @@ import {
 } from './runtime-monitor.js';
 import {
   announceChangelog,
+  announceRelease,
   createMaintenanceBot,
   renderReport,
 } from './telegram.js';
@@ -124,6 +125,24 @@ const runtimeMonitor = new MaintenanceRuntimeMonitor(
 );
 
 let stopping = false;
+let releasePollTimer: ReturnType<typeof setInterval> | undefined;
+let releasePoll: Promise<void> | undefined;
+const pollRelease = (): void => {
+  if (releasePoll) return;
+  releasePoll = announceRelease(
+    bot,
+    store,
+    allowedIds,
+    env.MAINTENANCE_RELEASE_PATH,
+    logger,
+  )
+    .catch((error: unknown) =>
+      logger.warn({ err: error }, 'Release poll failed'),
+    )
+    .finally(() => {
+      releasePoll = undefined;
+    });
+};
 await api.listen({ host: env.MAINTENANCE_HOST, port: env.MAINTENANCE_PORT });
 void bot.start({
   onStart: async () => {
@@ -138,6 +157,8 @@ void bot.start({
       env.MAINTENANCE_CHANGELOG_PATH,
       logger,
     );
+    pollRelease();
+    releasePollTimer = setInterval(pollRelease, 30_000);
   },
 });
 scheduler.start();
@@ -147,6 +168,8 @@ const shutdown = async (signal: string): Promise<void> => {
   if (stopping) return;
   stopping = true;
   logger.info({ signal }, 'Shutting down maintenance agent');
+  if (releasePollTimer) clearInterval(releasePollTimer);
+  await releasePoll;
   await runtimeMonitor.stop();
   await scheduler.stop();
   if (bot.isRunning()) await bot.stop();

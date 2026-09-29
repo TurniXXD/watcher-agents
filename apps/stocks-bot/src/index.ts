@@ -21,6 +21,8 @@ import {
   StockDiscoveryStore,
   StockNewsStore,
   TelegramOutboxStore,
+  Trading212ScheduleStore,
+  trading212ScheduledKind,
   createDatabaseClient,
   WatcherStore,
   ValidationStore,
@@ -28,6 +30,7 @@ import {
 import { OllamaEmbeddingProvider, OllamaProvider } from '@watcher/llm';
 import {
   AlphaVantageDiscoveryScanner,
+  NasdaqPriceSource,
   SecEdgarSource,
   TradingViewNewsSource,
 } from './sources/index.js';
@@ -42,6 +45,10 @@ import { DiscoveryCatalystAnalyzer } from './discovery-catalyst.js';
 import { renderWeeklyDiscoveryReport } from './discovery-report.js';
 import { AlpacaPaperClient } from './alpaca-paper.js';
 import { Trading212Client } from './trading212.js';
+import {
+  enqueueTrading212Positions,
+  trading212SlotAt,
+} from './trading212-schedule.js';
 import { SecCashflowClient } from './sources/sec-cashflow.js';
 import { env } from './env.js';
 import { StockReconciliationCoordinator } from './reconciliation.js';
@@ -153,6 +160,7 @@ const store = new WatcherStore(database, {
   },
 });
 const telegramOutbox = new TelegramOutboxStore(database);
+const trading212Schedule = new Trading212ScheduleStore(database);
 const telemetry = new AgentTelemetryStore(database);
 const universeStore = new CompanyUniverseStore(database);
 const validationStore = new ValidationStore(database);
@@ -285,6 +293,8 @@ const bot = createStocksBot(
   },
   trading212,
   new SecCashflowClient(env.SEC_USER_AGENT),
+  new NasdaqPriceSource(),
+  trading212Schedule,
 );
 const runner = createStocksRunner(
   store,
@@ -446,6 +456,18 @@ const telegramOutboxScheduler = new PersistentScheduler(
       ReturnType<typeof telegramOutbox.claimDue>
     >[number];
     try {
+      if (
+        message.kind === trading212ScheduledKind &&
+        (!trading212 ||
+          message.chatId !== BigInt(trading212.ownerTelegramUserId) ||
+          !(await trading212Schedule.enabled(message.chatId)))
+      ) {
+        await telegramOutbox.markFailed(
+          message,
+          'Trading 212 schedule disabled by owner',
+        );
+        return;
+      }
       const sent = await bot.api.sendMessage(
         message.chatId.toString(),
         message.body,
@@ -541,10 +563,43 @@ const alertScheduler = new PersistentScheduler(
   logger,
 );
 
+let trading212Timer: ReturnType<typeof setInterval> | undefined;
+let trading212Tick: Promise<void> | undefined;
+let lastEnqueuedTrading212Slot: string | undefined;
+const scheduleTrading212Tick = (): void => {
+  if (!trading212 || trading212Tick) return;
+  const now = new Date();
+  const slot = trading212SlotAt(now);
+  if (!slot) return;
+  const key = `${slot.date}:${slot.name}`;
+  if (key === lastEnqueuedTrading212Slot) return;
+  trading212Tick = enqueueTrading212Positions(
+    now,
+    BigInt(trading212.ownerTelegramUserId),
+    trading212Schedule,
+    trading212.client,
+    telegramOutbox,
+  )
+    .then((queued) => {
+      if (queued) lastEnqueuedTrading212Slot = key;
+    })
+    .catch((error: unknown) => {
+      logger.warn(
+        { err: error, slot: key },
+        'Trading 212 schedule tick failed',
+      );
+    })
+    .finally(() => {
+      trading212Tick = undefined;
+    });
+};
+
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'Shutting down');
   shutdownController.abort();
   readiness.markApplicationStopping();
+  if (trading212Timer) clearInterval(trading212Timer);
+  await trading212Tick;
   await Promise.all([
     scheduler.stop(),
     discoveryScheduler.stop(),
@@ -566,6 +621,10 @@ highResolutionScheduler.start();
 reconciliationScheduler.start();
 alertScheduler.start();
 telegramOutboxScheduler.start();
+if (trading212) {
+  trading212Timer = setInterval(scheduleTrading212Tick, 30_000);
+  scheduleTrading212Tick();
+}
 await readiness.start();
 await bot.start({
   onStart: () => {

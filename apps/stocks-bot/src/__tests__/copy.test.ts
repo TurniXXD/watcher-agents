@@ -69,6 +69,7 @@ describe('stocks bot command copy', () => {
       'thesis',
       'trading212',
       'trading212_report',
+      'trading212_schedule',
       'trading212_setup',
       'validate',
       'valuation',
