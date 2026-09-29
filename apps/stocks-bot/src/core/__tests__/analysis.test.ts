@@ -10,6 +10,7 @@ import {
   redundancyFor,
   StockIntelligenceAnalyzer,
 } from '../analysis.js';
+import { evaluateDecision } from '../decision.js';
 
 const context = (
   overrides: Partial<StockAnalysisContext> = {},
@@ -273,10 +274,146 @@ describe('Phase 5 stock analysis', () => {
       metadata: { stockAnalysisContext: context() },
     });
 
-    expect(call).toBe(2);
+    expect(call).toBe(3);
     expect(outcome.status).toBe('FAILED');
     if (outcome.status !== 'FAILED') throw new Error('Expected failure');
     expect(outcome.error).toContain('full stock analysis failed:');
+  });
+
+  it('builds an auditable thesis from a separately validated compact response when full JSON is malformed', async () => {
+    const diagnostics: StructuredAttemptDiagnostic[] = [];
+    const requests: Array<{
+      format: { required: string[] };
+      messages: Array<{ content: string }>;
+    }> = [];
+    let call = 0;
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 2,
+        onStructuredAttempt: (attempt) => diagnostics.push(attempt),
+        fetch: async (_url, init) => {
+          if (typeof init?.body !== 'string') throw new Error('Missing body');
+          requests.push(
+            JSON.parse(init.body) as {
+              format: { required: string[] };
+              messages: Array<{ content: string }>;
+            },
+          );
+          call += 1;
+          if (call === 1) return response(targeted);
+          if (call === 2) return response({ decisionInputs: null });
+          return response({
+            thesis:
+              'Reported earnings support momentum, but demand durability remains uncertain.',
+            verdict: 'WATCH',
+            risks: ['Demand could weaken.'],
+            confidence: 0.7,
+            primaryDrivers: ['Reported earnings improvement'],
+          });
+        },
+      }),
+    );
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'SEC:compact',
+      source: 'SEC',
+      externalId: 'compact',
+      title: 'Micron reports results',
+      url: 'https://www.sec.gov/example',
+      content: 'Primary-source earnings evidence.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(
+      diagnostics.map(({ label, outcome: result }) => [label, result]),
+    ).toEqual([
+      ['stock_targeted', 'VALID'],
+      ['stock_full', 'INVALID_SCHEMA'],
+      ['stock_full_compact', 'VALID'],
+    ]);
+    expect(call).toBe(3);
+    expect(requests[2]?.format.required).toEqual([
+      'thesis',
+      'verdict',
+      'risks',
+      'confidence',
+      'primaryDrivers',
+    ]);
+    expect(requests[2]?.messages[0]?.content.length).toBeLessThan(
+      requests[1]?.messages[0]?.content.length ?? 0,
+    );
+    expect(outcome.status).toBe('SUCCESS');
+    if (outcome.status !== 'SUCCESS' || !('intelligence' in outcome.result)) {
+      throw new Error('Expected a validated thesis');
+    }
+    expect(outcome.result.intelligence?.state.thesis).toContain(
+      'Reported earnings support momentum',
+    );
+    expect(outcome.result.intelligence?.decision).toBeNull();
+    expect(outcome.metrics?.llmCallCount).toBe(3);
+  });
+
+  it('does not promote an incomplete compact response into a thesis', async () => {
+    let call = 0;
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        fetch: async () =>
+          response(
+            ++call === 1
+              ? targeted
+              : call === 2
+                ? { decisionInputs: null }
+                : { thesis: 'Unsupported partial draft' },
+          ),
+      }),
+    );
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'SEC:compact-invalid',
+      source: 'SEC',
+      externalId: 'compact-invalid',
+      title: 'Micron reports results',
+      url: 'https://www.sec.gov/example',
+      content: 'Primary-source earnings evidence.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(outcome.status).toBe('FAILED');
+    if (outcome.status !== 'FAILED') throw new Error('Expected failure');
+    expect(outcome.error).toContain('compact thesis invalid');
+  });
+
+  it('does not make a compact retry after an Ollama transport failure', async () => {
+    let call = 0;
+    const analyzer = new StockIntelligenceAnalyzer(
+      new OllamaProvider({
+        url: 'http://ollama',
+        model: 'test',
+        retries: 0,
+        fetch: async () =>
+          ++call === 1
+            ? response(targeted)
+            : Response.json(
+                { error: 'temporarily unavailable' },
+                { status: 503 },
+              ),
+      }),
+    );
+    const outcome = await analyzer.analyze('STOCKS', {
+      id: 'SEC:ollama-unavailable',
+      source: 'SEC',
+      externalId: 'ollama-unavailable',
+      title: 'Micron reports results',
+      url: 'https://www.sec.gov/example',
+      content: 'Primary-source earnings evidence.',
+      metadata: { stockAnalysisContext: context() },
+    });
+
+    expect(call).toBe(2);
+    expect(outcome.status).toBe('FAILED');
   });
 
   it('does not promote a schema-incomplete targeted response into a thesis', async () => {
@@ -627,6 +764,12 @@ describe('Phase 5 stock analysis', () => {
     let call = 0;
     const withoutScenarios = { ...full };
     delete withoutScenarios.decisionInputs;
+    if (!full.decisionInputs) throw new Error('Missing test decision inputs');
+    const previousState = buildNextThesisState(context(), targeted, full).state;
+    const currentThesis = {
+      ...previousState,
+      decision: evaluateDecision(previousState, full.decisionInputs),
+    };
     const analyzer = new StockIntelligenceAnalyzer(
       new OllamaProvider({
         url: 'http://ollama',
@@ -654,7 +797,7 @@ describe('Phase 5 stock analysis', () => {
       title: 'New company evidence',
       url: 'https://example.com/story',
       content: 'Sourced company facts without supported return probabilities.',
-      metadata: { stockAnalysisContext: context() },
+      metadata: { stockAnalysisContext: context({ currentThesis }) },
     });
 
     expect(outcome.status).toBe('SUCCESS');
@@ -662,6 +805,7 @@ describe('Phase 5 stock analysis', () => {
       throw new Error('Expected stock intelligence result');
     }
     expect(outcome.result.intelligence?.decision).toBeNull();
+    expect(outcome.result.intelligence?.state.decision).toBeNull();
     expect(requests[1]?.format.required).not.toContain('decisionInputs');
     expect(requests[1]?.messages[0]?.content).toContain(
       'omit decisionInputs entirely if the evidence cannot support',

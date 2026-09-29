@@ -11,7 +11,7 @@ export type BriefingFreshnessResult = {
   health: BriefingWatcherHealthRecord[];
   staleWatchers: WatcherBotId[];
   waitedMs: number;
-  timedOut: false;
+  timedOut: boolean;
 };
 
 const sleepFor = (milliseconds: number): Promise<void> =>
@@ -36,7 +36,7 @@ export const waitForFreshWatcherRuns = async (input: {
   subscriptions: readonly WatcherBotId[];
   referenceTime: Date;
   maximumAgeMs: number;
-  warningIntervalMs: number;
+  maximumWaitMs: number;
   pollIntervalMs: number;
   trigger?: (watcherBot: WatcherBotId) => Promise<WatcherTriggerResult>;
   sleep?: (milliseconds: number) => Promise<void>;
@@ -44,7 +44,6 @@ export const waitForFreshWatcherRuns = async (input: {
   logger?: WatcherLogger;
 }): Promise<BriefingFreshnessResult> => {
   const startedAt = input.clock?.() ?? Date.now();
-  let lastWarningAt = startedAt;
   const cutoff = new Date(input.referenceTime.getTime() - input.maximumAgeMs);
   let health = await input.watcherHealth.list(input.subscriptions);
   let staleWatchers = staleWatcherIds(input.subscriptions, health, cutoff);
@@ -79,33 +78,28 @@ export const waitForFreshWatcherRuns = async (input: {
   }
   while (staleWatchers.length > 0) {
     const elapsed = (input.clock?.() ?? Date.now()) - startedAt;
-    const sinceLastWarning = (input.clock?.() ?? Date.now()) - lastWarningAt;
-    if (
-      input.warningIntervalMs === 0 ||
-      sinceLastWarning >= input.warningIntervalMs
-    ) {
-      lastWarningAt = input.clock?.() ?? Date.now();
-      input.logger?.warn(
-        {
-          staleWatchers,
-          cutoff: cutoff.toISOString(),
-          waitedMs: elapsed,
-        },
-        'Briefing is postponed while subscribed watcher runs are still incomplete',
-      );
-    }
+    if (elapsed >= input.maximumWaitMs) break;
     input.logger?.info(
       { staleWatchers, cutoff: cutoff.toISOString(), waitedMs: elapsed },
       'Waiting for fresh watcher runs before scheduled briefing',
     );
-    await (input.sleep ?? sleepFor)(input.pollIntervalMs);
+    await (input.sleep ?? sleepFor)(
+      Math.min(input.pollIntervalMs, input.maximumWaitMs - elapsed),
+    );
     health = await input.watcherHealth.list(input.subscriptions);
     staleWatchers = staleWatcherIds(input.subscriptions, health, cutoff);
   }
+  const waitedMs = (input.clock?.() ?? Date.now()) - startedAt;
+  if (staleWatchers.length > 0) {
+    input.logger?.warn(
+      { staleWatchers, cutoff: cutoff.toISOString(), waitedMs },
+      'Watcher freshness wait timed out; continuing scheduled briefing with available data',
+    );
+  }
   return {
     health,
-    staleWatchers: [],
-    waitedMs: (input.clock?.() ?? Date.now()) - startedAt,
-    timedOut: false,
+    staleWatchers,
+    waitedMs,
+    timedOut: staleWatchers.length > 0,
   };
 };

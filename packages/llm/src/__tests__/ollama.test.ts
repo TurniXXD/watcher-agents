@@ -663,6 +663,29 @@ describe('OllamaProvider', () => {
     expect(secondBody.messages[2]?.content).toContain('Output only JSON');
   });
 
+  it('respects a per-request attempt cap even when provider retries are enabled', async () => {
+    const mockFetch = vi.fn(async () =>
+      Response.json({ message: { content: '{"ok":false}' } }),
+    );
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'test',
+      retries: 2,
+      fetch: mockFetch,
+    });
+
+    await expect(
+      provider.generateStructuredWithMetrics(
+        'Return a true value.',
+        { type: 'object' },
+        z.object({ ok: z.literal(true) }),
+        undefined,
+        { maxAttempts: 1 },
+      ),
+    ).rejects.toThrow();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('treats token-limited valid but incomplete JSON as truncated', async () => {
     const mockFetch = vi
       .fn()

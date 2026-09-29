@@ -429,6 +429,7 @@ export type StructuredGeneration<T> = {
 
 type StructuredGenerationOptions = {
   numPredict?: number;
+  maxAttempts?: number;
   normalize?: (value: unknown) => unknown;
   diagnosticLabel?: string;
   temperature?: number;
@@ -757,7 +758,11 @@ export class OllamaProvider implements Analyzer {
     const configuredNumPredict =
       generation.numPredict ?? this.options.numPredict ?? 768;
 
-    for (let attempt = 0; attempt <= this.#retries; attempt += 1) {
+    const attempts = Math.max(
+      1,
+      Math.min(this.#retries + 1, generation.maxAttempts ?? 3),
+    );
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
       const numPredict = Math.min(configuredNumPredict * 2 ** attempt, 8_192);
       let outcome: StructuredAttemptDiagnostic['outcome'] = 'REQUEST_FAILED';
       let outputChars = 0;
@@ -949,7 +954,7 @@ export class OllamaProvider implements Analyzer {
       } catch (error) {
         reportAttempt();
         lastError = errorWithCauses(error);
-        if (attempt < this.#retries && isTransientFetchFailure(error)) {
+        if (attempt + 1 < attempts && isTransientFetchFailure(error)) {
           await new Promise((resolve) =>
             setTimeout(resolve, 250 * 2 ** attempt),
           );

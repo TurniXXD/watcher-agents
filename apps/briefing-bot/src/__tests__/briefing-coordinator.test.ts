@@ -542,7 +542,7 @@ describe('BriefingCoordinator', () => {
       watcherTrigger: { trigger },
       freshness: {
         maximumAgeMs: 60 * 60_000,
-        warningIntervalMs: 0,
+        maximumWaitMs: 10_000,
         pollIntervalMs: 1_000,
       },
       sleep: vi.fn(async () => undefined),
@@ -561,6 +561,43 @@ describe('BriefingCoordinator', () => {
     const completion: unknown = setup.runs.complete.mock.calls.at(-1)?.[1];
     expect(completion).toMatchObject({
       metrics: { watcherHealth: { stocks: 'HEALTHY' } },
+    });
+  });
+
+  it('delivers a scheduled briefing and goals when a producer remains stale', async () => {
+    const setup = dependencies({
+      watcherLastRunAt: '2026-09-06T01:00:00.000Z',
+    });
+    const goals = {
+      list: vi.fn(async () => [
+        { id: 7, title: 'Finish my degree', dueOn: '2026-09-16' },
+      ]),
+    };
+    const coordinator = new BriefingCoordinator({
+      ...setup.value,
+      goals,
+      freshness: {
+        maximumAgeMs: 60 * 60_000,
+        maximumWaitMs: 0,
+        pollIntervalMs: 1_000,
+      },
+    });
+
+    const result = await coordinator.generate(123n, 'SCHEDULED', now);
+
+    expect(result.run.status).toBe('PARTIAL');
+    expect(setup.delivery.deliver).toHaveBeenCalledOnce();
+    expect(setup.deliveryInputs[0]?.goalsMessage).toContain('Finish my degree');
+    expect(setup.value.scripts.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dataQuality: [
+          'stocks watcher has not completed a recent scan; older stored events were still considered.',
+        ],
+      }),
+    );
+    const completion: unknown = setup.runs.complete.mock.calls.at(-1)?.[1];
+    expect(completion).toMatchObject({
+      metrics: { watcherHealth: { stocks: 'DEGRADED' } },
     });
   });
 });

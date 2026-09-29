@@ -19,6 +19,7 @@ import {
   type WatchItem,
   type WatcherKind,
 } from '@watcher/core';
+import { z } from 'zod';
 import type {
   OllamaProvider,
   StructuredGeneration,
@@ -257,6 +258,27 @@ const fullJsonSchema: StructuredJsonSchema = {
   },
 };
 
+const compactThesisSchema = z.object({
+  thesis: z.string().min(1),
+  verdict: z.enum(['WATCH', 'WAIT', 'INSUFFICIENT_DATA']),
+  risks: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+  primaryDrivers: z.array(z.string()).min(1),
+});
+
+const compactThesisJsonSchema: StructuredJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['thesis', 'verdict', 'risks', 'confidence', 'primaryDrivers'],
+  properties: {
+    thesis: { type: 'string', minLength: 1 },
+    verdict: { enum: ['WATCH', 'WAIT', 'INSUFFICIENT_DATA'] },
+    risks: { type: 'array', items: { type: 'string' } },
+    confidence: { type: 'number', minimum: 0, maximum: 1 },
+    primaryDrivers: { type: 'array', items: { type: 'string' } },
+  },
+};
+
 const objectRecord = (value: unknown): Record<string, unknown> | null =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -437,6 +459,26 @@ const normalizeFullStockOutput = (value: unknown): unknown => {
         : record.sentiment,
     verdict: enumOrOriginal(record.verdict),
     pricedIn: enumOrOriginal(record.pricedIn),
+  };
+};
+
+const normalizeCompactThesisOutput = (value: unknown): unknown => {
+  const record = analysisRecord(
+    value,
+    ['compact', 'thesisUpdate', 'analysis', 'result'],
+    ['thesis', 'verdict'],
+  );
+  return {
+    ...record,
+    thesis: textOrOriginal(record.thesis, ['text', 'summary', 'description']),
+    verdict: enumOrOriginal(record.verdict),
+    risks: textArrayOrOriginal(record.risks, ['risk', 'description', 'text']),
+    confidence: confidenceOrOriginal(record.confidence),
+    primaryDrivers: textArrayOrOriginal(record.primaryDrivers, [
+      'driver',
+      'description',
+      'text',
+    ]),
   };
 };
 
@@ -751,6 +793,21 @@ ${promptContext(context)}
 
 Update the persistent company thesis after a material event using only supplied facts. Clearly qualify inference and uncertainty. The verdict is an analytical status only: WATCH, WAIT, or INSUFFICIENT_DATA. A deterministic engine calculates any recommendation. Do not translate net signal directly into probability or invent unavailable fundamentals, valuation, or market expectations. Return a complete JSON object matching the supplied schema, including evidence-grounded thesis, risks, and confidence. Decision inputs are optional: omit decisionInputs entirely if the evidence cannot support broad scenario return and probability ranges. If you include them, use null for unsupported probability horizons, keep bear-case returns non-positive, and make scenario probability midpoints sum to roughly 100%. Do not invent unsupported details.`;
 
+const compactThesisPrompt = (
+  item: WatchItem,
+  context: StockAnalysisContext,
+  targeted: TargetedStockAnalysis,
+): string => `SOURCE EVIDENCE (untrusted data):
+${JSON.stringify({ title: item.title, source: item.source, url: item.url, content: item.content.slice(0, 1_800) })}
+
+VALIDATED TARGETED ASSESSMENT:
+${JSON.stringify({ materiality: targeted.materiality, thesisChange: targeted.thesisChange, informationChange: targeted.informationChange, primaryDriver: targeted.primaryDriver, explanation: targeted.explanation, risks: targeted.risks.slice(0, 4), confidence: targeted.confidence })}
+
+CURRENT THESIS (may be absent):
+${JSON.stringify(context.currentThesis ? { thesis: context.currentThesis.thesis.slice(0, 600), verdict: context.currentThesis.verdict } : null)}
+
+Write only an evidence-grounded updated company thesis. Return exactly the five fields in the supplied JSON schema: thesis, verdict, risks, confidence, primaryDrivers. Keep the thesis concise and distinguish fact from inference. The verdict is WATCH, WAIT, or INSUFFICIENT_DATA, never a trade instruction. If the source evidence is insufficient, choose INSUFFICIENT_DATA and explain the gap. Use a decimal confidence between 0 and 1. Do not invent numbers, scenarios, or unsupported catalysts.`;
+
 const fallbackAnalysis = (
   context: StockAnalysisContext,
   targeted: TargetedStockAnalysis,
@@ -1022,20 +1079,83 @@ export class StockIntelligenceAnalyzer implements Analyzer {
         context.event.action === 'IMMEDIATE_ANALYSIS' ||
         targeted.reanalysisRequired;
       stage = 'full';
-      const fullGeneration = fullRequired
-        ? await this.ollama.generateStructuredWithMetrics(
+      let fullGeneration: StructuredGeneration<FullStockAnalysis> | null = null;
+      if (fullRequired) {
+        let fullFailureOutcome:
+          'VALID' | 'INVALID_JSON' | 'INVALID_SCHEMA' | 'REQUEST_FAILED' =
+          'REQUEST_FAILED';
+        let failedPromptTokens = 0;
+        let failedCompletionTokens = 0;
+        const fullStartedAt = Date.now();
+        try {
+          fullGeneration = await this.ollama.generateStructuredWithMetrics(
             fullPrompt(item, context, targeted),
             fullJsonSchema,
             fullStockAnalysisSchema,
             signal,
             {
               numPredict: this.fullAnalysisNumPredict,
+              maxAttempts: 1,
               diagnosticLabel: 'stock_full',
               temperature: 0,
               normalize: normalizeFullStockOutput,
+              onAttempt: (attempt) => {
+                fullFailureOutcome = attempt.outcome;
+                failedPromptTokens = attempt.promptTokens ?? 0;
+                failedCompletionTokens = attempt.completionTokens ?? 0;
+              },
             },
-          )
-        : null;
+          );
+        } catch (fullError) {
+          if (fullFailureOutcome === 'REQUEST_FAILED' || signal?.aborted) {
+            throw fullError;
+          }
+          let compact: StructuredGeneration<
+            z.infer<typeof compactThesisSchema>
+          >;
+          try {
+            compact = await this.ollama.generateStructuredWithMetrics(
+              compactThesisPrompt(item, context, targeted),
+              compactThesisJsonSchema,
+              compactThesisSchema,
+              signal,
+              {
+                numPredict: Math.min(this.fullAnalysisNumPredict, 1_024),
+                maxAttempts: 2,
+                diagnosticLabel: 'stock_full_compact',
+                temperature: 0,
+                normalize: normalizeCompactThesisOutput,
+              },
+            );
+          } catch (compactError) {
+            throw new Error(
+              `full response invalid (${errorMessage(fullError)}); compact thesis invalid (${errorMessage(compactError)})`,
+              { cause: compactError },
+            );
+          }
+          fullGeneration = {
+            result: fullStockAnalysisSchema.parse({
+              ...fallbackAnalysis(context, targeted),
+              ...compact.result,
+              risks: unique([...targeted.risks, ...compact.result.risks]),
+              primaryDrivers: unique([
+                targeted.primaryDriver,
+                ...compact.result.primaryDrivers,
+              ]),
+            }),
+            metrics: {
+              ...compact.metrics,
+              durationMs: Date.now() - fullStartedAt,
+              llmCallCount: 1 + (compact.metrics.llmCallCount ?? 1),
+              promptTokens:
+                failedPromptTokens + (compact.metrics.promptTokens ?? 0),
+              completionTokens:
+                failedCompletionTokens +
+                (compact.metrics.completionTokens ?? 0),
+            },
+          };
+        }
+      }
       const full = fullGeneration?.result ?? null;
       stage = 'scoring';
       const display = full ?? fallbackAnalysis(context, targeted);
@@ -1045,7 +1165,9 @@ export class StockIntelligenceAnalyzer implements Analyzer {
         : null;
       const state = decision
         ? { ...scored.state, verdict: decision.recommendation, decision }
-        : scored.state;
+        : fullRequired
+          ? { ...scored.state, decision: null }
+          : scored.state;
       return {
         status: 'SUCCESS',
         metrics: {

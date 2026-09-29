@@ -108,7 +108,7 @@ export class BriefingCoordinator {
       ttsAttempts?: number;
       freshness?: {
         maximumAgeMs: number;
-        warningIntervalMs: number;
+        maximumWaitMs: number;
         pollIntervalMs: number;
       };
       sleep?: (milliseconds: number) => Promise<void>;
@@ -162,7 +162,7 @@ export class BriefingCoordinator {
         subscriptions,
         referenceTime: now,
         maximumAgeMs: this.dependencies.freshness.maximumAgeMs,
-        warningIntervalMs: this.dependencies.freshness.warningIntervalMs,
+        maximumWaitMs: this.dependencies.freshness.maximumWaitMs,
         pollIntervalMs: this.dependencies.freshness.pollIntervalMs,
         ...(watcherTrigger
           ? {
