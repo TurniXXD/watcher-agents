@@ -343,6 +343,26 @@ services:
     tmpfs:
       - /tmp
 
+  osint-bot:
+    profiles: ['osint']
+    image: ${WATCHER_IMAGE:-watcher:local}
+    command: ['node', 'apps/osint-bot/dist/index.js']
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
   sales-bot:
     profiles: ['sales']
     image: ${WATCHER_IMAGE:-watcher:local}

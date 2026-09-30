@@ -1,5 +1,15 @@
 # Watcher
 
+## Optional OSINT Telegram bot (initial vertical slice)
+
+`apps/osint-bot` is an opt-in, private Telegram investigation bot. It accepts Czech free text such as `Zjisti firmu, IČO 25301632` and public domains such as `Prověř example.cz`. It persists investigations, selectors, source evidence, entities, observations, provenance-backed relationships, source failures, chat context, and watch state in the existing PostgreSQL database. It currently collects the official ARES company record and public-register statutory roles for an IČO, plus public website metadata and DNS for a domain. Public-register birth dates and residential addresses are deliberately discarded. It does not infer that a domain belongs to a company merely because both appear in one query.
+
+Set a **separate** `OSINT_TELEGRAM_TOKEN` and `TELEGRAM_ALLOWED_USER_IDS`, migrate the database, then start the `osint` Compose profile. For production, copy [the OSINT preset](deploy/presets/osint-bot.env.example) to a private mode-`0600` `deploy/runtime/osint-bot.env`, populate its token and database URL, and use `docker compose --env-file deploy/runtime/compose.env --profile osint -f docker-compose.production.yml up -d osint-bot` after the normal migration/release process. For local Compose, fill the OSINT variables in a private env file and use `WATCHER_ENV_FILE=<path> docker compose --profile osint up -d osint-bot`. `OLLAMA_URL` and `OLLAMA_MODEL` are optional: when configured, `/report` may add separately labeled, source-ID-checked inference/hypothesis text **after** deterministic evidence collection; LLM output never becomes a stored fact.
+
+Commands: `/investigate <query>`, `/investigations`, `/investigation [id]`, `/evidence [id]`, `/entity <id>`, `/relations [id]`, `/timeline [id]`, `/expand <IČO/domain/entity-id>`, `/report [id]`, `/watch [id]`, `/unwatch [id]`, `/status`, `/sources`, `/pause [id]`, `/resume [id]`, `/stop [id]`, `/help`. Follow-up text such as `Prověř jednatele`, `Ukaž vztahy`, `Udělej timeline` and `Sleduj tuto firmu` uses the saved chat context. Watches recheck daily by default and notify only when normalized evidence changes. Collector count is capped by `OSINT_MAX_COLLECTORS` (default 4); polling frequency is `OSINT_WATCH_POLL_MINUTES` (default 5). The OSINT profile is not automatically started during the standard production rollout.
+
+This is a bounded first slice, **not the full OSINT brief**. Company-name search, Justice documents, Registr smluv, ISIR, RÚIAN, RDAP, archives, API endpoints, advanced graph search and further Czech/global collectors are not implemented yet. Unsupported selectors are reported rather than answered from invented data. See [architecture and explicit limitations](docs/osint-architecture.md).
+
 ## Sales-bot MVP (opt-in service)
 
 Start the VPS configuration from `deploy/presets/sales-bot.env.example`, `deploy/presets/quickly.env.example`, and `deploy/presets/twenty.env.example`; keep populated copies only in `deploy/runtime`.

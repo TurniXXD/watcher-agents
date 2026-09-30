@@ -34,6 +34,7 @@ required_files=(
   # Compose parses optional sales-profile env files during config validation.
   # Their credentials are only needed when that profile is started.
   deploy/runtime/sales-bot.env
+  deploy/runtime/osint-bot.env
   deploy/runtime/quickly.env
   deploy/runtime/twenty.env
 )
@@ -102,6 +103,13 @@ required_piper_voice_files=(
   deploy/piper-voices/cs_CZ-jirka-medium.onnx
   deploy/piper-voices/cs_CZ-jirka-medium.onnx.json
 )
+
+# Compose validates env_file paths even for an inactive optional profile.
+# Keep an existing operator-managed file untouched; a preset is safe while
+# osint-bot is disabled and must be populated before enabling the profile.
+if [[ ! -e deploy/runtime/osint-bot.env && -d deploy/runtime ]]; then
+  install -m 600 deploy/presets/osint-bot.env.example deploy/runtime/osint-bot.env
+fi
 
 for required_file in "${required_files[@]}"; do
   if [[ ! -f "$required_file" ]]; then

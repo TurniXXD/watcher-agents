@@ -414,6 +414,34 @@ services:
         max-file: '3'
         max-size: 10m
 
+  osint-bot:
+    profiles: ['osint']
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    command: ['node', 'apps/osint-bot/dist/index.js']
+    env_file:
+      - ./deploy/runtime/osint-bot.env
+    environment:
+      NODE_ENV: production
+      TZ: Europe/Prague
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+
   sales-bot:
     profiles: ['sales']
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}

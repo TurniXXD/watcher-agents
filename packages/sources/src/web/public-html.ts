@@ -58,7 +58,29 @@ export const fetchPublicHtml = async (
         const contentType = response.headers.get('content-type') ?? '';
         if (!contentType.includes('html'))
           throw new Error(`Expected HTML from ${url}`);
-        return { html: (await response.text()).slice(0, maximumBytes), url };
+        const reader = response.body?.getReader();
+        if (!reader) return { html: '', url };
+        const chunks: Uint8Array[] = [];
+        let total = 0;
+        try {
+          while (total < maximumBytes) {
+            const part = await reader.read();
+            if (part.done) break;
+            const bounded = part.value.subarray(0, maximumBytes - total);
+            chunks.push(bounded);
+            total += bounded.byteLength;
+            if (bounded.byteLength < part.value.byteLength) break;
+          }
+        } finally {
+          await reader.cancel().catch(() => undefined);
+        }
+        const bytes = new Uint8Array(total);
+        let offset = 0;
+        for (const chunk of chunks) {
+          bytes.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        return { html: new TextDecoder().decode(bytes), url };
       }
       throw new Error('Public source exceeded the redirect limit');
     },

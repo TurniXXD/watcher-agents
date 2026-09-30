@@ -2436,3 +2436,161 @@ model SalesDiscoveryCursor {
 
   @@map("sales_discovery_cursors")
 }
+
+model OsintInvestigation {
+  id          String              @id @default(uuid())
+  userId      String
+  chatId      String
+  seed        String
+  status      String              @default("QUEUED")
+  depthLimit  Int                 @default(1)
+  lastError   String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  selectors   OsintSelector[]
+  evidence    OsintEvidence[]
+  entities    OsintEntity[]
+  runs        OsintCollectorRun[]
+  watch       OsintWatch?
+  contexts    OsintContext[]
+
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
+  @@map("osint_investigations")
+}
+
+model OsintContext {
+  chatId          String
+  userId          String
+  investigationId String
+  updatedAt       DateTime           @updatedAt
+  investigation   OsintInvestigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+
+  @@id([chatId, userId])
+  @@map("osint_contexts")
+}
+
+model OsintSelector {
+  id              String              @id @default(uuid())
+  investigationId String
+  type            String
+  value           String
+  original        String
+  depth           Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  investigation   OsintInvestigation  @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  runs            OsintCollectorRun[]
+
+  @@unique([investigationId, type, value])
+  @@index([investigationId, depth])
+  @@map("osint_selectors")
+}
+
+model OsintEvidence {
+  id              String              @id @default(uuid())
+  investigationId String
+  collectorId     String
+  sourceKey       String
+  sourceUrl       String
+  contentHash     String
+  excerpt         String
+  data            Json
+  observedAt      DateTime?
+  collectedAt     DateTime            @default(now())
+  investigation   OsintInvestigation  @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  observations    OsintObservation[]
+  relationships   OsintRelationship[]
+
+  @@unique([investigationId, sourceKey, contentHash])
+  @@index([investigationId, collectedAt])
+  @@map("osint_evidence")
+}
+
+model OsintEntity {
+  id              String              @id @default(uuid())
+  investigationId String
+  kind            String
+  key             String
+  label           String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  investigation   OsintInvestigation  @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  observations    OsintObservation[]
+  outgoing        OsintRelationship[] @relation("OsintFromEntity")
+  incoming        OsintRelationship[] @relation("OsintToEntity")
+
+  @@unique([investigationId, kind, key])
+  @@index([investigationId, kind])
+  @@map("osint_entities")
+}
+
+model OsintObservation {
+  id         String        @id @default(uuid())
+  entityId   String
+  evidenceId String
+  predicate  String
+  value      String
+  valueHash  String
+  confidence Float         @default(1)
+  observedAt DateTime?
+  createdAt  DateTime      @default(now())
+  entity     OsintEntity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  evidence   OsintEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, predicate, valueHash, evidenceId])
+  @@index([entityId, predicate])
+  @@map("osint_observations")
+}
+
+model OsintRelationship {
+  id           String        @id @default(uuid())
+  fromEntityId String
+  toEntityId   String
+  evidenceId   String
+  type         String
+  confidence   Float         @default(1)
+  validFrom    DateTime?
+  validTo      DateTime?
+  createdAt    DateTime      @default(now())
+  fromEntity   OsintEntity   @relation("OsintFromEntity", fields: [fromEntityId], references: [id], onDelete: Cascade)
+  toEntity     OsintEntity   @relation("OsintToEntity", fields: [toEntityId], references: [id], onDelete: Cascade)
+  evidence     OsintEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@unique([fromEntityId, toEntityId, type, evidenceId])
+  @@index([toEntityId])
+  @@map("osint_relationships")
+}
+
+model OsintCollectorRun {
+  id              String             @id @default(uuid())
+  investigationId String
+  selectorId      String
+  collectorId     String
+  status          String             @default("RUNNING")
+  error           String?
+  evidenceCount   Int                @default(0)
+  startedAt       DateTime           @default(now())
+  completedAt     DateTime?
+  investigation   OsintInvestigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  selector        OsintSelector      @relation(fields: [selectorId], references: [id], onDelete: Cascade)
+
+  @@index([investigationId, startedAt])
+  @@index([status, startedAt])
+  @@map("osint_collector_runs")
+}
+
+model OsintWatch {
+  investigationId String             @id
+  enabled         Boolean            @default(true)
+  intervalMinutes Int                @default(1440)
+  nextRunAt       DateTime
+  lastNotifiedAt  DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  investigation   OsintInvestigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+
+  @@index([enabled, nextRunAt])
+  @@map("osint_watches")
+}
