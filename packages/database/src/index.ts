@@ -29,6 +29,7 @@ export * from './portfolio-risk-profile-store.js';
 export * from './telegram-outbox-store.js';
 export * from './trading212-schedule-store.js';
 export * from './transport-store.js';
+export * from './sales-store.js';
 export * from './source-health-store.js';
 export * from './resource-lease-store.js';
 export * from './specialized-signal-store.js';

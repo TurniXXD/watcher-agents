@@ -137,6 +137,9 @@ Runtime credentials are intentionally not uploaded by GitHub Actions. Create the
 | `deploy/runtime/study-bot.env`         | Optional Study Bot, Anki export, and object-storage credentials |
 | `deploy/runtime/maintenance-agent.env` | Maintenance API, Telegram, and scheduler values                 |
 | `deploy/runtime/transport-bot.env`     | Transport bot credentials, request feed, and routing settings   |
+| `deploy/runtime/sales-bot.env`         | Optional sales bot credentials and integrations                 |
+| `deploy/runtime/quickly.env`           | Optional Quickly app and private PostgreSQL credentials         |
+| `deploy/runtime/twenty.env`            | Optional Twenty server, worker, and database credentials        |
 
 You can copy the readable examples from `deploy/presets`, or render all files from environment variables:
 
@@ -155,6 +158,9 @@ cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
 cp deploy/presets/study-bot.env.example deploy/runtime/study-bot.env
 cp deploy/presets/maintenance-agent.env.example deploy/runtime/maintenance-agent.env
 cp deploy/presets/transport-bot.env.example deploy/runtime/transport-bot.env
+cp deploy/presets/sales-bot.env.example deploy/runtime/sales-bot.env
+cp deploy/presets/quickly.env.example deploy/runtime/quickly.env
+cp deploy/presets/twenty.env.example deploy/runtime/twenty.env
 chmod 600 deploy/runtime/*.env
 ```
 
@@ -164,7 +170,7 @@ Alternatively, export the inputs documented in `ENVIRONMENT.md` and run:
 ./deploy/render-env.sh
 ```
 
-Use a long random PostgreSQL password and URL-encode it in `DATABASE_URL`. Both bot env files and `migrate.env` must use the same database credentials. Never commit the populated `deploy/runtime` directory.
+Use a long random PostgreSQL password and URL-encode it in `DATABASE_URL`. Both bot env files and `migrate.env` must use the same Watcher database credentials. Quickly and Twenty use separate database passwords and volumes; set the same URL-safe password in `POSTGRES_PASSWORD` and the matching database URL in each of their files. Never commit the populated `deploy/runtime` directory. See the optional sales setup in the root README and `ENVIRONMENT.md` before enabling the `sales` profile.
 
 ## Remote database access
 

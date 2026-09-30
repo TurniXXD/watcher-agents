@@ -343,5 +343,155 @@ services:
     tmpfs:
       - /tmp
 
+  sales-bot:
+    profiles: ['sales']
+    image: ${WATCHER_IMAGE:-watcher:local}
+    command: ['node', 'apps/sales-bot/dist/index.js']
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    ports:
+      - '127.0.0.1:4050:4050'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4050/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
+  quickly-postgres:
+    profiles: ['sales']
+    image: postgres:15-alpine
+    env_file:
+      - ${QUICKLY_ENV_FILE:-./deploy/presets/quickly.env.example}
+    volumes:
+      - quickly-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  quickly:
+    profiles: ['sales']
+    image: azowail/quickly:v2.4.0
+    env_file:
+      - ${QUICKLY_ENV_FILE:-./deploy/presets/quickly.env.example}
+    environment:
+      QUICKLY_PREBUILT_IMAGE: '1'
+    ports:
+      - '127.0.0.1:8000:8000'
+    depends_on:
+      quickly-postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/auth/setup-status', timeout=5)",
+        ]
+      interval: 15s
+      timeout: 7s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  twenty-postgres:
+    profiles: ['sales']
+    image: postgres:16-alpine
+    env_file:
+      - ${TWENTY_ENV_FILE:-./deploy/presets/twenty.env.example}
+    volumes:
+      - twenty-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  twenty-redis:
+    profiles: ['sales']
+    image: redis:7.4-alpine
+    command: ['redis-server', '--maxmemory-policy', 'noeviction']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  twenty-server:
+    profiles: ['sales']
+    image: twentycrm/twenty:v2.43.0
+    env_file:
+      - ${TWENTY_ENV_FILE:-./deploy/presets/twenty.env.example}
+    ports:
+      - '127.0.0.1:3001:3000'
+    volumes:
+      - twenty-local-data:/app/packages/twenty-server/.local-storage
+    depends_on:
+      twenty-postgres:
+        condition: service_healthy
+      twenty-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '--fail', 'http://localhost:3000/healthz']
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  twenty-worker:
+    profiles: ['sales']
+    image: twentycrm/twenty:v2.43.0
+    command: ['yarn', 'worker:prod']
+    env_file:
+      - ${TWENTY_ENV_FILE:-./deploy/presets/twenty.env.example}
+    environment:
+      DISABLE_DB_MIGRATIONS: 'true'
+      DISABLE_CRON_JOBS_REGISTRATION: 'true'
+    volumes:
+      - twenty-local-data:/app/packages/twenty-server/.local-storage
+    depends_on:
+      twenty-server:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   watcher-postgres:
+  quickly-postgres:
+  twenty-postgres:
+  twenty-local-data:

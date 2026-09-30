@@ -221,6 +221,31 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  apps/sales-bot:
+    dependencies:
+      '@watcher/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@watcher/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@watcher/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
+      '@watcher/telegram':
+        specifier: workspace:*
+        version: link:../../packages/telegram
+      grammy:
+        specifier: 1.46.0
+        version: 1.46.0
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   apps/stocks-bot:
     dependencies:
       '@watcher/core':

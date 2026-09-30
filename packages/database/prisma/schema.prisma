@@ -13,6 +13,36 @@ enum WatcherKind {
   NEWS
 }
 
+enum SalesLeadStage {
+  DISCOVERED
+  ANALYZED
+  QUALIFIED
+  SYNCING
+  REJECTED
+  SYNCED_TO_QUICKLY
+  CONTACTED
+  REPLIED
+  INTERESTED
+  NOT_INTERESTED
+  BOUNCED
+  UNSUBSCRIBED
+}
+
+enum SalesAuthorizationBasis {
+  RECIPIENT_OPT_IN
+  EXISTING_CUSTOMER
+}
+
+enum SalesAuthorizationAction {
+  RECORDED
+  REVOKED
+}
+
+enum SalesDecisionSource {
+  TELEGRAM
+  API
+}
+
 enum RunTrigger {
   MANUAL
   SCHEDULED
@@ -2267,4 +2297,142 @@ model TransportFuelPriceCache {
 
   @@id([country, fuel])
   @@map("transport_fuel_price_cache")
+}
+
+model SalesCampaign {
+  id                String      @id @default(uuid())
+  name              String      @unique
+  offer             String
+  subjectTemplate   String
+  bodyTemplate      String
+  discoveryFeedUrl  String?
+  minimumLeadScore  Int         @default(70)
+  dailyOutreachLimit Int        @default(20)
+  quicklyCampaignId Int?
+  enabled           Boolean     @default(false)
+  pausedReason      String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  leads             SalesLead[]
+  authorizations    SalesContactAuthorization[]
+  authorizationEvents SalesAuthorizationEvent[]
+
+  @@map("sales_campaigns")
+}
+
+model SalesLead {
+  id              String             @id @default(uuid())
+  campaignId      String
+  companyName     String
+  websiteUrl      String?
+  domain          String?
+  email           String?
+  emailSyntaxValid Boolean          @default(false)
+  contactSourceUrl String?
+  source          String
+  sourceExternalId String
+  sourceUrl       String?
+  stage           SalesLeadStage     @default(DISCOVERED)
+  baseScore       Int?
+  llmAdjustment   Int?
+  finalScore      Int?
+  audit           Json?
+  analysis        Json?
+  draftSubject    String?
+  draftBody       String?
+  approvedAt      DateTime?
+  approvedBy      String?
+  approvedVia     SalesDecisionSource?
+  rejectedAt      DateTime?
+  quicklyLeadId   Int?
+  quicklyEnrolledAt DateTime?
+  twentyCompanyId String?
+  twentyPersonId  String?
+  twentyOpportunityId String?
+  attemptCount    Int                @default(0)
+  nextAttemptAt   DateTime           @default(now())
+  lastError       String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  campaign        SalesCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  decisions       SalesLeadDecision[]
+
+  @@unique([campaignId, source, sourceExternalId])
+  @@unique([campaignId, domain])
+  @@unique([campaignId, email])
+  @@index([stage, nextAttemptAt])
+  @@map("sales_leads")
+}
+
+model SalesLeadDecision {
+  id             String              @id @default(uuid())
+  leadId         String
+  approved       Boolean
+  source         SalesDecisionSource
+  actor          String
+  createdAt      DateTime            @default(now())
+  lead           SalesLead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@map("sales_lead_decisions")
+}
+
+model SalesContactAuthorization {
+  campaignId        String
+  email             String
+  basis             SalesAuthorizationBasis
+  evidenceSource    String
+  evidenceReference String
+  capturedAt        DateTime
+  expiresAt         DateTime?
+  revokedAt         DateTime?
+  recordedAt        DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  campaign          SalesCampaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, email])
+  @@map("sales_contact_authorizations")
+}
+
+model SalesAuthorizationEvent {
+  id                String                   @id @default(uuid())
+  campaignId        String
+  email             String
+  action            SalesAuthorizationAction
+  basis             SalesAuthorizationBasis?
+  evidenceSource    String?
+  evidenceReference String?
+  capturedAt        DateTime?
+  expiresAt         DateTime?
+  createdAt         DateTime                 @default(now())
+  campaign          SalesCampaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, email, createdAt])
+  @@map("sales_authorization_events")
+}
+
+model SalesSuppression {
+  key       String   @id
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@map("sales_suppressions")
+}
+
+model SalesWebhookEvent {
+  id          String   @id
+  event       String
+  payload     Json
+  processedAt DateTime @default(now())
+
+  @@map("sales_webhook_events")
+}
+
+model SalesDiscoveryCursor {
+  key         String   @id
+  lastRunAt   DateTime
+  contentHash String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("sales_discovery_cursors")
 }

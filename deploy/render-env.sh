@@ -13,6 +13,15 @@ required() {
   fi
 }
 
+url_safe_password() {
+  local name="$1"
+  local value="${!name:-}"
+  if [[ -n "$value" && ! "$value" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    echo "$name must contain only URL-safe letters, numbers, '_' or '-'" >&2
+    exit 1
+  fi
+}
+
 write_env() {
   local path="$1"
   shift
@@ -56,6 +65,9 @@ for name in \
   SEC_USER_AGENT; do
   required "$name"
 done
+
+url_safe_password QUICKLY_POSTGRES_PASSWORD
+url_safe_password TWENTY_POSTGRES_PASSWORD
 
 umask 077
 rm -rf "$RUNTIME_DIR"
@@ -246,6 +258,45 @@ write_env "$RUNTIME_DIR/transport-bot.env" \
   TRANSPORT_CNB_RATE_URL "${TRANSPORT_CNB_RATE_URL:-}" \
   TRANSPORT_HEALTH_PORT "${TRANSPORT_HEALTH_PORT:-4040}" \
   LOG_LEVEL "${LOG_LEVEL:-info}"
+
+write_env "$RUNTIME_DIR/sales-bot.env" \
+  DATABASE_URL "$WATCHER_DATABASE_URL" \
+  SALES_TELEGRAM_TOKEN "${SALES_TELEGRAM_TOKEN:-}" \
+  TELEGRAM_ALLOWED_USER_IDS "$TELEGRAM_ALLOWED_USER_IDS" \
+  SALES_API_TOKEN "${SALES_API_TOKEN:-}" \
+  SALES_WEBHOOK_TOKEN "${SALES_WEBHOOK_TOKEN:-}" \
+  SALES_PORT "${SALES_PORT:-4050}" \
+  SALES_INTERVAL_MINUTES "${SALES_INTERVAL_MINUTES:-30}" \
+  QUICKLY_BASE_URL "${QUICKLY_BASE_URL:-http://quickly:8000}" \
+  QUICKLY_API_KEY "${QUICKLY_API_KEY:-}" \
+  TWENTY_BASE_URL "${TWENTY_BASE_URL:-http://twenty-server:3000}" \
+  TWENTY_API_KEY "${TWENTY_API_KEY:-}" \
+  LOG_LEVEL "${LOG_LEVEL:-info}"
+
+write_env "$RUNTIME_DIR/quickly.env" \
+  POSTGRES_DB quickly \
+  POSTGRES_USER quickly \
+  POSTGRES_PASSWORD "${QUICKLY_POSTGRES_PASSWORD:-}" \
+  DATABASE_URL "postgresql+asyncpg://quickly:${QUICKLY_POSTGRES_PASSWORD:-}@quickly-postgres:5432/quickly" \
+  BASE_URL "${QUICKLY_PUBLIC_URL:-http://localhost:8000}" \
+  QUICKLY_SECRET_KEY "${QUICKLY_SECRET_KEY:-}" \
+  GOOGLE_CLIENT_ID "${QUICKLY_GOOGLE_CLIENT_ID:-}" \
+  GOOGLE_CLIENT_SECRET "${QUICKLY_GOOGLE_CLIENT_SECRET:-}" \
+  OFFICE365_CLIENT_ID "${QUICKLY_OFFICE365_CLIENT_ID:-}" \
+  OFFICE365_CLIENT_SECRET "${QUICKLY_OFFICE365_CLIENT_SECRET:-}" \
+  OFFICE365_TENANT_ID "${QUICKLY_OFFICE365_TENANT_ID:-common}" \
+  CORS_ORIGINS "${QUICKLY_CORS_ORIGINS:-http://localhost:8000}"
+
+write_env "$RUNTIME_DIR/twenty.env" \
+  POSTGRES_DB twenty \
+  POSTGRES_USER twenty \
+  POSTGRES_PASSWORD "${TWENTY_POSTGRES_PASSWORD:-}" \
+  PG_DATABASE_URL "postgres://twenty:${TWENTY_POSTGRES_PASSWORD:-}@twenty-postgres:5432/twenty" \
+  REDIS_URL redis://twenty-redis:6379 \
+  SERVER_URL "${TWENTY_PUBLIC_URL:-http://localhost:3001}" \
+  NODE_PORT 3000 \
+  STORAGE_TYPE local \
+  ENCRYPTION_KEY "${TWENTY_ENCRYPTION_KEY:-}"
 
 write_env "$RUNTIME_DIR/mu-clubs-monitor.env" \
   DATABASE_URL "$WATCHER_DATABASE_URL" \

@@ -31,6 +31,11 @@ required_files=(
   deploy/runtime/study-bot.env
   deploy/runtime/maintenance-agent.env
   deploy/runtime/transport-bot.env
+  # Compose parses optional sales-profile env files during config validation.
+  # Their credentials are only needed when that profile is started.
+  deploy/runtime/sales-bot.env
+  deploy/runtime/quickly.env
+  deploy/runtime/twenty.env
 )
 
 required_env_values=(
