@@ -606,6 +606,7 @@ export class StockReportStore {
       this.db.sourceHealth.findMany({
         where: {
           watcherConfigId: configId,
+          source: { not: StockSourceType.NEWS },
           target: { not: PROVIDER_BACKOFF_TARGET },
         },
         orderBy: [{ status: 'desc' }, { source: 'asc' }],

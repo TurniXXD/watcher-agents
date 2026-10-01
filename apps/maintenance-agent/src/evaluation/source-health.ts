@@ -6,6 +6,10 @@ import type {
 } from './types.js';
 
 const dayMs = 86_400_000;
+const retiredSources = new Set([
+  'stocks-bot\u0000NEWS',
+  'news-bot\u0000NEWS_GDELT',
+]);
 
 export const calculateSourceHealth = (
   runs: RunObservation[],
@@ -18,6 +22,9 @@ export const calculateSourceHealth = (
   for (const run of runs) {
     for (const source of run.sources) {
       const key = `${run.agentName}\u0000${source.sourceId}`;
+      // Historical observations remain stored after the provider is retired,
+      // but must not keep proposing a repair for a source that cannot run.
+      if (retiredSources.has(key)) continue;
       const group = grouped.get(key) ?? {
         agentName: run.agentName,
         sourceId: source.sourceId,

@@ -89,6 +89,25 @@ describe('briefing story clustering', () => {
     expect(eventsDescribeSameStory(appointment, trial)).toBe(false);
     expect(clusterBriefingEvents([appointment, trial])).toHaveLength(2);
   });
+
+  it('merges the same news headline even when entity extraction missed it', () => {
+    const first = event('news-a', {
+      watcherBot: 'news',
+      category: 'WORLD_NEWS',
+      title: 'European regulators approve new semiconductor rules',
+      entities: [],
+      tags: [],
+    });
+    const second = event('news-b', {
+      watcherBot: 'news',
+      category: 'WORLD_NEWS',
+      title: 'European regulators approve new semiconductor rules',
+      entities: [],
+      tags: [],
+    });
+
+    expect(clusterBriefingEvents([first, second])).toHaveLength(1);
+  });
 });
 
 describe('SemanticStoryMatcher', () => {

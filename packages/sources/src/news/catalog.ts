@@ -12,12 +12,7 @@ export type BuiltInRssNewsSource = BuiltInNewsSourceBase & {
   feedUrl: string;
 };
 
-export type BuiltInGdeltNewsSource = BuiltInNewsSourceBase & {
-  adapter: 'GDELT';
-  query: string;
-};
-
-export type BuiltInNewsSource = BuiltInRssNewsSource | BuiltInGdeltNewsSource;
+export type BuiltInNewsSource = BuiltInRssNewsSource;
 
 export const builtInNewsSources = [
   {
@@ -118,22 +113,6 @@ export const builtInNewsSources = [
     feedUrl: 'https://vlada.gov.cz/cs/urad/RSS/rss.xml',
   },
   {
-    key: 'global-reuters',
-    name: 'Reuters',
-    scope: 'GLOBAL',
-    homepageUrl: 'https://www.reuters.com/',
-    adapter: 'GDELT',
-    query: 'domain:reuters.com',
-  },
-  {
-    key: 'global-ap',
-    name: 'Associated Press (AP)',
-    scope: 'GLOBAL',
-    homepageUrl: 'https://apnews.com/',
-    adapter: 'GDELT',
-    query: 'domain:apnews.com',
-  },
-  {
     key: 'global-bbc',
     name: 'BBC News',
     scope: 'GLOBAL',
@@ -196,14 +175,6 @@ export const builtInNewsSources = [
     homepageUrl: 'https://www.politico.eu/',
     adapter: 'RSS',
     feedUrl: 'https://www.politico.eu/feed/',
-  },
-  {
-    key: 'global-euractiv',
-    name: 'Euractiv',
-    scope: 'GLOBAL',
-    homepageUrl: 'https://www.euractiv.com/',
-    adapter: 'GDELT',
-    query: 'domain:euractiv.com',
   },
   {
     key: 'global-nature-news',
@@ -278,23 +249,6 @@ export const builtInNewsSources = [
     adapter: 'RSS',
     feedUrl: 'https://www.esa.int/rssfeed/Our_Activities',
   },
-  {
-    key: 'global-iea',
-    name: 'IEA',
-    scope: 'GLOBAL',
-    homepageUrl: 'https://www.iea.org/',
-    adapter: 'GDELT',
-    query: 'domain:iea.org',
-  },
-  {
-    key: 'global-gdelt',
-    name: 'GDELT',
-    scope: 'GLOBAL',
-    homepageUrl: 'https://www.gdeltproject.org/',
-    adapter: 'GDELT',
-    query:
-      '(conflict OR economy OR politics OR climate OR health OR science OR technology)',
-  },
 ] as const satisfies readonly BuiltInNewsSource[];
 
 const byKey = new Map<string, BuiltInNewsSource>(
@@ -306,4 +260,4 @@ export const getBuiltInNewsSource = (
 ): BuiltInNewsSource | undefined => byKey.get(key);
 
 export const builtInNewsSourceUrl = (source: BuiltInNewsSource): string =>
-  source.adapter === 'RSS' ? source.feedUrl : source.homepageUrl;
+  source.feedUrl;

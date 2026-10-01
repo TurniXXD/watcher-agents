@@ -129,8 +129,8 @@ describe('news digest delivery policy', () => {
     const input = result([{ importance: 10, relevance: 9 }]);
     input.sourceFailures = [
       {
-        source: 'NEWS_GDELT',
-        target: 'GLOBAL:built-in-gdelt',
+        source: 'NEWS_RSS',
+        target: 'GLOBAL:global-bbc',
         message: 'RATE_LIMITED backoff active until 2026-09-13T10:32:34.462Z',
       },
     ];
@@ -143,9 +143,9 @@ describe('news digest delivery policy', () => {
     const input = result([{ importance: 10, relevance: 9 }]);
     input.sourceFailures = [
       {
-        source: 'NEWS_GDELT',
-        target: 'GLOBAL:built-in-gdelt',
-        message: 'HTTP 429 from api.gdeltproject.org',
+        source: 'NEWS_RSS',
+        target: 'GLOBAL:global-bbc',
+        message: 'HTTP 429 from feeds.bbci.co.uk',
       },
     ];
     input.analyses.push({

@@ -16,7 +16,6 @@ import {
   FederalRegisterSource,
   FinraShortInterestSource,
   FinvizInsiderSource,
-  GdeltNewsSource,
   InvestorRelationsSource,
   OfficialAgencyNewsSource,
   QuiverSource,
@@ -91,7 +90,6 @@ export const createStocksRunner = (
         'Company intelligence endpoint degraded',
       ),
   );
-  const news = new GdeltNewsSource();
   const tradingViewNews = new TradingViewNewsSource();
   const finviz = new FinvizInsiderSource();
   const zacks = new ZacksSource();
@@ -238,18 +236,6 @@ export const createStocksRunner = (
                   source: companyIntelligence,
                   target,
                   config: { symbol: stock.symbol },
-                },
-              ];
-            }
-            if (entry.source === StockSourceType.NEWS) {
-              return [
-                {
-                  source: news,
-                  target,
-                  config: {
-                    symbol: stock.symbol,
-                    companyName: stock.companyName,
-                  },
                 },
               ];
             }

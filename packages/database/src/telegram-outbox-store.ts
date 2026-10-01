@@ -52,6 +52,17 @@ const toMessage = (row: OutboxRow): TelegramOutboxMessage => {
 export class TelegramOutboxStore {
   public constructor(private readonly db: DatabaseClient) {}
 
+  public async hasMessage(
+    kind: string,
+    deduplicationKey: string,
+  ): Promise<boolean> {
+    const row = await this.db.telegramOutboxMessage.findUnique({
+      where: { kind_deduplicationKey: { kind, deduplicationKey } },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
   public async enqueue(input: EnqueueTelegramOutboxMessage): Promise<void> {
     await this.db.telegramOutboxMessage.upsert({
       where: {
@@ -70,13 +81,30 @@ export class TelegramOutboxStore {
     });
   }
 
+  public async enqueueMany(
+    inputs: readonly EnqueueTelegramOutboxMessage[],
+  ): Promise<void> {
+    if (inputs.length === 0) return;
+    await this.db.telegramOutboxMessage.createMany({
+      data: inputs.map((input) => ({
+        kind: input.kind,
+        deduplicationKey: input.deduplicationKey,
+        telegramChatId: input.chatId,
+        body: input.body,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
   public async claimDue(
     now = new Date(),
     limit = 10,
     leaseMs = defaultLeaseMs,
+    kinds?: readonly string[],
   ): Promise<TelegramOutboxMessage[]> {
     const candidates = await this.db.telegramOutboxMessage.findMany({
       where: {
+        ...(kinds ? { kind: { in: [...kinds] } } : {}),
         OR: [
           {
             status: TelegramOutboxStatus.PENDING,

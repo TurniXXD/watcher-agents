@@ -39,6 +39,22 @@ export type SiteAudit = {
   hasDescription: boolean;
   foundEmail?: string;
   emailSourceUrl?: string;
+  foundPhone?: string;
+  phoneSourceUrl?: string;
+};
+
+export const extractPublicPhone = (html: string): string | undefined => {
+  const encoded = html.match(/href\s*=\s*["']tel:([^"']+)["']/iu)?.[1];
+  if (!encoded) return undefined;
+  let phone: string;
+  try {
+    phone = decodeURIComponent(encoded).replaceAll('&nbsp;', ' ').trim();
+  } catch {
+    return undefined;
+  }
+  if (!/^\+?[\d\s().-]+$/u.test(phone)) return undefined;
+  const digitCount = phone.replaceAll(/\D/gu, '').length;
+  return digitCount >= 7 && digitCount <= 15 ? phone.slice(0, 40) : undefined;
 };
 
 export const auditWebsite = async (websiteUrl: string): Promise<SiteAudit> => {
@@ -69,6 +85,7 @@ export const auditWebsite = async (websiteUrl: string): Promise<SiteAudit> => {
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu,
   );
   const foundEmail = match?.[0]?.toLowerCase();
+  const foundPhone = extractPublicPhone(contactHtml);
   return {
     sourceUrl: homepage.url,
     title: decodeHtmlText(
@@ -80,6 +97,7 @@ export const auditWebsite = async (websiteUrl: string): Promise<SiteAudit> => {
     hasMobileViewport: /<meta[^>]+name=["']viewport["']/iu.test(homepage.html),
     hasDescription: /<meta[^>]+name=["']description["']/iu.test(homepage.html),
     ...(foundEmail ? { foundEmail, emailSourceUrl } : {}),
+    ...(foundPhone ? { foundPhone, phoneSourceUrl: emailSourceUrl } : {}),
   };
 };
 

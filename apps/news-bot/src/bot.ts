@@ -12,6 +12,7 @@ import {
 import {
   builtInNewsSources,
   builtInNewsSourceUrl,
+  getBuiltInNewsSource,
 } from '@watcher/sources/news';
 import {
   authorizationMiddleware,
@@ -52,6 +53,14 @@ export const createNewsBot = (
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
+  const visibleGlobalFeeds = (
+    feeds: Awaited<ReturnType<NewsConfigurationStore['listFeeds']>>,
+  ) =>
+    feeds.filter(
+      ({ scope, builtInKey }) =>
+        scope === 'GLOBAL' &&
+        (!builtInKey || getBuiltInNewsSource(builtInKey) !== undefined),
+    );
   const chat = async (chatId: number) => {
     const current = await store.ensureChat('NEWS', BigInt(chatId), timezone);
     await newsConfiguration.syncBuiltInFeeds(
@@ -85,7 +94,7 @@ export const createNewsBot = (
       newsConfiguration.listTopics(current.id),
       newsConfiguration.listCategoryPreferences(current.id),
     ]);
-    const globalFeeds = feeds.filter(({ scope }) => scope === 'GLOBAL');
+    const globalFeeds = visibleGlobalFeeds(feeds);
     await context.reply(
       [
         `Status: ${current.watcherConfig?.enabled ? 'running' : 'paused'}`,
@@ -101,8 +110,8 @@ export const createNewsBot = (
   });
   bot.command('feeds', async (context) => {
     const current = await chat(context.chat.id);
-    const feeds = (await newsConfiguration.listFeeds(current.id)).filter(
-      ({ scope }) => scope === 'GLOBAL',
+    const feeds = visibleGlobalFeeds(
+      await newsConfiguration.listFeeds(current.id),
     );
     const message = feeds.length
       ? [
@@ -144,6 +153,15 @@ export const createNewsBot = (
       return;
     }
     const current = await chat(context.chat.id);
+    const existing = (await newsConfiguration.listFeeds(current.id)).find(
+      (feed) => feed.scope === scope && feed.url === new URL(url).toString(),
+    );
+    if (existing?.builtInKey && !getBuiltInNewsSource(existing.builtInKey)) {
+      await context.reply(
+        'This built-in source was retired and cannot be added again.',
+      );
+      return;
+    }
     const feed = await newsConfiguration.addFeed(
       current.id,
       scope,
@@ -178,6 +196,19 @@ export const createNewsBot = (
     }
     const current = await chat(context.chat.id);
     const enabled = context.message?.text?.startsWith('/feed_enable') === true;
+    const selectedFeed = (await newsConfiguration.listFeeds(current.id)).find(
+      (feed) => feed.id === id,
+    );
+    if (
+      enabled &&
+      selectedFeed?.builtInKey &&
+      !getBuiltInNewsSource(selectedFeed.builtInKey)
+    ) {
+      await context.reply(
+        'This built-in source was retired and cannot be enabled.',
+      );
+      return;
+    }
     const updated = await newsConfiguration.setFeedEnabled(
       current.id,
       id,

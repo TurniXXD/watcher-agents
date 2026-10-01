@@ -1069,19 +1069,24 @@ export const createStocksBot = (
   bot.callbackQuery(/^ss:/, async (ctx) => {
     const sourceToken = ctx.callbackQuery.data.split(':').at(-1);
     if (!sourceToken || !ctx.chat) return;
-    const sourceTypes = Object.values(StockSourceType);
-    const source = /^\d+$/.test(sourceToken)
-      ? sourceTypes[Number(sourceToken)]
-      : z.enum(StockSourceType).parse(sourceToken);
-    if (!source) return ctx.answerCallbackQuery('Unknown source');
+    if (/^\d+$/.test(sourceToken))
+      return ctx.answerCallbackQuery('This menu expired. Send /sources again.');
+    const parsed = z.enum(StockSourceType).safeParse(sourceToken);
+    if (!parsed.success) return ctx.answerCallbackQuery('Unknown source');
     const current = await chat(ctx.chat.id);
-    const updated = await store.toggleStockSourceForAll(current.id, source);
+    const available = await store.listStockSourceSettings(current.id);
+    if (!available.some(({ source }) => source === parsed.data))
+      return ctx.answerCallbackQuery('Source retired. Send /sources again.');
+    const updated = await store.toggleStockSourceForAll(
+      current.id,
+      parsed.data,
+    );
     const [stocks, settings] = await Promise.all([
       store.listStocks(current.id),
       store.listStockSourceSettings(current.id),
     ]);
     await ctx.answerCallbackQuery(
-      `${source} ${updated.enabled ? 'enabled' : 'disabled'} for all stocks`,
+      `${parsed.data} ${updated.enabled ? 'enabled' : 'disabled'} for all stocks`,
     );
     await ctx.editMessageText(
       globalSourceSettingsText('Stock watcher', stocks.length, 'stock'),

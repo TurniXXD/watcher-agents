@@ -15,8 +15,8 @@ describe('global source settings', () => {
     );
 
     expect(keyboard.inline_keyboard).toEqual([
-      [{ text: '✅ SEC', callback_data: 'ss:0' }],
-      [{ text: '❌ NEWS', callback_data: 'ss:1' }],
+      [{ text: '✅ SEC', callback_data: 'ss:SEC' }],
+      [{ text: '❌ NEWS', callback_data: 'ss:NEWS' }],
     ]);
   });
 

@@ -89,6 +89,47 @@ integration('news configuration with PostgreSQL', () => {
     ).rejects.toThrow(/Czech news profile is disabled/);
   });
 
+  it('disables retired built-in feeds without deleting their configuration', async () => {
+    const chat = await watcher.ensureChat('NEWS', 704n);
+    const oldCatalog = [
+      {
+        key: 'global-gdelt',
+        scope: 'GLOBAL' as const,
+        name: 'GDELT',
+        url: 'https://www.gdeltproject.org/',
+      },
+      {
+        key: 'global-bbc',
+        scope: 'GLOBAL' as const,
+        name: 'BBC News',
+        url: 'https://feeds.bbci.co.uk/news/rss.xml',
+      },
+      {
+        key: 'global-future-source',
+        scope: 'GLOBAL' as const,
+        name: 'Future source',
+        url: 'https://example.com/future.rss',
+      },
+    ];
+    await news.syncBuiltInFeeds(chat.id, oldCatalog);
+    await news.syncBuiltInFeeds(chat.id, oldCatalog.slice(1, 2));
+
+    const feeds = await news.listFeeds(chat.id);
+    expect(
+      feeds.find(({ builtInKey }) => builtInKey === 'global-gdelt'),
+    ).toMatchObject({
+      enabled: false,
+    });
+    expect(
+      feeds.find(({ builtInKey }) => builtInKey === 'global-bbc'),
+    ).toMatchObject({
+      enabled: true,
+    });
+    expect(
+      feeds.find(({ builtInKey }) => builtInKey === 'global-future-source'),
+    ).toMatchObject({ enabled: true });
+  });
+
   it('rejects private feed URLs', async () => {
     const chat = await watcher.ensureChat('NEWS', 702n);
     await expect(

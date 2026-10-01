@@ -3,6 +3,65 @@ import type { DatabaseClient } from '../client.js';
 import { TelegramOutboxStore } from '../telegram-outbox-store.js';
 
 describe('TelegramOutboxStore', () => {
+  it('queues a multipart report atomically and ignores duplicate keys', async () => {
+    const createMany = vi.fn(async () => ({ count: 2 }));
+    const database = {
+      telegramOutboxMessage: { createMany },
+    } as unknown as DatabaseClient;
+    await new TelegramOutboxStore(database).enqueueMany([
+      {
+        kind: 'SALES_FOLLOWUP_CALLS',
+        deduplicationKey: '1:date:0',
+        chatId: 1n,
+        body: 'A',
+      },
+      {
+        kind: 'SALES_FOLLOWUP_CALLS',
+        deduplicationKey: '1:date:1',
+        chatId: 1n,
+        body: 'B',
+      },
+    ]);
+    expect(createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          kind: 'SALES_FOLLOWUP_CALLS',
+          deduplicationKey: '1:date:0',
+          telegramChatId: 1n,
+          body: 'A',
+        },
+        {
+          kind: 'SALES_FOLLOWUP_CALLS',
+          deduplicationKey: '1:date:1',
+          telegramChatId: 1n,
+          body: 'B',
+        },
+      ],
+      skipDuplicates: true,
+    });
+  });
+
+  it('filters claims to the bot-owned message kinds', async () => {
+    const queries: unknown[] = [];
+    const findMany = vi.fn(async (input: unknown) => {
+      queries.push(input);
+      return [];
+    });
+    const database = {
+      telegramOutboxMessage: { findMany },
+    } as unknown as DatabaseClient;
+    await new TelegramOutboxStore(database).claimDue(
+      new Date('2026-10-01T12:00:00Z'),
+      10,
+      60_000,
+      ['SALES_FOLLOWUP_CALLS'],
+    );
+    expect(findMany.mock.calls).toHaveLength(1);
+    expect(queries[0]).toMatchObject({
+      where: { kind: { in: ['SALES_FOLLOWUP_CALLS'] } },
+    });
+  });
+
   it('deduplicates an enqueued scheduled notification', async () => {
     const upsert = vi.fn(async () => ({}));
     const database = {

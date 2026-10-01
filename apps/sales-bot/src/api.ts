@@ -40,11 +40,12 @@ const feedLeadSchema = z.object({
 });
 const webhookSchema = z.object({
   event: z.string(),
-  timestamp: z.string(),
+  timestamp: z.iso.datetime({ offset: true }),
   data: z
     .object({
       lead_id: z.number().int().optional(),
       lead_email: z.email().optional(),
+      campaign_id: z.number().int().optional(),
     })
     .passthrough(),
 });
@@ -137,13 +138,29 @@ export class SalesApi {
         send(response, 200, { duplicate: true });
         return;
       }
-      const lead = payload.data.lead_id
+      const leadById = payload.data.lead_id
         ? await this.store.findLeadByQuicklyId(payload.data.lead_id)
-        : payload.data.lead_email
-          ? await this.store.findLeadByEmail(
+        : null;
+      const lead =
+        leadById ??
+        (payload.data.lead_email && payload.data.campaign_id
+          ? await this.store.findLeadByQuicklyCampaignEmail(
+              payload.data.campaign_id,
               payload.data.lead_email.toLowerCase(),
             )
-          : null;
+          : payload.event !== 'email.sent' && payload.data.lead_email
+            ? await this.store.findLeadByEmail(
+                payload.data.lead_email.toLowerCase(),
+              )
+            : null);
+      if (payload.event === 'email.sent' && !lead)
+        this.logger.warn(
+          {
+            quicklyLeadId: payload.data.lead_id,
+            quicklyCampaignId: payload.data.campaign_id,
+          },
+          'Quickly sent email could not be matched to a sales lead',
+        );
       if (
         ['email.bounced', 'lead.unsubscribed', 'lead.not_interested'].includes(
           payload.event,
@@ -183,7 +200,13 @@ export class SalesApi {
           );
       }
       try {
-        await this.store.recordWebhook(id, payload.event, payload);
+        await this.store.recordWebhook(
+          id,
+          payload.event,
+          payload,
+          new Date(payload.timestamp),
+          lead?.id,
+        );
       } catch (error) {
         if (
           typeof error === 'object' &&

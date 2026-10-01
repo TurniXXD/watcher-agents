@@ -7,7 +7,6 @@ export * from './federal-register.js';
 export * from './finra-short-interest.js';
 export * from './investor-relations.js';
 export * from './utils/network.js';
-export * from './news.js';
 export * from './official-agency-news.js';
 export * from './price.js';
 export * from './quiver.js';

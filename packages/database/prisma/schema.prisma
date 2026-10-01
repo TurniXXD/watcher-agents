@@ -2327,6 +2327,8 @@ model SalesLead {
   websiteUrl      String?
   domain          String?
   email           String?
+  phone           String?
+  phoneSourceUrl  String?
   emailSyntaxValid Boolean          @default(false)
   contactSourceUrl String?
   source          String
@@ -2356,6 +2358,7 @@ model SalesLead {
   updatedAt       DateTime           @updatedAt
   campaign        SalesCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   decisions       SalesLeadDecision[]
+  webhookEvents   SalesWebhookEvent[]
 
   @@unique([campaignId, source, sourceExternalId])
   @@unique([campaignId, domain])
@@ -2423,7 +2426,12 @@ model SalesWebhookEvent {
   id          String   @id
   event       String
   payload     Json
+  leadId      String?
+  occurredAt  DateTime?
   processedAt DateTime @default(now())
+  lead        SalesLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([event, occurredAt])
 
   @@map("sales_webhook_events")
 }

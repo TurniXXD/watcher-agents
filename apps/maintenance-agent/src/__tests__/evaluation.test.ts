@@ -177,6 +177,25 @@ describe('maintenance evaluation', () => {
     expect(health?.averageLatencyMs).toBe(200);
   });
 
+  it('does not report retired GDELT sources from historical telemetry', () => {
+    const runs = Array.from({ length: 4 }, (_, index) =>
+      run(index, {
+        agentName: index % 2 === 0 ? 'stocks-bot' : 'news-bot',
+        sources: [
+          {
+            sourceId: index % 2 === 0 ? 'NEWS' : 'NEWS_GDELT',
+            status: 'failed',
+            itemCount: 0,
+            createdAt: new Date(now.getTime() - index * 3_600_000),
+          },
+        ],
+      }),
+    );
+
+    expect(calculateSourceHealth(runs, now)).toEqual([]);
+    expect(detectRecurringFailures(runs, now)).toEqual([]);
+  });
+
   it('uses robust rolling baselines', () => {
     expect(rollingBaseline([1, 2, 2, 3, 100])).toMatchObject({
       median: 2,

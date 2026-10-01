@@ -237,6 +237,45 @@ const dependencies = (
 };
 
 describe('BriefingCoordinator', () => {
+  it('uses the scheduled local month-end for the morning reminder, even after a delayed run', async () => {
+    const scheduledFor = new Date('2026-10-31T06:00:00.000Z');
+    const setup = dependencies({
+      currentTime: new Date('2026-11-01T06:00:00.000Z'),
+    });
+
+    await new BriefingCoordinator(setup.value).generate(
+      123n,
+      'SCHEDULED',
+      scheduledFor,
+    );
+
+    expect(setup.value.scripts.generate.mock.calls[0]?.[0]).toMatchObject({
+      monthEndReminder: true,
+      dayPeriod: 'morning',
+    });
+    expect(setup.deliveryInputs[0]?.index).toMatchObject({
+      monthEndReminder: true,
+      dateLabel: 'Saturday, October 31',
+    });
+  });
+
+  it('does not repeat the month-end reminder in the evening briefing', async () => {
+    const currentTime = new Date('2026-10-31T19:00:00.000Z');
+    const setup = dependencies({ currentTime });
+
+    await new BriefingCoordinator(setup.value).generate(
+      123n,
+      'SCHEDULED',
+      currentTime,
+    );
+
+    expect(setup.value.scripts.generate.mock.calls[0]?.[0]).toMatchObject({
+      monthEndReminder: false,
+      dayPeriod: 'evening',
+    });
+    expect(setup.deliveryInputs[0]?.index.monthEndReminder).toBe(false);
+  });
+
   it.each([
     ['morning', '2026-09-06T05:00:00.000Z'],
     ['evening', '2026-09-06T18:00:00.000Z'],

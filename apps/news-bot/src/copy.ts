@@ -22,10 +22,10 @@ Profiles: czech, global. SPORT is disabled by default for both profiles.`;
 
 export const newsAbout = `*News Watcher*
 
-News Watcher is one private, self-hosted Telegram bot with two editorial profiles: *Czech* for news centered on Czechia and *Global* for important international developments. Both profiles share one reliable ingestion and analysis engine while keeping their sources and topics separate. The curated Czech and Global source catalogs are configured and enabled automatically.
+News Watcher is one private, self-hosted Telegram bot. Its active *Global* profile tracks important international developments; the former *Czech* profile is disabled. The curated Global RSS/Atom sources are configured automatically.
 
 *What it does*
-• Reads built-in official RSS/Atom feeds and GDELT discovery results, plus optional custom feeds, and normalizes their articles into one format.
+• Reads built-in RSS/Atom feeds and optional custom feeds, then normalizes their articles into one format.
 • Deduplicates articles by stable source identity before analysis or delivery.
 • Uses Ollama to assess importance, relevance, category, key facts, entities, and why a story matters.
 • Ranks each story against the topics configured for its Czech or Global profile and suppresses disabled categories before Telegram or Briefing delivery.

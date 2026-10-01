@@ -51,6 +51,7 @@ import type { WeatherProvider } from './weather.js';
 import { renderSpokenWeather } from './weather.js';
 import { waitForFreshWatcherRuns } from './briefing-freshness.js';
 import { renderGoalsMessage } from './goals.js';
+import { isLastCalendarDayOfMonth } from './month-end.js';
 import {
   loadWatchlistEarnings,
   type WatchlistEarningsContext,
@@ -182,6 +183,10 @@ export class BriefingCoordinator {
       type === 'SCHEDULED' && scheduledFor ? scheduledFor : now;
     const local = dateParts(presentationTime, configuration.settings.timezone);
     const dayPeriod = briefingDayPeriodFor(local.time);
+    const monthEndReminder =
+      type !== 'TEST' &&
+      dayPeriod === 'morning' &&
+      isLastCalendarDayOfMonth(local.date);
     const endOfDay = isEndOfDayBriefing(dayPeriod);
     const previous =
       type === 'SCHEDULED'
@@ -411,6 +416,7 @@ export class BriefingCoordinator {
       );
       const scriptInput = {
         date: dateLabel(presentationTime, configuration.settings.timezone),
+        monthEndReminder,
         localTime: local.time,
         dayPeriod,
         timezone: configuration.settings.timezone,
@@ -563,8 +569,12 @@ export class BriefingCoordinator {
         telegramChatId: telegramChatId.toString(),
         ...(audio ? { audio } : {}),
         index: {
-          dateLabel: dateLabel(now, configuration.settings.timezone),
+          dateLabel: dateLabel(
+            presentationTime,
+            configuration.settings.timezone,
+          ),
           dayPeriod,
+          monthEndReminder,
           ...(place ? { location: place } : {}),
           calendar: { status: calendar.status, count: calendar.value.length },
           earnings,

@@ -11,6 +11,7 @@ import {
   isEndOfDayBriefing,
 } from './utils/day-period.js';
 import { segmentTtsScriptByCalendarLanguage } from './utils/tts-language.js';
+import { monthEndSpokenReminder } from './month-end.js';
 import { normalizeForSpeech } from './utils/tts-normalization.js';
 
 const generatedSectionsSchema = z
@@ -18,8 +19,16 @@ const generatedSectionsSchema = z
     greeting: z.string().trim().min(1).max(1_000),
     weather: z.string().trim().min(1).max(2_000).nullable(),
     calendar: z.string().trim().min(1).max(3_000).nullable(),
-    newsPreview: z.string().trim().min(1).max(2_000),
-    topStories: z.array(z.string().trim().min(1).max(5_000)).max(30),
+    topStories: z
+      .array(
+        z
+          .object({
+            storyId: z.string().trim().min(1),
+            text: z.string().trim().min(1).max(5_000),
+          })
+          .strict(),
+      )
+      .max(30),
     watchToday: z.array(z.string().trim().min(1).max(1_000)).max(3),
     outro: z.string().trim().min(1).max(500),
   })
@@ -32,7 +41,6 @@ const generatedSectionsJsonSchema: StructuredJsonSchema = {
     'greeting',
     'weather',
     'calendar',
-    'newsPreview',
     'topStories',
     'watchToday',
     'outro',
@@ -41,8 +49,19 @@ const generatedSectionsJsonSchema: StructuredJsonSchema = {
     greeting: { type: 'string' },
     weather: { type: ['string', 'null'] },
     calendar: { type: ['string', 'null'] },
-    newsPreview: { type: 'string' },
-    topStories: { type: 'array', items: { type: 'string' } },
+    topStories: {
+      type: 'array',
+      maxItems: 30,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['storyId', 'text'],
+        properties: {
+          storyId: { type: 'string' },
+          text: { type: 'string' },
+        },
+      },
+    },
     watchToday: {
       type: 'array',
       maxItems: 3,
@@ -66,6 +85,7 @@ export type ContextAvailability = 'AVAILABLE' | 'UNAVAILABLE' | 'DISABLED';
 
 export type ScriptGenerationInput = {
   date: string;
+  monthEndReminder: boolean;
   localTime: string;
   dayPeriod: BriefingDayPeriod;
   timezone: string;
@@ -98,8 +118,8 @@ export type GeneratedBriefingScript = {
 };
 
 const promptFor = (input: ScriptGenerationInput): string => {
-  const stories = input.stories.map((story) => ({
-    id: story.id,
+  const stories = input.stories.map((story, index) => ({
+    storyId: `S${index + 1}`,
     title: story.title,
     summary: story.summary,
     score: story.score,
@@ -131,6 +151,7 @@ The JSON response fields must be spoken prose only and must support this exact a
 The local day period is authoritative. Never call this a morning, afternoon, evening, or night briefing other than ${input.dayPeriod}, and do not use a greeting for another part of the day.
 ${endOfDay ? "This is an end-of-day briefing. Report only supplied developments that are new or materially changed since the previous briefing; do not repeat morning news or recap unchanged stories. If there are no such developments, say so briefly and focus on tomorrow's weather, Calendar, and preparation. The supplied weather forecast and Calendar window are for tomorrow, never today. Do not present tomorrow's conditions or events as current or as having happened already." : ''}
 Do not mention internal bot or database names. Combine the supplied cross-domain perspectives into one coherent story while preserving medical, investment, news, and student-community interpretations. For major stories explain what happened, why it matters, what changed, and what to watch next. Use previousSummary only to explain a material change, never to recap old facts.
+Write exactly one topStories entry for each supplied story, with its exact storyId and a distinct text. Never write two entries for one story, reuse another story's facts, or omit a story. A short count-only preview is inserted automatically; do not preview or repeat story details elsewhere. watchToday must contain only distinct future actions, not a second narration of a story.
 If weather or Calendar status is UNAVAILABLE, briefly say it could not be retrieved; never describe it as empty. If DISABLED, omit that section by returning null. If Calendar is AVAILABLE with zero events, it is safe to say the calendar is clear. If there are no stories, explain briefly that there are no new subscribed watcher developments; do not add fake news.
 Use the supplied actionAgenda for concrete preparation, deadlines, conflicts, or follow-up. Mention dataQuality briefly only when it is non-empty, without provider error strings or implementation details. When previousSummary exists, explain only the meaningful new development since the earlier briefing; never repeat the previous summary as news.
 Do not discuss the watchlist earnings calendar in generated fields; a verified earnings section is inserted separately after generation. Do not treat a scheduled earnings date as a reported earnings result.
@@ -159,6 +180,33 @@ const assemble = (
   const period = briefingDayPeriodPresentation(input.dayPeriod);
   const greeting = `${period.greeting}. Here is your ${input.dayPeriod} briefing for ${input.date}.`;
   const earnings = earningsSection(input.earnings);
+  const expectedIds = input.stories.map((_, index) => `S${index + 1}`);
+  const generatedById = new Map(
+    sections.topStories.map(({ storyId, text }) => [storyId, text]),
+  );
+  if (
+    sections.topStories.length !== expectedIds.length ||
+    generatedById.size !== expectedIds.length ||
+    expectedIds.some((id) => !generatedById.has(id))
+  ) {
+    throw new Error('Briefing story coverage is incomplete or duplicated');
+  }
+  const topStories = expectedIds.map((id) => generatedById.get(id)!);
+  const distinctTexts = new Set(
+    topStories.map((text) =>
+      text
+        .toLowerCase()
+        .replaceAll(/[^\p{L}\p{N}]+/gu, ' ')
+        .trim(),
+    ),
+  );
+  if (distinctTexts.size !== topStories.length) {
+    throw new Error('Briefing repeats a story');
+  }
+  const storyPreview =
+    expectedIds.length === 0
+      ? 'There are no new subscribed watcher developments to report.'
+      : `I found ${expectedIds.length} important ${expectedIds.length === 1 ? 'development' : 'developments'} worth mentioning.`;
   const watch =
     sections.watchToday.length > 0
       ? `Things to watch ${period.watchHorizon}. ${sections.watchToday.join(' ')}`
@@ -168,8 +216,8 @@ const assemble = (
         greeting,
         sections.weather,
         earnings,
-        `Latest developments. ${sections.newsPreview}`,
-        ...sections.topStories,
+        `Latest developments. ${storyPreview}`,
+        ...topStories,
         sections.calendar ? `Tomorrow. ${sections.calendar}` : undefined,
         watch,
         `That is your ${input.dayPeriod} briefing.`,
@@ -179,8 +227,8 @@ const assemble = (
         sections.weather,
         sections.calendar,
         earnings,
-        sections.newsPreview,
-        ...sections.topStories,
+        storyPreview,
+        ...topStories,
         watch,
         `That is your ${input.dayPeriod} briefing.`,
       ];
@@ -236,7 +284,24 @@ const finalizeScript = (
   input: ScriptGenerationInput,
   metrics: AnalysisMetrics,
 ): GeneratedBriefingScript => {
-  const displayScript = trimToWordLimit(rawScript, input.maximumWords);
+  const closing = `That is your ${input.dayPeriod} briefing.`;
+  const displayScript = input.monthEndReminder
+    ? (() => {
+        const body = rawScript.endsWith(closing)
+          ? rawScript.slice(0, -closing.length).trim()
+          : rawScript;
+        const reservedWords =
+          words(monthEndSpokenReminder).length + words(closing).length;
+        const bodyBudget = Math.max(0, input.maximumWords - reservedWords);
+        return [
+          bodyBudget > 0 ? trimToWordLimit(body, bodyBudget) : undefined,
+          monthEndSpokenReminder,
+          closing,
+        ]
+          .filter((section): section is string => Boolean(section))
+          .join('\n\n');
+      })()
+    : trimToWordLimit(rawScript, input.maximumWords);
   const normalizationInput = {
     entities: scriptEntities(input.stories),
     ...(input.pronunciations ? { pronunciations: input.pronunciations } : {}),

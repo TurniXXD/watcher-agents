@@ -2,8 +2,6 @@ import type { NewsFeedRecord, NewsTopicRecord } from '@watcher/database';
 import {
   builtInNewsSources,
   builtInNewsSourceUrl,
-  GdeltNewsSource,
-  type GdeltNewsConfig,
   RssNewsSource,
   type RssNewsConfig,
 } from '@watcher/sources/news';
@@ -24,51 +22,39 @@ const topics: NewsTopicRecord[] = [
 ];
 
 describe('built-in news source requests', () => {
-  it('creates Global-only RSS requests and one combined GDELT request', () => {
+  it('creates only Global RSS requests', () => {
     const requests = buildNewsSourceRequests(
       feeds,
       topics,
       new RssNewsSource(),
-      new GdeltNewsSource(),
     );
-    const gdelt = requests.filter(({ source }) => source.id === 'NEWS_GDELT');
 
-    expect(requests).toHaveLength(18);
+    expect(requests).toHaveLength(17);
     expect(requests.every(({ targetKey }) => targetKey === 'GLOBAL')).toBe(
       true,
     );
-    expect(gdelt).toHaveLength(1);
-    expect(gdelt[0]).toMatchObject({
-      target: 'GLOBAL:built-in-gdelt',
-      targetKey: 'GLOBAL',
-    });
-    const config = gdelt[0]!.config as GdeltNewsConfig;
-    expect(config.query).toContain('domain:reuters.com');
-    expect(config.query).toContain('domain:apnews.com');
-    expect(config.query).toContain('sourcelang:english');
-    expect(config.query).toBe(
-      '(domain:reuters.com OR domain:apnews.com OR domain:euractiv.com OR domain:iea.org OR conflict OR economy OR politics OR climate OR health OR science OR technology) sourcelang:english',
-    );
-    expect(config.query).not.toContain('((');
-    expect(config.metadata?.sourceKeys).toHaveLength(5);
-    expect(config.topics).toEqual(['energy']);
+    expect(requests.every(({ source }) => source.id === 'NEWS_RSS')).toBe(true);
   });
 
-  it('omits disabled sources from the combined GDELT request', () => {
-    const withoutReuters = feeds.map((feed) =>
-      feed.builtInKey === 'global-reuters' ? { ...feed, enabled: false } : feed,
-    );
+  it('skips retired GDELT built-ins left in the database', () => {
     const requests = buildNewsSourceRequests(
-      withoutReuters,
+      [
+        ...feeds,
+        {
+          id: 'old-gdelt-feed',
+          builtInKey: 'global-gdelt',
+          scope: 'GLOBAL',
+          name: 'GDELT',
+          url: 'https://www.gdeltproject.org/',
+          enabled: true,
+        },
+      ],
       topics,
       new RssNewsSource(),
-      new GdeltNewsSource(),
     );
-    const gdelt = requests.find(({ source }) => source.id === 'NEWS_GDELT');
-    const config = gdelt!.config as GdeltNewsConfig;
 
-    expect(config.query).not.toContain('domain:reuters.com');
-    expect(config.metadata?.sourceKeys).toHaveLength(4);
+    expect(requests).toHaveLength(17);
+    expect(requests.some(({ target }) => target.includes('gdelt'))).toBe(false);
   });
 
   it('passes Global category exclusions into RSS requests', () => {
@@ -76,7 +62,6 @@ describe('built-in news source requests', () => {
       feeds,
       topics,
       new RssNewsSource(),
-      new GdeltNewsSource(),
       undefined,
       [
         { scope: 'CZECH', category: 'SPORT', enabled: false },

@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InvestorRelationsSource } from '../investor-relations.js';
-import { GdeltNewsSource } from '../news.js';
 
 const resolvePublicUrl = vi.fn(async (value: string) => new URL(value));
 const requestUrl = (input: RequestInfo | URL): string =>
@@ -9,44 +8,6 @@ const requestUrl = (input: RequestInfo | URL): string =>
     : input instanceof URL
       ? input.toString()
       : input.url;
-
-describe('GdeltNewsSource', () => {
-  it('normalizes structured article-list results', async () => {
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      void input;
-      return Response.json({
-        articles: [
-          {
-            url: 'https://example.com/micron-event',
-            title: 'Micron announces a new product',
-            seendate: '20260904T061500Z',
-            domain: 'example.com',
-            language: 'English',
-            sourcecountry: 'United States',
-          },
-        ],
-      });
-    });
-    const source = new GdeltNewsSource(fetcher);
-
-    const [item] = await source.fetch({
-      symbol: 'mu',
-      companyName: 'Micron Technology, Inc.',
-    });
-
-    expect(item).toMatchObject({
-      source: 'NEWS',
-      title: 'Micron announces a new product',
-      sourceType: 'NEWS',
-      category: 'NEWS',
-      metadata: { symbol: 'MU', publisherDomain: 'example.com' },
-    });
-    expect(item?.publishedAt?.toISOString()).toBe('2026-09-04T06:15:00.000Z');
-    expect(requestUrl(fetcher.mock.calls[0]![0])).toContain(
-      'api.gdeltproject.org/api/v2/doc/doc',
-    );
-  });
-});
 
 describe('InvestorRelationsSource', () => {
   it('does not invent a feed when SEC has no issuer URL', async () => {

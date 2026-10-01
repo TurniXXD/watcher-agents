@@ -92,7 +92,6 @@ const availableStockSourceIds = new Set([
   'SEC',
   'INVESTOR_RELATIONS',
   'COMPANY_INTELLIGENCE',
-  'NEWS',
   'TRADINGVIEW_NEWS',
   'PRICE',
   'FINVIZ',
@@ -450,7 +449,11 @@ const discoveryScheduler = new PersistentScheduler(
   logger,
 );
 const telegramOutboxScheduler = new PersistentScheduler(
-  (now) => telegramOutbox.claimDue(now),
+  (now) =>
+    telegramOutbox.claimDue(now, 10, undefined, [
+      'STOCK_DISCOVERY_REPORT',
+      trading212ScheduledKind,
+    ]),
   async (due) => {
     const message = due as Awaited<
       ReturnType<typeof telegramOutbox.claimDue>

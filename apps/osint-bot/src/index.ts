@@ -13,6 +13,7 @@ import {
 } from './collectors/domain.js';
 import type { Collector } from './collectors/types.js';
 import { env } from './env.js';
+import { createOsintHealthServer } from './health.js';
 import { OsintService } from './service.js';
 
 const logger = createLogger('osint-bot', env.LOG_LEVEL);
@@ -59,6 +60,16 @@ const bot = createOsintBot(
 
 await store.recoverStaleRuns();
 
+let ready = false;
+const healthServer = createOsintHealthServer(() => ready);
+await new Promise<void>((resolve, reject) => {
+  healthServer.once('error', reject);
+  healthServer.listen(env.OSINT_HEALTH_PORT, '127.0.0.1', () => {
+    healthServer.off('error', reject);
+    resolve();
+  });
+});
+
 let polling = false;
 let pollJob: Promise<void> | undefined;
 const interval = setInterval(() => {
@@ -98,13 +109,22 @@ let stopping = false;
 const shutdown = async (signal: string) => {
   if (stopping) return;
   stopping = true;
+  ready = false;
   logger.info({ signal }, 'Shutting down OSINT bot');
   clearInterval(interval);
   service.stop();
   await bot.stop();
   await pollJob;
+  await new Promise<void>((resolve, reject) => {
+    healthServer.close((error) => (error ? reject(error) : resolve()));
+  });
   await database.$disconnect();
 };
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
 process.once('SIGINT', () => void shutdown('SIGINT'));
-await bot.start({ onStart: () => logger.info({}, 'OSINT bot started') });
+await bot.start({
+  onStart: () => {
+    ready = true;
+    logger.info({}, 'OSINT bot started');
+  },
+});

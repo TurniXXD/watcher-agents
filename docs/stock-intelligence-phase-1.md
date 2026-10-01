@@ -2,6 +2,8 @@
 
 This document evaluates the master specification against the existing Watcher repository and records the Phase 1 implementation boundary. It is intentionally explicit about incomplete capabilities. No output described here should be interpreted as investment advice or an automated trading instruction.
 
+Historical note: this document records the original Phase 1 design. GDELT was removed from the active Stocks and News Watchers on 2026-09-30; see the current source list in the README.
+
 ## 1. Current architecture
 
 Watcher is a TypeScript Turborepo with two independent grammY bot processes. Both use PostgreSQL through Prisma, a shared `WatcherPipeline`, injectable source adapters, and one external Ollama service. Runs are triggered manually or by a persisted cron schedule. Independent source requests run concurrently through `Promise.allSettled`; analysis is serialized and globally protected by a PostgreSQL advisory lock.

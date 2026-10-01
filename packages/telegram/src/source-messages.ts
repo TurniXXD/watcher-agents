@@ -25,11 +25,6 @@ export const renderStockSourceList = (): string =>
       url: 'https://www.sec.gov/edgar/searchedgar/companysearch',
     },
     {
-      name: 'GDELT News',
-      description: 'Recent public web-news discovery through GDELT DOC 2.0.',
-      url: 'https://www.gdeltproject.org/',
-    },
-    {
       name: 'TradingView News',
       description:
         'Symbol-specific market headlines and TradingView article pages.',

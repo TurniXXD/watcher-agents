@@ -13,7 +13,7 @@ export const globalSourceKeyboard = (
   settings.forEach((setting, index) => {
     keyboard.text(
       `${setting.enabled ? '✅' : '❌'} ${setting.source}`,
-      `${callbackPrefix}:${index}`,
+      `${callbackPrefix}:${setting.source}`,
     );
     if (index < settings.length - 1) keyboard.row();
   });

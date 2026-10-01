@@ -2,7 +2,7 @@
 
 Production deployment uses GitHub Actions, GitHub Container Registry (GHCR), Tailscale, OpenSSH, Docker Compose, and a server-managed runtime configuration. The `deploy-vps` workflow runs after `watcher-ci` succeeds on `main`; it can also be started manually from the Actions page.
 
-GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `maintenance-agent`, and the one-shot `migrate` service. Ollama remains outside this Compose stack.
+GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `maintenance-agent`, `transport-bot`, `osint-bot`, `sales-bot`, and the one-shot `migrate` service. Quickly and Twenty are required companion services for the sales stack. Ollama remains outside this Compose stack.
 
 ## Security model
 
@@ -137,9 +137,10 @@ Runtime credentials are intentionally not uploaded by GitHub Actions. Create the
 | `deploy/runtime/study-bot.env`         | Optional Study Bot, Anki export, and object-storage credentials |
 | `deploy/runtime/maintenance-agent.env` | Maintenance API, Telegram, and scheduler values                 |
 | `deploy/runtime/transport-bot.env`     | Transport bot credentials, request feed, and routing settings   |
-| `deploy/runtime/sales-bot.env`         | Optional sales bot credentials and integrations                 |
-| `deploy/runtime/quickly.env`           | Optional Quickly app and private PostgreSQL credentials         |
-| `deploy/runtime/twenty.env`            | Optional Twenty server, worker, and database credentials        |
+| `deploy/runtime/osint-bot.env`         | Required OSINT bot credentials and health settings              |
+| `deploy/runtime/sales-bot.env`         | Required sales bot credentials and integrations                 |
+| `deploy/runtime/quickly.env`           | Required Quickly app and private PostgreSQL credentials         |
+| `deploy/runtime/twenty.env`            | Required Twenty server, worker, and database credentials        |
 
 You can copy the readable examples from `deploy/presets`, or render all files from environment variables:
 
@@ -158,6 +159,7 @@ cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
 cp deploy/presets/study-bot.env.example deploy/runtime/study-bot.env
 cp deploy/presets/maintenance-agent.env.example deploy/runtime/maintenance-agent.env
 cp deploy/presets/transport-bot.env.example deploy/runtime/transport-bot.env
+cp deploy/presets/osint-bot.env.example deploy/runtime/osint-bot.env
 cp deploy/presets/sales-bot.env.example deploy/runtime/sales-bot.env
 cp deploy/presets/quickly.env.example deploy/runtime/quickly.env
 cp deploy/presets/twenty.env.example deploy/runtime/twenty.env
@@ -170,7 +172,7 @@ Alternatively, export the inputs documented in `ENVIRONMENT.md` and run:
 ./deploy/render-env.sh
 ```
 
-Use a long random PostgreSQL password and URL-encode it in `DATABASE_URL`. Both bot env files and `migrate.env` must use the same Watcher database credentials. Quickly and Twenty use separate database passwords and volumes; set the same URL-safe password in `POSTGRES_PASSWORD` and the matching database URL in each of their files. Never commit the populated `deploy/runtime` directory. See the optional sales setup in the root README and `ENVIRONMENT.md` before enabling the `sales` profile.
+Use a long random PostgreSQL password and URL-encode it in `DATABASE_URL`. All Watcher bot env files and `migrate.env` must use the same Watcher database credentials. Quickly and Twenty use separate database passwords and volumes; set the same URL-safe password in `POSTGRES_PASSWORD` and the matching database URL in each of their files. Populate the OSINT and sales credentials before deploying: empty presets now fail preflight instead of silently skipping those bots. Never commit the populated `deploy/runtime` directory. See the sales setup in the root README and `ENVIRONMENT.md`.
 
 ## Remote database access
 
@@ -189,7 +191,7 @@ Before enabling automatic deployment:
 1. Confirm the VPS can reach Ollama at the configured `OLLAMA_URL`.
 2. Apply the conservative Ollama systemd settings documented in the root README (`OLLAMA_NUM_PARALLEL=1`, one loaded model, and a small queue), then verify them with `systemctl show ollama` and `ollama ps`.
 3. Confirm the deployment user can run `docker compose version` without sudo.
-4. Confirm all runtime env files exist, and install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation. Study Bot is optional: its empty S3 fields do not block the core rollout, and it starts automatically once its Telegram and S3 credentials are complete.
+4. Confirm all runtime env files exist and OSINT, sales, Quickly, and Twenty secrets are populated, and install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation. A missing required bot or integration value blocks the release before migrations. Study Bot remains optional: its empty S3 fields do not block the core rollout, and it starts automatically once its Telegram and S3 credentials are complete.
    Runtime values containing `$` must either be fully single-quoted or encode each literal dollar sign as `$$`. `deploy/render-env.sh` safely single-quotes every value. If older unquoted runtime files caused Compose interpolation warnings, rotate any affected database password and update every rendered `DATABASE_URL` together before deploying again.
 5. Push the completed application to `main` and wait for `watcher-ci` to pass.
 6. Approve the `production` environment deployment if approval protection is enabled.
@@ -201,14 +203,15 @@ The workflow then:
 3. Uses verified OpenSSH to upload the release's Compose definition and deployment script.
 4. Pulls the exact commit-SHA image.
 5. Starts the pinned PostgreSQL 16 image with pgvector and waits for readiness.
-6. Creates a compressed pre-deployment database backup when the database already exists; a running database is backed up before its container image can be replaced.
+6. Creates compressed pre-deployment backups of Watcher, Quickly, and Twenty PostgreSQL databases. Running databases are backed up before their container images can be replaced.
 7. Applies committed Prisma migrations and verifies that the `vector` extension is installed.
-8. Starts the core bots plus the MU Clubs producer and waits for their health checks. If Study Bot is configured, it is started separately; a Study Bot failure does not roll back the core release.
+8. Starts the required bots, Quickly, Twenty, and their private databases/Redis, then waits for health checks. If Study Bot is configured, it is started separately; a Study Bot failure does not roll back the core release.
 9. Restores the prior image tag if the new containers fail health checks.
 
 When the VPS has `nvidia-smi` and Docker reports the NVIDIA runtime, deployment automatically layers `docker-compose.nvidia.yml` onto the production definition. This grants only GPU utility access to the maintenance container, allowing utilization, VRAM, and NVIDIA compute-process reporting. Install and configure NVIDIA Container Toolkit on an NVIDIA host if the deployment warns that the runtime is unavailable. AMD and Intel detection uses the read-only host DRM sysfs mount and does not require this overlay.
 
 Migrations must remain backward-compatible with the previous application image because container rollback does not reverse a database migration.
+On the first release that makes OSINT and sales mandatory, a rollback to an older image without OSINT readiness restores the previously supported core services and stops the new stack; a later successful release enables full-stack rollback.
 
 ## Operations
 
@@ -230,7 +233,7 @@ docker compose \
   --env-file deploy/runtime/compose.env \
   --env-file .release.env \
   -f docker-compose.production.yml \
-  logs --tail 200 stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot
+  logs --tail 200 stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot osint-bot sales-bot quickly twenty-server twenty-worker
 ```
 
 Backups are stored in `/opt/watcher/backups` and retained for 14 days by default. Override `BACKUP_RETENTION_DAYS` only when invoking `deploy/deploy.sh` manually.

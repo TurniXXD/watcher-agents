@@ -18,6 +18,14 @@ export type NewsScopeId = z.infer<typeof newsScopeSchema>;
 
 const feedNameSchema = z.string().trim().min(1).max(120);
 const topicSchema = z.string().trim().min(1).max(200);
+// Do not disable every unknown built-in: an older image may run during rollback.
+const retiredGdeltFeedKeys = [
+  'global-reuters',
+  'global-ap',
+  'global-euractiv',
+  'global-iea',
+  'global-gdelt',
+] as const;
 const feedUrlSchema = z.url().transform((value, context) => {
   try {
     return assertPublicHttpUrl(value).toString();
@@ -135,6 +143,18 @@ export class NewsConfigurationStore {
         url: true,
       },
     });
+    const retiredIds = existing.flatMap((feed) =>
+      feed.builtInKey &&
+      retiredGdeltFeedKeys.some((key) => key === feed.builtInKey)
+        ? [feed.id]
+        : [],
+    );
+    if (retiredIds.length > 0) {
+      await this.db.newsFeed.updateMany({
+        where: { id: { in: retiredIds }, enabled: true },
+        data: { enabled: false },
+      });
+    }
     const byKey = new Map(
       existing.flatMap((feed) =>
         feed.builtInKey ? [[feed.builtInKey, feed] as const] : [],

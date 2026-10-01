@@ -49,6 +49,7 @@ const story = (
 
 const input = (stories: BriefingStoryCluster[]): ScriptGenerationInput => ({
   date: 'Sunday, September sixth',
+  monthEndReminder: false,
   localTime: '07:00',
   dayPeriod: 'morning',
   timezone: 'Europe/Prague',
@@ -99,6 +100,25 @@ describe('briefing duration planning', () => {
 });
 
 describe('BriefingScriptGenerator', () => {
+  it('keeps the month-end reminder in the fallback audio script without new stories', () => {
+    const monthEnd = input([]);
+    monthEnd.monthEndReminder = true;
+    monthEnd.maximumWords = 80;
+
+    const result = fallbackBriefingScript(monthEnd);
+
+    expect(result.displayScript).toContain('Zaplať zálohy OSVČ');
+    expect(result.displayScript).toContain('měkké dovednosti, finance');
+    expect(result.displayScript.match(/Zaplať zálohy OSVČ/gu)).toHaveLength(1);
+    expect(
+      result.displayScript.endsWith('That is your morning briefing.'),
+    ).toBe(true);
+    expect(result.wordCount).toBeLessThanOrEqual(monthEnd.maximumWords);
+    expect(result.ttsSegments.some(({ language }) => language === 'cs')).toBe(
+      true,
+    );
+  });
+
   it('speaks confirmed watchlist earnings in the fallback script even without stories', () => {
     const script = fallbackBriefingScript({
       ...input([]),
@@ -136,8 +156,12 @@ describe('BriefingScriptGenerator', () => {
             greeting: 'Good morning.',
             weather: 'It is mild in Brno.',
             calendar: 'Your calendar is clear today.',
-            newsPreview: 'I found one development worth mentioning.',
-            topStories: ['Merck reported positive Phase III results.'],
+            topStories: [
+              {
+                storyId: 'S1',
+                text: 'Merck reported positive Phase III results.',
+              },
+            ],
             watchToday: ['Review MRK after the open.'],
             outro: 'That is your briefing.',
           }),
@@ -162,6 +186,7 @@ describe('BriefingScriptGenerator', () => {
     ]);
     expect(prompt).toContain('do not independently research or invent facts');
     expect(prompt).toContain('morning intelligence briefing at 07:00');
+    expect(prompt).toContain('"storyId":"S1"');
     expect(prompt).not.toContain('https://');
   });
 
@@ -200,7 +225,6 @@ describe('BriefingScriptGenerator', () => {
             weather: 'It is mild in Brno.',
             calendar:
               'You have two events today. Porada s Honzou začíná v deset hodin. Product sync starts at noon.',
-            newsPreview: 'There are no new developments.',
             topStories: [],
             watchToday: [],
             outro: 'That is your briefing.',
@@ -262,7 +286,6 @@ describe('BriefingScriptGenerator', () => {
             greeting: 'Good morning.',
             weather: null,
             calendar: 'Your calendar is clear tomorrow.',
-            newsPreview: 'There are no new developments.',
             topStories: [],
             watchToday: [],
             outro: 'That is your morning briefing.',
@@ -316,6 +339,69 @@ describe('BriefingScriptGenerator', () => {
         ({ text, language }) => language === 'en' && text.includes('Merck.'),
       ),
     ).toBe(true);
+  });
+
+  it('rejects a generated script that narrates one story twice', async () => {
+    const model = {
+      async generateStructuredWithMetrics<T>(
+        _value: string,
+        _format: StructuredJsonSchema,
+        schema: ZodType<T>,
+      ): Promise<StructuredGeneration<T>> {
+        return {
+          result: schema.parse({
+            greeting: 'Good morning.',
+            weather: null,
+            calendar: null,
+            topStories: [
+              { storyId: 'S1', text: 'Merck reported results.' },
+              { storyId: 'S1', text: 'Merck announced results again.' },
+            ],
+            watchToday: [],
+            outro: 'Goodbye.',
+          }),
+          metrics: { llmCallCount: 1, estimatedCostUsd: 0 },
+        };
+      },
+    };
+
+    await expect(
+      new BriefingScriptGenerator(model).generate(input([story('merck', 90)])),
+    ).rejects.toThrow('incomplete or duplicated');
+  });
+
+  it('narrates each selected story once in importance order', async () => {
+    const model = {
+      async generateStructuredWithMetrics<T>(
+        _value: string,
+        _format: StructuredJsonSchema,
+        schema: ZodType<T>,
+      ): Promise<StructuredGeneration<T>> {
+        return {
+          result: schema.parse({
+            greeting: 'Good morning.',
+            weather: null,
+            calendar: null,
+            topStories: [
+              { storyId: 'S2', text: 'Second development details.' },
+              { storyId: 'S1', text: 'First development details.' },
+            ],
+            watchToday: [],
+            outro: 'Goodbye.',
+          }),
+          metrics: { llmCallCount: 1, estimatedCostUsd: 0 },
+        };
+      },
+    };
+    const result = await new BriefingScriptGenerator(model).generate(
+      input([story('first', 90), story('second', 80)]),
+    );
+
+    expect(result.displayScript.indexOf('First development')).toBeLessThan(
+      result.displayScript.indexOf('Second development'),
+    );
+    expect(result.displayScript.match(/First development/g)).toHaveLength(1);
+    expect(result.displayScript.match(/Second development/g)).toHaveLength(1);
   });
 });
 

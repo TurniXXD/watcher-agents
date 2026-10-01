@@ -2,6 +2,17 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-01 — Prevent repeated briefing stories
+
+- The spoken briefing now requires one script paragraph per selected story ID, rejects missing or repeated IDs, and inserts a count-only preview instead of allowing the model to narrate the same event again in the preview. A malformed script uses the existing sourced deterministic fallback.
+- Identical, substantive news headlines within the story window are clustered even when entity extraction misses them, while unrelated headlines remain separate.
+
+## 2026-10-01 — Retire GDELT source
+
+- Removed GDELT requests from Stocks and News Watchers. Stock `NEWS` is no longer a configured source, and the five GDELT-only Global news entries are retired; the other RSS/Atom feeds and historical observations remain available.
+- Existing GDELT-backed feed switches are disabled on sync, retired sources are hidden from Telegram menus, and old source-menu buttons cannot reactivate the retired stock source.
+- Maintenance ignores historical failures from those retired source IDs, so old seven-day observations no longer generate repair recommendations.
+
 ## 2026-09-14 — Source-grounded study bot
 
 - Added `study-bot`: it accepts authorized PDF uploads, persists documents and generated audio in the configured RustFS S3 prefixes, and creates a structured, page-referenced spoken lecture through the globally serialized Ollama coordinator and Piper TTS.

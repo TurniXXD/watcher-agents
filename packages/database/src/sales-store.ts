@@ -96,6 +96,8 @@ export class SalesStore {
     input: {
       domain?: string;
       email?: string;
+      phone?: string;
+      phoneSourceUrl?: string;
       emailSyntaxValid: boolean;
       contactSourceUrl?: string;
       audit: unknown;
@@ -310,16 +312,18 @@ export class SalesStore {
     });
   }
 
-  public markSynced(id: string, quicklyLeadId?: number) {
-    return this.db.salesLead.update({
-      where: { id },
-      data: {
-        stage: 'SYNCED_TO_QUICKLY',
-        ...(quicklyLeadId !== undefined ? { quicklyLeadId } : {}),
-        quicklyEnrolledAt: new Date(),
-        lastError: null,
-      },
+  public async markSynced(id: string, quicklyLeadId?: number): Promise<void> {
+    const data = {
+      ...(quicklyLeadId !== undefined ? { quicklyLeadId } : {}),
+      quicklyEnrolledAt: new Date(),
+      lastError: null,
+    };
+    const claimed = await this.db.salesLead.updateMany({
+      where: { id, stage: 'SYNCING' },
+      data: { ...data, stage: 'SYNCED_TO_QUICKLY' },
     });
+    if (claimed.count === 0)
+      await this.db.salesLead.update({ where: { id }, data });
   }
 
   public releaseSyncClaim(id: string) {
@@ -343,12 +347,44 @@ export class SalesStore {
     });
   }
 
-  public recordWebhook(id: string, event: string, payload: unknown) {
+  public recordWebhook(
+    id: string,
+    event: string,
+    payload: unknown,
+    occurredAt: Date,
+    leadId?: string,
+  ) {
     return this.db.salesWebhookEvent.create({
       data: {
         id,
         event,
         payload: JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue,
+        occurredAt,
+        ...(leadId ? { leadId } : {}),
+      },
+    });
+  }
+
+  public listSentEmailEvents(from: Date, to: Date) {
+    return this.db.salesWebhookEvent.findMany({
+      where: {
+        event: 'email.sent',
+        occurredAt: { gte: from, lt: to },
+        leadId: { not: null },
+      },
+      include: { lead: { include: { campaign: true } } },
+      orderBy: { occurredAt: 'asc' },
+    });
+  }
+
+  public findLeadByQuicklyCampaignEmail(
+    quicklyCampaignId: number,
+    email: string,
+  ) {
+    return this.db.salesLead.findFirst({
+      where: {
+        email,
+        campaign: { quicklyCampaignId },
       },
     });
   }
@@ -381,6 +417,17 @@ export class SalesStore {
       | 'BOUNCED'
       | 'UNSUBSCRIBED',
   ) {
+    if (stage === 'CONTACTED') {
+      return this.db.salesLead.updateMany({
+        where: {
+          id,
+          stage: {
+            in: ['QUALIFIED', 'SYNCING', 'SYNCED_TO_QUICKLY', 'CONTACTED'],
+          },
+        },
+        data: { stage },
+      });
+    }
     return this.db.salesLead.update({ where: { id }, data: { stage } });
   }
 

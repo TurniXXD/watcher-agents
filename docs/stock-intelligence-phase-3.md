@@ -11,7 +11,7 @@ Alpha Vantage market snapshot
   -> persisted discovery signal
   -> DISCOVERY/unknown -> INVESTIGATE + HIGH_RESOLUTION
   -> immediate run of every enabled company source
-  -> repeated SEC/IR/GDELT/TradingView/price checks
+  -> repeated SEC/IR/TradingView/price checks
   -> HIGH/EXTREME canonical event -> WATCH + EVENT_MODE
   -> timeout/expiry -> NORMAL or DISCOVERY + LOW_RESOLUTION
 ```
@@ -40,7 +40,7 @@ The provider's snapshot identity, ticker, price, move, and volume form a stable 
 
 A qualified unknown company is created with every stock source enabled, `autoDiscovered=true`, an attention score, a reason, and an investigation timeout. A configured `DISCOVERY` name is promoted temporarily. Existing `WATCH` and `CORE` names may receive temporary high-resolution monitoring without losing their tier. Disabled companies are never automatically re-enabled.
 
-The first targeted run checks all enabled sources. Subsequent high-resolution ticks check the fast, relevant subset: SEC, investor relations, GDELT news, TradingView news, and price. Normal and high-resolution executions share the same persisted run lock, source-health backoff, item/event deduplication, cooldowns, and analysis pipeline.
+The first targeted run checks all enabled sources. Subsequent high-resolution ticks check the fast, relevant subset: SEC, investor relations, TradingView news, and price. Normal and high-resolution executions share the same persisted run lock, source-health backoff, item/event deduplication, cooldowns, and analysis pipeline.
 
 After every stock run, a canonical event first observed by that watcher with `HIGH` or `EXTREME` materiality promotes an investigated company to `WATCH/EVENT_MODE`. The event may already exist in the global cross-user event cache; per-watcher item-delivery deduplication prevents it from repeatedly renewing the same company. Event mode has a short timeout; afterward the company remains `WATCH/NORMAL`. If no such event appears before the investigation timeout, it returns to `DISCOVERY/LOW_RESOLUTION`.
 

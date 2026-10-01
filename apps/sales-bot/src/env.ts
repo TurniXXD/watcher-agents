@@ -20,6 +20,21 @@ export const env = z
       .min(1)
       .max(1440)
       .default(30),
+    SALES_FOLLOWUP_TIME: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/u)
+      .default('20:00'),
+    SALES_TIMEZONE: z
+      .string()
+      .refine((value) => {
+        try {
+          new Intl.DateTimeFormat('en-US', { timeZone: value });
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'Invalid IANA time zone')
+      .default('Europe/Prague'),
     QUICKLY_BASE_URL: optionalUrl,
     QUICKLY_API_KEY: z.string().optional(),
     TWENTY_BASE_URL: optionalUrl,

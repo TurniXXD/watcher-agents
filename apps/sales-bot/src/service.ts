@@ -107,6 +107,12 @@ export class SalesService {
           await this.store.markAnalyzed(lead.id, {
             domain: new URL(audit.sourceUrl).hostname.replace(/^www\./u, ''),
             ...(email ? { email, contactSourceUrl: audit.emailSourceUrl } : {}),
+            ...(audit.foundPhone
+              ? {
+                  phone: audit.foundPhone,
+                  phoneSourceUrl: audit.phoneSourceUrl,
+                }
+              : {}),
             emailSyntaxValid: email
               ? emailSchema.safeParse(email).success
               : false,

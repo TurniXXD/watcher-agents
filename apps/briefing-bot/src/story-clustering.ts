@@ -117,7 +117,15 @@ export const eventsDescribeSameStory = (
     Math.abs(eventAt(left).getTime() - eventAt(right).getTime()) / 3_600_000;
   if (hoursApart > 96) return false;
 
-  const titleOverlap = overlap(tokens(left.title), tokens(right.title));
+  const leftTitleTokens = tokens(left.title);
+  if (
+    left.category === right.category &&
+    leftTitleTokens.size >= 3 &&
+    normalize(left.title) === normalize(right.title)
+  ) {
+    return true;
+  }
+  const titleOverlap = overlap(leftTitleTokens, tokens(right.title));
   const tagOverlap = overlap(
     new Set(left.tags.map(normalize)),
     new Set(right.tags.map(normalize)),

@@ -14,7 +14,7 @@ There is no separate application named Medical Bot. The existing `apps/publicati
 
 Each app owns its commands and callbacks. `packages/telegram` shares authorization, input parsing, HTML escaping, command copy, source/validation messages, digest rendering, progress-message editing, and message splitting. Every command is guarded by configured Telegram user IDs. The Briefing Bot is a third grammY process and owns briefing-specific onboarding and commands.
 
-The News Watcher is a separate grammY process with one bot identity. The Czech profile is retired and its persisted feeds are disabled at startup; only the `GLOBAL` profile is requested. A hardcoded catalog combines official RSS/Atom feeds with shared GDELT discovery adapters; operators can pause individual built-in sources and add optional custom Global feeds. Ingestion, deduplication, analysis, scheduling, and briefing publication are shared.
+The News Watcher is a separate grammY process with one bot identity. The Czech profile is retired and its persisted feeds are disabled at startup; only the `GLOBAL` profile is requested. Its hardcoded catalog uses RSS/Atom feeds; the former GDELT-only built-ins are retired and disabled without deleting historical stories. Operators can pause individual active built-in sources and add optional custom Global feeds. Ingestion, deduplication, analysis, scheduling, and briefing publication are shared.
 
 ## 4. Current database architecture
 

@@ -17,8 +17,6 @@ const czechNames = [
 ];
 
 const globalNames = [
-  'Reuters',
-  'Associated Press (AP)',
   'BBC News',
   'The Guardian',
   'Al Jazeera English',
@@ -27,7 +25,6 @@ const globalNames = [
   'Bloomberg',
   'The Economist',
   'Politico Europe',
-  'Euractiv',
   'Nature News',
   'Science',
   'MIT Technology Review',
@@ -37,8 +34,6 @@ const globalNames = [
   'ECB',
   'NASA',
   'ESA',
-  'IEA',
-  'GDELT',
 ];
 
 describe('built-in news source catalog', () => {
@@ -61,20 +56,14 @@ describe('built-in news source catalog', () => {
   it('uses public HTTPS URLs for every persisted source', () => {
     for (const source of builtInNewsSources) {
       expect(new URL(builtInNewsSourceUrl(source)).protocol).toBe('https:');
-      if (source.adapter === 'RSS') {
-        expect(new URL(source.feedUrl).protocol).toBe('https:');
-      } else {
-        expect(source.query.trim()).not.toBe('');
-      }
+      expect(new URL(source.feedUrl).protocol).toBe('https:');
     }
   });
 
-  it('uses RSS for 29 sources and bounded GDELT discovery for five', () => {
-    expect(
-      builtInNewsSources.filter(({ adapter }) => adapter === 'RSS'),
-    ).toHaveLength(29);
-    expect(
-      builtInNewsSources.filter(({ adapter }) => adapter === 'GDELT'),
-    ).toHaveLength(5);
+  it('uses RSS for every active built-in source', () => {
+    expect(builtInNewsSources).toHaveLength(29);
+    expect(builtInNewsSources.every(({ adapter }) => adapter === 'RSS')).toBe(
+      true,
+    );
   });
 });

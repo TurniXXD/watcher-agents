@@ -338,6 +338,21 @@ describe('BriefingDeliveryService', () => {
 });
 
 describe('renderBriefingIndex', () => {
+  it('shows the month-end actions in the compact Telegram message', () => {
+    const rendered = renderBriefingIndex({
+      dateLabel: 'Oct 31',
+      dayPeriod: 'morning',
+      monthEndReminder: true,
+      calendar: { status: 'DISABLED', count: 0 },
+      topics: [],
+    });
+
+    expect(rendered).toContain('📅 Konec měsíce');
+    expect(rendered).toContain('Zaplať zálohy OSVČ');
+    expect(rendered).toContain('finance a pokrok u všech cílů');
+    expect(rendered).toContain('Všechny cíle: /goals');
+  });
+
   it('labels evening Calendar events as tomorrow', () => {
     const rendered = renderBriefingIndex({
       dateLabel: 'Sep 6',

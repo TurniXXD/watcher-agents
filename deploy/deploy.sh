@@ -31,8 +31,6 @@ required_files=(
   deploy/runtime/study-bot.env
   deploy/runtime/maintenance-agent.env
   deploy/runtime/transport-bot.env
-  # Compose parses optional sales-profile env files during config validation.
-  # Their credentials are only needed when that profile is started.
   deploy/runtime/sales-bot.env
   deploy/runtime/osint-bot.env
   deploy/runtime/quickly.env
@@ -81,7 +79,33 @@ required_env_values=(
   "deploy/runtime/transport-bot.env:TRANSPORT_TELEGRAM_TOKEN"
   "deploy/runtime/transport-bot.env:TELEGRAM_ALLOWED_USER_IDS"
   "deploy/runtime/transport-bot.env:TRANSPORT_REQUEST_FEED_URL"
+  "deploy/runtime/osint-bot.env:DATABASE_URL"
+  "deploy/runtime/osint-bot.env:OSINT_TELEGRAM_TOKEN"
+  "deploy/runtime/osint-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/sales-bot.env:DATABASE_URL"
+  "deploy/runtime/sales-bot.env:SALES_TELEGRAM_TOKEN"
+  "deploy/runtime/sales-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/sales-bot.env:SALES_API_TOKEN"
+  "deploy/runtime/sales-bot.env:SALES_WEBHOOK_TOKEN"
+  "deploy/runtime/quickly.env:POSTGRES_DB"
+  "deploy/runtime/quickly.env:POSTGRES_USER"
+  "deploy/runtime/quickly.env:POSTGRES_PASSWORD"
+  "deploy/runtime/quickly.env:DATABASE_URL"
+  "deploy/runtime/quickly.env:QUICKLY_SECRET_KEY"
+  "deploy/runtime/twenty.env:POSTGRES_DB"
+  "deploy/runtime/twenty.env:POSTGRES_USER"
+  "deploy/runtime/twenty.env:POSTGRES_PASSWORD"
+  "deploy/runtime/twenty.env:PG_DATABASE_URL"
+  "deploy/runtime/twenty.env:ENCRYPTION_KEY"
 )
+
+legacy_watcher_services=(
+  stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent
+  briefing-bot maintenance-agent transport-bot
+)
+watcher_services=("${legacy_watcher_services[@]}" osint-bot sales-bot)
+integration_services=(quickly twenty-server twenty-worker)
+release_services=("${watcher_services[@]}" "${integration_services[@]}")
 
 study_bot_env_values=(
   "deploy/runtime/study-bot.env:DATABASE_URL"
@@ -103,13 +127,6 @@ required_piper_voice_files=(
   deploy/piper-voices/cs_CZ-jirka-medium.onnx
   deploy/piper-voices/cs_CZ-jirka-medium.onnx.json
 )
-
-# Compose validates env_file paths even for an inactive optional profile.
-# Keep an existing operator-managed file untouched; a preset is safe while
-# osint-bot is disabled and must be populated before enabling the profile.
-if [[ ! -e deploy/runtime/osint-bot.env && -d deploy/runtime ]]; then
-  install -m 600 deploy/presets/osint-bot.env.example deploy/runtime/osint-bot.env
-fi
 
 for required_file in "${required_files[@]}"; do
   if [[ ! -f "$required_file" ]]; then
@@ -149,7 +166,7 @@ for required_env_value in "${required_env_values[@]}"; do
   line="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1 || true)"
   value="${line#*=}"
 
-  if [[ -z "$line" || -z "$value" || "$value" == "''" || "$value" == '""' ]]; then
+  if [[ -z "$line" || -z "$value" || "$value" == "''" || "$value" == '""' || "$value" == *'<url-encoded-password>'* || "$value" == *'<same-url-safe-password>'* || "$value" == *'<comma-separated-telegram-user-ids>'* || "$value" == replace-with-* ]]; then
     missing_env_values+=("$file: $key")
   fi
 done
@@ -299,8 +316,10 @@ echo "Validating production Compose configuration..."
 compose_candidate config --quiet
 
 mkdir -p backups
-backup_path="backups/pre-deploy-$(date -u +%Y%m%dT%H%M%SZ)-${IMAGE_TAG:0:12}.sql.gz"
+backup_stamp="$(date -u +%Y%m%dT%H%M%SZ)-${IMAGE_TAG:0:12}"
 backup_created=false
+quickly_backup_created=false
+twenty_backup_created=false
 
 database_exists() {
   compose_candidate exec -T postgres sh -c \
@@ -308,19 +327,29 @@ database_exists() {
 }
 
 create_database_backup() {
+  local service="$1"
+  local backup_path="backups/pre-deploy-${service}-${backup_stamp}.sql.gz"
   echo "Creating pre-deploy database backup at $backup_path..."
-  compose_candidate exec -T postgres sh -c \
+  compose_candidate exec -T "$service" sh -c \
     'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip >"$backup_path"
   find backups -type f -name 'pre-deploy-*.sql.gz' -mtime "+$BACKUP_RETENTION_DAYS" -delete
-  backup_created=true
 }
 
 echo "Pulling release $IMAGE_TAG..."
-compose_candidate pull postgres migrate stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot
+compose_candidate pull postgres quickly-postgres twenty-postgres twenty-redis migrate "${release_services[@]}"
 
 if [[ -n "$(compose_candidate ps --status running -q postgres)" ]] && database_exists; then
   echo "Backing up the running database before changing its container image..."
-  create_database_backup
+  create_database_backup postgres
+  backup_created=true
+fi
+if [[ -n "$(compose_candidate ps --status running -q quickly-postgres)" ]]; then
+  create_database_backup quickly-postgres
+  quickly_backup_created=true
+fi
+if [[ -n "$(compose_candidate ps --status running -q twenty-postgres)" ]]; then
+  create_database_backup twenty-postgres
+  twenty_backup_created=true
 fi
 
 echo "Starting PostgreSQL..."
@@ -343,10 +372,19 @@ done
 
 if [[ "$backup_created" == false ]]; then
   if database_exists; then
-    create_database_backup
+    create_database_backup postgres
   else
     echo "Skipping the pre-deploy backup because the database does not exist yet."
   fi
+fi
+
+echo "Starting sales databases and Redis..."
+compose_candidate up -d --wait --wait-timeout 180 quickly-postgres twenty-postgres twenty-redis
+if [[ "$quickly_backup_created" == false ]]; then
+  create_database_backup quickly-postgres
+fi
+if [[ "$twenty_backup_created" == false ]]; then
+  create_database_backup twenty-postgres
 fi
 
 echo "Applying database migrations..."
@@ -366,29 +404,50 @@ if ! verify_briefing_host_gateway compose_candidate; then
   exit 1
 fi
 
-echo "Starting Watcher bots..."
+echo "Starting required sales integrations..."
 if ! compose_candidate up \
   -d \
-  --force-recreate \
-  --remove-orphans \
   --wait \
-  --wait-timeout 180 \
-  stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot; then
+  --wait-timeout 600 \
+  "${integration_services[@]}" || ! compose_candidate up \
+  -d \
+  --force-recreate \
+  --wait \
+  --wait-timeout 600 \
+  "${watcher_services[@]}"; then
   echo "Release failed its container health checks." >&2
-  echo "=== transport bot logs before rollback ===" >&2
-  compose_candidate logs --tail 200 transport-bot >&2 || true
+  echo "=== Release service logs before rollback ===" >&2
+  compose_candidate logs --tail 100 "${release_services[@]}" >&2 || true
   dump_briefing_container_network
 
   if [[ -f "$RELEASE_FILE" ]] && ! cmp -s "$CANDIDATE_FILE" "$RELEASE_FILE"; then
     echo "Restoring the previous healthy application image..."
-    compose_release pull stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot
+    rollback_services=("${watcher_services[@]}")
+    legacy_rollback=false
+    if ! compose_release run --rm --no-deps --entrypoint sh osint-bot \
+      -c 'test -f apps/osint-bot/dist/health.js'; then
+      # The first mandatory rollout may replace an image that predates OSINT
+      # readiness. Restore its previously supported services, not a bot that
+      # could never pass the new health check with that image.
+      echo "Previous image predates OSINT readiness; restoring legacy services only." >&2
+      rollback_services=("${legacy_watcher_services[@]}")
+      legacy_rollback=true
+      compose_candidate stop osint-bot sales-bot quickly twenty-server twenty-worker quickly-postgres twenty-postgres twenty-redis || true
+    fi
+    compose_release pull "${rollback_services[@]}"
+    if [[ "$legacy_rollback" == false ]]; then
+      compose_release up \
+        -d \
+        --wait \
+        --wait-timeout 600 \
+        "${integration_services[@]}"
+    fi
     compose_release up \
       -d \
       --force-recreate \
-      --remove-orphans \
       --wait \
-      --wait-timeout 180 \
-      stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot
+      --wait-timeout 600 \
+      "${rollback_services[@]}"
   elif [[ -f "$RELEASE_FILE" ]]; then
     echo "Previous release matches the failed candidate; skipping an ineffective rollback." >&2
   fi

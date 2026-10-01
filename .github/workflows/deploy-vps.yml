@@ -266,6 +266,14 @@ jobs:
               echo '=== transport bot logs ==='
               IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
                 docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 transport-bot || true
+              echo
+              echo '=== OSINT bot logs ==='
+              IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
+                docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 osint-bot || true
+              echo
+              echo '=== sales stack logs ==='
+              IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
+                docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 sales-bot quickly twenty-server twenty-worker || true
             }
 
             trap 'dump_logs' ERR

@@ -201,18 +201,25 @@ integration('WatcherStore with PostgreSQL', () => {
     ]);
 
     await expect(
-      store.toggleStockSourceForAll(chat.id, 'NEWS'),
-    ).resolves.toEqual({ source: 'NEWS', enabled: false, affectedCount: 2 });
+      store.toggleStockSourceForAll(chat.id, 'TRADINGVIEW_NEWS'),
+    ).resolves.toEqual({
+      source: 'TRADINGVIEW_NEWS',
+      enabled: false,
+      affectedCount: 2,
+    });
     await universe.createCompany(company('AMD'));
 
     const newsSettings = await database.stockSourceConfig.findMany({
-      where: { source: 'NEWS', stock: { chatConfigId: chat.id } },
+      where: {
+        source: 'TRADINGVIEW_NEWS',
+        stock: { chatConfigId: chat.id },
+      },
       select: { enabled: true },
     });
     expect(newsSettings).toHaveLength(3);
     expect(newsSettings.every(({ enabled }) => !enabled)).toBe(true);
     expect(await store.listStockSourceSettings(chat.id)).toContainEqual({
-      source: 'NEWS',
+      source: 'TRADINGVIEW_NEWS',
       enabled: false,
     });
   });
@@ -1361,6 +1368,9 @@ integration('WatcherStore with PostgreSQL', () => {
     );
     expect(snapshot.sourceHealth).not.toContainEqual(
       expect.objectContaining({ target: '__PROVIDER__' }),
+    );
+    expect(snapshot.sourceHealth).not.toContainEqual(
+      expect.objectContaining({ source: 'NEWS' }),
     );
     await expect(
       store.claimReconciliation(

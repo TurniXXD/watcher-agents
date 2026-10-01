@@ -17,7 +17,6 @@ import type {
 import {
   builtInNewsSources,
   builtInNewsSourceUrl,
-  GdeltNewsSource,
   getBuiltInNewsSource,
   RssNewsSource,
 } from '@watcher/sources/news';
@@ -37,7 +36,6 @@ export const buildNewsSourceRequests = (
   feeds: readonly NewsFeedRecord[],
   topics: readonly NewsTopicRecord[],
   rssSource: RssNewsSource,
-  gdeltSource: GdeltNewsSource,
   logger?: WatcherLogger,
   categoryPreferences: readonly NewsCategoryPreference[] = [],
 ): SourceRequest[] => {
@@ -70,7 +68,6 @@ export const buildNewsSourceRequests = (
     );
   const rssRequests = validFeeds.flatMap((feed): SourceRequest[] => {
     const builtIn = sourceForFeed(feed.builtInKey);
-    if (builtIn?.adapter === 'GDELT') return [];
     return [
       {
         source: rssSource,
@@ -87,43 +84,7 @@ export const buildNewsSourceRequests = (
       },
     ];
   });
-  const gdeltSources = validFeeds.flatMap((feed) => {
-    const source = sourceForFeed(feed.builtInKey);
-    return source?.adapter === 'GDELT' ? [source] : [];
-  });
-  if (gdeltSources.length === 0) return rssRequests;
-  const publisherEntries = gdeltSources.flatMap((source) => {
-    const domain = source.query.match(/^domain:([^\s]+)$/u)?.[1];
-    return domain
-      ? [[domain, { sourceKey: source.key, sourceName: source.name }] as const]
-      : [];
-  });
-  const sourceKeys = gdeltSources.map(({ key }) => key);
-  const gdeltTerms = gdeltSources.flatMap(({ query }) => {
-    const trimmed = query.trim();
-    const unwrapped = trimmed.match(/^\(([^()]*)\)$/u)?.[1] ?? trimmed;
-    return unwrapped
-      .split(/\s+OR\s+/iu)
-      .map((term) => term.trim())
-      .filter(Boolean);
-  });
-  return [
-    ...rssRequests,
-    {
-      source: gdeltSource,
-      target: 'GLOBAL:built-in-gdelt',
-      targetKey: 'GLOBAL',
-      config: {
-        query: `(${gdeltTerms.join(' OR ')}) sourcelang:english`,
-        sourceName: 'GDELT',
-        scope: 'GLOBAL',
-        topics: topicsFor('GLOBAL'),
-        publishers: Object.fromEntries(publisherEntries),
-        metadata: { sourceKeys },
-        maxItems: 25,
-      },
-    },
-  ];
+  return rssRequests;
 };
 
 export const createNewsRunner = (
@@ -148,7 +109,6 @@ export const createNewsRunner = (
   telemetry?: AgentTelemetryRecorder,
 ): WatcherRunner => {
   const rssSource = new RssNewsSource();
-  const gdeltSource = new GdeltNewsSource();
   const pipeline = new WatcherPipeline(
     store,
     analyzer,
@@ -181,7 +141,6 @@ export const createNewsRunner = (
       feeds,
       topics,
       rssSource,
-      gdeltSource,
       logger,
       categoryPreferences,
     );

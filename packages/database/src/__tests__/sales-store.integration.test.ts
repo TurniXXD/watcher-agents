@@ -47,5 +47,64 @@ describe.skipIf(!database || !store)(
         await database!.salesCampaign.delete({ where: { id: campaign.id } });
       }
     });
+
+    it('indexes confirmed sends by event time and preserves a replied stage', async () => {
+      const campaign = await store!.createCampaign({
+        name: `sales-report-test-${randomUUID()}`,
+        offer: 'Test offer',
+        subjectTemplate: 'Hello',
+        bodyTemplate: 'Test',
+        quicklyCampaignId: 987654,
+      });
+      try {
+        const lead = await store!.discoverLead({
+          campaignId: campaign.id,
+          source: 'TEST',
+          sourceExternalId: randomUUID(),
+          companyName: 'Acme',
+          websiteUrl: 'https://acme.example',
+        });
+        await store!.markAnalyzed(lead.id, {
+          email: 'hello@acme.example',
+          phone: '+420 777 123 456',
+          phoneSourceUrl: 'https://acme.example/contact',
+          emailSyntaxValid: true,
+          audit: {},
+          analysis: {},
+          baseScore: 90,
+          llmAdjustment: 0,
+          finalScore: 90,
+          draftSubject: 'Hello',
+          draftBody: 'Test',
+          minimumLeadScore: 70,
+        });
+        const matched = await store!.findLeadByQuicklyCampaignEmail(
+          987654,
+          'hello@acme.example',
+        );
+        expect(matched?.id).toBe(lead.id);
+        const sentAt = new Date('2026-10-01T18:15:00Z');
+        await store!.recordWebhook(
+          randomUUID(),
+          'email.sent',
+          { event: 'email.sent' },
+          sentAt,
+          lead.id,
+        );
+        await store!.setLeadStage(lead.id, 'REPLIED');
+        await store!.setLeadStage(lead.id, 'CONTACTED');
+        await store!.markSynced(lead.id, 234567);
+        const events = await store!.listSentEmailEvents(
+          new Date('2026-10-01T00:00:00Z'),
+          new Date('2026-10-02T00:00:00Z'),
+        );
+        const stored = events.find((item) => item.leadId === lead.id);
+        expect(stored?.occurredAt).toEqual(sentAt);
+        expect(stored?.lead?.stage).toBe('REPLIED');
+        expect(stored?.lead?.phone).toBe('+420 777 123 456');
+      } finally {
+        await database!.salesCampaign.delete({ where: { id: campaign.id } });
+      }
+    });
   },
 );

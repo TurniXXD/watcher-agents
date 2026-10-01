@@ -7,6 +7,7 @@ import { escapeHtml, optionalSourceLink } from '@watcher/telegram';
 import type { TtsResult } from './tts.js';
 import type { BriefingTelegramTransport } from './telegram-transport.js';
 import type { WatchlistEarningsContext } from './stock-context.js';
+import { monthEndAction } from './month-end.js';
 import {
   briefingDayPeriodPresentation,
   type BriefingDayPeriod,
@@ -40,6 +41,7 @@ type DeliveryAttempts = {
 export type BriefingIndex = {
   dateLabel: string;
   dayPeriod: BriefingDayPeriod;
+  monthEndReminder?: boolean;
   location?: string;
   audioDurationSeconds?: number;
   calendar: { status: 'AVAILABLE' | 'UNAVAILABLE' | 'DISABLED'; count: number };
@@ -92,6 +94,14 @@ export const renderBriefingIndex = (index: BriefingIndex): string => {
   if (index.location) append(`📍 ${escapeHtml(index.location)}`);
   if (index.audioDurationSeconds !== undefined) {
     append(`🎙 ${durationLabel(index.audioDurationSeconds)}`);
+  }
+  if (index.monthEndReminder) {
+    append(
+      '',
+      '<b>📅 Konec měsíce</b>',
+      escapeHtml(monthEndAction),
+      'Všechny cíle: /goals',
+    );
   }
   if (index.calendar.status === 'AVAILABLE') {
     const day = isEndOfDayBriefing(index.dayPeriod) ? 'tomorrow' : 'today';
