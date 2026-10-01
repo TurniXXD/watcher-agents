@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import type { Collector, EntityRef, EvidenceDocument } from './types.js';
-import { fetchOfficialJson } from './http-json.js';
+import {
+  fetchOfficialJson,
+  fetchOptionalOfficialJson,
+  postOfficialJson,
+} from './http-json.js';
 
 const base = 'https://ares.gov.cz/ekonomicke-subjekty-v-be/rest';
 const date = (value: string | undefined): Date | undefined =>
@@ -14,6 +18,107 @@ const subjectSchema = z.object({
   datumVzniku: z.string().optional(),
   datumAktualizace: z.string().optional(),
   sidlo: z.object({ textovaAdresa: z.string().optional() }).optional(),
+});
+
+const subjectSearchSchema = z.object({
+  pocetCelkem: z.number().int().nonnegative().optional(),
+  ekonomickeSubjekty: z.array(subjectSchema).optional(),
+});
+
+const corporateAddress = (
+  legalForm: string | undefined,
+  value: string | undefined,
+): string | undefined =>
+  ['112', '121'].includes(legalForm ?? '') ? value?.trim() : undefined;
+
+export const createAresNameCollector = (
+  fetcher: typeof fetch = fetch,
+): Collector => ({
+  id: 'ARES_NAME_SEARCH',
+  supports: ['COMPANY_NAME', 'FULL_NAME'],
+  priority: 120,
+  collect: async (selector, signal) => {
+    const url = `${base}/ekonomicke-subjekty/vyhledat`;
+    const response = await postOfficialJson(
+      url,
+      { obchodniJmeno: selector.value, start: 0, pocet: 10 },
+      subjectSearchSchema,
+      signal,
+      fetcher,
+    );
+    return (response.ekonomickeSubjekty ?? []).slice(0, 10).map((subject) => {
+      const address = corporateAddress(
+        subject.pravniForma,
+        subject.sidlo?.textovaAdresa,
+      );
+      const organization: EntityRef = {
+        kind: 'ORGANIZATION',
+        key: `ico:${subject.ico}`,
+        label: subject.obchodniJmeno ?? `IČO ${subject.ico}`,
+      };
+      const exact =
+        subject.obchodniJmeno?.localeCompare(selector.value, 'cs', {
+          sensitivity: 'base',
+        }) === 0;
+      return {
+        sourceKey: `ares:name-search:${selector.value.toLocaleLowerCase('cs')}:${subject.ico}`,
+        sourceUrl: `https://ares.gov.cz/ekonomicke-subjekty?ico=${subject.ico}`,
+        excerpt:
+          `${subject.obchodniJmeno ?? subject.ico} · IČO ${subject.ico} · výsledek vyhledávání ARES podle názvu${exact ? ' (přesná textová shoda)' : ''}; samotná shoda jména nepotvrzuje totožnost osoby`.slice(
+            0,
+            900,
+          ),
+        data: {
+          query: selector.value,
+          totalResults: response.pocetCelkem ?? null,
+          ico: subject.ico,
+          name: subject.obchodniJmeno ?? null,
+          legalForm: subject.pravniForma ?? null,
+          registeredAt: subject.datumVzniku ?? null,
+          exactNameMatch: exact,
+          address: address ?? null,
+        },
+        ...(date(subject.datumAktualizace)
+          ? { observedAt: date(subject.datumAktualizace) }
+          : {}),
+        findings: [
+          { entity: organization, predicate: 'ICO', value: subject.ico },
+          ...(subject.obchodniJmeno
+            ? [
+                {
+                  entity: organization,
+                  predicate: 'REGISTERED_NAME',
+                  value: subject.obchodniJmeno,
+                },
+              ]
+            : []),
+          {
+            entity: organization,
+            predicate: 'NAME_SEARCH_QUERY',
+            value: selector.value,
+          },
+          ...(address
+            ? [
+                {
+                  entity: organization,
+                  predicate: 'REGISTERED_ADDRESS',
+                  value: address,
+                },
+              ]
+            : []),
+        ],
+        links: [],
+        discoveredSelectors: [
+          {
+            type: 'ICO' as const,
+            value: subject.ico,
+            original: `ARES name result for ${selector.value}`,
+            depth: selector.depth + 1,
+          },
+        ],
+      };
+    });
+  },
 });
 
 export const createAresCollector = (
@@ -34,9 +139,10 @@ export const createAresCollector = (
     };
     // Registered seats of sole traders may be private homes. Only retain
     // addresses for legal forms verified as corporate entities in the CZSO codebook.
-    const address = ['112', '121'].includes(data.pravniForma ?? '')
-      ? data.sidlo?.textovaAdresa?.trim()
-      : undefined;
+    const address = corporateAddress(
+      data.pravniForma,
+      data.sidlo?.textovaAdresa,
+    );
     const result: EvidenceDocument = {
       sourceKey: `ares:subject:${data.ico}`,
       sourceUrl: url,
@@ -257,5 +363,95 @@ export const createAresRegisterCollector = (
       },
       ...individual,
     ];
+  },
+});
+
+const insolvencySchema = z.object({
+  icoId: z.string().optional(),
+  zaznamy: z
+    .array(
+      z.object({
+        obchodniJmeno: z.string().optional(),
+        jmenoPrijmeni: z.string().optional(),
+        upadek: z
+          .array(
+            z.object({
+              spisZn: z.string().optional(),
+              datum: z.string().optional(),
+              detail: z.string().optional(),
+              akceUpadek: z.string().optional(),
+              typUpadek: z.string().optional(),
+              soudUpadek: z.string().optional(),
+              spravceUpadku: z
+                .object({ jmenoPrijmeni: z.string().optional() })
+                .optional(),
+            }),
+          )
+          .optional(),
+      }),
+    )
+    .optional(),
+});
+
+export const createAresInsolvencyCollector = (
+  fetcher: typeof fetch = fetch,
+): Collector => ({
+  id: 'ARES_INSOLVENCY_CEU',
+  supports: ['ICO'],
+  priority: 80,
+  collect: async (selector, signal) => {
+    const url = `${base}/ekonomicke-subjekty-ceu/${selector.value}`;
+    const response = await fetchOptionalOfficialJson(
+      url,
+      insolvencySchema,
+      signal,
+      fetcher,
+    );
+    if (!response) return [];
+    const organization: EntityRef = {
+      kind: 'ORGANIZATION',
+      key: `ico:${selector.value}`,
+      label: `IČO ${selector.value}`,
+    };
+    return (response.zaznamy ?? []).flatMap((record, recordIndex) =>
+      (record.upadek ?? []).slice(0, 20).map((proceeding, index) => {
+        const reference =
+          proceeding.spisZn ?? `record-${recordIndex + 1}-${index + 1}`;
+        return {
+          sourceKey: `ares:ceu:${selector.value}:${reference}`,
+          sourceUrl: url,
+          excerpt:
+            `Veřejný záznam CEÚ pro IČO ${selector.value}: ${reference}${proceeding.typUpadek ? ` · ${proceeding.typUpadek}` : ''}${proceeding.akceUpadek ? ` · ${proceeding.akceUpadek}` : ''}${proceeding.datum ? ` · ${proceeding.datum}` : ''}`.slice(
+              0,
+              900,
+            ),
+          data: {
+            ico: selector.value,
+            name: record.obchodniJmeno ?? record.jmenoPrijmeni ?? null,
+            caseReference: proceeding.spisZn ?? null,
+            date: proceeding.datum ?? null,
+            action: proceeding.akceUpadek ?? null,
+            type: proceeding.typUpadek ?? null,
+            court: proceeding.soudUpadek ?? null,
+            administrator: proceeding.spravceUpadku?.jmenoPrijmeni ?? null,
+            detail: proceeding.detail ?? null,
+          },
+          ...(date(proceeding.datum)
+            ? { observedAt: date(proceeding.datum) }
+            : {}),
+          findings: [
+            {
+              entity: organization,
+              predicate: 'INSOLVENCY_CASE',
+              value: reference,
+              ...(date(proceeding.datum)
+                ? { observedAt: date(proceeding.datum) }
+                : {}),
+            },
+          ],
+          links: [],
+        };
+      }),
+    );
   },
 });

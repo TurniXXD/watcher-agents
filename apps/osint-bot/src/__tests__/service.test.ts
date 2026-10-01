@@ -84,4 +84,82 @@ describe('OSINT run orchestration', () => {
     const result = await new OsintService(store, [], logger).run('user', 'inv');
     expect(result.status).toBe('BUSY');
   });
+
+  it('persists strong selectors discovered by a name collector and runs the next wave', async () => {
+    const ingest = vi.fn(async () => ({ id: 'ev', isNew: true }));
+    const addSelector = vi.fn(async () => ({ id: 'ico-selector' }));
+    const store = {
+      getInvestigation: vi.fn(async () => ({
+        id: 'inv',
+        depthLimit: 1,
+        selectors: [
+          {
+            id: 'name-selector',
+            type: 'FULL_NAME',
+            value: 'Jakub Vantuch',
+            original: 'Jakub Vantuch',
+            depth: 0,
+          },
+        ],
+      })),
+      beginRun: vi.fn(async () => true),
+      ingest,
+      addSelector,
+      recordCollectorRun: vi.fn(async () => undefined),
+      finishRun: vi.fn(async () => undefined),
+    } as unknown as OsintStore;
+    const nameCollector: Collector = {
+      id: 'NAME',
+      supports: ['FULL_NAME'],
+      priority: 100,
+      collect: vi.fn(async () => [
+        {
+          sourceKey: 'name:1',
+          sourceUrl: 'https://ares.gov.cz/example',
+          excerpt: 'Name result',
+          data: {},
+          findings: [],
+          links: [],
+          discoveredSelectors: [
+            {
+              type: 'ICO' as const,
+              value: '19462590',
+              original: 'ARES result',
+              depth: 1,
+            },
+          ],
+        },
+      ]),
+    };
+    const icoCollector: Collector = {
+      id: 'ICO',
+      supports: ['ICO'],
+      priority: 100,
+      collect: vi.fn(async () => [
+        {
+          sourceKey: 'ico:1',
+          sourceUrl: 'https://ares.gov.cz/example',
+          excerpt: 'IČO detail',
+          data: {},
+          findings: [],
+          links: [],
+        },
+      ]),
+    };
+    const result = await new OsintService(
+      store,
+      [nameCollector, icoCollector],
+      logger,
+      4,
+    ).run('user', 'inv');
+    expect(result.status).toBe('COMPLETE');
+    expect(result.newEvidence).toBe(2);
+    expect(addSelector).toHaveBeenCalledWith('user', 'inv', {
+      type: 'ICO',
+      value: '19462590',
+      original: 'ARES result',
+      depth: 1,
+    });
+    expect(icoCollector.collect).toHaveBeenCalledOnce();
+  });
 });

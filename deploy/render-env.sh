@@ -81,6 +81,13 @@ umask 077
 rm -rf "$RUNTIME_DIR"
 install -d -m 700 "$RUNTIME_DIR"
 
+quickly_bind_address="${QUICKLY_BIND_ADDRESS:-127.0.0.1}"
+quickly_public_host="$quickly_bind_address"
+if [[ "$quickly_bind_address" == "127.0.0.1" || "$quickly_bind_address" == "0.0.0.0" ]]; then
+  quickly_public_host=localhost
+fi
+quickly_public_url="${QUICKLY_PUBLIC_URL:-http://${quickly_public_host}:${QUICKLY_HOST_PORT:-8000}}"
+
 twenty_bind_address="${TWENTY_BIND_ADDRESS:-127.0.0.1}"
 twenty_public_host="$twenty_bind_address"
 if [[ "$twenty_bind_address" == "127.0.0.1" || "$twenty_bind_address" == "0.0.0.0" ]]; then
@@ -89,6 +96,8 @@ fi
 
 write_env "$RUNTIME_DIR/compose.env" \
   COMPOSE_PROJECT_NAME "${COMPOSE_PROJECT_NAME:-watcher}" \
+  QUICKLY_BIND_ADDRESS "$quickly_bind_address" \
+  QUICKLY_HOST_PORT "${QUICKLY_HOST_PORT:-8000}" \
   TWENTY_BIND_ADDRESS "$twenty_bind_address" \
   TWENTY_HOST_PORT "${TWENTY_HOST_PORT:-3002}"
 
@@ -295,7 +304,7 @@ write_env "$RUNTIME_DIR/osint-bot.env" \
   DATABASE_URL "$WATCHER_DATABASE_URL" \
   OSINT_TELEGRAM_TOKEN "${OSINT_TELEGRAM_TOKEN:-}" \
   TELEGRAM_ALLOWED_USER_IDS "$TELEGRAM_ALLOWED_USER_IDS" \
-  OSINT_MAX_COLLECTORS "${OSINT_MAX_COLLECTORS:-4}" \
+  OSINT_MAX_COLLECTORS "${OSINT_MAX_COLLECTORS:-12}" \
   OSINT_WATCH_POLL_MINUTES "${OSINT_WATCH_POLL_MINUTES:-5}" \
   OSINT_HEALTH_PORT "${OSINT_HEALTH_PORT:-4060}" \
   OLLAMA_URL "${OLLAMA_URL:-}" \
@@ -307,14 +316,14 @@ write_env "$RUNTIME_DIR/quickly.env" \
   POSTGRES_USER quickly \
   POSTGRES_PASSWORD "${QUICKLY_POSTGRES_PASSWORD:-}" \
   DATABASE_URL "postgresql+asyncpg://quickly:${QUICKLY_POSTGRES_PASSWORD:-}@quickly-postgres:5432/quickly" \
-  BASE_URL "${QUICKLY_PUBLIC_URL:-http://localhost:8000}" \
+  BASE_URL "$quickly_public_url" \
   QUICKLY_SECRET_KEY "${QUICKLY_SECRET_KEY:-}" \
   GOOGLE_CLIENT_ID "${QUICKLY_GOOGLE_CLIENT_ID:-}" \
   GOOGLE_CLIENT_SECRET "${QUICKLY_GOOGLE_CLIENT_SECRET:-}" \
   OFFICE365_CLIENT_ID "${QUICKLY_OFFICE365_CLIENT_ID:-}" \
   OFFICE365_CLIENT_SECRET "${QUICKLY_OFFICE365_CLIENT_SECRET:-}" \
   OFFICE365_TENANT_ID "${QUICKLY_OFFICE365_TENANT_ID:-common}" \
-  CORS_ORIGINS "${QUICKLY_CORS_ORIGINS:-http://localhost:8000}"
+  CORS_ORIGINS "${QUICKLY_CORS_ORIGINS:-$quickly_public_url}"
 
 write_env "$RUNTIME_DIR/twenty.env" \
   POSTGRES_DB twenty \

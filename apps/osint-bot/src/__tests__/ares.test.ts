@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createAresCollector,
+  createAresInsolvencyCollector,
+  createAresNameCollector,
   createAresRegisterCollector,
 } from '../collectors/ares.js';
 import type { Selector } from '../selectors.js';
@@ -141,5 +143,52 @@ describe('ARES collectors', () => {
     );
     expect(JSON.stringify(docs)).not.toContain('Former Director');
     expect(docs[0]?.data.activeRoster).toBe('');
+  });
+
+  it('resolves name searches to strong IČO selectors without asserting person identity', async () => {
+    const fetcher = vi.fn(async () =>
+      response({
+        pocetCelkem: 2,
+        ekonomickeSubjekty: [
+          {
+            ico: '19462590',
+            obchodniJmeno: 'Jakub Vantuch',
+            pravniForma: '101',
+            sidlo: { textovaAdresa: 'Private Home' },
+          },
+        ],
+      }),
+    ) as unknown as typeof fetch;
+    const docs = await createAresNameCollector(fetcher).collect(
+      {
+        type: 'FULL_NAME',
+        value: 'Jakub Vantuch',
+        original: 'Jakub Vantuch',
+        depth: 0,
+      },
+      new AbortController().signal,
+    );
+    expect(docs[0]?.discoveredSelectors).toEqual([
+      {
+        type: 'ICO',
+        value: '19462590',
+        original: 'ARES name result for Jakub Vantuch',
+        depth: 1,
+      },
+    ]);
+    expect(docs[0]?.excerpt).toContain('nepotvrzuje totožnost');
+    expect(JSON.stringify(docs)).not.toContain('Private Home');
+  });
+
+  it('treats a missing insolvency record as an empty successful result', async () => {
+    const fetcher = vi.fn(
+      async () => new Response('{}', { status: 404 }),
+    ) as unknown as typeof fetch;
+    await expect(
+      createAresInsolvencyCollector(fetcher).collect(
+        selector,
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual([]);
   });
 });

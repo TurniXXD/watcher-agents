@@ -1,7 +1,15 @@
 import type { Selector, SelectorType } from '../selectors.js';
 
 export type EntityRef = {
-  kind: 'ORGANIZATION' | 'PERSON' | 'ADDRESS' | 'DOMAIN';
+  kind:
+    | 'ORGANIZATION'
+    | 'PERSON'
+    | 'ADDRESS'
+    | 'DOMAIN'
+    | 'IP_ADDRESS'
+    | 'DOCUMENT'
+    | 'PUBLIC_PROFILE'
+    | 'CRYPTO_ADDRESS';
   key: string;
   label: string;
 };
@@ -26,6 +34,12 @@ export type EvidenceDocument = {
   observedAt?: Date | undefined;
   findings: Finding[];
   links: Link[];
+  /**
+   * Identifiers discovered by this document. The service may persist and
+   * collect them in the next bounded depth wave. A name-search result remains
+   * a candidate and must not be presented as a confirmed identity.
+   */
+  discoveredSelectors?: Selector[] | undefined;
 };
 export type Collector = {
   id: string;

@@ -6,7 +6,7 @@ import {
 } from '@watcher/database';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { SalesApi } from './api.js';
-import { createSalesBot } from './bot.js';
+import { createSalesBot, salesBotCommands } from './bot.js';
 import { env } from './env.js';
 import {
   enqueueFollowupReports,
@@ -139,4 +139,5 @@ process.once('SIGINT', () => void shutdown('SIGINT'));
 void service
   .run()
   .catch((error) => logger.error({ err: error }, 'Initial sales run failed'));
+await bot.api.setMyCommands([...salesBotCommands]);
 await bot.start({ onStart: () => logger.info({}, 'Sales bot started') });

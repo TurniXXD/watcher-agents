@@ -23,6 +23,64 @@ describe('OSINT selector normalization', () => {
   it('does not mistake company-only text for a person selector', () => {
     expect(parseSelectors('Prověř ACME s.r.o.')[0]?.type).toBe('COMPANY_NAME');
   });
+  it('accepts an explicitly labeled address without treating it as a name', () => {
+    expect(parseSelectors('adresa: Česká 1, Brno')).toEqual([
+      {
+        type: 'ADDRESS',
+        value: 'Česká 1, Brno',
+        original: 'adresa: Česká 1, Brno',
+        depth: 0,
+      },
+    ]);
+  });
+  it('recognizes IPv4 and IPv6 selectors', () => {
+    expect(parseSelectors('8.8.8.8')[0]).toMatchObject({
+      type: 'IP_ADDRESS',
+      value: '8.8.8.8',
+    });
+    expect(parseSelectors('ip: 2001:4860:4860::8888')[0]).toMatchObject({
+      type: 'IP_ADDRESS',
+      value: '2001:4860:4860::8888',
+    });
+  });
+  it('recognizes explicit public profile and research identifiers', () => {
+    expect(parseSelectors('github: octocat')[0]).toMatchObject({
+      type: 'GITHUB_PROFILE',
+      value: 'octocat',
+    });
+    expect(parseSelectors('reddit: u/example_user')[0]).toMatchObject({
+      type: 'REDDIT_USERNAME',
+      value: 'example_user',
+    });
+    expect(parseSelectors('0000-0002-1825-0097')[0]).toMatchObject({
+      type: 'ORCID',
+      value: '0000-0002-1825-0097',
+    });
+    expect(parseSelectors('10.1000/example-doi')[0]).toMatchObject({
+      type: 'DOI',
+      value: '10.1000/example-doi',
+    });
+  });
+  it('keeps exact e-mail evidence separate from its public domain', () => {
+    expect(parseSelectors('Kontakt: test@example.com')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'EMAIL', value: 'test@example.com' }),
+        expect.objectContaining({ type: 'DOMAIN', value: 'example.com' }),
+      ]),
+    );
+  });
+  it('recognizes public profile URLs and blockchain addresses', () => {
+    expect(parseSelectors('https://github.com/octocat')[0]).toMatchObject({
+      type: 'GITHUB_PROFILE',
+      value: 'octocat',
+    });
+    expect(
+      parseSelectors('0x0000000000000000000000000000000000000000')[0],
+    ).toMatchObject({ type: 'ETHEREUM_ADDRESS' });
+    expect(
+      parseSelectors('bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh')[0],
+    ).toMatchObject({ type: 'BITCOIN_ADDRESS' });
+  });
 });
 
 describe('deterministic collector priority', () => {

@@ -514,7 +514,7 @@ services:
     environment:
       QUICKLY_PREBUILT_IMAGE: '1'
     ports:
-      - '127.0.0.1:8000:8000'
+      - '${QUICKLY_BIND_ADDRESS:-127.0.0.1}:${QUICKLY_HOST_PORT:-8000}:8000'
     depends_on:
       quickly-postgres:
         condition: service_healthy

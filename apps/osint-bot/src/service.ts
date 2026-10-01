@@ -23,7 +23,7 @@ export class OsintService {
     private readonly store: OsintStore,
     private readonly collectors: readonly Collector[],
     private readonly logger: WatcherLogger,
-    private readonly maxCollectors = 4,
+    private readonly maxCollectors = 12,
   ) {}
 
   async create(userId: string, chatId: string, query: string) {
@@ -76,72 +76,113 @@ export class OsintService {
           : [];
       },
     );
-    const selected = selectCollectors(
-      selectors,
-      this.collectors,
-      this.maxCollectors,
+    const unsupported = new Set(
+      selectors
+        .filter(
+          (selector) =>
+            !this.collectors.some((collector) =>
+              collector.supports.includes(selector.type),
+            ),
+        )
+        .map((selector) => `${selector.type}: ${selector.value}`),
     );
-    const unsupported = selectors
-      .filter(
-        (selector) =>
-          !this.collectors.some((collector) =>
-            collector.supports.includes(selector.type),
-          ),
-      )
-      .map((selector) => `${selector.type}: ${selector.value}`);
+    const selectorRows = new Map(
+      investigation.selectors.map((selector) => [
+        `${selector.type}:${selector.value}`,
+        selector.id,
+      ]),
+    );
+    const knownSelectors = new Set(selectorRows.keys());
+    let wave = selectors;
+    let remainingCollectors = this.maxCollectors;
     let newEvidence = 0;
     const failures: string[] = [];
     try {
-      const outcomes = await Promise.allSettled(
-        selected.map(async ({ selector, collector }) => {
-          const row = investigation.selectors.find(
-            (item) =>
-              item.type === selector.type && item.value === selector.value,
-          );
-          if (!row)
-            throw new Error('Selector disappeared before collector run');
-          try {
-            const documents = await collector.collect(
-              selector,
-              controller.signal,
+      while (wave.length > 0 && remainingCollectors > 0) {
+        const selected = selectCollectors(
+          wave,
+          this.collectors,
+          remainingCollectors,
+        );
+        if (selected.length === 0) break;
+        remainingCollectors -= selected.length;
+        const outcomes = await Promise.allSettled(
+          selected.map(async ({ selector, collector }) => {
+            const selectorId = selectorRows.get(
+              `${selector.type}:${selector.value}`,
             );
-            let added = 0;
-            for (const document of documents.slice(0, 30)) {
-              const result = await this.store.ingest(
-                investigationId,
-                collector.id,
-                document,
+            if (!selectorId)
+              throw new Error('Selector disappeared before collector run');
+            try {
+              const documents = await collector.collect(
+                selector,
+                controller.signal,
               );
-              if (result.isNew) added += 1;
+              let added = 0;
+              const discovered = [] as Selector[];
+              for (const document of documents.slice(0, 30)) {
+                const result = await this.store.ingest(
+                  investigationId,
+                  collector.id,
+                  document,
+                );
+                if (result.isNew) added += 1;
+                discovered.push(...(document.discoveredSelectors ?? []));
+              }
+              await this.store.recordCollectorRun(
+                investigationId,
+                selectorId,
+                collector.id,
+                'SUCCESS',
+                documents.length,
+              );
+              return { added, discovered };
+            } catch (error) {
+              const message = errorMessage(error);
+              await this.store.recordCollectorRun(
+                investigationId,
+                selectorId,
+                collector.id,
+                'FAILED',
+                0,
+                message,
+              );
+              throw new Error(collector.id, { cause: error });
             }
-            await this.store.recordCollectorRun(
-              investigationId,
-              row.id,
-              collector.id,
-              'SUCCESS',
-              documents.length,
-            );
-            return added;
-          } catch (error) {
-            const message = errorMessage(error);
-            await this.store.recordCollectorRun(
-              investigationId,
-              row.id,
-              collector.id,
-              'FAILED',
-              0,
-              message,
-            );
-            throw new Error(collector.id, { cause: error });
+          }),
+        );
+        const nextWave: Selector[] = [];
+        for (const outcome of outcomes) {
+          if (outcome.status === 'rejected') {
+            failures.push(errorMessage(outcome.reason).slice(0, 200));
+            continue;
           }
-        }),
-      );
-      for (const outcome of outcomes) {
-        if (outcome.status === 'fulfilled') newEvidence += outcome.value;
-        else failures.push(errorMessage(outcome.reason).slice(0, 200));
+          newEvidence += outcome.value.added;
+          for (const discovered of outcome.value.discovered) {
+            if (discovered.depth > (investigation.depthLimit ?? 1)) continue;
+            const key = `${discovered.type}:${discovered.value}`;
+            if (knownSelectors.has(key)) continue;
+            const row = await this.store.addSelector(
+              userId,
+              investigationId,
+              discovered,
+            );
+            if (!row) continue;
+            knownSelectors.add(key);
+            selectorRows.set(key, row.id);
+            nextWave.push(discovered);
+            if (
+              !this.collectors.some((collector) =>
+                collector.supports.includes(discovered.type),
+              )
+            )
+              unsupported.add(`${discovered.type}: ${discovered.value}`);
+          }
+        }
+        wave = nextWave;
       }
       const status =
-        failures.length === 0 && unsupported.length === 0
+        failures.length === 0 && unsupported.size === 0
           ? 'COMPLETE'
           : newEvidence > 0
             ? 'PARTIAL'
@@ -160,7 +201,7 @@ export class OsintService {
         status,
         newEvidence,
         failures,
-        unsupported,
+        unsupported: [...unsupported],
       };
     } catch (error) {
       await this.store.finishRun(

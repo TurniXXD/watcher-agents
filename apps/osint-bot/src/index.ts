@@ -2,16 +2,40 @@ import { createLogger, ProviderRequestLimiter } from '@watcher/core';
 import { createDatabaseClient, OsintStore } from '@watcher/database';
 import { OllamaProvider } from '@watcher/llm';
 import { parseAllowedUserIds } from '@watcher/telegram';
-import { createOsintBot } from './bot.js';
+import { createOsintBot, osintBotCommands } from './bot.js';
 import {
   createAresCollector,
+  createAresInsolvencyCollector,
+  createAresNameCollector,
   createAresRegisterCollector,
 } from './collectors/ares.js';
+import {
+  createBitcoinCollector,
+  createEthereumCollector,
+} from './collectors/blockchain.js';
+import { createContractRegistryCollector } from './collectors/contracts.js';
+import {
+  createCertificateTransparencyCollector,
+  createWaybackCollector,
+} from './collectors/domain-history.js';
+import {
+  createCrossrefCollector,
+  createGithubCollector,
+  createOrcidCollector,
+  createRedditCollector,
+  createWikipediaCollector,
+} from './collectors/identity.js';
+import {
+  createPublicEmailEvidenceCollector,
+  createPublicProfileMetadataCollector,
+} from './collectors/public-profile.js';
 import {
   createDnsCollector,
   createWebsiteCollector,
 } from './collectors/domain.js';
 import type { Collector } from './collectors/types.js';
+import { createRuianAddressCollector } from './collectors/ruian.js';
+import { createRdapCollector } from './collectors/rdap.js';
 import { env } from './env.js';
 import { createOsintHealthServer } from './health.js';
 import { OsintService } from './service.js';
@@ -33,10 +57,26 @@ const paceAres = (collector: Collector): Collector => ({
 const service = new OsintService(
   store,
   [
+    paceAres(createAresNameCollector()),
     paceAres(createAresCollector()),
     paceAres(createAresRegisterCollector()),
+    paceAres(createAresInsolvencyCollector()),
+    createContractRegistryCollector(),
+    createRuianAddressCollector(),
     createWebsiteCollector(),
     createDnsCollector(),
+    createRdapCollector(),
+    createCertificateTransparencyCollector(),
+    createWaybackCollector(),
+    createWikipediaCollector(),
+    createGithubCollector(),
+    createRedditCollector(),
+    createOrcidCollector(),
+    createCrossrefCollector(),
+    createPublicProfileMetadataCollector(),
+    createPublicEmailEvidenceCollector(),
+    createBitcoinCollector(),
+    createEthereumCollector(),
   ],
   logger,
   env.OSINT_MAX_COLLECTORS,
@@ -122,6 +162,7 @@ const shutdown = async (signal: string) => {
 };
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
 process.once('SIGINT', () => void shutdown('SIGINT'));
+await bot.api.setMyCommands([...osintBotCommands]);
 await bot.start({
   onStart: () => {
     ready = true;

@@ -1,21 +1,32 @@
 import type { z } from 'zod';
 import { sourceHttpError } from '@watcher/core';
 
-export const fetchOfficialJson = async <T>(
+type OfficialJsonRequest = {
+  method?: 'GET' | 'POST';
+  body?: Record<string, unknown>;
+  notFound?: 'error' | 'null';
+};
+
+const requestOfficialJson = async <T>(
   url: string,
   schema: z.ZodType<T>,
   signal: AbortSignal,
-  fetcher: typeof fetch = fetch,
-): Promise<T> => {
-  // Only fixed, reviewed official endpoints call this helper; never use it with a user URL.
+  fetcher: typeof fetch,
+  request: OfficialJsonRequest,
+): Promise<T | null> => {
+  const method = request.method ?? 'GET';
   const response = await fetcher(url, {
+    method,
     redirect: 'error',
     headers: {
       accept: 'application/json',
       'user-agent': 'Watcher OSINT/1.0 (public research)',
+      ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
     },
+    ...(request.body ? { body: JSON.stringify(request.body) } : {}),
     signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   });
+  if (response.status === 404 && request.notFound === 'null') return null;
   if (!response.ok) throw sourceHttpError(response, url);
   const length = Number(response.headers.get('content-length') ?? '0');
   if (length > 2_000_000)
@@ -44,3 +55,39 @@ export const fetchOfficialJson = async <T>(
   }
   return schema.parse(JSON.parse(new TextDecoder().decode(bytes)));
 };
+
+export const fetchOfficialJson = async <T>(
+  url: string,
+  schema: z.ZodType<T>,
+  signal: AbortSignal,
+  fetcher: typeof fetch = fetch,
+): Promise<T> => {
+  // Only fixed, reviewed official endpoints call this helper; never use it with a user URL.
+  const result = await requestOfficialJson(url, schema, signal, fetcher, {});
+  if (result === null) throw new Error('Official source unexpectedly missing');
+  return result;
+};
+
+export const postOfficialJson = async <T>(
+  url: string,
+  body: Record<string, unknown>,
+  schema: z.ZodType<T>,
+  signal: AbortSignal,
+  fetcher: typeof fetch = fetch,
+): Promise<T> => {
+  // Only fixed, reviewed official endpoints call this helper; never use it with a user URL.
+  const result = await requestOfficialJson(url, schema, signal, fetcher, {
+    method: 'POST',
+    body,
+  });
+  if (result === null) throw new Error('Official source unexpectedly missing');
+  return result;
+};
+
+export const fetchOptionalOfficialJson = <T>(
+  url: string,
+  schema: z.ZodType<T>,
+  signal: AbortSignal,
+  fetcher: typeof fetch = fetch,
+): Promise<T | null> =>
+  requestOfficialJson(url, schema, signal, fetcher, { notFound: 'null' });

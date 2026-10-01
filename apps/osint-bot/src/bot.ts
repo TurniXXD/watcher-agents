@@ -19,6 +19,7 @@ Rychlý začátek
 
 Založení a přehled
 /help — zobrazí tento návod
+/about nebo /osint_about — vysvětlí účel, datový model, zdroje, automatizaci, omezení a bezpečnostní hranice
 /investigate <dotaz> — založí investigation a ihned spustí podporované collectory
 /investigations — vypíše tvoje investigation, jejich ID, stav a počet důkazů
 /investigation [id] — nastaví vybranou investigation jako aktivní a zobrazí report
@@ -44,10 +45,103 @@ Sledování a řízení běhu
 /resume [id] — obnoví investigation a spustí nový sběr
 /stop [id] — zastaví další běhy investigation
 
-Aktuálně podporované automatické zdroje: ARES, ARES veřejný rejstřík, veřejný web a DNS. Selhání jednoho zdroje neblokuje ostatní. Nepodporovaný selector lze bezpečně uložit, ale nespustí neimplementovaný collector.
+Aktuálně podporované zdroje zahrnují české veřejné registry, doménovou infrastrukturu a archiv, vybrané veřejné profily, vědecké identifikátory a blockchain explorery. Úplný živý inventář, vstupy a omezení zobrazí /sources. Selhání jednoho zdroje neblokuje ostatní.
 
 Bezpečnost a interpretace
 Bot používá pouze veřejné zdroje, nepřihlašuje se do neveřejných účtů a neobchází ochrany. Shoda jmen sama o sobě nepotvrzuje totožnost. Výstup Ollamy je označená interpretace, nikoli důkaz; rozhodující jsou citované evidence ID a původní URL.`;
+
+export const osintAbout = `🔎 O OSINT botovi
+
+Účel
+OSINT bot je soukromý nástroj pro strukturovaný sběr a kontrolu veřejně dostupných informací. Z dotazu vytvoří investigation, spustí podporované collectory, uloží zdroje a jednotlivá pozorování a dovolí nad nimi sestavit report, vztahy a časovou osu. Je určen pro doložitelné firemní a doménové rešerše, ne pro přístup k soukromým účtům nebo obcházení ochran.
+
+Datový model
+• Investigation je samostatný případ s původním dotazem, stavem a aktivním kontextem chatu.
+• Evidence je neměnný záznam získaný z konkrétního veřejného URL včetně času sběru a výňatku.
+• Entity představují identifikované organizace, osoby, domény nebo jiné objekty. Stejné jméno samo o sobě nepotvrzuje stejnou identitu.
+• Relations propojují entity pouze tehdy, když je vazba doložena uloženým evidence ID.
+• Timeline řadí jen záznamy, které mají použitelné datum pozorované skutečnosti.
+
+Jak probíhá investigation
+1. /investigate rozpozná podporované selektory, například české IČO nebo veřejnou doménu.
+2. Nezávislé collectory získají veřejná data; selhání jednoho zdroje nezruší výsledky ostatních.
+3. Data se normalizují, deduplikují a uloží spolu s původním zdrojem.
+4. /report oddělí doložená fakta od případné interpretace Ollamy.
+5. /expand přidá další IČO, doménu nebo známou entitu do stejného případu.
+6. /watch provádí přibližně denní kontrolu a upozorní pouze na změněné normalizované důkazy.
+
+Aktuální zdroje
+Implementované jsou ARES podle jména i IČO, veřejný rejstřík ARES, insolvenční CEÚ, Registr smluv, RÚIAN adresy, veřejný web, DNS, RDAP, Certificate Transparency, Wayback Machine, Wikipedia, GitHub, Reddit, ORCID, Crossref a veřejná metadata explicitně zadaných profilů LinkedIn/X/YouTube. Samostatné collectory ověřují veřejné uvedení e-mailu a veřejný stav Bitcoin/Ethereum adres. Přesný inventář a omezení vypíše /sources.
+
+Ollama a interpretace
+Pokud je Ollama nakonfigurovaná, může po deterministickém sběru přidat oddělené inference nebo hypotézy. Každé tvrzení musí odkazovat na existující evidence ID a projít validací. Text modelu se nestává uloženým faktem a při chybě modelu zůstávají získané důkazy použitelné.
+
+Soukromí, bezpečnost a přesnost
+Bot pracuje pouze v soukromém Telegram chatu a autorizuje každý požadavek podle povolených user ID. Neprovádí přihlášení do cizích účtů, neobchází paywally ani ochrany a nemá potvrzovat citlivé soukromé údaje. Veřejný zdroj může být zastaralý nebo chybný; vždy kontroluj URL, datum sběru, přesný identifikátor a případné konfliktní záznamy. Report není právní, bezpečnostní ani finanční rozhodnutí.
+
+Použití
+Kompletní pracovní postup a dostupné příkazy zobrazíš přes /help. Implementované collectory a jejich aktuální omezení zobrazíš přes /sources.`;
+
+export const osintSources = `📚 OSINT zdroje a podporované vstupy
+
+České oficiální a veřejné registry
+• ARES name search — FULL_NAME, COMPANY_NAME; vrací kandidátní ekonomické subjekty a silná IČO. Shoda jména nepotvrzuje totožnost.
+• ARES ekonomické subjekty — ICO; registrovaný název, právní forma, datum vzniku a u korporací veřejné sídlo.
+• ARES veřejný rejstřík — ICO; aktuálně publikované statutární role bez ukládání data narození a soukromých adres.
+• ARES CEÚ — ICO; dostupné veřejné záznamy o úpadku. Nenahrazuje kompletní dokumentový stream ISIR.
+• Registr smluv — ICO, COMPANY_NAME, FULL_NAME; nejvýše 10 aktuálních výsledků z veřejného vyhledávání. Jmenná shoda je pouze kandidát.
+• RÚIAN — ADDRESS zadávaná jako „adresa: …“; standardizace a veřejné územní kódy, nikoli vlastnictví nemovitosti.
+
+Domény a infrastruktura
+• Veřejný web — DOMAIN; titul a veřejný popis domovské stránky.
+• DNS — DOMAIN; veřejné A/AAAA/MX/NS záznamy.
+• RDAP přes IANA bootstrap — DOMAIN, IP_ADDRESS; registr, stav, události a registrátor bez ukládání kontaktních osobních údajů.
+• Certificate Transparency (crt.sh) — DOMAIN; veřejně zalogovaná certifikátová jména a platnost.
+• Wayback CDX — DOMAIN; nejvýše 10 unikátních archivních snapshotů.
+
+Veřejné profily a publikační identifikátory
+• Wikipedia search — FULL_NAME, COMPANY_NAME; kandidátní stránky, nikoli potvrzení identity.
+• GitHub public API — GITHUB_PROFILE nebo „github: uživatel“; veřejná profilová metadata.
+• Reddit public profile — REDDIT_USERNAME nebo „reddit: uživatel“.
+• ORCID public record — ORCID.
+• Crossref — DOI.
+• LinkedIn, X/Twitter a YouTube — pouze metadata explicitně zadané veřejné URL/handle; bot se nepřihlašuje a při blokaci zdroje výsledek nevymýšlí.
+• Veřejný web e-mailové domény — EMAIL; důkaz vznikne jen při nalezení přesné adresy na veřejné domovské stránce.
+
+Veřejné blockchainy
+• mempool.space — BITCOIN_ADDRESS; veřejné souhrnné transakční statistiky a balance.
+• Blockscout Ethereum — ETHEREUM_ADDRESS; veřejný balance, počet transakcí a contract metadata.
+Blockchainová adresa sama neidentifikuje vlastníka.
+
+Záměrně neimplementované nebo omezené
+• Přímé Justice dokumenty/PDF a úplný ISIR SOAP stream zatím nejsou stahované; CEÚ a veřejný rejstřík pokrývají jen strukturovaný výřez.
+• PHONE_NUMBER nemá bezpečný bezplatný autoritativní reverse-lookup zdroj a zůstává unsupported.
+• Nejsou používány privátní účty, CAPTCHA bypass, placené databáze osob, uniklá hesla, neveřejná data ani automatické slučování osob podle stejného jména.
+
+Limity
+Jeden běh spustí nejvýše OSINT_MAX_COLLECTORS collectorů a má společný deadline. Nezávislé chyby jsou uvedeny v reportu jako selhání zdroje; úspěšná evidence ostatních zdrojů zůstává uložená.`;
+
+export const osintBotCommands = [
+  { command: 'help', description: 'Detailní návod a všechny příkazy' },
+  { command: 'about', description: 'Účel, zdroje, datový model a omezení' },
+  { command: 'investigate', description: 'Nová rešerše: /investigate <dotaz>' },
+  { command: 'investigations', description: 'Přehled všech investigations' },
+  { command: 'investigation', description: 'Otevřít investigation podle ID' },
+  { command: 'report', description: 'Report aktivní investigation' },
+  { command: 'evidence', description: 'Seznam nebo detail důkazu' },
+  { command: 'entity', description: 'Detail entity podle ID' },
+  { command: 'relations', description: 'Doložené vztahy mezi entitami' },
+  { command: 'timeline', description: 'Časová osa veřejných záznamů' },
+  { command: 'expand', description: 'Rozšířit sběr o selector nebo entitu' },
+  { command: 'search', description: 'Rychlé rozšíření o IČO nebo doménu' },
+  { command: 'sources', description: 'Zdroje a jejich omezení' },
+  { command: 'watch', description: 'Zapnout denní sledování změn' },
+  { command: 'unwatch', description: 'Vypnout sledování změn' },
+  { command: 'status', description: 'Stav aktivní investigation' },
+  { command: 'pause', description: 'Pozastavit investigation' },
+  { command: 'resume', description: 'Obnovit investigation a sběr' },
+  { command: 'stop', description: 'Zastavit další běhy investigation' },
+] as const;
 const send = async (ctx: Context, message: string) => {
   for (const part of splitTelegramMessage(message, 3900)) await ctx.reply(part);
 };
@@ -212,6 +306,7 @@ export const createOsintBot = (
     }
   };
   bot.command(['start', 'help'], (ctx) => send(ctx, osintHelp));
+  bot.command(['about', 'osint_about'], (ctx) => send(ctx, osintAbout));
   bot.command('investigate', (ctx) => launch(ctx, ctx.match));
   bot.command('search', async (ctx) => {
     const investigation = await current(ctx);
@@ -401,12 +496,7 @@ export const createOsintBot = (
         : 'Nemáš aktivní investigation.',
     );
   });
-  bot.command('sources', (ctx) =>
-    send(
-      ctx,
-      'Aktivní collectory: ARES (IČO), ARES veřejný rejstřík (IČO, aktuální statutární role), veřejný web (doména), DNS (doména). Selhání jednotlivého zdroje neblokuje ostatní. Ostatní zdroje ze zadání zatím nejsou implementované.',
-    ),
-  );
+  bot.command('sources', (ctx) => send(ctx, osintSources));
   for (const [command, status] of [
     ['pause', 'PAUSED'],
     ['resume', 'QUEUED'],
