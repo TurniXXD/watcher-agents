@@ -7,18 +7,47 @@ import type { OsintStore } from '@watcher/database';
 import type { OllamaProvider } from '@watcher/llm';
 import { osintSummarySchema, type OsintService } from './service.js';
 
-const help = `🔎 OSINT bot — veřejné, doložitelné informace
+export const osintHelp = `🔎 OSINT bot — veřejné, doložitelné informace
 
-Napiš např. „Zjisti firmu, IČO 25301632“ nebo „Prověř example.cz“.
-Po výsledku můžeš napsat „Prověř jednatele“, „Ukaž vztahy“, „Udělej timeline“ nebo „Sleduj tuto firmu“.
+Bot vytváří investigation z veřejných zdrojů, ukládá jednotlivé důkazy a odděluje doložená fakta od inference. Funguje pouze v soukromém chatu pro povolené uživatele.
 
-/investigate <dotaz> · /investigations · /investigation [id]
-/evidence [id] · /entity <id> · /relations [id] · /timeline [id]
-/expand <IČO/doména/id entity> · /report [id]
-/watch [id] · /unwatch [id] · /status · /sources
-/pause [id] · /resume [id] · /stop [id]
+Rychlý začátek
+1. Napiš přirozený dotaz, např. „Zjisti firmu, IČO 25301632“ nebo „Prověř example.cz“, případně použij /investigate <dotaz>.
+2. Po dokončení použij /report, /evidence, /relations nebo /timeline. Bez uvedeného ID pracují příkazy s aktivní investigation.
+3. Pro další veřejný sběr použij /expand <IČO/doména/ID entity>.
+4. Dlouhodobé sledování změn zapni přes /watch.
 
-Podporované automatické zdroje nyní: ARES, ARES veřejný rejstřík, web a DNS. Jiné selektory se bezpečně uloží, ale nespustí neimplementovaný collector. Žádné neveřejné účty ani obcházení ochran.`;
+Založení a přehled
+/help — zobrazí tento návod
+/investigate <dotaz> — založí investigation a ihned spustí podporované collectory
+/investigations — vypíše tvoje investigation, jejich ID, stav a počet důkazů
+/investigation [id] — nastaví vybranou investigation jako aktivní a zobrazí report
+/report [id] — zobrazí fakta, entity, selhání zdrojů a případnou validovanou interpretaci Ollamy
+/status — zobrazí stav a sledování aktivní investigation
+
+Důkazy a vztahy
+/evidence — vypíše důkazy aktivní investigation
+/evidence <id> — zobrazí konkrétní důkaz, URL zdroje, čas a pozorování
+/entity <id> — zobrazí entitu a pozorování navázaná na důkazy
+/relations [id] — zobrazí doložené vztahy investigation nebo konkrétní entity
+/timeline [id] — sestaví časovou osu z datovaných veřejných záznamů
+
+Rozšíření sběru
+/expand <IČO/doména/ID entity> — přidá selector do aktivní investigation a spustí odpovídající collector
+/search <IČO nebo doména> — zkratka pro rozšíření aktivní investigation
+/sources — vypíše implementované zdroje a jejich omezení
+
+Sledování a řízení běhu
+/watch [id] — zapne přibližně denní kontrolu a upozorní jen na změněné veřejné důkazy
+/unwatch [id] — vypne dlouhodobé sledování
+/pause [id] — pozastaví investigation mimo právě probíhající collector
+/resume [id] — obnoví investigation a spustí nový sběr
+/stop [id] — zastaví další běhy investigation
+
+Aktuálně podporované automatické zdroje: ARES, ARES veřejný rejstřík, veřejný web a DNS. Selhání jednoho zdroje neblokuje ostatní. Nepodporovaný selector lze bezpečně uložit, ale nespustí neimplementovaný collector.
+
+Bezpečnost a interpretace
+Bot používá pouze veřejné zdroje, nepřihlašuje se do neveřejných účtů a neobchází ochrany. Shoda jmen sama o sobě nepotvrzuje totožnost. Výstup Ollamy je označená interpretace, nikoli důkaz; rozhodující jsou citované evidence ID a původní URL.`;
 const send = async (ctx: Context, message: string) => {
   for (const part of splitTelegramMessage(message, 3900)) await ctx.reply(part);
 };
@@ -182,7 +211,7 @@ export const createOsintBot = (
       );
     }
   };
-  bot.command(['start', 'help'], (ctx) => send(ctx, help));
+  bot.command(['start', 'help'], (ctx) => send(ctx, osintHelp));
   bot.command('investigate', (ctx) => launch(ctx, ctx.match));
   bot.command('search', async (ctx) => {
     const investigation = await current(ctx);
