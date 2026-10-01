@@ -479,7 +479,7 @@ services:
     env_file:
       - ${TWENTY_ENV_FILE:-./deploy/presets/twenty.env.example}
     ports:
-      - '127.0.0.1:${TWENTY_HOST_PORT:-3002}:3000'
+      - '${TWENTY_BIND_ADDRESS:-127.0.0.1}:${TWENTY_HOST_PORT:-3002}:3000'
     volumes:
       - twenty-local-data:/app/packages/twenty-server/.local-storage
     depends_on:

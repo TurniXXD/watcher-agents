@@ -81,8 +81,15 @@ umask 077
 rm -rf "$RUNTIME_DIR"
 install -d -m 700 "$RUNTIME_DIR"
 
+twenty_bind_address="${TWENTY_BIND_ADDRESS:-127.0.0.1}"
+twenty_public_host="$twenty_bind_address"
+if [[ "$twenty_bind_address" == "127.0.0.1" || "$twenty_bind_address" == "0.0.0.0" ]]; then
+  twenty_public_host=localhost
+fi
+
 write_env "$RUNTIME_DIR/compose.env" \
   COMPOSE_PROJECT_NAME "${COMPOSE_PROJECT_NAME:-watcher}" \
+  TWENTY_BIND_ADDRESS "$twenty_bind_address" \
   TWENTY_HOST_PORT "${TWENTY_HOST_PORT:-3002}"
 
 write_env "$RUNTIME_DIR/postgres.env" \
@@ -315,7 +322,7 @@ write_env "$RUNTIME_DIR/twenty.env" \
   POSTGRES_PASSWORD "${TWENTY_POSTGRES_PASSWORD:-}" \
   PG_DATABASE_URL "postgres://twenty:${TWENTY_POSTGRES_PASSWORD:-}@twenty-postgres:5432/twenty" \
   REDIS_URL redis://twenty-redis:6379 \
-  SERVER_URL "${TWENTY_PUBLIC_URL:-http://localhost:${TWENTY_HOST_PORT:-3002}}" \
+  SERVER_URL "${TWENTY_PUBLIC_URL:-http://${twenty_public_host}:${TWENTY_HOST_PORT:-3002}}" \
   NODE_PORT 3000 \
   STORAGE_TYPE local \
   ENCRYPTION_KEY "${TWENTY_ENCRYPTION_KEY:-}"
