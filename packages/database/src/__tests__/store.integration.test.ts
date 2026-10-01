@@ -155,7 +155,6 @@ integration('WatcherStore with PostgreSQL', () => {
         'INVESTOR_RELATIONS',
         'COMPANY_INTELLIGENCE',
         'CLINICAL_TRIALS',
-        'NEWS',
         'PRICE',
         'QUIVER_CONGRESS',
         'QUIVER_CONTRACTS',
@@ -743,7 +742,9 @@ integration('WatcherStore with PostgreSQL', () => {
           role: index === 0 ? 'Chief Executive Officer' : 'Director',
           transactionCode: 'P',
           acquiredDisposedCode: 'A',
-          transactionDate: `2026-09-0${index + 1}`,
+          transactionDate: new Date(Date.now() - (3 - index) * 24 * 60 * 60_000)
+            .toISOString()
+            .slice(0, 10),
           shares: 10_000,
           pricePerShare: 100,
           sharesOwnedFollowing: 20_000,
@@ -1009,6 +1010,7 @@ integration('WatcherStore with PostgreSQL', () => {
   });
 
   it('persists and lists dated catalysts for watched companies', async () => {
+    const nextEarningsDate = new Date(Date.now() + 14 * 24 * 60 * 60_000);
     const chat = await store.ensureChat('STOCKS', 789n);
     await database.stock.create({
       data: { chatConfigId: chat.id, symbol: 'MU' },
@@ -1024,7 +1026,7 @@ integration('WatcherStore with PostgreSQL', () => {
       primarySource: false,
       category: 'EARNINGS',
       normalizedFacts: {
-        nextEarningsDate: '2026-09-30T20:00:00Z',
+        nextEarningsDate: nextEarningsDate.toISOString(),
         nextEarningsConfirmedAt: '2026-08-26T16:20:09.007Z',
         nextEarningsQuarter: 4,
         consensusEstimate: 31.17,
@@ -1047,7 +1049,7 @@ integration('WatcherStore with PostgreSQL', () => {
       {
         ticker: 'MU',
         catalystType: 'EARNINGS',
-        expectedStart: new Date('2026-09-30T20:00:00Z'),
+        expectedStart: nextEarningsDate,
         exactDateKnown: true,
         status: 'UPCOMING',
       },
@@ -1058,7 +1060,7 @@ integration('WatcherStore with PostgreSQL', () => {
       ticker: 'MU',
       source: 'EARNINGS_WHISPERS',
       upcoming: {
-        earningsDate: new Date('2026-09-30T20:00:00Z'),
+        earningsDate: nextEarningsDate,
         confirmedAt: new Date('2026-08-26T16:20:09.007Z'),
         fiscalQuarter: 4,
         consensusEps: 31.17,
