@@ -1,12 +1,14 @@
 import type { WatcherLogger } from '@watcher/core';
 import type { SalesStore } from '@watcher/database';
+import { findExactAresCompany } from '@watcher/sources/company';
 import { z } from 'zod';
+import type { GooglePlacesDiscoveryClient } from './discovery.js';
 import { sendEligibility } from './eligibility.js';
 import {
   auditWebsite,
   discoverFromFeed,
   draftOutreach,
-  scoreAudit,
+  scoreAuditDetailed,
   type QuicklyClient,
   type TwentyClient,
 } from './providers.js';
@@ -20,7 +22,49 @@ export class SalesService {
     private readonly logger: WatcherLogger,
     private readonly quickly?: QuicklyClient,
     private readonly twenty?: TwentyClient,
+    private readonly places?: GooglePlacesDiscoveryClient,
   ) {}
+
+  public get discoveryConfigured(): boolean {
+    return Boolean(this.places);
+  }
+
+  public async discoverBusinesses(input: {
+    campaignId: string;
+    query: string;
+    locality: string;
+    limit: number;
+  }): Promise<{ found: number; imported: number }> {
+    const campaign = await this.store.getCampaign(input.campaignId);
+    if (!campaign) throw new Error('Campaign not found');
+    if (!this.places)
+      throw new Error('Google Places discovery is not configured');
+    const companies = await this.places.search(
+      input.query,
+      input.locality,
+      input.limit,
+    );
+    for (const company of companies) {
+      await this.store.discoverLead({
+        campaignId: campaign.id,
+        source: 'GOOGLE_PLACES',
+        sourceExternalId: company.id,
+        companyName: company.name,
+        websiteUrl: company.websiteUrl,
+        sourceUrl: company.sourceUrl,
+      });
+    }
+    this.logger.info(
+      {
+        campaignId: campaign.id,
+        query: input.query,
+        locality: input.locality,
+        candidates: companies.length,
+      },
+      'Sales business discovery completed',
+    );
+    return { found: companies.length, imported: companies.length };
+  }
 
   public async eligibility(leadId: string): Promise<
     | {
@@ -61,6 +105,18 @@ export class SalesService {
     const result = { discovered: 0, analyzed: 0, synced: 0, failures: 0 };
     try {
       const campaigns = await this.store.listCampaigns();
+      this.logger.info(
+        {
+          campaigns: campaigns.length,
+          discoveryFeeds: campaigns.filter(
+            (campaign) => campaign.discoveryFeedUrl,
+          ).length,
+          placesConfigured: this.discoveryConfigured,
+          quicklyConfigured: Boolean(this.quickly),
+          twentyConfigured: Boolean(this.twenty),
+        },
+        'Sales pipeline run started',
+      );
       const discovery = await Promise.allSettled(
         campaigns
           .filter((campaign) => campaign.discoveryFeedUrl)
@@ -96,7 +152,30 @@ export class SalesService {
           if (!lead.websiteUrl) throw new Error('Lead has no website URL');
           const audit = await auditWebsite(lead.websiteUrl);
           const email = audit.foundEmail;
-          const score = scoreAudit(audit);
+          let legalIdentity:
+            { ico: string; name: string; sourceUrl: string } | undefined;
+          try {
+            const ares = await findExactAresCompany(lead.companyName, {
+              limit: 10,
+            });
+            if (ares && !ares.datumZaniku) {
+              legalIdentity = {
+                ico: ares.ico,
+                name: ares.obchodniJmeno ?? lead.companyName,
+                sourceUrl: `https://ares.gov.cz/ekonomicke-subjekty?ico=${encodeURIComponent(ares.ico)}`,
+              };
+            }
+          } catch (error) {
+            this.logger.warn(
+              { err: error, leadId: lead.id },
+              'ARES verification failed; website analysis continues',
+            );
+          }
+          const scoreBreakdown = scoreAuditDetailed(audit, {
+            explicitDiscoveryMatch: lead.source === 'GOOGLE_PLACES',
+            aresExactMatch: Boolean(legalIdentity),
+          });
+          const score = scoreBreakdown.total;
           const draft = draftOutreach(
             lead.companyName,
             lead.campaign.offer,
@@ -128,6 +207,9 @@ export class SalesService {
               ],
               sourceUrl: audit.sourceUrl,
               method: 'deterministic-mvp',
+              discoverySource: lead.source,
+              scoreBreakdown,
+              legalIdentity: legalIdentity ?? null,
             },
             baseScore: score,
             llmAdjustment: 0,
@@ -231,6 +313,7 @@ export class SalesService {
           );
         }
       }
+      this.logger.info(result, 'Sales pipeline run completed');
       return result;
     } finally {
       this.running = false;

@@ -11,6 +11,7 @@ describe('RÚIAN address collector', () => {
             standardizovaneAdresy: [
               {
                 kodAdresnihoMista: 123,
+                kodStavebnihoObjektu: 2267001,
                 kodObce: 456,
                 nazevObce: 'Brno',
                 textovaAdresa: 'Česká 1, 60200 Brno',
@@ -32,6 +33,20 @@ describe('RÚIAN address collector', () => {
     );
     expect(docs[0]?.data.addressPlaceCode).toBe(123);
     expect(docs[0]?.findings[0]?.predicate).toBe('STANDARDIZED_ADDRESS');
-    expect(docs[0]?.links).toEqual([]);
+    expect(docs[0]?.links[0]?.type).toBe('ADDRESS_OF_BUILDING');
+    expect(docs[0]?.discoveredSelectors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'ADDRESS_PLACE',
+          value: 'AD.123',
+          depth: 0,
+        }),
+        expect.objectContaining({
+          type: 'BUILDING',
+          value: 'SO.2267001',
+          depth: 1,
+        }),
+      ]),
+    );
   });
 });

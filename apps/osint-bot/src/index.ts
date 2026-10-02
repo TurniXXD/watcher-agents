@@ -35,6 +35,12 @@ import {
 } from './collectors/domain.js';
 import type { Collector } from './collectors/types.js';
 import { createRuianAddressCollector } from './collectors/ruian.js';
+import {
+  createCuzkAddressPlaceCollector,
+  createCuzkBuildingCollector,
+  createCuzkCadastralAreaCollector,
+  createCuzkParcelCollector,
+} from './collectors/cuzk-property.js';
 import { createRdapCollector } from './collectors/rdap.js';
 import { env } from './env.js';
 import { createOsintHealthServer } from './health.js';
@@ -49,10 +55,21 @@ const aresLimiter = new ProviderRequestLimiter({
   minimumSpacingMs: 600,
   sharedRateLimitBackoff: true,
 });
+const cuzkLimiter = new ProviderRequestLimiter({
+  providerKey: 'CUZK',
+  maxConcurrency: 1,
+  minimumSpacingMs: 500,
+  sharedRateLimitBackoff: true,
+});
 const paceAres = (collector: Collector): Collector => ({
   ...collector,
   collect: (selector, signal) =>
     aresLimiter.run(() => collector.collect(selector, signal)),
+});
+const paceCuzk = (collector: Collector): Collector => ({
+  ...collector,
+  collect: (selector, signal) =>
+    cuzkLimiter.run(() => collector.collect(selector, signal)),
 });
 const service = new OsintService(
   store,
@@ -63,6 +80,10 @@ const service = new OsintService(
     paceAres(createAresInsolvencyCollector()),
     createContractRegistryCollector(),
     createRuianAddressCollector(),
+    paceCuzk(createCuzkAddressPlaceCollector()),
+    paceCuzk(createCuzkParcelCollector()),
+    paceCuzk(createCuzkBuildingCollector()),
+    paceCuzk(createCuzkCadastralAreaCollector()),
     createWebsiteCollector(),
     createDnsCollector(),
     createRdapCollector(),

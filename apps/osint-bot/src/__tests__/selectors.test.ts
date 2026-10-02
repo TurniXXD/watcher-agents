@@ -33,6 +33,37 @@ describe('OSINT selector normalization', () => {
       },
     ]);
   });
+  it('recognizes ČÚZK parcel, building, and cadastral-area selectors', () => {
+    expect(parseSelectors('parcela: CP.2131099101')).toEqual([
+      expect.objectContaining({
+        type: 'CADASTRAL_PARCEL',
+        value: 'CP.2131099101',
+      }),
+    ]);
+    expect(parseSelectors('parcela: 730190 188')).toEqual([
+      expect.objectContaining({
+        type: 'CADASTRAL_PARCEL',
+        value: '730190|188',
+      }),
+    ]);
+    expect(parseSelectors('BU.2267001')[0]).toMatchObject({
+      type: 'BUILDING',
+      value: 'BU.2267001',
+    });
+    expect(parseSelectors('budova: 21645736')[0]).toMatchObject({
+      type: 'BUILDING',
+      value: 'SO.21645736',
+    });
+    expect(parseSelectors('katastr: Stachy')[0]).toMatchObject({
+      type: 'CADASTRAL_AREA',
+      value: 'Stachy',
+    });
+  });
+  it('rejects broad cadastral-area wildcards and malformed parcel input', () => {
+    expect(() => parseSelectors('katastr: Sta%')).toThrow(/Neplatný název/);
+    expect(() => parseSelectors('parcela: 188')).toThrow(/Parcela musí/);
+    expect(() => parseSelectors('budova: neznámá')).toThrow(/BU/);
+  });
   it('recognizes IPv4 and IPv6 selectors', () => {
     expect(parseSelectors('8.8.8.8')[0]).toMatchObject({
       type: 'IP_ADDRESS',

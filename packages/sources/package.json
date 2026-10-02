@@ -7,6 +7,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./company": {
+      "types": "./dist/company/index.d.ts",
+      "default": "./dist/company/index.js"
+    },
     "./instagram": {
       "types": "./dist/instagram/index.d.ts",
       "default": "./dist/instagram/index.js"

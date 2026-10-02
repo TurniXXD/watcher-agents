@@ -82,6 +82,29 @@ export class SalesStore {
     });
   }
 
+  public listCallCandidates(take = 20) {
+    return this.db.salesLead.findMany({
+      where: {
+        phone: { not: null },
+        phoneSourceUrl: { not: null },
+        rejectedAt: null,
+        stage: {
+          in: [
+            'ANALYZED',
+            'QUALIFIED',
+            'SYNCED_TO_QUICKLY',
+            'CONTACTED',
+            'REPLIED',
+            'INTERESTED',
+          ],
+        },
+      },
+      include: { campaign: true },
+      orderBy: [{ finalScore: 'desc' }, { createdAt: 'desc' }],
+      take,
+    });
+  }
+
   public listUnprocessed(limit = 20) {
     return this.db.salesLead.findMany({
       where: { stage: 'DISCOVERED', nextAttemptAt: { lte: new Date() } },

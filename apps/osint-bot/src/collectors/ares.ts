@@ -1,10 +1,7 @@
 import { z } from 'zod';
+import { searchAresSubjects } from '@watcher/sources/company';
 import type { Collector, EntityRef, EvidenceDocument } from './types.js';
-import {
-  fetchOfficialJson,
-  fetchOptionalOfficialJson,
-  postOfficialJson,
-} from './http-json.js';
+import { fetchOfficialJson, fetchOptionalOfficialJson } from './http-json.js';
 
 const base = 'https://ares.gov.cz/ekonomicke-subjekty-v-be/rest';
 const date = (value: string | undefined): Date | undefined =>
@@ -20,11 +17,6 @@ const subjectSchema = z.object({
   sidlo: z.object({ textovaAdresa: z.string().optional() }).optional(),
 });
 
-const subjectSearchSchema = z.object({
-  pocetCelkem: z.number().int().nonnegative().optional(),
-  ekonomickeSubjekty: z.array(subjectSchema).optional(),
-});
-
 const corporateAddress = (
   legalForm: string | undefined,
   value: string | undefined,
@@ -38,15 +30,12 @@ export const createAresNameCollector = (
   supports: ['COMPANY_NAME', 'FULL_NAME'],
   priority: 120,
   collect: async (selector, signal) => {
-    const url = `${base}/ekonomicke-subjekty/vyhledat`;
-    const response = await postOfficialJson(
-      url,
-      { obchodniJmeno: selector.value, start: 0, pocet: 10 },
-      subjectSearchSchema,
+    const response = await searchAresSubjects(selector.value, {
+      limit: 10,
       signal,
       fetcher,
-    );
-    return (response.ekonomickeSubjekty ?? []).slice(0, 10).map((subject) => {
+    });
+    return response.subjects.map((subject) => {
       const address = corporateAddress(
         subject.pravniForma,
         subject.sidlo?.textovaAdresa,
@@ -70,7 +59,7 @@ export const createAresNameCollector = (
           ),
         data: {
           query: selector.value,
-          totalResults: response.pocetCelkem ?? null,
+          totalResults: response.total,
           ico: subject.ico,
           name: subject.obchodniJmeno ?? null,
           legalForm: subject.pravniForma ?? null,

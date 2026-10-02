@@ -22,6 +22,10 @@ export const selectorTypeSchema = z.enum([
   'ETHEREUM_ADDRESS',
   'IP_ADDRESS',
   'ADDRESS',
+  'ADDRESS_PLACE',
+  'CADASTRAL_PARCEL',
+  'BUILDING',
+  'CADASTRAL_AREA',
 ]);
 export type SelectorType = z.infer<typeof selectorTypeSchema>;
 export type Selector = {
@@ -73,6 +77,91 @@ export const parseSelectors = (query: string): Selector[] => {
   const input = query.trim().slice(0, 500);
   if (!input) throw new Error('Zadej firmu, IČO nebo veřejnou doménu.');
   const selectors: Selector[] = [];
+  const parcelMatch = input.match(/^(?:parcela|parcel)\s*:\s*(.*)$/iu);
+  if (parcelMatch) {
+    const parcel = parcelMatch[1]?.trim() ?? '';
+    const inspireId = parcel.match(/^CP\.(\d+)$/iu);
+    const naturalReference = parcel.match(
+      /^(?:CZ\.)?(\d{6})\s*(?:[-,;]\s*|\s+)((?:st\.\s*)?\d+(?:\/\d+)?)$/iu,
+    );
+    if (inspireId?.[1])
+      selectors.push({
+        type: 'CADASTRAL_PARCEL',
+        value: `CP.${inspireId[1]}`,
+        original: parcelMatch[0],
+        depth: 0,
+      });
+    else if (naturalReference?.[1] && naturalReference[2])
+      selectors.push({
+        type: 'CADASTRAL_PARCEL',
+        value: `${naturalReference[1]}|${naturalReference[2].replace(/\s+/gu, ' ').toLowerCase()}`,
+        original: parcelMatch[0],
+        depth: 0,
+      });
+    else
+      throw new Error(
+        'Parcela musí být ve tvaru „CP.2131099101“ nebo „730190 188“ (kód katastru a parcelní číslo).',
+      );
+  }
+  const buildingMatch = input.match(/^(?:budova|building)\s*:\s*(.*)$/iu);
+  if (buildingMatch) {
+    const buildingId = buildingMatch[1]?.trim() ?? '';
+    if (!/^(?:BU|SO)\.\d+$/iu.test(buildingId) && !/^\d+$/u.test(buildingId))
+      throw new Error(
+        'Budova musí mít INSPIRE identifikátor „BU.…“ nebo RÚIAN kód stavebního objektu.',
+      );
+    selectors.push({
+      type: 'BUILDING',
+      value: /^\d+$/u.test(buildingId)
+        ? `SO.${buildingId}`
+        : buildingId.toUpperCase(),
+      original: buildingMatch[0],
+      depth: 0,
+    });
+  }
+  const cadastralAreaMatch = input.match(
+    /^(?:katastr(?:ální\s+území)?|cadastral\s+area)\s*:\s*(.*)$/iu,
+  );
+  if (cadastralAreaMatch) {
+    const value = cadastralAreaMatch[1]?.trim() ?? '';
+    if (
+      value.length === 0 ||
+      value.length > 120 ||
+      value.includes('%') ||
+      [...value].some((character) => (character.codePointAt(0) ?? 0) < 32) ||
+      (/^CZ\./iu.test(value) && !/^CZ\.\d{6}$/iu.test(value))
+    )
+      throw new Error('Neplatný název nebo kód katastrálního území.');
+    selectors.push({
+      type: 'CADASTRAL_AREA',
+      value: /^CZ\.\d{6}$/iu.test(value) ? value.toUpperCase() : value,
+      original: cadastralAreaMatch[0],
+      depth: 0,
+    });
+  }
+  const rawPropertyId = input.match(/^(AD|CP|BU|SO)\.(\d+)$/iu);
+  if (rawPropertyId?.[1] && rawPropertyId[2]) {
+    const prefix = rawPropertyId[1].toUpperCase();
+    selectors.push({
+      type:
+        prefix === 'AD'
+          ? 'ADDRESS_PLACE'
+          : prefix === 'CP'
+            ? 'CADASTRAL_PARCEL'
+            : 'BUILDING',
+      value: `${prefix}.${rawPropertyId[2]}`,
+      original: input,
+      depth: 0,
+    });
+  }
+  const rawCadastralAreaId = input.match(/^CZ\.(\d{6})$/iu);
+  if (rawCadastralAreaId?.[1])
+    selectors.push({
+      type: 'CADASTRAL_AREA',
+      value: `CZ.${rawCadastralAreaId[1]}`,
+      original: input,
+      depth: 0,
+    });
   const addressMatch = input.match(/^(?:adresa|address)\s*:\s*(.+)$/iu);
   if (addressMatch?.[1]?.trim())
     selectors.push({

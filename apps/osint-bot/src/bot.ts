@@ -12,9 +12,9 @@ export const osintHelp = `🔎 OSINT bot — veřejné, doložitelné informace
 Bot vytváří investigation z veřejných zdrojů, ukládá jednotlivé důkazy a odděluje doložená fakta od inference. Funguje pouze v soukromém chatu pro povolené uživatele.
 
 Rychlý začátek
-1. Napiš přirozený dotaz, např. „Zjisti firmu, IČO 25301632“ nebo „Prověř example.cz“, případně použij /investigate <dotaz>.
+1. Napiš přirozený dotaz, např. „Zjisti firmu, IČO 25301632“ nebo „Prověř example.cz“, případně veřejný majetkový selector „adresa: …“, „parcela: 730190 188“, „budova: 21645736“ či „katastr: Stachy“. Můžeš také použít /investigate <dotaz>.
 2. Po dokončení použij /report, /evidence, /relations nebo /timeline. Bez uvedeného ID pracují příkazy s aktivní investigation.
-3. Pro další veřejný sběr použij /expand <IČO/doména/ID entity>.
+3. Pro další veřejný sběr použij /expand <selector/ID entity>.
 4. Dlouhodobé sledování změn zapni přes /watch.
 
 Založení a přehled
@@ -34,7 +34,7 @@ Důkazy a vztahy
 /timeline [id] — sestaví časovou osu z datovaných veřejných záznamů
 
 Rozšíření sběru
-/expand <IČO/doména/ID entity> — přidá selector do aktivní investigation a spustí odpovídající collector
+/expand <selector/ID entity> — přidá IČO, doménu, adresu, parcelu, budovu, katastr nebo známou entitu do aktivní investigation a spustí odpovídající collector
 /search <IČO nebo doména> — zkratka pro rozšíření aktivní investigation
 /sources — vypíše implementované zdroje a jejich omezení
 
@@ -71,7 +71,7 @@ Jak probíhá investigation
 6. /watch provádí přibližně denní kontrolu a upozorní pouze na změněné normalizované důkazy.
 
 Aktuální zdroje
-Implementované jsou ARES podle jména i IČO, veřejný rejstřík ARES, insolvenční CEÚ, Registr smluv, RÚIAN adresy, veřejný web, DNS, RDAP, Certificate Transparency, Wayback Machine, Wikipedia, GitHub, Reddit, ORCID, Crossref a veřejná metadata explicitně zadaných profilů LinkedIn/X/YouTube. Samostatné collectory ověřují veřejné uvedení e-mailu a veřejný stav Bitcoin/Ethereum adres. Přesný inventář a omezení vypíše /sources.
+Implementované jsou ARES podle jména i IČO, veřejný rejstřík ARES, insolvenční CEÚ, Registr smluv, RÚIAN adresy a veřejné ČÚZK INSPIRE služby pro budovy, parcely a katastrální území. Dále bot používá veřejný web, DNS, RDAP, Certificate Transparency, Wayback Machine, Wikipedia, GitHub, Reddit, ORCID, Crossref a veřejná metadata explicitně zadaných profilů LinkedIn/X/YouTube. Samostatné collectory ověřují veřejné uvedení e-mailu a veřejný stav Bitcoin/Ethereum adres. Přesný inventář a omezení vypíše /sources.
 
 Ollama a interpretace
 Pokud je Ollama nakonfigurovaná, může po deterministickém sběru přidat oddělené inference nebo hypotézy. Každé tvrzení musí odkazovat na existující evidence ID a projít validací. Text modelu se nestává uloženým faktem a při chybě modelu zůstávají získané důkazy použitelné.
@@ -90,7 +90,10 @@ export const osintSources = `📚 OSINT zdroje a podporované vstupy
 • ARES veřejný rejstřík — ICO; aktuálně publikované statutární role bez ukládání data narození a soukromých adres.
 • ARES CEÚ — ICO; dostupné veřejné záznamy o úpadku. Nenahrazuje kompletní dokumentový stream ISIR.
 • Registr smluv — ICO, COMPANY_NAME, FULL_NAME; nejvýše 10 aktuálních výsledků z veřejného vyhledávání. Jmenná shoda je pouze kandidát.
-• RÚIAN — ADDRESS zadávaná jako „adresa: …“; standardizace a veřejné územní kódy, nikoli vlastnictví nemovitosti.
+• RÚIAN — ADDRESS zadávaná jako „adresa: …“; standardizace, veřejné územní kódy a navazující dotaz ČÚZK podle kódu stavebního objektu a adresního místa.
+• ČÚZK INSPIRE Parcely — CADASTRAL_PARCEL zadávaná jako „parcela: CP.2131099101“ nebo přirozeně „parcela: 730190 188“ (šestimístný kód katastru + parcelní číslo); číslo, výměra a vazba na katastrální území.
+• ČÚZK INSPIRE Budovy — BUILDING zadávaná jako „budova: 21645736“ / „budova: SO.21645736“ (RÚIAN kód stavebního objektu) nebo „budova: BU.2267001“ (INSPIRE ID); veřejné stavební charakteristiky, ISÚI/ISKN reference a vazba na parcelu.
+• ČÚZK INSPIRE Katastrální území — CADASTRAL_AREA zadávaná jako „katastr: Stachy“ nebo „katastr: CZ.753386“; oficiální název, kód a měřítko původní mapy.
 
 Domény a infrastruktura
 • Veřejný web — DOMAIN; titul a veřejný popis domovské stránky.
@@ -116,6 +119,7 @@ Blockchainová adresa sama neidentifikuje vlastníka.
 Záměrně neimplementované nebo omezené
 • Přímé Justice dokumenty/PDF a úplný ISIR SOAP stream zatím nejsou stahované; CEÚ a veřejný rejstřík pokrývají jen strukturovaný výřez.
 • PHONE_NUMBER nemá bezpečný bezplatný autoritativní reverse-lookup zdroj a zůstává unsupported.
+• ČÚZK collectory zpracovávají technická a územní data, nikoli osoby vlastníků. Nahlížení do KN se automaticky nescrapuje a jeho CAPTCHA se neobchází.
 • Nejsou používány privátní účty, CAPTCHA bypass, placené databáze osob, uniklá hesla, neveřejná data ani automatické slučování osob podle stejného jména.
 
 Limity

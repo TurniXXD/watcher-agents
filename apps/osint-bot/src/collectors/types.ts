@@ -9,7 +9,10 @@ export type EntityRef = {
     | 'IP_ADDRESS'
     | 'DOCUMENT'
     | 'PUBLIC_PROFILE'
-    | 'CRYPTO_ADDRESS';
+    | 'CRYPTO_ADDRESS'
+    | 'CADASTRAL_PARCEL'
+    | 'BUILDING'
+    | 'CADASTRAL_AREA';
   key: string;
   label: string;
 };

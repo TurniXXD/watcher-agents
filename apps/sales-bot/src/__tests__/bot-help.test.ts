@@ -1,8 +1,9 @@
 import type { SalesStore } from '@watcher/database';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { SalesService } from '../service.js';
 import {
   createSalesBot,
+  parseSalesFind,
   salesAbout,
   salesBotCommands,
   salesHelp,
@@ -47,17 +48,18 @@ describe('sales bot help', () => {
         can_manage_bots: false,
         supports_join_request_queries: false,
       };
-      const send = vi.fn();
+      const messages: string[] = [];
       bot.api.config.use(async (_previous, method, payload) => {
         if (method !== 'sendMessage') throw new Error(`Unexpected ${method}`);
-        send(payload);
+        if (!('text' in payload) || typeof payload.text !== 'string')
+          throw new Error('Expected sendMessage text');
+        messages.push(payload.text);
         return { ok: true, result: { message_id: 1 } } as never;
       });
 
       await bot.handleUpdate(update(command, command.length));
 
-      expect(send).toHaveBeenCalledOnce();
-      expect(send.mock.calls[0]?.[0]).toMatchObject({ text: salesHelp });
+      expect(messages).toEqual([salesHelp]);
     },
   );
 
@@ -85,23 +87,31 @@ describe('sales bot help', () => {
         can_manage_bots: false,
         supports_join_request_queries: false,
       };
-      const send = vi.fn();
+      const messages: string[] = [];
       bot.api.config.use(async (_previous, method, payload) => {
         if (method !== 'sendMessage') throw new Error(`Unexpected ${method}`);
-        send(payload);
+        if (!('text' in payload) || typeof payload.text !== 'string')
+          throw new Error('Expected sendMessage text');
+        messages.push(payload.text);
         return { ok: true, result: { message_id: 1 } } as never;
       });
 
       await bot.handleUpdate(update(command, command.length + 100));
 
-      expect(send).toHaveBeenCalledOnce();
-      expect(send.mock.calls[0]?.[0]).toMatchObject({ text: salesAbout });
+      expect(messages.length).toBeGreaterThan(0);
+      const delivered = messages.join('\n');
+      expect(delivered).toContain('💼 O Sales assistantovi');
+      expect(delivered).toContain('GOOGLE_PLACES_API_KEY');
+      expect(delivered).toContain('Podmínky odeslání');
     },
   );
 
   it('documents every sales command and the approval boundary', () => {
     for (const command of [
       '/sales_status',
+      '/sales_campaigns',
+      '/sales_find <campaign-id>',
+      '/sales_calls [limit]',
       '/sales_leads',
       '/sales_lead <id>',
       '/sales_approve <id>',
@@ -121,5 +131,29 @@ describe('sales bot help', () => {
     expect(salesAbout).toContain('RECIPIENT_OPT_IN');
     expect(salesAbout).toContain('Twenty CRM');
     expect(salesAbout).toContain('Quickly');
+    expect(salesAbout).toContain('GOOGLE_PLACES_API_KEY');
+    expect(salesAbout).toContain('Firmy.cz');
+    expect(salesBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'sales_find' }),
+    );
+    expect(salesBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'sales_campaigns' }),
+    );
+    expect(salesBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'sales_calls' }),
+    );
+  });
+
+  it('parses bounded discovery input', () => {
+    expect(parseSalesFind('campaign | autoservis | Brno | 15')).toEqual({
+      campaignId: 'campaign',
+      query: 'autoservis',
+      locality: 'Brno',
+      limit: 15,
+    });
+    expect(parseSalesFind('campaign | autoservis | Brno')).toMatchObject({
+      limit: 10,
+    });
+    expect(parseSalesFind('campaign | autoservis | Brno | 21')).toBeUndefined();
   });
 });

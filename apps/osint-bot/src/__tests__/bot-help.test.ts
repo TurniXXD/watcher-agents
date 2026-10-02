@@ -110,7 +110,7 @@ describe('OSINT bot help', () => {
       '/entity <id>',
       '/relations [id]',
       '/timeline [id]',
-      '/expand <IČO/doména/ID entity>',
+      '/expand <selector/ID entity>',
       '/search <IČO nebo doména>',
       '/sources',
       '/watch [id]',
@@ -139,6 +139,9 @@ describe('OSINT bot help', () => {
       'ARES name search',
       'Registr smluv',
       'RÚIAN',
+      'ČÚZK INSPIRE Parcely',
+      'ČÚZK INSPIRE Budovy',
+      'ČÚZK INSPIRE Katastrální území',
       'RDAP',
       'Certificate Transparency',
       'Wayback',
@@ -151,6 +154,8 @@ describe('OSINT bot help', () => {
     ])
       expect(osintSources).toContain(source);
     expect(osintSources).toContain('PHONE_NUMBER');
+    expect(osintSources).toContain('CAPTCHA');
+    expect(osintSources).toContain('parcela: 730190 188');
     expect(osintSources).toContain('Záměrně neimplementované');
   });
 });

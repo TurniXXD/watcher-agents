@@ -39,6 +39,11 @@ export const env = z
     QUICKLY_API_KEY: z.string().optional(),
     TWENTY_BASE_URL: optionalUrl,
     TWENTY_API_KEY: z.string().optional(),
+    GOOGLE_PLACES_API_KEY: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => value || undefined),
     LOG_LEVEL: z.string().default('info'),
   })
   .parse(process.env);

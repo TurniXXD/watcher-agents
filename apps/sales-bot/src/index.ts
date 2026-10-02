@@ -7,6 +7,7 @@ import {
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { SalesApi } from './api.js';
 import { createSalesBot, salesBotCommands } from './bot.js';
+import { GooglePlacesDiscoveryClient } from './discovery.js';
 import { env } from './env.js';
 import {
   enqueueFollowupReports,
@@ -29,7 +30,10 @@ const twenty =
   env.TWENTY_BASE_URL && env.TWENTY_API_KEY
     ? new TwentyClient(env.TWENTY_BASE_URL, env.TWENTY_API_KEY)
     : undefined;
-const service = new SalesService(store, logger, quickly, twenty);
+const places = env.GOOGLE_PLACES_API_KEY
+  ? new GooglePlacesDiscoveryClient(env.GOOGLE_PLACES_API_KEY)
+  : undefined;
+const service = new SalesService(store, logger, quickly, twenty, places);
 const allowed = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
 const bot = createSalesBot(env.SALES_TELEGRAM_TOKEN, allowed, store, service);
 const api = new SalesApi(

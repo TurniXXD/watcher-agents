@@ -101,15 +101,45 @@ export const auditWebsite = async (websiteUrl: string): Promise<SiteAudit> => {
   };
 };
 
-export const scoreAudit = (audit: SiteAudit): number => {
-  let score = 40;
-  if (!audit.hasMobileViewport) score += 20;
-  if (!audit.hasDescription) score += 15;
-  if (!audit.hasContactPage) score += 10;
-  if (audit.foundEmail) score += 10;
-  if (!audit.hasPrivacyPage) score += 5;
-  return Math.min(100, score);
+export type AuditScore = {
+  total: number;
+  fit: number;
+  need: number;
+  contactability: number;
+  evidence: number;
 };
+
+export const scoreAuditDetailed = (
+  audit: SiteAudit,
+  context: { explicitDiscoveryMatch?: boolean; aresExactMatch?: boolean } = {},
+): AuditScore => {
+  const fit = context.explicitDiscoveryMatch ? 25 : 15;
+  const need = Math.min(
+    30,
+    (audit.hasMobileViewport ? 0 : 10) +
+      (audit.hasDescription ? 0 : 8) +
+      (audit.hasContactPage ? 0 : 7) +
+      (audit.hasPrivacyPage ? 0 : 5),
+  );
+  const contactability =
+    (audit.foundPhone ? 12 : 0) + (audit.foundEmail ? 8 : 0);
+  const evidence =
+    5 +
+    (audit.emailSourceUrl || audit.phoneSourceUrl ? 5 : 0) +
+    (context.aresExactMatch ? 5 : 0);
+  return {
+    total: Math.min(100, fit + need + contactability + evidence),
+    fit,
+    need,
+    contactability,
+    evidence,
+  };
+};
+
+export const scoreAudit = (
+  audit: SiteAudit,
+  context?: Parameters<typeof scoreAuditDetailed>[1],
+): number => scoreAuditDetailed(audit, context).total;
 
 export const draftOutreach = (
   companyName: string,

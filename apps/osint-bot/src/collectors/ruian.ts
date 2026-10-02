@@ -60,6 +60,19 @@ export const createRuianAddressCollector = (
           key: `ruian-address:${stableId}`,
           label,
         };
+        const addressPlaceId = address.kodAdresnihoMista
+          ? `AD.${address.kodAdresnihoMista}`
+          : undefined;
+        const buildingCode = address.kodStavebnihoObjektu
+          ? String(address.kodStavebnihoObjektu)
+          : undefined;
+        const building: EntityRef | undefined = buildingCode
+          ? {
+              kind: 'BUILDING',
+              key: `ruian-building:${buildingCode}`,
+              label: `RÚIAN stavební objekt ${buildingCode}`,
+            }
+          : undefined;
         return {
           sourceKey: `ruian:address:${stableId}`,
           sourceUrl: endpoint,
@@ -98,7 +111,33 @@ export const createRuianAddressCollector = (
                 ]
               : []),
           ],
-          links: [],
+          links: building
+            ? [{ from: entity, to: building, type: 'ADDRESS_OF_BUILDING' }]
+            : [],
+          discoveredSelectors: [
+            ...(addressPlaceId
+              ? [
+                  {
+                    type: 'ADDRESS_PLACE' as const,
+                    value: addressPlaceId,
+                    original: addressPlaceId,
+                    // Address standardization and its INSPIRE record are the
+                    // same object, so this normalization does not consume a hop.
+                    depth: selector.depth,
+                  },
+                ]
+              : []),
+            ...(buildingCode
+              ? [
+                  {
+                    type: 'BUILDING' as const,
+                    value: `SO.${buildingCode}`,
+                    original: `SO.${buildingCode}`,
+                    depth: selector.depth + 1,
+                  },
+                ]
+              : []),
+          ],
         };
       });
   },
