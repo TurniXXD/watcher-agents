@@ -11,6 +11,11 @@ const companySchema = z.object({
   name: z.string().min(1),
   websiteUrl: z.url(),
   sourceUrl: z.url().optional(),
+  entityType: z.string().trim().min(1).max(80).optional(),
+  address: z.string().trim().min(1).max(500).optional(),
+  countryCode: z.string().trim().length(2).optional(),
+  languageCode: z.string().trim().min(2).max(12).optional(),
+  phone: z.string().trim().min(7).max(40).optional(),
 });
 export type DiscoveredCompany = z.infer<typeof companySchema>;
 
@@ -33,6 +38,9 @@ export type SiteAudit = {
   sourceUrl: string;
   title: string;
   textExcerpt: string;
+  contactTextExcerpt?: string;
+  htmlLanguage?: string;
+  alternateLanguages: string[];
   hasContactPage: boolean;
   hasPrivacyPage: boolean;
   hasMobileViewport: boolean;
@@ -86,12 +94,31 @@ export const auditWebsite = async (websiteUrl: string): Promise<SiteAudit> => {
   );
   const foundEmail = match?.[0]?.toLowerCase();
   const foundPhone = extractPublicPhone(contactHtml);
+  const htmlLanguage = homepage.html.match(
+    /<html[^>]+lang=["']([^"']+)["']/iu,
+  )?.[1];
+  const alternateLanguages = [
+    ...new Set(
+      [
+        ...homepage.html.matchAll(
+          /<link[^>]+hreflang=["']([^"']+)["'][^>]*>/giu,
+        ),
+      ]
+        .map((entry) => entry[1]?.trim())
+        .filter((value): value is string =>
+          Boolean(value && value !== 'x-default'),
+        ),
+    ),
+  ];
   return {
     sourceUrl: homepage.url,
     title: decodeHtmlText(
       homepage.html.match(/<title[^>]*>([\s\S]*?)<\/title>/iu)?.[1] ?? '',
     ).slice(0, 200),
     textExcerpt: decodeHtmlText(homepage.html).slice(0, 2_000),
+    contactTextExcerpt: decodeHtmlText(contactHtml).slice(0, 1_000),
+    ...(htmlLanguage ? { htmlLanguage } : {}),
+    alternateLanguages,
     hasContactPage: Boolean(contact),
     hasPrivacyPage: privacy,
     hasMobileViewport: /<meta[^>]+name=["']viewport["']/iu.test(homepage.html),
@@ -209,48 +236,5 @@ export class QuicklyClient {
     )
       throw new Error('Quickly did not confirm enrollment');
     return result.results?.[0]?.lead_id;
-  }
-}
-
-export class TwentyClient {
-  public constructor(
-    private readonly baseUrl: string,
-    private readonly apiKey: string,
-  ) {}
-  public async createCompany(
-    name: string,
-    websiteUrl: string,
-  ): Promise<string> {
-    const response = await fetch(
-      `${this.baseUrl.replace(/\/$/u, '')}/rest/companies`,
-      {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${this.apiKey}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          domainName: { primaryLinkUrl: websiteUrl, additionalLinks: [] },
-        }),
-        signal: AbortSignal.timeout(20_000),
-      },
-    );
-    if (!response.ok) throw new Error(`Twenty company HTTP ${response.status}`);
-    const result = z
-      .object({
-        data: z
-          .object({
-            createCompany: z.object({ id: z.string() }).optional(),
-            company: z.object({ id: z.string() }).optional(),
-          })
-          .optional(),
-        id: z.string().optional(),
-      })
-      .parse(await response.json());
-    const id =
-      result.data?.createCompany?.id ?? result.data?.company?.id ?? result.id;
-    if (!id) throw new Error('Twenty company response has no ID');
-    return id;
   }
 }

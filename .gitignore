@@ -13,6 +13,8 @@ dist/
 build/
 coverage/
 .turbo/
+.twenty/
+**/.twenty/
 *.tsbuildinfo
 **/generated/
 

@@ -39,11 +39,43 @@ export const env = z
     QUICKLY_API_KEY: z.string().optional(),
     TWENTY_BASE_URL: optionalUrl,
     TWENTY_API_KEY: z.string().optional(),
+    TWENTY_APP_FIELDS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    OLLAMA_URL: optionalUrl,
+    OLLAMA_MODEL: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => value || undefined),
+    OLLAMA_KEEP_ALIVE: z.string().min(1).default('5m'),
+    OLLAMA_NUM_CTX: z.coerce.number().int().min(512).max(131_072).default(4096),
+    OLLAMA_RETRIES: z.coerce.number().int().min(0).max(2).default(1),
+    OLLAMA_THINK: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    OLLAMA_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(10_000)
+      .max(180_000)
+      .default(120_000),
     GOOGLE_PLACES_API_KEY: z
       .string()
       .trim()
       .optional()
       .transform((value) => value || undefined),
     LOG_LEVEL: z.string().default('info'),
+  })
+  .superRefine((value, context) => {
+    if (Boolean(value.OLLAMA_URL) !== Boolean(value.OLLAMA_MODEL)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'OLLAMA_URL and OLLAMA_MODEL must be configured together',
+        path: ['OLLAMA_URL'],
+      });
+    }
   })
   .parse(process.env);

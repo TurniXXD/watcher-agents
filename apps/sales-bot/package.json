@@ -11,6 +11,7 @@
   "dependencies": {
     "@watcher/core": "workspace:*",
     "@watcher/database": "workspace:*",
+    "@watcher/llm": "workspace:*",
     "@watcher/sources": "workspace:*",
     "@watcher/telegram": "workspace:*",
     "grammy": "1.46.0",

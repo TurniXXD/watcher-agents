@@ -6,8 +6,11 @@ export type SalesLeadInput = {
   source: string;
   sourceExternalId: string;
   companyName: string;
+  entityType?: 'COMPANY' | 'PERSON';
   websiteUrl?: string;
   sourceUrl?: string;
+  location?: string;
+  sourceData?: unknown;
 };
 
 export class SalesStore {
@@ -58,10 +61,21 @@ export class SalesStore {
           ],
         },
       });
+      const { sourceData, ...leadData } = input;
       return (
         existing ??
         tx.salesLead.create({
-          data: { ...input, ...(domain ? { domain } : {}) },
+          data: {
+            ...leadData,
+            ...(sourceData
+              ? {
+                  sourceData: JSON.parse(
+                    JSON.stringify(sourceData),
+                  ) as Prisma.InputJsonValue,
+                }
+              : {}),
+            ...(domain ? { domain } : {}),
+          },
         })
       );
     });
@@ -118,6 +132,7 @@ export class SalesStore {
     id: string,
     input: {
       domain?: string;
+      registrationId?: string;
       email?: string;
       phone?: string;
       phoneSourceUrl?: string;
@@ -125,19 +140,84 @@ export class SalesStore {
       contactSourceUrl?: string;
       audit: unknown;
       analysis: unknown;
+      country?: {
+        code: string;
+        confidence: number;
+        source: string;
+      };
+      language?: {
+        primary: string;
+        detected: string[];
+        confidence: number;
+        source: string;
+      };
+      outreachLanguage?: {
+        language: string;
+        reason: string;
+        confidence: number;
+      };
       baseScore: number;
       llmAdjustment: number;
       finalScore: number;
       draftSubject: string;
       draftBody: string;
+      draftMetadata?: {
+        promptVersion: string;
+        model: string;
+        personalizationFact?: string;
+        generationConfidence: number;
+        insufficientPersonalizationData: boolean;
+        createdAt: Date;
+      };
       minimumLeadScore: number;
     },
   ) {
-    const { minimumLeadScore, ...rest } = input;
+    const {
+      minimumLeadScore,
+      country,
+      language,
+      outreachLanguage,
+      draftMetadata,
+      ...rest
+    } = input;
     return this.db.salesLead.update({
       where: { id },
       data: {
         ...rest,
+        ...(country
+          ? {
+              countryCode: country.code,
+              countryConfidence: country.confidence,
+              countryDetectionSource: country.source,
+            }
+          : {}),
+        ...(language
+          ? {
+              primaryLanguage: language.primary,
+              detectedLanguages: language.detected,
+              languageConfidence: language.confidence,
+              languageDetectionSource: language.source,
+            }
+          : {}),
+        ...(outreachLanguage
+          ? {
+              outreachLanguage: outreachLanguage.language,
+              outreachLanguageReason: outreachLanguage.reason,
+              outreachLanguageConfidence: outreachLanguage.confidence,
+            }
+          : {}),
+        ...(draftMetadata
+          ? {
+              draftPromptVersion: draftMetadata.promptVersion,
+              draftModel: draftMetadata.model,
+              draftPersonalizationFact:
+                draftMetadata.personalizationFact ?? null,
+              draftGenerationConfidence: draftMetadata.generationConfidence,
+              draftInsufficientPersonalizationData:
+                draftMetadata.insufficientPersonalizationData,
+              draftCreatedAt: draftMetadata.createdAt,
+            }
+          : {}),
         audit: JSON.parse(JSON.stringify(input.audit)) as Prisma.InputJsonValue,
         analysis: JSON.parse(
           JSON.stringify(input.analysis),
@@ -458,6 +538,28 @@ export class SalesStore {
     return this.db.salesLead.update({
       where: { id },
       data: { twentyCompanyId },
+    });
+  }
+
+  public setTwentySyncIds(
+    id: string,
+    input: {
+      companyId?: string;
+      personId?: string;
+      opportunityId?: string;
+      draftNoteId?: string;
+    },
+  ) {
+    return this.db.salesLead.update({
+      where: { id },
+      data: {
+        ...(input.companyId ? { twentyCompanyId: input.companyId } : {}),
+        ...(input.personId ? { twentyPersonId: input.personId } : {}),
+        ...(input.opportunityId
+          ? { twentyOpportunityId: input.opportunityId }
+          : {}),
+        ...(input.draftNoteId ? { twentyDraftNoteId: input.draftNoteId } : {}),
+      },
     });
   }
 }

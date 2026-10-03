@@ -27,6 +27,7 @@ describe('scoreAuditDetailed', () => {
       sourceUrl: 'https://company.example',
       title: 'Company',
       textExcerpt: 'Example',
+      alternateLanguages: [],
       hasContactPage: false,
       hasPrivacyPage: false,
       hasMobileViewport: false,

@@ -46,12 +46,14 @@ Jak data procházejí systémem
 1. /sales_find provede omezené Text Search v Google Places podle oboru/služby a lokality. Uloží Place ID jako deduplikační klíč, odkaz na Google Maps jako discovery zdroj a pouze kandidáty s uvedeným firemním webem. Alternativně discovery načte JSON feed kampaně nebo přijme lead přes Sales API.
 2. /sales_run navštíví veřejný firemní web, hledá kontaktní stránku, veřejný e-mail a telefon v explicitním tel: odkazu a ke kontaktu ukládá přesnou zdrojovou URL. Nečte telefon z volného textu a nepřebírá jej automaticky z katalogu.
 3. Sdílený ARES klient použitý Sales i OSINT botem zkusí přesnou shodu registrovaného názvu a doplní kandidátní IČO. Nejednoznačná nebo chybějící shoda se nepotvrdí a shoda v ARES sama nedokazuje vlastnictví webu.
-4. Deterministické skóre se skládá z relevance ručně zadanému discovery dotazu (max. 25), zjištěné potřeby na webu (max. 30), dosažitelnosti veřejným telefonem/e-mailem (max. 20) a síly zdrojů včetně přesné ARES shody (max. 15). Kvalifikační práh kampaně je standardně 70.
-5. /sales_calls zobrazí analyzované nezamítnuté leady s veřejným telefonem a zdrojem, seřazené podle skóre. Tento seznam je pro ruční kontrolu a cold cally; není důkazem právního titulu.
-6. Bot připraví předmět a tělo návrhu podle šablony kampaně.
-7. Operátor zkontroluje firmu, zdroj kontaktu, skóre, text a důvod oprávnění ke kontaktu.
-8. Schválený lead se odešle do Quickly pouze tehdy, když projde všemi kontrolami způsobilosti.
-9. Twenty uchovává CRM záznam firmy; Quickly řídí e-mailovou kampaň, odesílací schránku, sekvence a reakce.
+4. Bot určí zemi z explicitní adresy, rejstříku, discovery metadat nebo telefonní předvolby. Doména .cz je jen slabý signál. Primární jazyk určí přednostně z HTML lang, discovery metadat a obsahu webu; uloží také alternativní jazyky, zdroj a confidence. Pro oslovení použije spolehlivý primární jazyk webu, u české firmy bez jistého výsledku češtinu a jinak angličtinu.
+5. Deterministické skóre se skládá z relevance ručně zadanému discovery dotazu (max. 25), zjištěné potřeby na webu (max. 30), dosažitelnosti veřejným telefonem/e-mailem (max. 20) a síly zdrojů včetně přesné ARES shody (max. 15). Kvalifikační práh kampaně je standardně 70.
+6. /sales_calls zobrazí analyzované nezamítnuté leady s veřejným telefonem a zdrojem, seřazené podle skóre. Tento seznam je pro ruční kontrolu a cold cally; není důkazem právního titulu.
+7. Je-li nastaven Ollama, bot sestaví verzovaný cold-email prompt pouze z ověřených faktů, vyžádá strukturovaný JSON a zkontroluje Zod schema, jazyk, délku, jedinou nízkotlakou otázku a přesnou shodu personalizačního faktu. Neplatný výstup opraví nejvýše jedním omezeným retry. Bez Ollama použije původní deterministickou šablonu kampaně.
+8. Návrh, model, verzi promptu, jazyk, confidence a použitý fakt uloží k leadu. Návrh se tímto krokem neposílá.
+9. Operátor zkontroluje firmu, zdroj kontaktu, skóre, text a důvod oprávnění ke kontaktu.
+10. Schválený lead se odešle do Quickly pouze tehdy, když projde všemi kontrolami způsobilosti.
+11. Twenty uchovává idempotentně dohledanou nebo vytvořenou Company a návrh jako nativní Note. Quickly řídí e-mailovou kampaň, odesílací schránku, sekvence a reakce.
 
 První nastavení discovery
 1. V Google Cloud projektu zapni Places API (New), vytvoř omezený API key a povol mu jen toto API. Počítej s účtováním Google Maps Platform.
@@ -66,7 +68,8 @@ Zdroje a hranice discovery
 Google Places poskytuje kandidáty, jejich veřejně uvedený web a discovery odkaz. ARES ověřuje pouze jednoznačnou přesnou shodu názvu. Webový audit pracuje s oficiálním webem kandidáta. Firmy.cz se automaticky nescrapuje; jeho podmínky neumožňují použít katalog jako neautorizovaný hromadný zdroj. Výsledek nemusí být úplný, pořadí Places není obchodní doporučení a bot neobchází roboty, přihlášení ani placené databáze.
 
 Integrace
-• Twenty CRM: současná integrace vytváří nebo synchronizuje záznam společnosti. Twenty samo v tomto workflow e-mail neodesílá.
+• Twenty CRM: Company se hledá v pořadí doména → registrační ID/IČO → externí ID → jméno+země a pak se aktualizuje nebo vytvoří. Návrh e-mailu je nativní Note navázaná na Company; stejný lead poznámku aktualizuje místo vytváření duplikátu. Reusable integrace podporuje také Person, Opportunity, Task, Relationship a Referral, ale pipeline nevymýšlí osobu ani automaticky nevytváří obchodní příležitost. Vlastní pole fungují po instalaci Twenty Sales app a zapnutí TWENTY_APP_FIELDS_ENABLED. Twenty samo v tomto workflow e-mail neodesílá.
+• Ollama: volitelně generuje pouze draft přes sdílený provider. Dynamický obsah je oddělen od instrukcí, výstup je validovaný a při nedostatku podkladů musí model personalizaci přiznaně vynechat. Chyba modelu neznamená, že se smí odeslat neověřený text.
 • Quickly: přijímá e-mail, jméno a vygenerované hodnoty subject/body. Finální sekvence, časování, limity a odesílací schránka se spravují v Quickly.
 • Telegram: slouží jako soukromé administrační rozhraní pro kontrolu stavu, leadů, schválení a ruční spuštění běhu.
 • Sales API: umožňuje spravovat kampaně, leady a doložení oprávnění mimo Telegram.
@@ -78,7 +81,7 @@ Podmínky odeslání
 Bot vyžaduje kvalifikovaný lead, syntakticky platnou adresu, ruční schválení, evidovaný a platný RECIPIENT_OPT_IN nebo EXISTING_CUSTOMER, nepřítomnost suppression/reply blokace, aktivní kampaň, Quickly campaign ID, volnou denní kapacitu a funkční Quickly konfiguraci. Veřejně nalezený e-mail ani /sales_approve tyto podmínky nenahrazují.
 
 Omezení a odpovědnost
-Automatické skóre i návrh textu mohou být chybné. Bot nepotvrzuje totožnost příjemce, aktuálnost webu, doručitelnost adresy ani zákonnost kampaně. Před odesláním vždy ověř zdroj, příjemce, právní základ, místní pravidla, suppression stav a finální znění. Přístup je omezen na povolená Telegram user ID a tajné klíče se nespravují přes Telegram.
+Automatické skóre, detekce jazyka i návrh textu mohou být chybné. Bot nepotvrzuje totožnost příjemce, aktuálnost webu, doručitelnost adresy ani zákonnost kampaně. Nevytváří graph database, neprochází autonomně vztahové grafy, neplatí referral provize a nespouští autonomní odesílání. Před odesláním vždy ověř zdroj, příjemce, právní základ, místní pravidla, suppression stav a finální znění. Přístup je omezen na povolená Telegram user ID a tajné klíče se nespravují přes Telegram.
 
 Použití
 Pracovní postup a všechny dostupné příkazy zobrazíš přes /sales_help. Aktuální stav integrací a pipeline ověříš přes /sales_status. Když /sales_run vrátí 0 discovered, ale /sales_find našel kandidáty, sleduj hlavně analyzed: discovery count v runu označuje pouze JSON feed; ruční Places import je vypsán už příkazem /sales_find.`;

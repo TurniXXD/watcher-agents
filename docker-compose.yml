@@ -379,6 +379,8 @@ services:
     command: ['node', 'apps/sales-bot/dist/index.js']
     env_file:
       - ${WATCHER_ENV_FILE:-.env.example}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports:
       - '127.0.0.1:4050:4050'
     depends_on:

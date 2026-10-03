@@ -461,6 +461,8 @@ services:
     environment:
       NODE_ENV: production
       TZ: Europe/Prague
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports:
       - '127.0.0.1:4050:4050'
     networks:

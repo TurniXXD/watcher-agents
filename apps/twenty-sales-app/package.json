@@ -1,0 +1,22 @@
+{
+  "name": "@watcher/twenty-sales-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0",
+    "twenty": ">=2.43.0"
+  },
+  "keywords": [
+    "twenty-app"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "twenty": "twenty"
+  },
+  "devDependencies": {
+    "twenty-sdk": "2.43.0",
+    "typescript": "6.0.3"
+  }
+}

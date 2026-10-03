@@ -28,6 +28,7 @@ export type PlaceDiscoveryResult = {
   websiteUrl: string;
   sourceUrl: string;
   address?: string;
+  phone?: string;
 };
 
 const isHttpUrl = (value: string | undefined): value is string => {
@@ -61,7 +62,7 @@ export class GooglePlacesDiscoveryClient {
           'content-type': 'application/json',
           'x-goog-api-key': this.apiKey,
           'x-goog-fieldmask':
-            'places.id,places.displayName,places.formattedAddress,places.businessStatus,places.websiteUri,places.googleMapsUri',
+            'places.id,places.displayName,places.formattedAddress,places.businessStatus,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber',
         },
         body: JSON.stringify({
           textQuery: `${input.query} ${input.locality}`,
@@ -90,6 +91,9 @@ export class GooglePlacesDiscoveryClient {
           (isHttpUrl(place.googleMapsUri) ? place.googleMapsUri : undefined) ??
           `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(place.id)}`,
         ...(place.formattedAddress ? { address: place.formattedAddress } : {}),
+        ...(place.nationalPhoneNumber
+          ? { phone: place.nationalPhoneNumber }
+          : {}),
       }));
   }
 }

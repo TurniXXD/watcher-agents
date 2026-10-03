@@ -2324,8 +2324,11 @@ model SalesLead {
   id              String             @id @default(uuid())
   campaignId      String
   companyName     String
+  entityType      String             @default("COMPANY")
   websiteUrl      String?
   domain          String?
+  location        String?
+  registrationId  String?
   email           String?
   phone           String?
   phoneSourceUrl  String?
@@ -2334,6 +2337,17 @@ model SalesLead {
   source          String
   sourceExternalId String
   sourceUrl       String?
+  sourceData      Json?
+  countryCode     String?
+  countryConfidence Float?
+  countryDetectionSource String?
+  primaryLanguage String?
+  detectedLanguages String[]         @default([])
+  languageConfidence Float?
+  languageDetectionSource String?
+  outreachLanguage String?
+  outreachLanguageReason String?
+  outreachLanguageConfidence Float?
   stage           SalesLeadStage     @default(DISCOVERED)
   baseScore       Int?
   llmAdjustment   Int?
@@ -2342,6 +2356,12 @@ model SalesLead {
   analysis        Json?
   draftSubject    String?
   draftBody       String?
+  draftPromptVersion String?
+  draftModel      String?
+  draftPersonalizationFact String?
+  draftGenerationConfidence Float?
+  draftInsufficientPersonalizationData Boolean?
+  draftCreatedAt  DateTime?
   approvedAt      DateTime?
   approvedBy      String?
   approvedVia     SalesDecisionSource?
@@ -2351,6 +2371,7 @@ model SalesLead {
   twentyCompanyId String?
   twentyPersonId  String?
   twentyOpportunityId String?
+  twentyDraftNoteId String?
   attemptCount    Int                @default(0)
   nextAttemptAt   DateTime           @default(now())
   lastError       String?

@@ -2,6 +2,13 @@ import type { WatcherLogger } from '@watcher/core';
 import type { SalesStore } from '@watcher/database';
 import { findExactAresCompany } from '@watcher/sources/company';
 import { z } from 'zod';
+import type { ColdEmailGenerator } from './cold-email-generator.js';
+import {
+  detectCountry,
+  detectLanguage,
+  normalizeEntityType,
+  selectOutreachLanguage,
+} from './classification/index.js';
 import type { GooglePlacesDiscoveryClient } from './discovery.js';
 import { sendEligibility } from './eligibility.js';
 import {
@@ -10,10 +17,22 @@ import {
   draftOutreach,
   scoreAuditDetailed,
   type QuicklyClient,
-  type TwentyClient,
 } from './providers.js';
+import type { TwentyIntegration } from './integrations/twenty/index.js';
+import {
+  buildColdEmailContext,
+  verifiedResearchFacts,
+} from './lead-context.js';
+import { COLD_EMAIL_PROMPT_VERSION } from './prompts/cold-email/index.js';
 
 const emailSchema = z.email();
+const discoveryMetadataSchema = z
+  .object({
+    countryCode: z.string().length(2).optional(),
+    languageCode: z.string().min(2).max(12).optional(),
+    phone: z.string().min(7).max(40).optional(),
+  })
+  .passthrough();
 
 export class SalesService {
   private running = false;
@@ -21,8 +40,10 @@ export class SalesService {
     private readonly store: SalesStore,
     private readonly logger: WatcherLogger,
     private readonly quickly?: QuicklyClient,
-    private readonly twenty?: TwentyClient,
+    private readonly twenty?: TwentyIntegration,
     private readonly places?: GooglePlacesDiscoveryClient,
+    private readonly coldEmailGenerator?: ColdEmailGenerator,
+    private readonly coldEmailModel?: string,
   ) {}
 
   public get discoveryConfigured(): boolean {
@@ -50,8 +71,14 @@ export class SalesService {
         source: 'GOOGLE_PLACES',
         sourceExternalId: company.id,
         companyName: company.name,
+        entityType: 'COMPANY',
         websiteUrl: company.websiteUrl,
         sourceUrl: company.sourceUrl,
+        ...(company.address ? { location: company.address } : {}),
+        sourceData: {
+          ...(company.address ? { address: company.address } : {}),
+          ...(company.phone ? { phone: company.phone } : {}),
+        },
       });
     }
     this.logger.info(
@@ -130,8 +157,23 @@ export class SalesService {
                 source: 'JSON_FEED',
                 sourceExternalId: company.id,
                 companyName: company.name,
+                entityType: normalizeEntityType(company.entityType),
                 websiteUrl: company.websiteUrl,
                 ...(company.sourceUrl ? { sourceUrl: company.sourceUrl } : {}),
+                ...(company.address ? { location: company.address } : {}),
+                sourceData: {
+                  ...(company.entityType
+                    ? { entityType: company.entityType }
+                    : {}),
+                  ...(company.address ? { address: company.address } : {}),
+                  ...(company.countryCode
+                    ? { countryCode: company.countryCode }
+                    : {}),
+                  ...(company.languageCode
+                    ? { languageCode: company.languageCode }
+                    : {}),
+                  ...(company.phone ? { phone: company.phone } : {}),
+                },
               });
             }
             return companies.length;
@@ -154,37 +196,97 @@ export class SalesService {
           const email = audit.foundEmail;
           let legalIdentity:
             { ico: string; name: string; sourceUrl: string } | undefined;
-          try {
-            const ares = await findExactAresCompany(lead.companyName, {
-              limit: 10,
-            });
-            if (ares && !ares.datumZaniku) {
-              legalIdentity = {
-                ico: ares.ico,
-                name: ares.obchodniJmeno ?? lead.companyName,
-                sourceUrl: `https://ares.gov.cz/ekonomicke-subjekty?ico=${encodeURIComponent(ares.ico)}`,
-              };
+          if (lead.entityType !== 'PERSON') {
+            try {
+              const ares = await findExactAresCompany(lead.companyName, {
+                limit: 10,
+              });
+              if (ares && !ares.datumZaniku) {
+                legalIdentity = {
+                  ico: ares.ico,
+                  name: ares.obchodniJmeno ?? lead.companyName,
+                  sourceUrl: `https://ares.gov.cz/ekonomicke-subjekty?ico=${encodeURIComponent(ares.ico)}`,
+                };
+              }
+            } catch (error) {
+              this.logger.warn(
+                { err: error, leadId: lead.id },
+                'ARES verification failed; website analysis continues',
+              );
             }
-          } catch (error) {
-            this.logger.warn(
-              { err: error, leadId: lead.id },
-              'ARES verification failed; website analysis continues',
-            );
           }
           const scoreBreakdown = scoreAuditDetailed(audit, {
             explicitDiscoveryMatch: lead.source === 'GOOGLE_PLACES',
             aresExactMatch: Boolean(legalIdentity),
           });
           const score = scoreBreakdown.total;
-          const draft = draftOutreach(
-            lead.companyName,
-            lead.campaign.offer,
-            audit,
-            lead.campaign.subjectTemplate,
-            lead.campaign.bodyTemplate,
+          const discoveryMetadata = discoveryMetadataSchema.safeParse(
+            lead.sourceData,
           );
+          const metadata = discoveryMetadata.success
+            ? discoveryMetadata.data
+            : undefined;
+          const classificationPhone = audit.foundPhone ?? metadata?.phone;
+          const country = detectCountry({
+            ...(lead.location ? { address: lead.location } : {}),
+            ...(legalIdentity ? { registrationCountryCode: 'CZ' } : {}),
+            ...(metadata?.countryCode
+              ? { discoveryCountryCode: metadata.countryCode }
+              : {}),
+            ...(classificationPhone ? { phone: classificationPhone } : {}),
+            websiteUrl: audit.sourceUrl,
+          });
+          const language = detectLanguage({
+            ...(audit.htmlLanguage ? { htmlLanguage: audit.htmlLanguage } : {}),
+            alternateLanguages: audit.alternateLanguages,
+            ...(metadata?.languageCode
+              ? { discoveryLanguage: metadata.languageCode }
+              : {}),
+            websiteText: `${audit.textExcerpt}\n${audit.contactTextExcerpt ?? ''}`,
+          });
+          const outreachLanguage = selectOutreachLanguage({
+            ...(country ? { country } : {}),
+            ...(language ? { language } : {}),
+          });
+          const facts = verifiedResearchFacts({
+            audit,
+            ...(legalIdentity ? { legalIdentity } : {}),
+          });
+          let generatedDraft:
+            Awaited<ReturnType<ColdEmailGenerator['generate']>> | undefined;
+          if (this.coldEmailGenerator) {
+            try {
+              generatedDraft = await this.coldEmailGenerator.generate(
+                buildColdEmailContext({
+                  language: outreachLanguage.language,
+                  companyName: lead.companyName,
+                  websiteUrl: audit.sourceUrl,
+                  ...(lead.location ? { location: lead.location } : {}),
+                  ...(country ? { countryCode: country.code } : {}),
+                  offer: lead.campaign.offer,
+                  facts,
+                }),
+              );
+            } catch (error) {
+              this.logger.warn(
+                { err: error, leadId: lead.id },
+                'Cold-email generation failed validation; deterministic draft retained',
+              );
+            }
+          }
+          const draft =
+            generatedDraft ??
+            draftOutreach(
+              lead.companyName,
+              lead.campaign.offer,
+              audit,
+              lead.campaign.subjectTemplate,
+              lead.campaign.bodyTemplate,
+            );
+          const draftCreatedAt = new Date();
           await this.store.markAnalyzed(lead.id, {
             domain: new URL(audit.sourceUrl).hostname.replace(/^www\./u, ''),
+            ...(legalIdentity ? { registrationId: legalIdentity.ico } : {}),
             ...(email ? { email, contactSourceUrl: audit.emailSourceUrl } : {}),
             ...(audit.foundPhone
               ? {
@@ -210,22 +312,128 @@ export class SalesService {
               discoverySource: lead.source,
               scoreBreakdown,
               legalIdentity: legalIdentity ?? null,
+              country: country ?? null,
+              language: language ?? null,
+              outreachLanguage,
+              verifiedFacts: facts,
             },
+            ...(country ? { country } : {}),
+            ...(language ? { language } : {}),
+            outreachLanguage,
             baseScore: score,
             llmAdjustment: 0,
             finalScore: score,
             draftSubject: draft.subject,
             draftBody: draft.body,
+            draftMetadata: {
+              promptVersion: generatedDraft
+                ? COLD_EMAIL_PROMPT_VERSION
+                : 'deterministic-template',
+              model: generatedDraft
+                ? (this.coldEmailModel ?? 'unknown')
+                : 'none',
+              ...(generatedDraft?.personalizationFact
+                ? {
+                    personalizationFact: generatedDraft.personalizationFact,
+                  }
+                : {}),
+              generationConfidence: generatedDraft?.confidence ?? 1,
+              insufficientPersonalizationData:
+                generatedDraft?.insufficientPersonalizationData ??
+                facts.length === 0,
+              createdAt: draftCreatedAt,
+            },
             minimumLeadScore: lead.campaign.minimumLeadScore,
           });
           result.analyzed += 1;
-          if (this.twenty && !lead.twentyCompanyId) {
+          if (this.twenty) {
             try {
-              const id = await this.twenty.createCompany(
-                lead.companyName,
-                audit.sourceUrl,
+              const domain = new URL(audit.sourceUrl).hostname.replace(
+                /^www\./u,
+                '',
               );
-              await this.store.setTwentyCompanyId(lead.id, id);
+              let companyId: string | undefined;
+              let personId: string | undefined;
+              if (lead.entityType === 'PERSON') {
+                const [firstName, ...lastNameParts] = lead.companyName
+                  .trim()
+                  .split(/\s+/u);
+                const person = await this.twenty.upsertPerson({
+                  firstName: firstName ?? lead.companyName,
+                  ...(lastNameParts.length > 0
+                    ? { lastName: lastNameParts.join(' ') }
+                    : {}),
+                  ...(email ? { email } : {}),
+                  source: lead.source,
+                  ...(lead.sourceUrl ? { sourceUrl: lead.sourceUrl } : {}),
+                  externalId: `${lead.source}:${lead.sourceExternalId}`,
+                  preferredLanguage: outreachLanguage.language,
+                  ...(language ? { detectedLanguages: language.detected } : {}),
+                  ...(country ? { countryCode: country.code } : {}),
+                });
+                personId = person.id;
+              } else {
+                const company = await this.twenty.upsertCompany({
+                  name: lead.companyName,
+                  websiteUrl: audit.sourceUrl,
+                  domain,
+                  ...(legalIdentity
+                    ? { registrationId: legalIdentity.ico }
+                    : {}),
+                  externalId: `${lead.source}:${lead.sourceExternalId}`,
+                  ...(country
+                    ? {
+                        countryCode: country.code,
+                        countryConfidence: country.confidence,
+                        countryDetectionSource: country.source,
+                      }
+                    : {}),
+                  ...(language
+                    ? {
+                        primaryLanguage: language.primary,
+                        detectedLanguages: language.detected,
+                        languageConfidence: language.confidence,
+                        languageDetectionSource: language.source,
+                      }
+                    : {}),
+                  ...(lead.location ? { location: lead.location } : {}),
+                  source: lead.source,
+                  ...(lead.sourceUrl ? { sourceUrl: lead.sourceUrl } : {}),
+                  leadScore: score,
+                  lastResearchedAt: draftCreatedAt,
+                });
+                companyId = company.id;
+              }
+              const note = await this.twenty.saveDraftNote({
+                externalId: lead.id,
+                ...(companyId ? { companyId } : {}),
+                ...(personId ? { personId } : {}),
+                subject: draft.subject,
+                body: draft.body,
+                promptVersion: generatedDraft
+                  ? COLD_EMAIL_PROMPT_VERSION
+                  : 'deterministic-template',
+                model: generatedDraft
+                  ? (this.coldEmailModel ?? 'unknown')
+                  : 'none',
+                language: outreachLanguage.language,
+                ...(language
+                  ? { languageDetectionConfidence: language.confidence }
+                  : {}),
+                ...(country ? { countryCode: country.code } : {}),
+                ...(generatedDraft?.personalizationFact
+                  ? {
+                      personalizationFact: generatedDraft.personalizationFact,
+                    }
+                  : {}),
+                generationConfidence: generatedDraft?.confidence ?? 1,
+                createdAt: draftCreatedAt,
+              });
+              await this.store.setTwentySyncIds(lead.id, {
+                ...(companyId ? { companyId } : {}),
+                ...(personId ? { personId } : {}),
+                draftNoteId: note.id,
+              });
             } catch (error) {
               this.logger.warn(
                 { err: error, leadId: lead.id },

@@ -1,13 +1,16 @@
 import { createLogger, errorMessage, PersistentScheduler } from '@watcher/core';
 import {
   createDatabaseClient,
+  PostgresOllamaCoordinator,
   SalesStore,
   TelegramOutboxStore,
 } from '@watcher/database';
+import { OllamaProvider } from '@watcher/llm';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { SalesApi } from './api.js';
 import { createSalesBot, salesBotCommands } from './bot.js';
 import { GooglePlacesDiscoveryClient } from './discovery.js';
+import { ColdEmailGenerator } from './cold-email-generator.js';
 import { env } from './env.js';
 import {
   enqueueFollowupReports,
@@ -15,7 +18,8 @@ import {
   localDate,
   salesFollowupKind,
 } from './followup-report.js';
-import { QuicklyClient, TwentyClient } from './providers.js';
+import { TwentyIntegration } from './integrations/twenty/index.js';
+import { QuicklyClient } from './providers.js';
 import { SalesService } from './service.js';
 
 const logger = createLogger('sales-bot', env.LOG_LEVEL);
@@ -28,12 +32,43 @@ const quickly =
     : undefined;
 const twenty =
   env.TWENTY_BASE_URL && env.TWENTY_API_KEY
-    ? new TwentyClient(env.TWENTY_BASE_URL, env.TWENTY_API_KEY)
+    ? new TwentyIntegration(
+        env.TWENTY_BASE_URL,
+        env.TWENTY_API_KEY,
+        env.TWENTY_APP_FIELDS_ENABLED,
+      )
+    : undefined;
+const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);
+const coldEmailGenerator =
+  env.OLLAMA_URL && env.OLLAMA_MODEL
+    ? new ColdEmailGenerator(
+        new OllamaProvider({
+          url: env.OLLAMA_URL,
+          model: env.OLLAMA_MODEL,
+          keepAlive: env.OLLAMA_KEEP_ALIVE,
+          numCtx: env.OLLAMA_NUM_CTX,
+          numPredict: 512,
+          retries: env.OLLAMA_RETRIES,
+          think: env.OLLAMA_THINK,
+          timeoutMs: env.OLLAMA_TIMEOUT_MS,
+          caller: 'sales-bot',
+          priority: 'normal',
+          coordinator: ollamaCoordinator,
+        }),
+      )
     : undefined;
 const places = env.GOOGLE_PLACES_API_KEY
   ? new GooglePlacesDiscoveryClient(env.GOOGLE_PLACES_API_KEY)
   : undefined;
-const service = new SalesService(store, logger, quickly, twenty, places);
+const service = new SalesService(
+  store,
+  logger,
+  quickly,
+  twenty,
+  places,
+  coldEmailGenerator,
+  env.OLLAMA_MODEL,
+);
 const allowed = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
 const bot = createSalesBot(env.SALES_TELEGRAM_TOKEN, allowed, store, service);
 const api = new SalesApi(

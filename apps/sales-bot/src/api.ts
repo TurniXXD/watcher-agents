@@ -8,6 +8,7 @@ import {
 import type { WatcherLogger } from '@watcher/core';
 import type { SalesStore } from '@watcher/database';
 import { z } from 'zod';
+import { normalizeEntityType } from './classification/index.js';
 import type { SalesService } from './service.js';
 
 const campaignSchema = z.object({
@@ -37,6 +38,11 @@ const feedLeadSchema = z.object({
   companyName: z.string().trim().min(1).max(300),
   websiteUrl: z.url(),
   sourceUrl: z.url().optional(),
+  entityType: z.string().trim().min(1).max(100).optional(),
+  address: z.string().trim().min(1).max(500).optional(),
+  countryCode: z.string().trim().length(2).toUpperCase().optional(),
+  languageCode: z.string().trim().min(2).max(12).optional(),
+  phone: z.string().trim().min(7).max(40).optional(),
 });
 const webhookSchema = z.object({
   event: z.string(),
@@ -293,8 +299,17 @@ export class SalesApi {
           source: lead.source,
           sourceExternalId: lead.sourceExternalId,
           companyName: lead.companyName,
+          entityType: normalizeEntityType(lead.entityType),
           websiteUrl: lead.websiteUrl,
           ...(lead.sourceUrl ? { sourceUrl: lead.sourceUrl } : {}),
+          ...(lead.address ? { location: lead.address } : {}),
+          sourceData: {
+            ...(lead.entityType ? { entityType: lead.entityType } : {}),
+            ...(lead.address ? { address: lead.address } : {}),
+            ...(lead.countryCode ? { countryCode: lead.countryCode } : {}),
+            ...(lead.languageCode ? { languageCode: lead.languageCode } : {}),
+            ...(lead.phone ? { phone: lead.phone } : {}),
+          },
         }),
       );
       return;
