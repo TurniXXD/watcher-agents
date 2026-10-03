@@ -206,6 +206,16 @@ jobs:
             for service in osint-bot sales-bot quickly twenty-server twenty-worker; do
               grep -Fxq "$service" <<< "$services"
             done
+
+            sales_networks="$(IMAGE_REGISTRY=ghcr.io \
+              IMAGE_NAMESPACE=example \
+              IMAGE_TAG=ci \
+              docker compose \
+                --env-file deploy/runtime/compose.env \
+                -f docker-compose.production.yml \
+                config --format json | jq -r '.services["sales-bot"].networks | keys[]')"
+            grep -Fxq default <<< "$sales_networks"
+            grep -Fxq lateralis <<< "$sales_networks"
           fi
 
   container-build-verify:

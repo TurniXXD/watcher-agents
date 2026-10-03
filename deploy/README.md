@@ -13,6 +13,16 @@ GitHub publishes one immutable Watcher image. The VPS runs that image with separ
 - GitHub stores deployment transport credentials only. Bot tokens, database credentials, allowlisted Telegram IDs, Ollama settings, and the SEC user agent stay only in mode-`0600` files on the VPS.
 - GitHub's production environment can require approval before its secrets are released to a job.
 
+## Cloudflare Tunnel access to Sales API
+
+The production `sales-bot` service joins both the private Compose network and the existing external `lateralis` network. A token-managed `cloudflared` container already attached to `lateralis` can route a Cloudflare public hostname to this Docker origin:
+
+```text
+http://sales-bot:4050
+```
+
+Create the public-hostname mapping in Cloudflare Zero Trust; token-managed tunnel ingress is not stored in this repository. Keep the host port bound to `127.0.0.1`. The public hostname exposes a REST API, not a browser UI. Protect operator-facing access with Cloudflare Access and continue sending `Authorization: Bearer $SALES_API_TOKEN` to every `/v1/*` endpoint. The Quickly webhook uses the separate `SALES_WEBHOOK_TOKEN`; the Compose deployment should normally keep its origin internal at `http://sales-bot:4050/v1/webhooks/quickly`.
+
 ## VPS prerequisites
 
 Install and configure:
