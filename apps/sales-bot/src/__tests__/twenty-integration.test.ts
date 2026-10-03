@@ -111,7 +111,7 @@ describe('TwentyIntegration idempotence', () => {
     const input = {
       fromPersonId: 'person-1',
       toPersonId: 'person-2',
-      type: 'KNOWS',
+      type: 'KNOWS' as const,
     };
     await twenty.createRelationship(input);
     await twenty.createRelationship(input);
