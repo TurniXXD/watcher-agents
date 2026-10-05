@@ -10,6 +10,7 @@ export type SalesLeadInput = {
   websiteUrl?: string;
   sourceUrl?: string;
   location?: string;
+  registrationId?: string;
   sourceData?: unknown;
 };
 
@@ -57,6 +58,9 @@ export class SalesStore {
           campaignId: input.campaignId,
           OR: [
             { source: input.source, sourceExternalId: input.sourceExternalId },
+            ...(input.registrationId
+              ? [{ registrationId: input.registrationId }]
+              : []),
             ...(domain ? [{ domain }] : []),
           ],
         },

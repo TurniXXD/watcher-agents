@@ -1,9 +1,10 @@
 import type { SalesStore } from '@watcher/database';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SalesService } from '../service.js';
 import {
   createSalesBot,
   parseSalesFind,
+  parseSalesSearch,
   salesAbout,
   salesBotCommands,
   salesHelp,
@@ -18,7 +19,11 @@ const update = (text: string, updateId: number) => ({
     from: { id: 123, is_bot: false, first_name: 'Operator' },
     text,
     entities: [
-      { offset: 0, length: text.length, type: 'bot_command' as const },
+      {
+        offset: 0,
+        length: text.indexOf(' ') === -1 ? text.length : text.indexOf(' '),
+        type: 'bot_command' as const,
+      },
     ],
   },
 });
@@ -102,6 +107,8 @@ describe('sales bot help', () => {
       const delivered = messages.join('\n');
       expect(delivered).toContain('💼 O Sales assistantovi');
       expect(delivered).toContain('GOOGLE_PLACES_API_KEY');
+      expect(delivered).toContain('GEOAPIFY_API_KEY');
+      expect(delivered).toContain('ARES');
       expect(delivered).toContain('Podmínky odeslání');
     },
   );
@@ -110,6 +117,7 @@ describe('sales bot help', () => {
     for (const command of [
       '/sales_status',
       '/sales_campaigns',
+      '/sales_search <service>',
       '/sales_find <campaign-id>',
       '/sales_calls [limit]',
       '/sales_leads',
@@ -132,7 +140,11 @@ describe('sales bot help', () => {
     expect(salesAbout).toContain('Twenty CRM');
     expect(salesAbout).toContain('Quickly');
     expect(salesAbout).toContain('GOOGLE_PLACES_API_KEY');
+    expect(salesAbout).toContain('GEOAPIFY_API_KEY');
     expect(salesAbout).toContain('Firmy.cz');
+    expect(salesBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'sales_search' }),
+    );
     expect(salesBotCommands).toContainEqual(
       expect.objectContaining({ command: 'sales_find' }),
     );
@@ -155,5 +167,75 @@ describe('sales bot help', () => {
       limit: 10,
     });
     expect(parseSalesFind('campaign | autoservis | Brno | 21')).toBeUndefined();
+  });
+
+  it('parses a bounded one-off search without a campaign', () => {
+    expect(parseSalesSearch('autoservis | Brno | 15')).toEqual({
+      query: 'autoservis',
+      locality: 'Brno',
+      limit: 15,
+    });
+    expect(parseSalesSearch('autoservis | Brno')).toEqual({
+      query: 'autoservis',
+      locality: 'Brno',
+      limit: 10,
+    });
+    expect(parseSalesSearch('autoservis | Brno | 0')).toBeUndefined();
+    expect(parseSalesSearch('autoservis | Brno | 21')).toBeUndefined();
+  });
+
+  it('prints one-off search results without accessing a campaign', async () => {
+    const searchBusinesses = vi.fn().mockResolvedValue([
+      {
+        id: 'place-1',
+        name: 'Autoservis Test',
+        provider: 'GEOAPIFY',
+        phone: '+420 123 456 789',
+        address: 'Brno',
+        websiteUrl: 'https://autoservis.example',
+        sourceUrl: 'https://maps.google.com/example',
+      },
+    ]);
+    const bot = createSalesBot(
+      'test-token',
+      new Set([123]),
+      {} as SalesStore,
+      { searchBusinesses } as unknown as SalesService,
+    );
+    bot.botInfo = {
+      id: 456,
+      is_bot: true,
+      first_name: 'Sales Bot',
+      username: 'sales_test_bot',
+      can_join_groups: false,
+      can_read_all_group_messages: false,
+      supports_inline_queries: false,
+      can_connect_to_business: false,
+      has_main_web_app: false,
+      has_topics_enabled: false,
+      allows_users_to_create_topics: false,
+      can_manage_bots: false,
+      supports_join_request_queries: false,
+    };
+    const messages: string[] = [];
+    bot.api.config.use(async (_previous, method, payload) => {
+      if (method !== 'sendMessage') throw new Error(`Unexpected ${method}`);
+      if (!('text' in payload) || typeof payload.text !== 'string')
+        throw new Error('Expected sendMessage text');
+      messages.push(payload.text);
+      return { ok: true, result: { message_id: 1 } } as never;
+    });
+
+    await bot.handleUpdate(update('/sales_search autoservis | Brno | 2', 500));
+
+    expect(searchBusinesses).toHaveBeenCalledWith({
+      query: 'autoservis',
+      locality: 'Brno',
+      limit: 2,
+    });
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toContain('Autoservis Test');
+    expect(messages[1]).toContain('+420 123 456 789');
+    expect(messages[1]).toContain('Výsledky se neuložily');
   });
 });

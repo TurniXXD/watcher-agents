@@ -10,6 +10,7 @@ import { parseAllowedUserIds } from '@watcher/telegram';
 import { SalesApi } from './api.js';
 import { createSalesBot, salesBotCommands } from './bot.js';
 import { GooglePlacesDiscoveryClient } from './discovery.js';
+import { GeoapifyDiscoveryClient } from './geoapify.js';
 import { ColdEmailGenerator } from './cold-email-generator.js';
 import { env } from './env.js';
 import {
@@ -60,11 +61,15 @@ const coldEmailGenerator =
 const places = env.GOOGLE_PLACES_API_KEY
   ? new GooglePlacesDiscoveryClient(env.GOOGLE_PLACES_API_KEY)
   : undefined;
+const geoapify = env.GEOAPIFY_API_KEY
+  ? new GeoapifyDiscoveryClient(env.GEOAPIFY_API_KEY)
+  : undefined;
 const service = new SalesService(
   store,
   logger,
   quickly,
   twenty,
+  geoapify,
   places,
   coldEmailGenerator,
   env.OLLAMA_MODEL,

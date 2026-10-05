@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { BusinessSearchResult } from './discovery-types.js';
 
 const placesResponseSchema = z.object({
   places: z
@@ -22,14 +23,11 @@ const placesSearchSchema = z.object({
   limit: z.number().int().min(1).max(20),
 });
 
-export type PlaceDiscoveryResult = {
-  id: string;
-  name: string;
-  websiteUrl: string;
-  sourceUrl: string;
-  address?: string;
-  phone?: string;
+export type PlaceSearchResult = BusinessSearchResult & {
+  provider: 'GOOGLE_PLACES';
 };
+
+export type PlaceDiscoveryResult = PlaceSearchResult & { websiteUrl: string };
 
 const isHttpUrl = (value: string | undefined): value is string => {
   if (!value) return false;
@@ -48,6 +46,17 @@ export class GooglePlacesDiscoveryClient {
     locality: string,
     requestedLimit: number,
   ): Promise<PlaceDiscoveryResult[]> {
+    const places = await this.searchDirectory(query, locality, requestedLimit);
+    return places.filter(
+      (place): place is PlaceDiscoveryResult => place.websiteUrl !== undefined,
+    );
+  }
+
+  public async searchDirectory(
+    query: string,
+    locality: string,
+    requestedLimit: number,
+  ): Promise<PlaceSearchResult[]> {
     const input = placesSearchSchema.parse({
       query,
       locality,
@@ -77,19 +86,18 @@ export class GooglePlacesDiscoveryClient {
       throw new Error(`Google Places Text Search HTTP ${response.status}`);
     const data = placesResponseSchema.parse(await response.json());
     return (data.places ?? [])
-      .filter(
-        (place) =>
-          isHttpUrl(place.websiteUri) &&
-          place.businessStatus !== 'CLOSED_PERMANENTLY',
-      )
+      .filter((place) => place.businessStatus !== 'CLOSED_PERMANENTLY')
       .slice(0, input.limit)
       .map((place) => ({
         id: place.id,
         name: place.displayName.text,
-        websiteUrl: place.websiteUri!,
+        provider: 'GOOGLE_PLACES' as const,
         sourceUrl:
           (isHttpUrl(place.googleMapsUri) ? place.googleMapsUri : undefined) ??
           `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(place.id)}`,
+        ...(isHttpUrl(place.websiteUri)
+          ? { websiteUrl: place.websiteUri }
+          : {}),
         ...(place.formattedAddress ? { address: place.formattedAddress } : {}),
         ...(place.nationalPhoneNumber
           ? { phone: place.nationalPhoneNumber }

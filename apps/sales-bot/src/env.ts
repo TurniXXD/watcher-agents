@@ -67,6 +67,11 @@ export const env = z
       .trim()
       .optional()
       .transform((value) => value || undefined),
+    GEOAPIFY_API_KEY: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => value || undefined),
     LOG_LEVEL: z.string().default('info'),
   })
   .superRefine((value, context) => {

@@ -12,18 +12,20 @@ This private bot reviews discovered companies, prepares outreach drafts, and—w
 
 Getting started
 1. Run /sales_status to check the current pipeline counts.
-2. Run /sales_find <campaign-id> | <service> | <location> | <limit> to find companies with official websites. Example: /sales_find 5a... | autoservis | Brno | 15
-3. Run /sales_run to audit newly discovered websites, collect sourced public contacts, score the leads, and sync configured integrations.
-4. Use /sales_calls to get the highest-scoring public phone contacts, or /sales_leads for all recent leads.
-5. Review the complete record with /sales_lead <id>.
-6. Use /sales_approve <id> or /sales_reject <id> only after reviewing the company, contact evidence, draft, and outreach basis.
+2. Run /sales_search <service> | <location> | <limit> for a one-off ARES + Geoapify search printed directly in Telegram, without a campaign or database import. Google Places is used only as an optional fallback. Example: /sales_search autoservis | Brno | 15
+3. To import candidates for later analysis, run /sales_find <campaign-id> | <service> | <location> | <limit>. Example: /sales_find 5a... | autoservis | Brno | 15
+4. Run /sales_run to audit newly discovered websites, collect sourced public contacts, score the leads, and sync configured integrations.
+5. Use /sales_calls to get the highest-scoring public phone contacts, or /sales_leads for all recent leads.
+6. Review the complete record with /sales_lead <id>.
+7. Use /sales_approve <id> or /sales_reject <id> only after reviewing the company, contact evidence, draft, and outreach basis.
 
 Commands
 /help or /sales_help — show this guide
 /about or /sales_about — explain what the bot does, how data moves, integrations, limits, and safety boundaries
 /sales_status — show campaign count, recent leads, qualified leads, and Quickly enrollments
 /sales_campaigns — list campaign IDs needed by /sales_find
-/sales_find <campaign-id> | <service> | <location> | <limit> — discover up to 20 matching companies through Google Places; requires GOOGLE_PLACES_API_KEY
+/sales_search <service> | <location> | <limit> — combine ARES and Geoapify and print up to 20 companies without a campaign or database import; Google is an optional fallback
+/sales_find <campaign-id> | <service> | <location> | <limit> — run the same combined discovery and import candidates with an official website
 /sales_calls [limit] — list researched leads that have a public phone and its source page, ranked by score
 /sales_leads — list the 10 most recent leads with IDs, stages, and scores
 /sales_lead <id> — show one lead's company details, public contact data and source, draft, and current Quickly eligibility
@@ -43,29 +45,31 @@ export const salesAbout = `💼 O Sales assistantovi
 Sales assistant je soukromý operátorský bot pro řízené zpracování B2B leadů. Pomáhá převzít firmy z nakonfigurovaného zdroje, dohledat veřejné kontaktní údaje, vyhodnotit obchodní relevanci, připravit návrh prvního oslovení a synchronizovat způsobilé záznamy do CRM a e-mailové platformy. Není to autonomní spamovací nástroj.
 
 Jak data procházejí systémem
-1. /sales_find provede omezené Text Search v Google Places podle oboru/služby a lokality. Uloží Place ID jako deduplikační klíč, odkaz na Google Maps jako discovery zdroj a pouze kandidáty s uvedeným firemním webem. Alternativně discovery načte JSON feed kampaně nebo přijme lead přes Sales API.
-2. /sales_run navštíví veřejný firemní web, hledá kontaktní stránku, veřejný e-mail a telefon v explicitním tel: odkazu a ke kontaktu ukládá přesnou zdrojovou URL. Nečte telefon z volného textu a nepřebírá jej automaticky z katalogu.
-3. Sdílený ARES klient použitý Sales i OSINT botem zkusí přesnou shodu registrovaného názvu a doplní kandidátní IČO. Nejednoznačná nebo chybějící shoda se nepotvrdí a shoda v ARES sama nedokazuje vlastnictví webu.
-4. Bot určí zemi z explicitní adresy, rejstříku, discovery metadat nebo telefonní předvolby. Doména .cz je jen slabý signál. Primární jazyk určí přednostně z HTML lang, discovery metadat a obsahu webu; uloží také alternativní jazyky, zdroj a confidence. Pro oslovení použije spolehlivý primární jazyk webu, u české firmy bez jistého výsledku češtinu a jinak angličtinu.
-5. Deterministické skóre se skládá z relevance ručně zadanému discovery dotazu (max. 25), zjištěné potřeby na webu (max. 30), dosažitelnosti veřejným telefonem/e-mailem (max. 20) a síly zdrojů včetně přesné ARES shody (max. 15). Kvalifikační práh kampaně je standardně 70.
-6. /sales_calls zobrazí analyzované nezamítnuté leady s veřejným telefonem a zdrojem, seřazené podle skóre. Tento seznam je pro ruční kontrolu a cold cally; není důkazem právního titulu.
-7. Je-li nastaven Ollama, bot sestaví verzovaný cold-email prompt pouze z ověřených faktů, vyžádá strukturovaný JSON a zkontroluje Zod schema, jazyk, délku, jedinou nízkotlakou otázku a přesnou shodu personalizačního faktu. Neplatný výstup opraví nejvýše jedním omezeným retry. Bez Ollama použije původní deterministickou šablonu kampaně.
-8. Návrh, model, verzi promptu, jazyk, confidence a použitý fakt uloží k leadu. Návrh se tímto krokem neposílá.
-9. Operátor zkontroluje firmu, zdroj kontaktu, skóre, text a důvod oprávnění ke kontaktu.
-10. Schválený lead se odešle do Quickly pouze tehdy, když projde všemi kontrolami způsobilosti.
-11. Twenty uchovává idempotentně dohledanou nebo vytvořenou Company a návrh jako nativní Note. Quickly řídí e-mailovou kampaň, odesílací schránku, sekvence a reakce.
+1. /sales_search kombinuje veřejný ARES s Geoapify. ARES vrací aktivní české subjekty, IČO, sídlo a CZ-NACE; Geoapify vrací provozovny a dostupný veřejný telefon, e-mail a web z OpenStreetMap. Google Places se zavolá jen jako volitelný fallback, pokud je nakonfigurovaný a primární zdroje nemají dost kontaktních výsledků. Výpis nevyžaduje kampaň a nic neukládá do databáze, CRM ani Quickly.
+2. /sales_find provede stejné kombinované hledání pro zvolenou kampaň. Výsledky deduplikuje podle IČO, domény a identity zdroje, ale importuje jen kandidáty s webem, protože následný audit vyžaduje oficiální web. Alternativně discovery načte JSON feed kampaně nebo přijme lead přes Sales API.
+3. /sales_run navštíví veřejný firemní web, hledá kontaktní stránku, veřejný e-mail a telefon v explicitním tel: odkazu a ke kontaktu ukládá přesnou zdrojovou URL. Nečte telefon z volného textu a nepřebírá jej automaticky z katalogu.
+4. Sdílený ARES klient použitý Sales i OSINT botem zkusí přesnou shodu registrovaného názvu a doplní kandidátní IČO. Nejednoznačná nebo chybějící shoda se nepotvrdí a shoda v ARES sama nedokazuje vlastnictví webu.
+5. Bot určí zemi z explicitní adresy, rejstříku, discovery metadat nebo telefonní předvolby. Doména .cz je jen slabý signál. Primární jazyk určí přednostně z HTML lang, discovery metadat a obsahu webu; uloží také alternativní jazyky, zdroj a confidence. Pro oslovení použije spolehlivý primární jazyk webu, u české firmy bez jistého výsledku češtinu a jinak angličtinu.
+6. Deterministické skóre se skládá z relevance ručně zadanému discovery dotazu (max. 25), zjištěné potřeby na webu (max. 30), dosažitelnosti veřejným telefonem/e-mailem (max. 20) a síly zdrojů včetně přesné ARES shody (max. 15). Kvalifikační práh kampaně je standardně 70.
+7. /sales_calls zobrazí analyzované nezamítnuté leady s veřejným telefonem a zdrojem, seřazené podle skóre. Tento seznam je pro ruční kontrolu a cold cally; není důkazem právního titulu.
+8. Je-li nastaven Ollama, bot sestaví verzovaný cold-email prompt pouze z ověřených faktů, vyžádá strukturovaný JSON a zkontroluje Zod schema, jazyk, délku, jedinou nízkotlakou otázku a přesnou shodu personalizačního faktu. Neplatný výstup opraví nejvýše jedním omezeným retry. Bez Ollama použije původní deterministickou šablonu kampaně.
+9. Návrh, model, verzi promptu, jazyk, confidence a použitý fakt uloží k leadu. Návrh se tímto krokem neposílá.
+10. Operátor zkontroluje firmu, zdroj kontaktu, skóre, text a důvod oprávnění ke kontaktu.
+11. Schválený lead se odešle do Quickly pouze tehdy, když projde všemi kontrolami způsobilosti.
+12. Twenty uchovává idempotentně dohledanou nebo vytvořenou Company a návrh jako nativní Note. Quickly řídí e-mailovou kampaň, odesílací schránku, sekvence a reakce.
 
 První nastavení discovery
-1. V Google Cloud projektu zapni Places API (New), vytvoř omezený API key a povol mu jen toto API. Počítej s účtováním Google Maps Platform.
-2. Na VPS nastav GOOGLE_PLACES_API_KEY v tajném sales-bot.env; neposílej klíč do Telegramu ani do repozitáře. Potom znovu nasaď nebo restartuj sales-bot.
-3. Existující UUID vypíše /sales_campaigns. Novou kampaň vytvoř z VPS přes Sales API:
+1. ARES nevyžaduje API key a zůstává aktivní vždy. Pro známé obory bot mapuje běžný text na kategorii; přesný ARES filtr lze zadat jako nace:95310. Neznámý text ARES hledá v obchodním názvu.
+2. V Geoapify vytvoř bezplatný API key a na VPS nastav GEOAPIFY_API_KEY v tajném sales-bot.env. Geoapify je primární zdroj provozoven a kontaktů. Klíč neposílej do Telegramu ani do repozitáře.
+3. Volitelně nastav GOOGLE_PLACES_API_KEY. Google se použije pouze jako fallback pro chybějící kontaktní výsledky; bez klíče bot normálně funguje přes ARES a Geoapify. Potom znovu nasaď nebo restartuj sales-bot.
+4. Existující UUID vypíše /sales_campaigns. Novou kampaň vytvoř z VPS přes Sales API:
 curl -X POST http://127.0.0.1:4050/v1/campaigns -H "Authorization: Bearer $SALES_API_TOKEN" -H "Content-Type: application/json" --data '{"name":"Brno autoservisy","offer":"modernizace webu","subjectTemplate":"Nápad pro {{company}}","bodyTemplate":"Dobrý den, {{observation}} Nabízíme {{offer}}."}'
 Kampaň může zůstat disabled pro čistý research; enabled ovládá odesílání, ne analýzu.
-4. Spusť například /sales_find <campaign-id> | autoservis | Brno | 15. Limit je 1–20 a omezuje jeden placený dotaz.
-5. Spusť /sales_run a potom /sales_calls 20. Detail a původ každého kontaktu ověříš přes /sales_lead <id>.
+5. Pro okamžitý výpis bez kampaně spusť /sales_search autoservis | Brno | 15. Výsledek se nikam neukládá. Pro přesný obor lze použít například /sales_search nace:95310 | Brno | 15 nebo Geoapify kategorii ve tvaru geo:service.vehicle.repair.car.
+6. Pro import spusť /sales_find <campaign-id> | autoservis | Brno | 15, potom /sales_run a /sales_calls 20. Detail a původ každého uloženého kontaktu ověříš přes /sales_lead <id>.
 
 Zdroje a hranice discovery
-Google Places poskytuje kandidáty, jejich veřejně uvedený web a discovery odkaz. ARES ověřuje pouze jednoznačnou přesnou shodu názvu. Webový audit pracuje s oficiálním webem kandidáta. Firmy.cz se automaticky nescrapuje; jeho podmínky neumožňují použít katalog jako neautorizovaný hromadný zdroj. Výsledek nemusí být úplný, pořadí Places není obchodní doporučení a bot neobchází roboty, přihlášení ani placené databáze.
+ARES poskytuje registrované subjekty a sídla, nikoli spolehlivý katalog provozoven nebo kontaktů. Geoapify používá komunitní OpenStreetMap data, která mohou být neúplná nebo zastaralá; výsledky musí uvádět atribuci. Google Places je pouze volitelný fallback. ARES shoda názvu sama nedokazuje vlastnictví webu a sídlo nemusí být provozovna. Webový audit pracuje s oficiálním webem kandidáta. Firmy.cz se automaticky nescrapuje; bot neobchází roboty, přihlášení ani placené databáze.
 
 Integrace
 • Twenty CRM: Company se hledá v pořadí doména → registrační ID/IČO → externí ID → jméno+země a pak se aktualizuje nebo vytvoří. Návrh e-mailu je nativní Note navázaná na Company; stejný lead poznámku aktualizuje místo vytváření duplikátu. Reusable integrace podporuje také Person, Opportunity, Task, Relationship a Referral, ale pipeline nevymýšlí osobu ani automaticky nevytváří obchodní příležitost. Vlastní pole fungují po instalaci Twenty Sales app a zapnutí TWENTY_APP_FIELDS_ENABLED. Twenty samo v tomto workflow e-mail neodesílá.
@@ -94,6 +98,10 @@ export const salesBotCommands = [
     description: 'Stav kampaní, leadů a synchronizace',
   },
   { command: 'sales_campaigns', description: 'ID a stav Sales kampaní' },
+  {
+    command: 'sales_search',
+    description: 'Jednorázově hledat firmy bez kampaně',
+  },
   { command: 'sales_find', description: 'Najít firmy podle oboru a lokality' },
   { command: 'sales_calls', description: 'Kontakty pro ruční cold cally' },
   { command: 'sales_leads', description: 'Posledních 10 leadů' },
@@ -140,6 +148,22 @@ export const parseSalesFind = (
   return { campaignId, query, locality, limit };
 };
 
+export const parseSalesSearch = (
+  value: string,
+): { query: string; locality: string; limit: number } | undefined => {
+  const parts = value
+    .split('|')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 2 || parts.length > 3) return undefined;
+  const limit = parts[2] === undefined ? 10 : Number(parts[2]);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 20) return undefined;
+  const [query, locality] = parts;
+  if (!query || !locality || query.length > 120 || locality.length > 120)
+    return undefined;
+  return { query, locality, limit };
+};
+
 export const createSalesBot = (
   token: string,
   allowedUserIds: ReadonlySet<number>,
@@ -154,7 +178,7 @@ export const createSalesBot = (
     const campaigns = await store.listCampaigns();
     const leads = await store.listLeads(undefined, 100);
     await ctx.reply(
-      `Campaigns: ${campaigns.length}; recent leads: ${leads.length}; qualified: ${leads.filter((lead) => lead.stage === 'QUALIFIED').length}; Quickly enrolled: ${leads.filter((lead) => lead.stage === 'SYNCED_TO_QUICKLY').length}; Places discovery: ${service.discoveryConfigured ? 'configured' : 'missing GOOGLE_PLACES_API_KEY'}.`,
+      `Campaigns: ${campaigns.length}; recent leads: ${leads.length}; qualified: ${leads.filter((lead) => lead.stage === 'QUALIFIED').length}; Quickly enrolled: ${leads.filter((lead) => lead.stage === 'SYNCED_TO_QUICKLY').length}; Discovery: ARES active, Geoapify ${service.geoapifyConfigured ? 'configured' : 'missing GEOAPIFY_API_KEY'}, Google fallback ${service.googlePlacesConfigured ? 'configured' : 'disabled'}.`,
     );
   });
   bot.command('sales_campaigns', async (ctx) => {
@@ -171,6 +195,36 @@ export const createSalesBot = (
         : 'Žádná Sales kampaň. Postup vytvoření přes API je v /sales_about.',
     );
   });
+  bot.command('sales_search', async (ctx) => {
+    const input = parseSalesSearch(ctx.match);
+    if (!input) {
+      await ctx.reply(
+        'Použití: /sales_search <obor/služba> | <lokalita> | <limit 1–20>\nPříklad: /sales_search autoservis | Brno | 15',
+      );
+      return;
+    }
+    try {
+      await ctx.reply(
+        'Hledám firmy v ARES a Geoapify; Google použiji jen jako nakonfigurovaný fallback…',
+      );
+      const companies = await service.searchBusinesses(input);
+      await send(
+        ctx,
+        companies.length
+          ? `🔎 Výsledky (${companies.length}) pro „${input.query}“ · ${input.locality}\nVýsledky se neuložily do kampaně ani CRM. Veřejný kontakt sám nezakládá oprávnění firmu oslovit. Geoapify výsledky obsahují data © OpenStreetMap contributors.\n\n${companies
+              .map(
+                (company, index) =>
+                  `${index + 1}. ${company.name}\nZdroj: ${company.provider}${company.registrationId && company.provider !== 'ARES' ? ' + ARES' : ''}\nIČO: ${company.registrationId ?? 'neuvedeno'}\nCZ-NACE: ${company.naceCodes?.join(', ') ?? 'neuvedeno'}\nTelefon: ${company.phone ?? 'neuveden'}\nE-mail: ${company.email ?? 'neuveden'}\nAdresa: ${company.address ?? 'neuvedena'}\nWeb: ${company.websiteUrl ?? 'neuveden'}\nDetail zdroje: ${company.sourceUrl}`,
+              )
+              .join('\n\n')}`
+          : `Pro „${input.query}“ v lokalitě ${input.locality} nebyly nalezeny žádné aktivní firmy.`,
+      );
+    } catch (error) {
+      await ctx.reply(
+        `Hledání selhalo: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  });
   bot.command('sales_find', async (ctx) => {
     const input = parseSalesFind(ctx.match);
     if (!input) {
@@ -180,10 +234,12 @@ export const createSalesBot = (
       return;
     }
     try {
-      await ctx.reply('Hledám firmy s veřejně uvedeným webem…');
+      await ctx.reply(
+        'Hledám firmy přes ARES a Geoapify; Google je pouze volitelný fallback…',
+      );
       const result = await service.discoverBusinesses(input);
       await ctx.reply(
-        `Discovery dokončeno: ${result.found} kandidátů uloženo nebo deduplikováno. Spusť /sales_run pro audit webů a potom /sales_calls.`,
+        `Discovery dokončeno: ${result.found} kandidátů nalezeno, ${result.imported} s webem importováno nebo deduplikováno. Spusť /sales_run pro audit webů a potom /sales_calls.`,
       );
     } catch (error) {
       await ctx.reply(

@@ -44,6 +44,7 @@ describe('GooglePlacesDiscoveryClient', () => {
       {
         id: 'place-1',
         name: 'Autoservis Test',
+        provider: 'GOOGLE_PLACES',
         websiteUrl: 'https://autoservis.example',
         sourceUrl: 'https://maps.google.com/example',
         address: 'Brno',
@@ -74,6 +75,41 @@ describe('GooglePlacesDiscoveryClient', () => {
         10,
       ),
     ).rejects.toThrow('HTTP 403');
+  });
+
+  it('returns phone-only candidates for a one-off directory search', async () => {
+    const fetcher: typeof fetch = async () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            places: [
+              {
+                id: 'place-phone',
+                displayName: { text: 'Telefonní kontakt' },
+                businessStatus: 'OPERATIONAL',
+                nationalPhoneNumber: '+420 123 456 789',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+
+    const result = await new GooglePlacesDiscoveryClient(
+      'key',
+      fetcher,
+    ).searchDirectory('autoservis', 'Brno', 10);
+
+    expect(result).toEqual([
+      {
+        id: 'place-phone',
+        name: 'Telefonní kontakt',
+        provider: 'GOOGLE_PLACES',
+        phone: '+420 123 456 789',
+        sourceUrl:
+          'https://www.google.com/maps/search/?api=1&query_place_id=place-phone',
+      },
+    ]);
   });
 
   it('rejects an out-of-range result limit before calling the provider', async () => {

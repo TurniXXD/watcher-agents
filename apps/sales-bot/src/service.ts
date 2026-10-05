@@ -1,6 +1,9 @@
 import type { WatcherLogger } from '@watcher/core';
 import type { SalesStore } from '@watcher/database';
-import { findExactAresCompany } from '@watcher/sources/company';
+import {
+  findExactAresCompany,
+  searchAresBusinesses,
+} from '@watcher/sources/company';
 import { z } from 'zod';
 import type { ColdEmailGenerator } from './cold-email-generator.js';
 import {
@@ -10,7 +13,12 @@ import {
   selectOutreachLanguage,
 } from './classification/index.js';
 import type { GooglePlacesDiscoveryClient } from './discovery.js';
+import type { BusinessSearchResult } from './discovery-types.js';
 import { sendEligibility } from './eligibility.js';
+import {
+  type GeoapifyDiscoveryClient,
+  resolveBusinessCategory,
+} from './geoapify.js';
 import {
   auditWebsite,
   discoverFromFeed,
@@ -34,6 +42,56 @@ const discoveryMetadataSchema = z
   })
   .passthrough();
 
+const normalizedBusinessName = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/gu, '')
+    .toLowerCase()
+    .replace(
+      /\b(?:spol\.?\s*s\s*r\.?\s*o\.?|s\.?\s*r\.?\s*o\.?|a\.?\s*s\.?|v\.?\s*o\.?\s*s\.?)\b/gu,
+      '',
+    )
+    .replace(/[^a-z0-9]+/gu, ' ')
+    .trim();
+
+const resultKey = (result: BusinessSearchResult): string => {
+  if (result.registrationId) return `ico:${result.registrationId}`;
+  if (result.websiteUrl) {
+    try {
+      return `domain:${new URL(result.websiteUrl).hostname.replace(/^www\./u, '').toLowerCase()}`;
+    } catch {
+      // Fall through to the stable provider/name identity.
+    }
+  }
+  return `name:${normalizedBusinessName(result.name)}:${result.address?.toLowerCase() ?? ''}`;
+};
+
+const mergeDiscoveryResults = (
+  placeResults: BusinessSearchResult[],
+  aresResults: BusinessSearchResult[],
+  limit: number,
+): BusinessSearchResult[] => {
+  const aresByName = new Map(
+    aresResults.map((result) => [normalizedBusinessName(result.name), result]),
+  );
+  const enrichedPlaces = placeResults.map((result) => {
+    const ares = aresByName.get(normalizedBusinessName(result.name));
+    if (!ares) return result;
+    aresByName.delete(normalizedBusinessName(result.name));
+    return {
+      ...result,
+      ...(ares.registrationId ? { registrationId: ares.registrationId } : {}),
+      ...(ares.naceCodes ? { naceCodes: ares.naceCodes } : {}),
+    };
+  });
+  const deduplicated = new Map<string, BusinessSearchResult>();
+  for (const result of [...enrichedPlaces, ...aresByName.values()]) {
+    const key = resultKey(result);
+    if (!deduplicated.has(key)) deduplicated.set(key, result);
+  }
+  return [...deduplicated.values()].slice(0, limit);
+};
+
 export class SalesService {
   private running = false;
   public constructor(
@@ -41,13 +99,108 @@ export class SalesService {
     private readonly logger: WatcherLogger,
     private readonly quickly?: QuicklyClient,
     private readonly twenty?: TwentyIntegration,
+    private readonly geoapify?: GeoapifyDiscoveryClient,
     private readonly places?: GooglePlacesDiscoveryClient,
     private readonly coldEmailGenerator?: ColdEmailGenerator,
     private readonly coldEmailModel?: string,
   ) {}
 
-  public get discoveryConfigured(): boolean {
+  public get geoapifyConfigured(): boolean {
+    return Boolean(this.geoapify);
+  }
+
+  public get googlePlacesConfigured(): boolean {
     return Boolean(this.places);
+  }
+
+  public async searchBusinesses(input: {
+    query: string;
+    locality: string;
+    limit: number;
+  }): Promise<BusinessSearchResult[]> {
+    const category = resolveBusinessCategory(input.query);
+    const primary = await Promise.allSettled([
+      searchAresBusinesses({
+        ...input,
+        ...(category.naceCode ? { naceCode: category.naceCode } : {}),
+      }),
+      this.geoapify
+        ? this.geoapify.search(input.query, input.locality, input.limit)
+        : Promise.resolve([]),
+    ]);
+    const failures: unknown[] = [];
+    const aresResults: BusinessSearchResult[] = [];
+    if (primary[0].status === 'fulfilled') {
+      for (const subject of primary[0].value.subjects) {
+        const naceCodes = subject.czNace ?? subject.czNace2008;
+        aresResults.push({
+          id: subject.ico,
+          name: subject.obchodniJmeno ?? subject.ico,
+          provider: 'ARES',
+          sourceUrl: `https://ares.gov.cz/ekonomicke-subjekty?ico=${encodeURIComponent(subject.ico)}`,
+          registrationId: subject.ico,
+          ...(subject.sidlo?.textovaAdresa
+            ? { address: subject.sidlo.textovaAdresa }
+            : {}),
+          ...(naceCodes?.length ? { naceCodes } : {}),
+        });
+      }
+    } else {
+      failures.push(primary[0].reason);
+      this.logger.warn(
+        { err: primary[0].reason },
+        'ARES business discovery failed',
+      );
+    }
+    let placeResults: BusinessSearchResult[] = [];
+    if (primary[1].status === 'fulfilled') {
+      placeResults = primary[1].value;
+    } else {
+      failures.push(primary[1].reason);
+      this.logger.warn(
+        { err: primary[1].reason },
+        'Geoapify business discovery failed',
+      );
+    }
+
+    const contactResults = placeResults.filter(
+      (result) => result.websiteUrl || result.phone,
+    ).length;
+    if (this.places && contactResults < input.limit) {
+      try {
+        const googleResults = await this.places.searchDirectory(
+          input.query,
+          input.locality,
+          input.limit - contactResults,
+        );
+        placeResults = [...placeResults, ...googleResults];
+      } catch (error) {
+        failures.push(error);
+        this.logger.warn({ err: error }, 'Google Places fallback failed');
+      }
+    }
+    const companies = mergeDiscoveryResults(
+      placeResults,
+      aresResults,
+      input.limit,
+    );
+    if (companies.length === 0 && failures.length > 0)
+      throw new AggregateError(
+        failures,
+        'All configured discovery sources failed',
+      );
+    this.logger.info(
+      {
+        query: input.query,
+        locality: input.locality,
+        candidates: companies.length,
+        aresCandidates: aresResults.length,
+        geoapifyConfigured: this.geoapifyConfigured,
+        googleFallbackConfigured: this.googlePlacesConfigured,
+      },
+      'Sales business search completed',
+    );
+    return companies;
   }
 
   public async discoverBusinesses(input: {
@@ -58,26 +211,33 @@ export class SalesService {
   }): Promise<{ found: number; imported: number }> {
     const campaign = await this.store.getCampaign(input.campaignId);
     if (!campaign) throw new Error('Campaign not found');
-    if (!this.places)
-      throw new Error('Google Places discovery is not configured');
-    const companies = await this.places.search(
-      input.query,
-      input.locality,
-      input.limit,
+    const companies = await this.searchBusinesses(input);
+    const importable = companies.filter(
+      (company): company is BusinessSearchResult & { websiteUrl: string } =>
+        company.websiteUrl !== undefined,
     );
-    for (const company of companies) {
+    for (const company of importable) {
       await this.store.discoverLead({
         campaignId: campaign.id,
-        source: 'GOOGLE_PLACES',
+        source: company.provider,
         sourceExternalId: company.id,
         companyName: company.name,
         entityType: 'COMPANY',
         websiteUrl: company.websiteUrl,
         sourceUrl: company.sourceUrl,
+        ...(company.registrationId
+          ? { registrationId: company.registrationId }
+          : {}),
         ...(company.address ? { location: company.address } : {}),
         sourceData: {
+          provider: company.provider,
           ...(company.address ? { address: company.address } : {}),
           ...(company.phone ? { phone: company.phone } : {}),
+          ...(company.email ? { email: company.email } : {}),
+          ...(company.registrationId
+            ? { registrationId: company.registrationId }
+            : {}),
+          ...(company.naceCodes ? { naceCodes: company.naceCodes } : {}),
         },
       });
     }
@@ -87,10 +247,11 @@ export class SalesService {
         query: input.query,
         locality: input.locality,
         candidates: companies.length,
+        imported: importable.length,
       },
       'Sales business discovery completed',
     );
-    return { found: companies.length, imported: companies.length };
+    return { found: companies.length, imported: importable.length };
   }
 
   public async eligibility(leadId: string): Promise<
@@ -138,7 +299,9 @@ export class SalesService {
           discoveryFeeds: campaigns.filter(
             (campaign) => campaign.discoveryFeedUrl,
           ).length,
-          placesConfigured: this.discoveryConfigured,
+          aresConfigured: true,
+          geoapifyConfigured: this.geoapifyConfigured,
+          placesConfigured: this.googlePlacesConfigured,
           quicklyConfigured: Boolean(this.quickly),
           twentyConfigured: Boolean(this.twenty),
         },
@@ -197,26 +360,35 @@ export class SalesService {
           let legalIdentity:
             { ico: string; name: string; sourceUrl: string } | undefined;
           if (lead.entityType !== 'PERSON') {
-            try {
-              const ares = await findExactAresCompany(lead.companyName, {
-                limit: 10,
-              });
-              if (ares && !ares.datumZaniku) {
-                legalIdentity = {
-                  ico: ares.ico,
-                  name: ares.obchodniJmeno ?? lead.companyName,
-                  sourceUrl: `https://ares.gov.cz/ekonomicke-subjekty?ico=${encodeURIComponent(ares.ico)}`,
-                };
+            if (lead.registrationId) {
+              legalIdentity = {
+                ico: lead.registrationId,
+                name: lead.companyName,
+                sourceUrl: `https://ares.gov.cz/ekonomicke-subjekty?ico=${encodeURIComponent(lead.registrationId)}`,
+              };
+            } else {
+              try {
+                const ares = await findExactAresCompany(lead.companyName, {
+                  limit: 10,
+                });
+                if (ares && !ares.datumZaniku) {
+                  legalIdentity = {
+                    ico: ares.ico,
+                    name: ares.obchodniJmeno ?? lead.companyName,
+                    sourceUrl: `https://ares.gov.cz/ekonomicke-subjekty?ico=${encodeURIComponent(ares.ico)}`,
+                  };
+                }
+              } catch (error) {
+                this.logger.warn(
+                  { err: error, leadId: lead.id },
+                  'ARES verification failed; website analysis continues',
+                );
               }
-            } catch (error) {
-              this.logger.warn(
-                { err: error, leadId: lead.id },
-                'ARES verification failed; website analysis continues',
-              );
             }
           }
           const scoreBreakdown = scoreAuditDetailed(audit, {
-            explicitDiscoveryMatch: lead.source === 'GOOGLE_PLACES',
+            explicitDiscoveryMatch:
+              lead.source === 'GOOGLE_PLACES' || lead.source === 'GEOAPIFY',
             aresExactMatch: Boolean(legalIdentity),
           });
           const score = scoreBreakdown.total;

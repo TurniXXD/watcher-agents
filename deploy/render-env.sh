@@ -94,6 +94,11 @@ if [[ "$twenty_bind_address" == "127.0.0.1" || "$twenty_bind_address" == "0.0.0.
   twenty_public_host=localhost
 fi
 
+# Sales also joins the shared lateralis network, where another service may own
+# the generic "postgres" DNS name. Prefer Watcher's unique alias unless an
+# explicit Sales connection URL was supplied.
+sales_database_url="${SALES_DATABASE_URL:-${WATCHER_DATABASE_URL/@postgres:/@watcher-postgres:}}"
+
 write_env "$RUNTIME_DIR/compose.env" \
   COMPOSE_PROJECT_NAME "${COMPOSE_PROJECT_NAME:-watcher}" \
   QUICKLY_BIND_ADDRESS "$quickly_bind_address" \
@@ -285,7 +290,7 @@ write_env "$RUNTIME_DIR/transport-bot.env" \
   LOG_LEVEL "${LOG_LEVEL:-info}"
 
 write_env "$RUNTIME_DIR/sales-bot.env" \
-  DATABASE_URL "$WATCHER_DATABASE_URL" \
+  DATABASE_URL "$sales_database_url" \
   SALES_TELEGRAM_TOKEN "${SALES_TELEGRAM_TOKEN:-}" \
   TELEGRAM_ALLOWED_USER_IDS "$TELEGRAM_ALLOWED_USER_IDS" \
   SALES_API_TOKEN "${SALES_API_TOKEN:-}" \
@@ -295,6 +300,7 @@ write_env "$RUNTIME_DIR/sales-bot.env" \
   SALES_FOLLOWUP_TIME "${SALES_FOLLOWUP_TIME:-20:00}" \
   SALES_TIMEZONE "${SALES_TIMEZONE:-Europe/Prague}" \
   GOOGLE_PLACES_API_KEY "${GOOGLE_PLACES_API_KEY:-}" \
+  GEOAPIFY_API_KEY "${GEOAPIFY_API_KEY:-}" \
   QUICKLY_BASE_URL "${QUICKLY_BASE_URL:-http://quickly:8000}" \
   QUICKLY_API_KEY "${QUICKLY_API_KEY:-}" \
   TWENTY_BASE_URL "${TWENTY_BASE_URL:-http://twenty-server:3000}" \

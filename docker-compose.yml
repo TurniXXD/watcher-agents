@@ -5,6 +5,10 @@ services:
     image: pgvector/pgvector:0.8.6-pg16-bookworm
     env_file:
       - ${WATCHER_ENV_FILE:-.env.example}
+    networks:
+      default:
+        aliases:
+          - watcher-postgres
     ports:
       - '127.0.0.1:5433:5432'
     volumes:
