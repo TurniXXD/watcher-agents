@@ -23,7 +23,6 @@ required_files=(
   deploy/runtime/stocks-bot.env
   deploy/runtime/publications-bot.env
   deploy/runtime/news-bot.env
-  deploy/runtime/reality-bot.env
   deploy/runtime/mu-clubs-monitor.env
   deploy/runtime/brno-events-agent.env
   deploy/runtime/briefing-bot.env
@@ -59,9 +58,6 @@ required_env_values=(
   "deploy/runtime/news-bot.env:TELEGRAM_ALLOWED_USER_IDS"
   "deploy/runtime/news-bot.env:OLLAMA_URL"
   "deploy/runtime/news-bot.env:OLLAMA_MODEL"
-  "deploy/runtime/reality-bot.env:DATABASE_URL"
-  "deploy/runtime/reality-bot.env:REALITY_TELEGRAM_TOKEN"
-  "deploy/runtime/reality-bot.env:TELEGRAM_ALLOWED_USER_IDS"
   "deploy/runtime/mu-clubs-monitor.env:DATABASE_URL"
   "deploy/runtime/mu-clubs-monitor.env:MU_CLUBS_API_TOKEN"
   "deploy/runtime/brno-events-agent.env:BRNO_EVENTS_API_TOKEN"
@@ -104,12 +100,17 @@ required_env_values=(
 )
 
 legacy_watcher_services=(
-  stocks-bot publications-bot news-bot reality-bot mu-clubs-monitor brno-events-agent
+  stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent
   briefing-bot maintenance-agent transport-bot
 )
 watcher_services=("${legacy_watcher_services[@]}" osint-bot sales-bot)
 integration_services=(quickly twenty-server twenty-worker)
-release_services=("${watcher_services[@]}" "${integration_services[@]}")
+
+reality_bot_env_values=(
+  "deploy/runtime/reality-bot.env:DATABASE_URL"
+  "deploy/runtime/reality-bot.env:REALITY_TELEGRAM_TOKEN"
+  "deploy/runtime/reality-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+)
 
 study_bot_env_values=(
   "deploy/runtime/study-bot.env:DATABASE_URL"
@@ -138,6 +139,14 @@ for required_file in "${required_files[@]}"; do
     exit 1
   fi
 done
+
+# A newly introduced bot must not prevent established services from receiving
+# security fixes before the operator has provisioned its distinct credentials.
+# Compose still needs the env file to parse the complete service definition.
+if [[ ! -f deploy/runtime/reality-bot.env ]]; then
+  umask 077
+  : >deploy/runtime/reality-bot.env
+fi
 
 release_announcement="deploy/release/next.txt"
 if [[ ! -f "$release_announcement" ]] || [[ "$(head -n 1 "$release_announcement")" != "$IMAGE_TAG" ]]; then
@@ -180,6 +189,28 @@ if ((${#missing_env_values[@]} > 0)); then
   printf '%s\n' "${missing_env_values[@]}" >&2
   exit 1
 fi
+
+reality_bot_missing_values=()
+for reality_env_value in "${reality_bot_env_values[@]}"; do
+  file="${reality_env_value%%:*}"
+  key="${reality_env_value#*:}"
+  line="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1 || true)"
+  value="${line#*=}"
+
+  if [[ -z "$line" || -z "$value" || "$value" == "''" || "$value" == '""' || "$value" == *'<url-encoded-password>'* || "$value" == *'<comma-separated-telegram-user-ids>'* || "$value" == replace-with-* || "$value" == '<telegram-bot-token>' ]]; then
+    reality_bot_missing_values+=("$key")
+  fi
+done
+
+reality_bot_configured=true
+if ((${#reality_bot_missing_values[@]} > 0)); then
+  reality_bot_configured=false
+  echo "Reality Bot is not configured; it will be skipped without blocking this release. Missing: ${reality_bot_missing_values[*]}" >&2
+else
+  watcher_services+=(reality-bot)
+fi
+
+release_services=("${watcher_services[@]}" "${integration_services[@]}")
 
 study_bot_missing_values=()
 for study_env_value in "${study_bot_env_values[@]}"; do
@@ -428,6 +459,20 @@ if ! compose_candidate up \
     echo "Restoring the previous healthy application image..."
     rollback_services=("${watcher_services[@]}")
     legacy_rollback=false
+    if [[ "$reality_bot_configured" == true ]] && ! compose_release run --rm --no-deps --entrypoint sh reality-bot \
+      -c 'test -f apps/reality-bot/dist/index.js'; then
+      # The first Reality Bot rollout may replace an image that predates the
+      # service. Never ask that previous image to start a command it lacks.
+      echo "Previous image predates Reality Bot; excluding it from rollback." >&2
+      rollback_services_without_reality=()
+      for rollback_service in "${rollback_services[@]}"; do
+        if [[ "$rollback_service" != reality-bot ]]; then
+          rollback_services_without_reality+=("$rollback_service")
+        fi
+      done
+      rollback_services=("${rollback_services_without_reality[@]}")
+      compose_candidate stop reality-bot || true
+    fi
     if ! compose_release run --rm --no-deps --entrypoint sh osint-bot \
       -c 'test -f apps/osint-bot/dist/health.js'; then
       # The first mandatory rollout may replace an image that predates OSINT

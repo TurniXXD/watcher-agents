@@ -2,7 +2,7 @@
 
 Production deployment uses GitHub Actions, GitHub Container Registry (GHCR), Tailscale, OpenSSH, Docker Compose, and a server-managed runtime configuration. The `deploy-vps` workflow runs after `watcher-ci` succeeds on `main`; it can also be started manually from the Actions page.
 
-GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `reality-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `maintenance-agent`, `transport-bot`, `osint-bot`, `sales-bot`, and the one-shot `migrate` service. Quickly and Twenty are required companion services for the sales stack. Ollama remains outside this Compose stack.
+GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `maintenance-agent`, `transport-bot`, `osint-bot`, `sales-bot`, and the one-shot `migrate` service. Reality Bot joins the release after its private runtime file is configured; until then deployment reports that it was skipped without blocking established services. Quickly and Twenty are required companion services for the sales stack. Ollama remains outside this Compose stack.
 
 ## Security model
 
@@ -141,7 +141,7 @@ Runtime credentials are intentionally not uploaded by GitHub Actions. Create the
 | `deploy/runtime/stocks-bot.env`        | Stocks bot runtime and credentials                              |
 | `deploy/runtime/publications-bot.env`  | Publications bot runtime values                                 |
 | `deploy/runtime/news-bot.env`          | Czech and Global news bot values                                |
-| `deploy/runtime/reality-bot.env`       | Reality RSS key, Telegram credentials, and scheduler            |
+| `deploy/runtime/reality-bot.env`       | Optional Reality RSS key, Telegram credentials, and scheduler   |
 | `deploy/runtime/mu-clubs-monitor.env`  | MU Clubs API and polling settings                               |
 | `deploy/runtime/brno-events-agent.env` | Brno event API and per-source polling settings                  |
 | `deploy/runtime/briefing-bot.env`      | Morning briefing bot credentials                                |
@@ -152,6 +152,8 @@ Runtime credentials are intentionally not uploaded by GitHub Actions. Create the
 | `deploy/runtime/sales-bot.env`         | Required sales bot credentials and integrations                 |
 | `deploy/runtime/quickly.env`           | Required Quickly app and private PostgreSQL credentials         |
 | `deploy/runtime/twenty.env`            | Required Twenty server, worker, and database credentials        |
+
+`reality-bot.env` is an optional onboarding file. A release creates an empty mode-`0600` file when it is absent and skips Reality Bot when `DATABASE_URL`, `REALITY_TELEGRAM_TOKEN`, or `TELEGRAM_ALLOWED_USER_IDS` is missing. Populate all three values with a distinct BotFather token to include the bot in the next release; do not reuse another polling bot's token.
 
 You can copy the readable examples from `deploy/presets`, or render all files from environment variables:
 
@@ -203,7 +205,7 @@ Before enabling automatic deployment:
 1. Confirm the VPS can reach Ollama at the configured `OLLAMA_URL`.
 2. Apply the conservative Ollama systemd settings documented in the root README (`OLLAMA_NUM_PARALLEL=1`, one loaded model, and a small queue), then verify them with `systemctl show ollama` and `ollama ps`.
 3. Confirm the deployment user can run `docker compose version` without sudo.
-4. Confirm all runtime env files exist and OSINT, sales, Quickly, and Twenty secrets are populated, and install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation. A missing required bot or integration value blocks the release before migrations. Study Bot remains optional: its empty S3 fields do not block the core rollout, and it starts automatically once its Telegram and S3 credentials are complete.
+4. Confirm all required runtime env files exist and OSINT, sales, Quickly, and Twenty secrets are populated, and install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation. A missing required bot or integration value blocks the release before migrations. Reality Bot and Study Bot remain optional: each is skipped without blocking the core rollout and starts automatically once its required credentials are complete.
    Runtime values containing `$` must either be fully single-quoted or encode each literal dollar sign as `$$`. `deploy/render-env.sh` safely single-quotes every value. If older unquoted runtime files caused Compose interpolation warnings, rotate any affected database password and update every rendered `DATABASE_URL` together before deploying again.
 5. Push the completed application to `main` and wait for `watcher-ci` to pass.
 6. Approve the `production` environment deployment if approval protection is enabled.
