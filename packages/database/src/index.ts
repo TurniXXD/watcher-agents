@@ -33,6 +33,7 @@ export * from './sales-store.js';
 export * from './osint-store.js';
 export * from './source-health-store.js';
 export * from './resource-lease-store.js';
+export * from './reality-store.js';
 export * from './specialized-signal-store.js';
 export * from './study-store.js';
 export * from './universe-store.js';

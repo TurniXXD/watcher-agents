@@ -65,11 +65,11 @@ První nastavení discovery
 4. Existující UUID vypíše /sales_campaigns. Novou kampaň vytvoř z VPS přes Sales API:
 curl -X POST http://127.0.0.1:4050/v1/campaigns -H "Authorization: Bearer $SALES_API_TOKEN" -H "Content-Type: application/json" --data '{"name":"Brno autoservisy","offer":"modernizace webu","subjectTemplate":"Nápad pro {{company}}","bodyTemplate":"Dobrý den, {{observation}} Nabízíme {{offer}}."}'
 Kampaň může zůstat disabled pro čistý research; enabled ovládá odesílání, ne analýzu.
-5. Pro okamžitý výpis bez kampaně spusť /sales_search autoservis | Brno | 15. Výsledek se nikam neukládá. Pro přesný obor lze použít například /sales_search nace:95310 | Brno | 15 nebo Geoapify kategorii ve tvaru geo:service.vehicle.repair.car.
+5. Pro okamžitý výpis bez kampaně spusť /sales_search autoservis | Brno | 15. Výsledek se nikam neukládá. Horské chaty jsou mapované na Geoapify kategorie accommodation.hut + accommodation.chalet a CZ-NACE 55200, takže funguje například /sales_search horské chaty | Moravskoslezský kraj | 15. Pro přesný obor lze použít /sales_search nace:95310 | Brno | 15 nebo Geoapify kategorii ve tvaru geo:service.vehicle.repair.car.
 6. Pro import spusť /sales_find <campaign-id> | autoservis | Brno | 15, potom /sales_run a /sales_calls 20. Detail a původ každého uloženého kontaktu ověříš přes /sales_lead <id>.
 
 Zdroje a hranice discovery
-ARES poskytuje registrované subjekty a sídla, nikoli spolehlivý katalog provozoven nebo kontaktů. Geoapify používá komunitní OpenStreetMap data, která mohou být neúplná nebo zastaralá; výsledky musí uvádět atribuci. Google Places je pouze volitelný fallback. ARES shoda názvu sama nedokazuje vlastnictví webu a sídlo nemusí být provozovna. Webový audit pracuje s oficiálním webem kandidáta. Firmy.cz se automaticky nescrapuje; bot neobchází roboty, přihlášení ani placené databáze.
+ARES poskytuje registrované subjekty a sídla, nikoli spolehlivý katalog provozoven nebo kontaktů. Přesný filtr ARES funguje nejlépe pro obec; při zadání celého kraje může být ARES část prázdná a provozovny dodá Geoapify přes hranici daného kraje. Geoapify používá komunitní OpenStreetMap data, která mohou být neúplná nebo zastaralá; výsledky musí uvádět atribuci. Google Places je pouze volitelný fallback. ARES shoda názvu sama nedokazuje vlastnictví webu a sídlo nemusí být provozovna. Webový audit pracuje s oficiálním webem kandidáta. Firmy.cz se automaticky nescrapuje; bot neobchází roboty, přihlášení ani placené databáze.
 
 Integrace
 • Twenty CRM: Company se hledá v pořadí doména → registrační ID/IČO → externí ID → jméno+země a pak se aktualizuje nebo vytvoří. Návrh e-mailu je nativní Note navázaná na Company; stejný lead poznámku aktualizuje místo vytváření duplikátu. Reusable integrace podporuje také Person, Opportunity, Task, Relationship a Referral, ale pipeline nevymýšlí osobu ani automaticky nevytváří obchodní příležitost. Vlastní pole fungují po instalaci Twenty Sales app a zapnutí TWENTY_APP_FIELDS_ENABLED. Twenty samo v tomto workflow e-mail neodesílá.
@@ -88,7 +88,7 @@ Omezení a odpovědnost
 Automatické skóre, detekce jazyka i návrh textu mohou být chybné. Bot nepotvrzuje totožnost příjemce, aktuálnost webu, doručitelnost adresy ani zákonnost kampaně. Nevytváří graph database, neprochází autonomně vztahové grafy, neplatí referral provize a nespouští autonomní odesílání. Před odesláním vždy ověř zdroj, příjemce, právní základ, místní pravidla, suppression stav a finální znění. Přístup je omezen na povolená Telegram user ID a tajné klíče se nespravují přes Telegram.
 
 Použití
-Pracovní postup a všechny dostupné příkazy zobrazíš přes /sales_help. Aktuální stav integrací a pipeline ověříš přes /sales_status. Když /sales_run vrátí 0 discovered, ale /sales_find našel kandidáty, sleduj hlavně analyzed: discovery count v runu označuje pouze JSON feed; ruční Places import je vypsán už příkazem /sales_find.`;
+Pracovní postup a všechny dostupné příkazy zobrazíš přes /sales_help. Aktuální stav integrací a pipeline ověříš přes /sales_status. Každé hledání zapisuje „Sales business search started“, samostatný výsledek ARES a Geoapify v „Sales discovery source completed“, rozhodnutí o Google fallbacku a závěrečné počty podle provideru. V logu tak uvidíš rozpoznaný CZ-NACE/Geoapify category, stav completed/skipped/failed, skipReason, dobu trvání a počet kontaktních výsledků. Když /sales_run vrátí 0 discovered, ale /sales_find našel kandidáty, sleduj hlavně analyzed: discovery count v runu označuje pouze JSON feed; ruční Places import je vypsán už příkazem /sales_find.`;
 
 export const salesBotCommands = [
   { command: 'sales_help', description: 'Detailní návod a všechny příkazy' },
@@ -217,7 +217,7 @@ export const createSalesBot = (
                   `${index + 1}. ${company.name}\nZdroj: ${company.provider}${company.registrationId && company.provider !== 'ARES' ? ' + ARES' : ''}\nIČO: ${company.registrationId ?? 'neuvedeno'}\nCZ-NACE: ${company.naceCodes?.join(', ') ?? 'neuvedeno'}\nTelefon: ${company.phone ?? 'neuveden'}\nE-mail: ${company.email ?? 'neuveden'}\nAdresa: ${company.address ?? 'neuvedena'}\nWeb: ${company.websiteUrl ?? 'neuveden'}\nDetail zdroje: ${company.sourceUrl}`,
               )
               .join('\n\n')}`
-          : `Pro „${input.query}“ v lokalitě ${input.locality} nebyly nalezeny žádné aktivní firmy.`,
+          : `Pro „${input.query}“ v lokalitě ${input.locality} nebyly nalezeny žádné firmy. Zkontroluj /sales_status a logy „Sales discovery source completed“. Pro nepodporovaný obor použij přesnou kategorii, například /sales_search geo:accommodation.hut | ${input.locality} | ${input.limit}.`,
       );
     } catch (error) {
       await ctx.reply(

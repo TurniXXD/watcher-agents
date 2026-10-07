@@ -881,6 +881,146 @@ model TelegramChat {
   @@unique([kind, chatId])
 }
 
+model RealityUser {
+  id                    String         @id @default(uuid())
+  telegramChatId        BigInt         @unique
+  enabled               Boolean        @default(true)
+  reportSchedule        String         @default("0 8 1 * *")
+  timezone              String         @default("Europe/Prague")
+  nextReportAt          DateTime
+  lastReportAt          DateTime?
+  lastRunStatus         RunStatus?
+  runInProgress         Boolean        @default(false)
+  runStartedAt          DateTime?
+  locations             String[]       @default(["Brno", "Ostrava", "Frýdek-Místek"])
+  model                  Json           @default("{\"purchasePriceCzk\":3000000,\"floorAreaM2\":60,\"equityPercent\":30,\"termYears\":30,\"vacancyPercent\":5,\"annualMaintenancePercent\":1,\"annualInsuranceCzk\":3000,\"otherAnnualOwnerCostsCzk\":0}")
+  alertGrossYieldPercent Decimal        @default(6) @db.Decimal(8, 4)
+  alertDiscountPercent  Decimal        @default(15) @db.Decimal(8, 4)
+  alertCashflowRate     Decimal        @default(5) @db.Decimal(8, 4)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  runs                  RealityRun[]
+  reports               RealityReport[]
+  alerts                RealityAlert[]
+
+  @@index([enabled, nextReportAt])
+  @@map("reality_users")
+}
+
+model RealityRun {
+  id             String      @id @default(uuid())
+  userId         String
+  trigger        RunTrigger
+  status         RunStatus   @default(RUNNING)
+  startedAt      DateTime    @default(now())
+  finishedAt     DateTime?
+  metricsFetched Int         @default(0)
+  listingsFetched Int        @default(0)
+  newListings    Int         @default(0)
+  alertsSent     Int         @default(0)
+  sourceFailures Json        @default("[]")
+  error          String?
+  user           RealityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report         RealityReport?
+
+  @@index([userId, startedAt])
+  @@map("reality_runs")
+}
+
+model RealityMetric {
+  id          String   @id @default(uuid())
+  source      String
+  externalId  String
+  category    String
+  metric      String
+  location    String?
+  disposition String?
+  value       Decimal  @db.Decimal(24, 8)
+  unit        String
+  period      DateTime
+  observedAt  DateTime
+  sourceUrl   String?
+  raw         Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([source, externalId])
+  @@index([metric, location, period])
+  @@index([category, period])
+  @@map("reality_metrics")
+}
+
+model RealityListing {
+  id                       String                @id @default(uuid())
+  source                   String
+  externalId               String
+  url                      String
+  title                    String
+  location                 String
+  disposition              String?
+  priceCzk                 Decimal               @db.Decimal(16, 2)
+  floorAreaM2              Decimal               @db.Decimal(12, 2)
+  estimatedMonthlyRentCzk  Decimal?              @db.Decimal(16, 2)
+  annualOwnerCostsCzk      Decimal?              @db.Decimal(16, 2)
+  acquisitionCostsCzk      Decimal?              @db.Decimal(16, 2)
+  localMedianPricePerM2Czk Decimal?              @db.Decimal(16, 2)
+  publishedAt              DateTime?
+  firstSeenAt              DateTime               @default(now())
+  lastSeenAt               DateTime               @default(now())
+  disappearedAt            DateTime?
+  raw                      Json
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  prices                   RealityListingPrice[]
+  alerts                   RealityAlert[]
+
+  @@unique([source, externalId])
+  @@index([location, disappearedAt, lastSeenAt])
+  @@map("reality_listings")
+}
+
+model RealityListingPrice {
+  id         String         @id @default(uuid())
+  listingId  String
+  priceCzk   Decimal        @db.Decimal(16, 2)
+  observedAt DateTime       @default(now())
+  listing    RealityListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, observedAt])
+  @@map("reality_listing_prices")
+}
+
+model RealityAlert {
+  id        String         @id @default(uuid())
+  userId    String
+  listingId String
+  signature String
+  score     Int
+  payload   Json
+  sentAt    DateTime       @default(now())
+  user      RealityUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   RealityListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId, signature])
+  @@index([userId, sentAt])
+  @@map("reality_alerts")
+}
+
+model RealityReport {
+  id        String      @id @default(uuid())
+  userId    String
+  runId     String      @unique
+  period    DateTime
+  payload   Json
+  createdAt DateTime    @default(now())
+  user      RealityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  run       RealityRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period])
+  @@index([userId, createdAt])
+  @@map("reality_reports")
+}
+
 model WatcherConfig {
   id                       String            @id @default(uuid())
   chatConfigId             String            @unique

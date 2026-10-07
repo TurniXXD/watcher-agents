@@ -75,6 +75,22 @@ describe('SalesService discovery orchestration', () => {
       }),
     ]);
     expect(googleSearch).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        geoapifyCategory: 'service.vehicle.repair.car',
+        aresNaceCode: '95310',
+      }),
+      'Sales business search started',
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'GEOAPIFY',
+        status: 'completed',
+        candidates: 1,
+        contactableCandidates: 1,
+      }),
+      'Sales discovery source completed',
+    );
   });
 
   it('keeps ARES discovery available without either API key', async () => {

@@ -42,6 +42,16 @@ const discoveryMetadataSchema = z
   })
   .passthrough();
 
+const safeErrorDetails = (error: unknown): Record<string, string> => {
+  const name = error instanceof Error ? error.name : 'UnknownError';
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const message = rawMessage.replace(
+    /([?&](?:apiKey|key)=)[^&\s]+/giu,
+    '$1[redacted]',
+  );
+  return { errorName: name, errorMessage: message };
+};
+
 const normalizedBusinessName = (value: string): string =>
   value
     .normalize('NFD')
@@ -119,14 +129,51 @@ export class SalesService {
     limit: number;
   }): Promise<BusinessSearchResult[]> {
     const category = resolveBusinessCategory(input.query);
+    const geoapify = this.geoapify;
+    const geoapifyEligible =
+      geoapify !== undefined && category.geoapifyCategory !== undefined;
+    this.logger.info(
+      {
+        query: input.query,
+        locality: input.locality,
+        limit: input.limit,
+        aresNaceCode: category.naceCode ?? null,
+        geoapifyCategory: category.geoapifyCategory ?? null,
+        geoapifyConfigured: this.geoapifyConfigured,
+        googleFallbackConfigured: this.googlePlacesConfigured,
+      },
+      'Sales business search started',
+    );
+    let aresDurationMs = 0;
+    let geoapifyDurationMs = 0;
+    const aresOperation = (async () => {
+      const startedAt = Date.now();
+      try {
+        return await searchAresBusinesses({
+          ...input,
+          ...(category.naceCode ? { naceCode: category.naceCode } : {}),
+        });
+      } finally {
+        aresDurationMs = Date.now() - startedAt;
+      }
+    })();
+    const geoapifyOperation = geoapifyEligible
+      ? (async () => {
+          const startedAt = Date.now();
+          try {
+            return await geoapify.search(
+              input.query,
+              input.locality,
+              input.limit,
+            );
+          } finally {
+            geoapifyDurationMs = Date.now() - startedAt;
+          }
+        })()
+      : Promise.resolve([]);
     const primary = await Promise.allSettled([
-      searchAresBusinesses({
-        ...input,
-        ...(category.naceCode ? { naceCode: category.naceCode } : {}),
-      }),
-      this.geoapify
-        ? this.geoapify.search(input.query, input.locality, input.limit)
-        : Promise.resolve([]),
+      aresOperation,
+      geoapifyOperation,
     ]);
     const failures: unknown[] = [];
     const aresResults: BusinessSearchResult[] = [];
@@ -145,20 +192,66 @@ export class SalesService {
           ...(naceCodes?.length ? { naceCodes } : {}),
         });
       }
+      this.logger.info(
+        {
+          source: 'ARES',
+          status: 'completed',
+          durationMs: aresDurationMs,
+          totalReported: primary[0].value.total,
+          candidates: aresResults.length,
+          naceCode: category.naceCode ?? null,
+          locality: input.locality,
+        },
+        'Sales discovery source completed',
+      );
     } else {
       failures.push(primary[0].reason);
       this.logger.warn(
-        { err: primary[0].reason },
+        {
+          source: 'ARES',
+          status: 'failed',
+          durationMs: aresDurationMs,
+          query: input.query,
+          locality: input.locality,
+          ...safeErrorDetails(primary[0].reason),
+        },
         'ARES business discovery failed',
       );
     }
     let placeResults: BusinessSearchResult[] = [];
     if (primary[1].status === 'fulfilled') {
       placeResults = primary[1].value;
+      this.logger.info(
+        {
+          source: 'GEOAPIFY',
+          status: geoapifyEligible ? 'completed' : 'skipped',
+          skipReason: !this.geoapify
+            ? 'not_configured'
+            : !category.geoapifyCategory
+              ? 'unmapped_category'
+              : null,
+          durationMs: geoapifyDurationMs,
+          category: category.geoapifyCategory ?? null,
+          candidates: placeResults.length,
+          contactableCandidates: placeResults.filter(
+            (result) => result.websiteUrl || result.phone || result.email,
+          ).length,
+          locality: input.locality,
+        },
+        'Sales discovery source completed',
+      );
     } else {
       failures.push(primary[1].reason);
       this.logger.warn(
-        { err: primary[1].reason },
+        {
+          source: 'GEOAPIFY',
+          status: 'failed',
+          durationMs: geoapifyDurationMs,
+          category: category.geoapifyCategory ?? null,
+          query: input.query,
+          locality: input.locality,
+          ...safeErrorDetails(primary[1].reason),
+        },
         'Geoapify business discovery failed',
       );
     }
@@ -167,6 +260,7 @@ export class SalesService {
       (result) => result.websiteUrl || result.phone,
     ).length;
     if (this.places && contactResults < input.limit) {
+      const googleStartedAt = Date.now();
       try {
         const googleResults = await this.places.searchDirectory(
           input.query,
@@ -174,10 +268,43 @@ export class SalesService {
           input.limit - contactResults,
         );
         placeResults = [...placeResults, ...googleResults];
+        this.logger.info(
+          {
+            source: 'GOOGLE_PLACES',
+            status: 'completed',
+            durationMs: Date.now() - googleStartedAt,
+            fallbackReason: 'insufficient_geoapify_contacts',
+            requested: input.limit - contactResults,
+            candidates: googleResults.length,
+          },
+          'Sales discovery fallback completed',
+        );
       } catch (error) {
         failures.push(error);
-        this.logger.warn({ err: error }, 'Google Places fallback failed');
+        this.logger.warn(
+          {
+            source: 'GOOGLE_PLACES',
+            status: 'failed',
+            durationMs: Date.now() - googleStartedAt,
+            fallbackReason: 'insufficient_geoapify_contacts',
+            ...safeErrorDetails(error),
+          },
+          'Google Places fallback failed',
+        );
       }
+    } else {
+      this.logger.info(
+        {
+          source: 'GOOGLE_PLACES',
+          status: 'skipped',
+          skipReason: !this.places
+            ? 'not_configured'
+            : 'enough_geoapify_contacts',
+          geoapifyContactableCandidates: contactResults,
+          requestedLimit: input.limit,
+        },
+        'Sales discovery fallback skipped',
+      );
     }
     const companies = mergeDiscoveryResults(
       placeResults,
@@ -195,6 +322,17 @@ export class SalesService {
         locality: input.locality,
         candidates: companies.length,
         aresCandidates: aresResults.length,
+        geoapifyCandidates: placeResults.filter(
+          (result) => result.provider === 'GEOAPIFY',
+        ).length,
+        googleCandidates: placeResults.filter(
+          (result) => result.provider === 'GOOGLE_PLACES',
+        ).length,
+        contactableCandidates: companies.filter(
+          (result) => result.websiteUrl || result.phone || result.email,
+        ).length,
+        resolvedNaceCode: category.naceCode ?? null,
+        resolvedGeoapifyCategory: category.geoapifyCategory ?? null,
         geoapifyConfigured: this.geoapifyConfigured,
         googleFallbackConfigured: this.googlePlacesConfigured,
       },

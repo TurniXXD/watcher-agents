@@ -60,6 +60,7 @@ jobs:
             test -f deploy/presets/stocks-bot.env.example
             test -f deploy/presets/publications-bot.env.example
             test -f deploy/presets/news-bot.env.example
+            test -f deploy/presets/reality-bot.env.example
             test -f deploy/presets/mu-clubs-monitor.env.example
             test -f deploy/presets/brno-events-agent.env.example
             test -f deploy/presets/briefing-bot.env.example
@@ -176,6 +177,7 @@ jobs:
             cp deploy/presets/stocks-bot.env.example deploy/runtime/stocks-bot.env
             cp deploy/presets/publications-bot.env.example deploy/runtime/publications-bot.env
             cp deploy/presets/news-bot.env.example deploy/runtime/news-bot.env
+            cp deploy/presets/reality-bot.env.example deploy/runtime/reality-bot.env
             cp deploy/presets/mu-clubs-monitor.env.example deploy/runtime/mu-clubs-monitor.env
             cp deploy/presets/brno-events-agent.env.example deploy/runtime/brno-events-agent.env
             cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
@@ -203,7 +205,7 @@ jobs:
                 --env-file deploy/runtime/compose.env \
                 -f docker-compose.production.yml \
                 config --services)"
-            for service in osint-bot sales-bot quickly twenty-server twenty-worker; do
+            for service in reality-bot osint-bot sales-bot quickly twenty-server twenty-worker; do
               grep -Fxq "$service" <<< "$services"
             done
 

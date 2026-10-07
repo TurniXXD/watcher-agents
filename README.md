@@ -30,13 +30,14 @@ The API uses `Authorization: Bearer $SALES_API_TOKEN`, except `POST /v1/webhooks
 
 Telegram commands: `/help` or `/sales_help` for the detailed workflow and compliance guide; `/about` or `/sales_about` for purpose, integrations, states, limits, and safety boundaries; `/sales_status`; `/sales_campaigns`; `/sales_search <service> | <location> | <limit>`; `/sales_find <campaign-id> | <service> | <location> | <limit>`; `/sales_calls [limit]`; `/sales_leads`; `/sales_lead <id>`; `/sales_approve <id>`; `/sales_reject <id>`; and `/sales_run`. Approval is deliberately distinct from authorization evidence. When a lead lacks evidence, `/sales_lead` shows `legal_basis_not_evidenced`; analysis and draft remain available. The bot registers its command menu with Telegram at startup.
 
-Current MVP limitations: ARES registered seats are not necessarily operating locations, Geoapify/OpenStreetMap contact coverage is incomplete, and Google Places is only an optional fallback rather than a general search-provider crawl. Natural-language category mapping is intentionally bounded; use `nace:<code>` or `geo:<category>` for an exact unsupported sector. Scoring remains deterministic; email validation is syntax-only (not mailbox verification); a Person is created only when discovery supplies an identified human contact, and the current website discovery normally has only a company-level mailbox; Opportunities, referral payment transitions, and Twenty Workflows are not created automatically; and Quickly webhook handling does not yet cancel a previously queued message if authorization is revoked after enrollment. Keep campaigns disabled until those operational conditions are acceptable.
+Current MVP limitations: ARES registered seats are not necessarily operating locations, and its address filter works best with a municipality rather than a whole region; Geoapify handles region boundaries but OpenStreetMap contact coverage is incomplete. Google Places is only an optional fallback rather than a general search-provider crawl. Natural-language category mapping is intentionally bounded; `horské chaty` maps to Geoapify huts/chalets and CZ-NACE 55200, while `nace:<code>` or `geo:<category>` selects an exact unsupported sector. Each search logs the resolved categories, per-source status/duration/counts, fallback decision, and final provider/contact totals without logging API keys. Scoring remains deterministic; email validation is syntax-only (not mailbox verification); a Person is created only when discovery supplies an identified human contact, and the current website discovery normally has only a company-level mailbox; Opportunities, referral payment transitions, and Twenty Workflows are not created automatically; and Quickly webhook handling does not yet cancel a previously queued message if authorization is revoked after enrollment. Keep campaigns disabled until those operational conditions are acceptable.
 
 Watcher is a production-oriented, self-hosted, Telegram-only monitoring system for one operator. It runs independent TypeScript bot processes on one Linux server:
 
 - **Stocks Watcher** monitors SEC filings, auto-discovered issuer feeds, Federal Register notices, official FTC/DOJ announcements, TradingView symbol news, curated first-party company intelligence for selected AI-infrastructure stocks, FINVIZ insider transactions, Zacks rank/quote snapshots, Earnings Whispers earnings snapshots, and price snapshots.
 - **Publications Watcher** monitors PubMed, bioRxiv, ClinicalTrials.gov, and openFDA results.
 - **News Watcher** runs Czech and Global editorial profiles through one shared RSS/Atom ingestion, deduplication, and ranking engine.
+- **Reality Investment Analyst** produces a monthly Czech housing-market report and continuously evaluates sale and rental listings collected from a permitted public RSS source for yield, financing stress, discount, and cashflow opportunities.
 - **MU Clubs Monitor** checks verified public websites, Linktrees, and Instagram profiles for meaningful Brno/MUNI club activities and publishes qualifying current items to the briefing event stream.
 - **Personal Morning Briefing** consumes meaningful normalized events from the watcher producers, combines them with optional weather and read-only Google Calendar context, and delivers a scheduled or manual spoken briefing through Telegram.
 - **Maintenance Agent** evaluates every service from normalized run, source, cost, latency, and downstream-feedback telemetry and produces human-reviewed recommendations without changing production.
@@ -83,7 +84,7 @@ Schedule state and overlap locks are stored in PostgreSQL. A stale lock is recov
    PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh
    WATCHER_ENV_FILE=.env docker compose up -d --build
    WATCHER_ENV_FILE=.env docker compose ps
-   WATCHER_ENV_FILE=.env docker compose logs -f stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent osint-bot sales-bot quickly twenty-server twenty-worker
+   WATCHER_ENV_FILE=.env docker compose logs -f stocks-bot publications-bot news-bot reality-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent osint-bot sales-bot quickly twenty-server twenty-worker
    ```
 
    The installer includes `cs_CZ-jirka-medium`. The Briefing Bot keeps the
@@ -129,6 +130,16 @@ To stop the application without deleting data:
 docker compose down
 ```
 
+## Reality Investment Analyst
+
+`apps/reality-bot` is a private Telegram service with two cadences. On the first day of each month it sends one compact market screen followed by financing, macro, city price/rent/yield, development, demographic, regulatory, mortgage-stress, and TOP-10 opportunity sections. Every 30 minutes by default it refreshes listings and immediately alerts only when a listing meets all three persisted gates: gross yield at least 6%, price per square metre at least 15% below the supplied local median, and positive cashflow at a 5% mortgage rate.
+
+The default investment model is a CZK 3 million, 60 m² purchase, 30% equity, 70% mortgage, 30 years, 5% vacancy, annual maintenance equal to 1% of purchase price, and CZK 3,000 annual insurance. `/model` shows or changes the primary assumptions. The calculator derives annuity payments, gross and net yield, current cashflow, and stress cashflows at 3%, the current supplied mortgage rate, 5%, 6%, and 7%. Listing price history is persisted, so discounts and time on market are observations rather than guessed values.
+
+Commands are `/start`, `/help`, `/about`, `/status`, `/run`, `/pause`, `/resume`, `/schedule`, `/locations`, `/location_add`, `/location_remove`, and `/model`. All commands and callbacks use the common Telegram allowlist. Schedule state and overlap locks survive restarts; source failures are isolated and shown in the report.
+
+The bot collects sale and rental flats itself from DigiReality's public RSS channel for every watched city. It derives current asking-price and rent medians from the newest RSS sample, estimates rent for sale listings, and persists price history for deal monitoring. Anonymous personal use works within DigiReality's published limits; `REALITY_DIGIREALITY_KEY` is optional. The adapter caches each city for 55 minutes, does not download photographs, does not bypass portal protections, and drops offers without a numeric price or usable floor area instead of inventing values. See [the source and calculation policy](docs/reality-bot.md).
+
 ## Transport Opportunity Bot
 
 `apps/transport-bot` is a private Telegram decision engine for a single van operator. It normalizes a configured JSON request feed, rejects loads that cannot be proven to fit, routes viable candidates over an OSRM-compatible road service, and shows only jobs that pass the operator's profit, profit/hour, empty-distance, detour, and confidence thresholds. The same evaluator is used by manual searches and scheduled proactive discovery.
@@ -157,6 +168,7 @@ pnpm db:deploy
 pnpm --filter @watcher/stocks-bot dev
 pnpm --filter @watcher/publications-bot dev
 pnpm --filter @watcher/news-bot dev
+pnpm --filter @watcher/reality-bot dev
 pnpm --filter @watcher/mu-clubs-monitor dev
 pnpm --filter @watcher/brno-events-agent dev
 pnpm --filter @watcher/maintenance-agent dev
@@ -195,6 +207,10 @@ Every application variable is represented in `.env.example`.
 | `TRANSPORT_HEALTH_PORT`                                 | transport bot         | Readiness listener; defaults to 4040                                                                     |
 | `PUBLICATIONS_TELEGRAM_TOKEN`                           | publications bot      | BotFather token for the publications bot                                                                 |
 | `NEWS_TELEGRAM_TOKEN`                                   | news bot              | Distinct BotFather token for the Czech and Global news profiles                                          |
+| `REALITY_TELEGRAM_TOKEN`                                | reality bot           | Distinct BotFather token for the private Reality Investment Analyst                                      |
+| `REALITY_DIGIREALITY_KEY`                               | reality bot           | Optional DigiReality RSS key; anonymous personal use remains supported within the public quota           |
+| `REALITY_REPORT_SCHEDULE`                               | reality bot           | Persistent default monthly schedule, `0 8 1 * *`                                                         |
+| `REALITY_MONITOR_INTERVAL_MINUTES`                      | reality bot           | Immediate-deal refresh cadence, default 30 minutes                                                       |
 | `BRIEFING_TELEGRAM_TOKEN`                               | briefing bot          | Distinct BotFather token for the personal morning briefing bot                                           |
 | `MAINTENANCE_TELEGRAM_TOKEN`                            | maintenance agent     | BotFather token used for private reports and one-time project update announcements                       |
 | `MAINTENANCE_API_TOKEN`                                 | maintenance agent     | Bearer token protecting every `/maintenance/*` endpoint                                                  |
@@ -301,7 +317,7 @@ Maintenance Ollama anomaly settings are `OLLAMA_CPU_ALERT_PERCENT=150`, `OLLAMA_
 
 ## Telegram commands
 
-Stocks and Publications support `/about`, `/start`, `/help`, `/status`, `/list_sources`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. News supports the common lifecycle commands plus profile-aware feed and topic configuration. `/help` prints an alphabetized command list. Stocks `/about` sends a three-part Czech beginner's guide covering setup, thesis interpretation, monitoring tiers and modes, practical research workflows, scheduling, and paper-only risk profiles; other bots' `/about` messages explain their purpose and workflow.
+Stocks and Publications support `/about`, `/start`, `/help`, `/status`, `/list_sources`, `/schedule [CRON] [TIMEZONE]`, `/run`, `/pause`, and `/resume`. News supports the common lifecycle commands plus profile-aware feed and topic configuration. Reality supports the common lifecycle commands plus `/locations`, `/location_add`, `/location_remove`, and `/model`. `/help` prints an alphabetized command list. Stocks `/about` sends a three-part Czech beginner's guide covering setup, thesis interpretation, monitoring tiers and modes, practical research workflows, scheduling, and paper-only risk profiles; other bots' `/about` messages explain their purpose and workflow.
 
 Manual `/run` requests first send one progress message, then update that message with `editMessageText` while sources are fetched, items are prepared, and Ollama analyses run. Run digests use Telegram formatting with clear item separators, labeled summary and detail sections, bullet lists, source links, and total run time. Link previews are disabled to keep multi-item digests compact.
 
@@ -526,6 +542,7 @@ apps/
   publications-bot/       process lifecycle and publication Telegram workflows
     src/sources/           PubMed, bioRxiv, trials, and FDA adapters
   news-bot/               general-news Telegram workflows and source orchestration
+  reality-bot/            housing-market reporting and real-estate opportunity monitoring
   mu-clubs-monitor/       public club activity monitoring, API, classification, and scheduling
   brno-events-agent/      Brno event discovery, normalization, deduplication, scoring, and API
   briefing-bot/           scheduled personalized audio briefings and calendar integration

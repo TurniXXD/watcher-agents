@@ -23,6 +23,7 @@ required_files=(
   deploy/runtime/stocks-bot.env
   deploy/runtime/publications-bot.env
   deploy/runtime/news-bot.env
+  deploy/runtime/reality-bot.env
   deploy/runtime/mu-clubs-monitor.env
   deploy/runtime/brno-events-agent.env
   deploy/runtime/briefing-bot.env
@@ -58,6 +59,9 @@ required_env_values=(
   "deploy/runtime/news-bot.env:TELEGRAM_ALLOWED_USER_IDS"
   "deploy/runtime/news-bot.env:OLLAMA_URL"
   "deploy/runtime/news-bot.env:OLLAMA_MODEL"
+  "deploy/runtime/reality-bot.env:DATABASE_URL"
+  "deploy/runtime/reality-bot.env:REALITY_TELEGRAM_TOKEN"
+  "deploy/runtime/reality-bot.env:TELEGRAM_ALLOWED_USER_IDS"
   "deploy/runtime/mu-clubs-monitor.env:DATABASE_URL"
   "deploy/runtime/mu-clubs-monitor.env:MU_CLUBS_API_TOKEN"
   "deploy/runtime/brno-events-agent.env:BRNO_EVENTS_API_TOKEN"
@@ -100,7 +104,7 @@ required_env_values=(
 )
 
 legacy_watcher_services=(
-  stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent
+  stocks-bot publications-bot news-bot reality-bot mu-clubs-monitor brno-events-agent
   briefing-bot maintenance-agent transport-bot
 )
 watcher_services=("${legacy_watcher_services[@]}" osint-bot sales-bot)

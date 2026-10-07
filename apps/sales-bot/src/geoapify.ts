@@ -108,6 +108,21 @@ const categoryRules: CategoryRule[] = [
   {
     aliases: ['hotel', 'hotely'],
     geoapifyCategory: 'accommodation.hotel',
+    naceCode: '55100',
+  },
+  {
+    aliases: [
+      'horska chata',
+      'horske chaty',
+      'chata',
+      'chaty',
+      'chalet',
+      'chalets',
+      'mountain hut',
+      'mountain huts',
+    ],
+    geoapifyCategory: 'accommodation.hut,accommodation.chalet',
+    naceCode: '55200',
   },
   {
     aliases: ['supermarket', 'potraviny'],

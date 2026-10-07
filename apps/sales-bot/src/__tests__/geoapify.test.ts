@@ -17,6 +17,10 @@ describe('GeoapifyDiscoveryClient', () => {
     expect(resolveBusinessCategory('geo:service.beauty.hairdresser')).toEqual({
       geoapifyCategory: 'service.beauty.hairdresser',
     });
+    expect(resolveBusinessCategory('horské chaty')).toEqual({
+      geoapifyCategory: 'accommodation.hut,accommodation.chalet',
+      naceCode: '55200',
+    });
   });
 
   it('geocodes the locality, finds places, and enriches missing contacts', async () => {

@@ -21,6 +21,7 @@ COPY apps/mu-clubs-monitor/package.json apps/mu-clubs-monitor/package.json
 COPY apps/maintenance-agent/package.json apps/maintenance-agent/package.json
 COPY apps/news-bot/package.json apps/news-bot/package.json
 COPY apps/publications-bot/package.json apps/publications-bot/package.json
+COPY apps/reality-bot/package.json apps/reality-bot/package.json
 COPY apps/stocks-bot/package.json apps/stocks-bot/package.json
 COPY apps/study-bot/package.json apps/study-bot/package.json
 COPY apps/transport-bot/package.json apps/transport-bot/package.json
@@ -65,6 +66,7 @@ COPY --from=production-dependencies --chown=node:node /app/apps/mu-clubs-monitor
 COPY --from=production-dependencies --chown=node:node /app/apps/maintenance-agent/node_modules ./apps/maintenance-agent/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/news-bot/node_modules ./apps/news-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/publications-bot/node_modules ./apps/publications-bot/node_modules
+COPY --from=production-dependencies --chown=node:node /app/apps/reality-bot/node_modules ./apps/reality-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/stocks-bot/node_modules ./apps/stocks-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/study-bot/node_modules ./apps/study-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/transport-bot/node_modules ./apps/transport-bot/node_modules
@@ -84,6 +86,8 @@ COPY --from=build --chown=node:node /app/apps/news-bot/package.json ./apps/news-
 COPY --from=build --chown=node:node /app/apps/news-bot/dist ./apps/news-bot/dist
 COPY --from=build --chown=node:node /app/apps/publications-bot/package.json ./apps/publications-bot/package.json
 COPY --from=build --chown=node:node /app/apps/publications-bot/dist ./apps/publications-bot/dist
+COPY --from=build --chown=node:node /app/apps/reality-bot/package.json ./apps/reality-bot/package.json
+COPY --from=build --chown=node:node /app/apps/reality-bot/dist ./apps/reality-bot/dist
 COPY --from=build --chown=node:node /app/apps/stocks-bot/package.json ./apps/stocks-bot/package.json
 COPY --from=build --chown=node:node /app/apps/stocks-bot/dist ./apps/stocks-bot/dist
 COPY --from=build --chown=node:node /app/apps/study-bot/package.json ./apps/study-bot/package.json
