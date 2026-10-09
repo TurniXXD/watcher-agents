@@ -124,6 +124,7 @@ describe('Google Calendar integration', () => {
         items: [
           {
             id: 'meeting-1',
+            eventType: 'default',
             summary: 'Planning',
             description: 'Private notes must not leave the adapter',
             location: 'Office',
@@ -163,6 +164,7 @@ describe('Google Calendar integration', () => {
         start: '2026-03-29T09:00:00+02:00',
         end: '2026-03-29T10:00:00+02:00',
         allDay: false,
+        eventType: 'default',
         location: 'Office',
         calendarName: 'Primary',
       },
@@ -182,6 +184,74 @@ describe('Google Calendar integration', () => {
     expect(renderCalendarSummary([], 'tomorrow')).toBe(
       'Your calendar is clear tomorrow.',
     );
+  });
+
+  it('discovers dedicated birthday and name-day calendars only for occasion lookups', async () => {
+    const requested: URL[] = [];
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url =
+        input instanceof URL
+          ? input
+          : new URL(typeof input === 'string' ? input : input.url);
+      requested.push(url);
+      if (url.pathname.endsWith('/calendarList')) {
+        return jsonResponse({
+          items: [
+            { id: 'primary', summary: 'Primary' },
+            { id: 'birthdays@example.com', summary: 'Birthdays' },
+            { id: 'holidays@example.com', summary: 'Holidays in Czechia' },
+          ],
+        });
+      }
+      if (decodeURIComponent(url.pathname).includes('birthdays@example.com')) {
+        return jsonResponse({
+          summary: 'Birthdays',
+          items: [
+            {
+              id: 'birthday-1',
+              eventType: 'birthday',
+              summary: 'Alice',
+              start: { date: '2026-10-15' },
+              end: { date: '2026-10-16' },
+            },
+          ],
+        });
+      }
+      return jsonResponse({ summary: 'Primary', items: [] });
+    });
+    const oauth = {
+      accessToken: vi.fn(async () => 'access-token'),
+    } as unknown as GoogleCalendarOAuth;
+    const integrations: Pick<CalendarIntegrationStore, 'get'> = {
+      get: vi.fn(async () => ({
+        connected: true,
+        calendarIds: ['primary'],
+      })),
+    };
+    const provider = new GoogleCalendarProvider(oauth, integrations, fetcher);
+
+    await expect(
+      provider.listEvents(42n, {
+        start: new Date('2026-10-12T00:00:00.000Z'),
+        end: new Date('2026-10-26T00:00:00.000Z'),
+        timezone: 'Europe/Prague',
+        includeOccasionCalendars: true,
+      }),
+    ).resolves.toMatchObject([
+      {
+        id: 'birthday-1',
+        eventType: 'birthday',
+        title: 'Alice',
+        calendarName: 'Birthdays',
+      },
+    ]);
+    expect(
+      requested.map(({ pathname }) => decodeURIComponent(pathname)),
+    ).toEqual([
+      '/calendar/v3/users/me/calendarList',
+      '/calendar/v3/calendars/primary/events',
+      '/calendar/v3/calendars/birthdays@example.com/events',
+    ]);
   });
 
   it('turns calendar pressure into concise preparation actions', () => {

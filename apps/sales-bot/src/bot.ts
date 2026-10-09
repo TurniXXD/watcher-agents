@@ -5,6 +5,10 @@ import {
   splitTelegramMessage,
 } from '@watcher/telegram';
 import type { SalesService } from './service.js';
+import {
+  registerNetworkHandlers,
+  type NetworkBotDependencies,
+} from './network/index.js';
 
 export const salesHelp = `💼 Sales assistant
 
@@ -169,6 +173,7 @@ export const createSalesBot = (
   allowedUserIds: ReadonlySet<number>,
   store: SalesStore,
   service: SalesService,
+  network?: NetworkBotDependencies,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedUserIds));
@@ -322,6 +327,7 @@ export const createSalesBot = (
       `Sales run complete: ${result.discovered} discovered, ${result.analyzed} analyzed, ${result.synced} enrolled, ${result.failures} failures.`,
     );
   });
+  if (network) registerNetworkHandlers(bot, network);
   bot.catch((error) => {
     console.error('Sales Telegram error', error.error);
   });

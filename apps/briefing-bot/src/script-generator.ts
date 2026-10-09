@@ -12,6 +12,10 @@ import {
 } from './utils/day-period.js';
 import { segmentTtsScriptByCalendarLanguage } from './utils/tts-language.js';
 import { monthEndSpokenReminder } from './month-end.js';
+import {
+  renderSpokenOccasionReminders,
+  type CalendarOccasionReminderContext,
+} from './occasion-reminders.js';
 import { normalizeForSpeech } from './utils/tts-normalization.js';
 
 const generatedSectionsSchema = z
@@ -86,6 +90,7 @@ export type ContextAvailability = 'AVAILABLE' | 'UNAVAILABLE' | 'DISABLED';
 export type ScriptGenerationInput = {
   date: string;
   monthEndReminder: boolean;
+  occasionReminders?: CalendarOccasionReminderContext;
   localTime: string;
   dayPeriod: BriefingDayPeriod;
   timezone: string;
@@ -285,23 +290,31 @@ const finalizeScript = (
   metrics: AnalysisMetrics,
 ): GeneratedBriefingScript => {
   const closing = `That is your ${input.dayPeriod} briefing.`;
-  const displayScript = input.monthEndReminder
-    ? (() => {
-        const body = rawScript.endsWith(closing)
-          ? rawScript.slice(0, -closing.length).trim()
-          : rawScript;
-        const reservedWords =
-          words(monthEndSpokenReminder).length + words(closing).length;
-        const bodyBudget = Math.max(0, input.maximumWords - reservedWords);
-        return [
-          bodyBudget > 0 ? trimToWordLimit(body, bodyBudget) : undefined,
-          monthEndSpokenReminder,
-          closing,
-        ]
-          .filter((section): section is string => Boolean(section))
-          .join('\n\n');
-      })()
-    : trimToWordLimit(rawScript, input.maximumWords);
+  const deterministicReminders = [
+    renderSpokenOccasionReminders(input.occasionReminders),
+    input.monthEndReminder ? monthEndSpokenReminder : undefined,
+  ].filter((section): section is string => Boolean(section));
+  const displayScript =
+    deterministicReminders.length > 0
+      ? (() => {
+          const body = rawScript.endsWith(closing)
+            ? rawScript.slice(0, -closing.length).trim()
+            : rawScript;
+          const reservedWords =
+            deterministicReminders.reduce(
+              (total, reminder) => total + words(reminder).length,
+              0,
+            ) + words(closing).length;
+          const bodyBudget = Math.max(0, input.maximumWords - reservedWords);
+          return [
+            bodyBudget > 0 ? trimToWordLimit(body, bodyBudget) : undefined,
+            ...deterministicReminders,
+            closing,
+          ]
+            .filter((section): section is string => Boolean(section))
+            .join('\n\n');
+        })()
+      : trimToWordLimit(rawScript, input.maximumWords);
   const normalizationInput = {
     entities: scriptEntities(input.stories),
     ...(input.pronunciations ? { pronunciations: input.pronunciations } : {}),
@@ -312,6 +325,7 @@ const finalizeScript = (
     : undefined;
   const englishPhrases = [
     ...input.calendar.events.map(({ title }) => title),
+    ...(input.occasionReminders?.reminders.map(({ title }) => title) ?? []),
     ...input.stories.flatMap(({ title, entities }) => [
       title,
       ...entities.map(({ name }) => name),

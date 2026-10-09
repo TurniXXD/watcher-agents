@@ -10,6 +10,7 @@ const calendarResponseSchema = z.object({
       z.object({
         id: z.string().min(1),
         status: z.string().optional(),
+        eventType: z.string().optional(),
         summary: z.string().optional(),
         location: z.string().optional(),
         start: z.object({
@@ -25,12 +26,26 @@ const calendarResponseSchema = z.object({
     .optional(),
 });
 
+const calendarListResponseSchema = z.object({
+  nextPageToken: z.string().optional(),
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        summary: z.string().optional(),
+        deleted: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+});
+
 export type CalendarEvent = {
   id: string;
   title: string;
   start: string;
   end: string;
   allDay: boolean;
+  eventType?: string;
   location?: string;
   calendarName?: string;
 };
@@ -54,7 +69,12 @@ export class GoogleCalendarProvider {
 
   public async listEvents(
     telegramChatId: bigint,
-    input: { start: Date; end: Date; timezone: string },
+    input: {
+      start: Date;
+      end: Date;
+      timezone: string;
+      includeOccasionCalendars?: boolean;
+    },
     signal?: AbortSignal,
   ): Promise<CalendarEvent[]> {
     if (input.end <= input.start) throw new Error('Invalid Calendar window');
@@ -64,7 +84,14 @@ export class GoogleCalendarProvider {
     }
     const accessToken = await this.oauth.accessToken(telegramChatId);
     const events: CalendarEvent[] = [];
-    for (const calendarId of integration.calendarIds) {
+    const calendarIds = input.includeOccasionCalendars
+      ? await this.withOccasionCalendarIds(
+          integration.calendarIds,
+          accessToken,
+          signal,
+        )
+      : integration.calendarIds;
+    for (const calendarId of calendarIds) {
       let pageToken: string | undefined;
       let page = 0;
       do {
@@ -98,6 +125,7 @@ export class GoogleCalendarProvider {
             start,
             end,
             allDay: Boolean(event.start.date && !event.start.dateTime),
+            ...(event.eventType ? { eventType: event.eventType } : {}),
             ...(event.location ? { location: event.location } : {}),
             ...(response.summary ? { calendarName: response.summary } : {}),
           });
@@ -110,6 +138,49 @@ export class GoogleCalendarProvider {
       } while (pageToken);
     }
     return events.sort((left, right) => left.start.localeCompare(right.start));
+  }
+
+  private async withOccasionCalendarIds(
+    configuredIds: readonly string[],
+    accessToken: string,
+    signal?: AbortSignal,
+  ): Promise<string[]> {
+    const ids = new Set(configuredIds);
+    let pageToken: string | undefined;
+    let page = 0;
+    do {
+      const url = new URL(
+        'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+      );
+      url.searchParams.set('maxResults', '250');
+      url.searchParams.set('minAccessRole', 'reader');
+      url.searchParams.set('showDeleted', 'false');
+      url.searchParams.set('showHidden', 'true');
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const response = calendarListResponseSchema.parse(
+        await responseJson(
+          await this.fetcher(url, {
+            headers: { authorization: `Bearer ${accessToken}` },
+            ...(signal ? { signal } : {}),
+          }),
+        ),
+      );
+      for (const calendar of response.items ?? []) {
+        if (calendar.deleted) continue;
+        const label = `${calendar.summary ?? ''} ${calendar.id}`;
+        if (
+          /birthday|narozenin|narozky|jmeniny|name[\s-]?days?/iu.test(label)
+        ) {
+          ids.add(calendar.id);
+        }
+      }
+      pageToken = response.nextPageToken;
+      page += 1;
+      if (page >= 10 && pageToken) {
+        throw new Error('Google Calendar list pagination limit exceeded');
+      }
+    } while (pageToken);
+    return [...ids];
   }
 }
 

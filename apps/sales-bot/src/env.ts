@@ -6,6 +6,11 @@ const optionalUrl = z
   .optional()
   .transform((value) => value || undefined)
   .pipe(z.url().optional());
+const optionalString = z
+  .string()
+  .trim()
+  .optional()
+  .transform((value) => value || undefined);
 export const env = z
   .object({
     DATABASE_URL: z.string().min(1),
@@ -72,6 +77,11 @@ export const env = z
       .trim()
       .optional()
       .transform((value) => value || undefined),
+    GOOGLE_SHEETS_SPREADSHEET_ID: optionalString,
+    GOOGLE_SHEETS_NETWORK_RANGE: z.string().trim().default('Network!A:H'),
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: optionalString.pipe(z.email().optional()),
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: optionalString,
+    NETWORK_OLLAMA_VISION_MODEL: optionalString,
     LOG_LEVEL: z.string().default('info'),
   })
   .superRefine((value, context) => {
@@ -80,6 +90,27 @@ export const env = z
         code: 'custom',
         message: 'OLLAMA_URL and OLLAMA_MODEL must be configured together',
         path: ['OLLAMA_URL'],
+      });
+    }
+    const sheetCredentials = [
+      value.GOOGLE_SHEETS_SPREADSHEET_ID,
+      value.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      value.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
+    ];
+    const configured = sheetCredentials.filter(Boolean).length;
+    if (configured > 0 && configured < sheetCredentials.length) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'GOOGLE_SHEETS_SPREADSHEET_ID, GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY must be configured together',
+        path: ['GOOGLE_SHEETS_SPREADSHEET_ID'],
+      });
+    }
+    if (value.NETWORK_OLLAMA_VISION_MODEL && !value.OLLAMA_URL) {
+      context.addIssue({
+        code: 'custom',
+        message: 'NETWORK_OLLAMA_VISION_MODEL requires OLLAMA_URL',
+        path: ['NETWORK_OLLAMA_VISION_MODEL'],
       });
     }
   })

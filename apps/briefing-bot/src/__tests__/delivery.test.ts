@@ -353,6 +353,40 @@ describe('renderBriefingIndex', () => {
     expect(rendered).toContain('Všechny cíle: /goals');
   });
 
+  it('shows Monday birthday and name-day reminders in the compact index', () => {
+    const rendered = renderBriefingIndex({
+      dateLabel: 'Oct 5',
+      dayPeriod: 'morning',
+      occasionReminders: {
+        status: 'AVAILABLE',
+        reminders: [
+          {
+            kind: 'BIRTHDAY',
+            leadWeeks: 1,
+            title: 'Narozeniny Jany',
+            start: '2026-10-15',
+            dateLabel: 'čtvrtek 15. října',
+          },
+          {
+            kind: 'NAME_DAY',
+            leadWeeks: 2,
+            title: 'Svátek má Petr',
+            start: '2026-10-22',
+            dateLabel: 'čtvrtek 22. října',
+          },
+        ],
+      },
+      calendar: { status: 'AVAILABLE', count: 0 },
+      topics: [],
+    });
+
+    expect(rendered).toContain('🎂 Narozeniny a svátky');
+    expect(rendered).toContain('V týdnu za týden');
+    expect(rendered).toContain('Narozeniny Jany');
+    expect(rendered).toContain('V týdnu za dva týdny');
+    expect(rendered).toContain('Svátek má Petr');
+  });
+
   it('labels evening Calendar events as tomorrow', () => {
     const rendered = renderBriefingIndex({
       dateLabel: 'Sep 6',

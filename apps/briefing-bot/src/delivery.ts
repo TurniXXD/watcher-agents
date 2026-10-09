@@ -8,6 +8,7 @@ import type { TtsResult } from './tts.js';
 import type { BriefingTelegramTransport } from './telegram-transport.js';
 import type { WatchlistEarningsContext } from './stock-context.js';
 import { monthEndAction } from './month-end.js';
+import type { CalendarOccasionReminderContext } from './occasion-reminders.js';
 import {
   briefingDayPeriodPresentation,
   type BriefingDayPeriod,
@@ -42,6 +43,7 @@ export type BriefingIndex = {
   dateLabel: string;
   dayPeriod: BriefingDayPeriod;
   monthEndReminder?: boolean;
+  occasionReminders?: CalendarOccasionReminderContext;
   location?: string;
   audioDurationSeconds?: number;
   calendar: { status: 'AVAILABLE' | 'UNAVAILABLE' | 'DISABLED'; count: number };
@@ -102,6 +104,26 @@ export const renderBriefingIndex = (index: BriefingIndex): string => {
       escapeHtml(monthEndAction),
       'Všechny cíle: /goals',
     );
+  }
+  if (index.occasionReminders?.status === 'UNAVAILABLE') {
+    append('', '🎂 Pondělní připomínky narozenin a svátků nejsou dostupné.');
+  } else if (
+    index.occasionReminders?.status === 'AVAILABLE' &&
+    index.occasionReminders.reminders.length > 0
+  ) {
+    append('', '<b>🎂 Narozeniny a svátky</b>');
+    for (const leadWeeks of [1, 2] as const) {
+      const reminders = index.occasionReminders.reminders.filter(
+        (reminder) => reminder.leadWeeks === leadWeeks,
+      );
+      if (reminders.length === 0) continue;
+      append(`<b>V týdnu za ${leadWeeks === 1 ? 'týden' : 'dva týdny'}:</b>`);
+      for (const reminder of reminders) {
+        append(
+          `• ${reminder.kind === 'BIRTHDAY' ? '🎂' : '🌼'} ${escapeHtml(reminder.dateLabel)} · ${escapeHtml(reminder.title)}`,
+        );
+      }
+    }
   }
   if (index.calendar.status === 'AVAILABLE') {
     const day = isEndOfDayBriefing(index.dayPeriod) ? 'tomorrow' : 'today';

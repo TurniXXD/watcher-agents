@@ -3,6 +3,13 @@ import type { BriefingConfiguration } from '@watcher/database';
 import type { CalendarEvent } from './calendar.js';
 import { calendarDayWindow } from './calendar.js';
 import type { ContextAvailability } from './script-generator.js';
+import {
+  calendarOccasionReminders,
+  isMondayMorning,
+  mondayOccasionWindow,
+  type CalendarOccasionReminderContext,
+} from './occasion-reminders.js';
+import type { BriefingDayPeriod } from './utils/day-period.js';
 import type {
   WeatherContext,
   WeatherForecastTarget,
@@ -12,7 +19,12 @@ import type {
 export type CalendarProvider = {
   listEvents: (
     telegramChatId: bigint,
-    input: { start: Date; end: Date; timezone: string },
+    input: {
+      start: Date;
+      end: Date;
+      timezone: string;
+      includeOccasionCalendars?: boolean;
+    },
     signal?: AbortSignal,
   ) => Promise<CalendarEvent[]>;
 };
@@ -123,5 +135,55 @@ export const loadBriefingCalendar = async (
   } catch (error) {
     logger?.warn({ err: error }, 'CALENDAR = DEGRADED');
     return { status: 'UNAVAILABLE', value: [] };
+  }
+};
+
+export const loadMondayOccasionReminders = async (
+  telegramChatId: bigint,
+  configuration: BriefingConfiguration,
+  calendar: CalendarProvider | undefined,
+  presentationTime: Date,
+  dayPeriod: BriefingDayPeriod,
+  enabled: boolean,
+  logger?: WatcherLogger,
+): Promise<CalendarOccasionReminderContext> => {
+  if (
+    !enabled ||
+    !isMondayMorning(
+      presentationTime,
+      configuration.settings.timezone,
+      dayPeriod,
+    ) ||
+    !configuration.settings.calendarEnabled
+  ) {
+    return { status: 'DISABLED', reminders: [] };
+  }
+  if (!calendar) return { status: 'UNAVAILABLE', reminders: [] };
+  try {
+    const window = mondayOccasionWindow(
+      presentationTime,
+      configuration.settings.timezone,
+    );
+    const events = await calendar.listEvents(
+      telegramChatId,
+      {
+        start: window.start,
+        end: window.end,
+        timezone: configuration.settings.timezone,
+        includeOccasionCalendars: true,
+      },
+      AbortSignal.timeout(15_000),
+    );
+    return {
+      status: 'AVAILABLE',
+      reminders: calendarOccasionReminders(
+        events,
+        configuration.settings.timezone,
+        window.secondWeekStart,
+      ),
+    };
+  } catch (error) {
+    logger?.warn({ err: error }, 'CALENDAR OCCASION REMINDERS = DEGRADED');
+    return { status: 'UNAVAILABLE', reminders: [] };
   }
 };

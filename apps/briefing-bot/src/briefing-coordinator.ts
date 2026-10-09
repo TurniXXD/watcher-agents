@@ -21,6 +21,7 @@ import {
   dateLabel,
   dateParts,
   loadBriefingCalendar,
+  loadMondayOccasionReminders,
   loadBriefingWeather,
   locationLabel,
   measured,
@@ -289,6 +290,7 @@ export class BriefingCoordinator {
       const [
         weatherResult,
         calendarResult,
+        occasionRemindersResult,
         storiesResult,
         watcherHealth,
         earnings,
@@ -322,6 +324,17 @@ export class BriefingCoordinator {
           ),
         ),
         measured(() =>
+          loadMondayOccasionReminders(
+            telegramChatId,
+            configuration,
+            this.dependencies.calendar,
+            presentationTime,
+            dayPeriod,
+            type !== 'TEST',
+            this.dependencies.logger,
+          ),
+        ),
+        measured(() =>
           this.dependencies.storyEngine.collect({
             telegramChatId,
             subscriptions,
@@ -347,6 +360,7 @@ export class BriefingCoordinator {
       ]);
       const weather = weatherResult.value;
       const calendar = calendarResult.value;
+      const occasionReminders = occasionRemindersResult.value;
       const storyResult = storiesResult.value;
       const coverage = calculateBriefingCoverage({
         subscriptions,
@@ -401,9 +415,12 @@ export class BriefingCoordinator {
           weatherDurationMs: weatherResult.durationMs,
           calendarStatus: calendar.status,
           calendarEventCount: calendar.value.length,
+          occasionReminderStatus: occasionReminders.status,
+          occasionReminderCount: occasionReminders.reminders.length,
           earningsStatus: earnings.status,
           upcomingEarningsCount: earnings.events.length,
           calendarDurationMs: calendarResult.durationMs,
+          occasionReminderDurationMs: occasionRemindersResult.durationMs,
           watcherEventsDurationMs: storiesResult.durationMs,
           storyMetrics: storyResult.metrics,
           selectedStoryCount: selectedStories.length,
@@ -417,6 +434,7 @@ export class BriefingCoordinator {
       const scriptInput = {
         date: dateLabel(presentationTime, configuration.settings.timezone),
         monthEndReminder,
+        occasionReminders,
         localTime: local.time,
         dayPeriod,
         timezone: configuration.settings.timezone,
@@ -575,6 +593,7 @@ export class BriefingCoordinator {
           ),
           dayPeriod,
           monthEndReminder,
+          occasionReminders,
           ...(place ? { location: place } : {}),
           calendar: { status: calendar.status, count: calendar.value.length },
           earnings,
@@ -640,6 +659,7 @@ export class BriefingCoordinator {
       const contextDegraded =
         weather.status === 'UNAVAILABLE' ||
         calendar.status === 'UNAVAILABLE' ||
+        occasionReminders.status === 'UNAVAILABLE' ||
         earnings.status === 'UNAVAILABLE' ||
         goalsUnavailable ||
         coverage.percentage < 100;

@@ -12,6 +12,7 @@ const now = new Date('2026-09-06T05:00:00.000Z');
 const configuration = (
   onboardingCompleted = true,
   locationEnabled = false,
+  calendarEnabled = false,
 ): BriefingConfiguration => ({
   settings: {
     id: 'settings-1',
@@ -24,7 +25,7 @@ const configuration = (
     targetDurationMinutes: 7,
     maximumDurationMinutes: 15,
     sendTranscript: false,
-    calendarEnabled: false,
+    calendarEnabled,
     weatherEnabled: true,
     priorityKeywords: [],
     mutedKeywords: [],
@@ -92,6 +93,7 @@ const dependencies = (
     onboardingCompleted?: boolean;
     currentTime?: Date;
     locationEnabled?: boolean;
+    calendarEnabled?: boolean;
   } = {},
 ) => {
   const seen = new Map<string, BriefingRunRecord>();
@@ -158,6 +160,7 @@ const dependencies = (
           configuration(
             options.onboardingCompleted ?? true,
             options.locationEnabled ?? false,
+            options.calendarEnabled ?? false,
           ),
       },
       runs,
@@ -274,6 +277,101 @@ describe('BriefingCoordinator', () => {
       dayPeriod: 'evening',
     });
     expect(setup.deliveryInputs[0]?.index.monthEndReminder).toBe(false);
+  });
+
+  it('adds one-week and two-week birthday and name-day reminders on Monday morning', async () => {
+    const mondayMorning = new Date('2026-10-05T05:00:00.000Z');
+    const setup = dependencies({
+      currentTime: mondayMorning,
+      calendarEnabled: true,
+    });
+    const listEvents = vi.fn(
+      async (
+        _chatId: bigint,
+        input: { start: Date; end: Date; timezone: string },
+      ) =>
+        input.end.getTime() - input.start.getTime() > 24 * 60 * 60_000
+          ? [
+              {
+                id: 'birthday-1',
+                title: 'Narozeniny Jany',
+                start: '2026-10-15',
+                end: '2026-10-16',
+                allDay: true,
+              },
+              {
+                id: 'name-day-1',
+                title: 'Svátek má Petr',
+                start: '2026-10-22',
+                end: '2026-10-23',
+                allDay: true,
+              },
+            ]
+          : [],
+    );
+
+    await new BriefingCoordinator({
+      ...setup.value,
+      calendar: { listEvents },
+    }).generate(123n, 'SCHEDULED', mondayMorning);
+
+    expect(listEvents).toHaveBeenCalledTimes(2);
+    expect(setup.value.scripts.generate.mock.calls[0]?.[0]).toMatchObject({
+      occasionReminders: {
+        status: 'AVAILABLE',
+        reminders: [
+          { title: 'Narozeniny Jany', leadWeeks: 1 },
+          { title: 'Svátek má Petr', leadWeeks: 2 },
+        ],
+      },
+    });
+    expect(setup.deliveryInputs[0]?.index).toMatchObject({
+      occasionReminders: {
+        status: 'AVAILABLE',
+        reminders: [
+          { title: 'Narozeniny Jany', leadWeeks: 1 },
+          { title: 'Svátek má Petr', leadWeeks: 2 },
+        ],
+      },
+    });
+  });
+
+  it('does not request the future occasion window outside Monday morning', async () => {
+    const tuesdayMorning = new Date('2026-10-06T05:00:00.000Z');
+    const setup = dependencies({
+      currentTime: tuesdayMorning,
+      calendarEnabled: true,
+    });
+    const listEvents = vi.fn(async () => []);
+
+    await new BriefingCoordinator({
+      ...setup.value,
+      calendar: { listEvents },
+    }).generate(123n, 'SCHEDULED', tuesdayMorning);
+
+    expect(listEvents).toHaveBeenCalledOnce();
+    expect(setup.value.scripts.generate.mock.calls[0]?.[0]).toMatchObject({
+      occasionReminders: { status: 'DISABLED', reminders: [] },
+    });
+  });
+
+  it('does not add occasion reminders to a Monday test briefing', async () => {
+    const mondayMorning = new Date('2026-10-05T05:00:00.000Z');
+    const setup = dependencies({
+      currentTime: mondayMorning,
+      calendarEnabled: true,
+    });
+    const listEvents = vi.fn(async () => []);
+
+    await new BriefingCoordinator({
+      ...setup.value,
+      calendar: { listEvents },
+    }).generate(123n, 'TEST');
+
+    expect(listEvents).toHaveBeenCalledOnce();
+    expect(setup.value.scripts.generate.mock.calls[0]?.[0]).toMatchObject({
+      occasionReminders: { status: 'DISABLED', reminders: [] },
+    });
   });
 
   it.each([

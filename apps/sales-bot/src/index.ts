@@ -22,6 +22,13 @@ import {
 import { TwentyIntegration } from './integrations/twenty/index.js';
 import { QuicklyClient } from './providers.js';
 import { SalesService } from './service.js';
+import {
+  GoogleSheetsNetworkRepository,
+  NetworkAiService,
+  networkBotCommands,
+  OllamaBusinessCardParser,
+  type NetworkBotDependencies,
+} from './network/index.js';
 
 const logger = createLogger('sales-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
@@ -40,24 +47,25 @@ const twenty =
       )
     : undefined;
 const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);
-const coldEmailGenerator =
+const ollamaProvider =
   env.OLLAMA_URL && env.OLLAMA_MODEL
-    ? new ColdEmailGenerator(
-        new OllamaProvider({
-          url: env.OLLAMA_URL,
-          model: env.OLLAMA_MODEL,
-          keepAlive: env.OLLAMA_KEEP_ALIVE,
-          numCtx: env.OLLAMA_NUM_CTX,
-          numPredict: 512,
-          retries: env.OLLAMA_RETRIES,
-          think: env.OLLAMA_THINK,
-          timeoutMs: env.OLLAMA_TIMEOUT_MS,
-          caller: 'sales-bot',
-          priority: 'normal',
-          coordinator: ollamaCoordinator,
-        }),
-      )
+    ? new OllamaProvider({
+        url: env.OLLAMA_URL,
+        model: env.OLLAMA_MODEL,
+        keepAlive: env.OLLAMA_KEEP_ALIVE,
+        numCtx: env.OLLAMA_NUM_CTX,
+        numPredict: 900,
+        retries: env.OLLAMA_RETRIES,
+        think: env.OLLAMA_THINK,
+        timeoutMs: env.OLLAMA_TIMEOUT_MS,
+        caller: 'sales-bot',
+        priority: 'normal',
+        coordinator: ollamaCoordinator,
+      })
     : undefined;
+const coldEmailGenerator = ollamaProvider
+  ? new ColdEmailGenerator(ollamaProvider)
+  : undefined;
 const places = env.GOOGLE_PLACES_API_KEY
   ? new GooglePlacesDiscoveryClient(env.GOOGLE_PLACES_API_KEY)
   : undefined;
@@ -75,7 +83,37 @@ const service = new SalesService(
   env.OLLAMA_MODEL,
 );
 const allowed = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
-const bot = createSalesBot(env.SALES_TELEGRAM_TOKEN, allowed, store, service);
+const network: NetworkBotDependencies | undefined =
+  env.GOOGLE_SHEETS_SPREADSHEET_ID &&
+  env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
+  env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+    ? {
+        repository: new GoogleSheetsNetworkRepository({
+          spreadsheetId: env.GOOGLE_SHEETS_SPREADSHEET_ID,
+          range: env.GOOGLE_SHEETS_NETWORK_RANGE,
+          serviceAccountEmail: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+          serviceAccountPrivateKey: env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
+        }),
+        ai: new NetworkAiService(ollamaProvider),
+        ...(env.OLLAMA_URL && env.NETWORK_OLLAMA_VISION_MODEL
+          ? {
+              cardParser: new OllamaBusinessCardParser(
+                env.OLLAMA_URL,
+                env.NETWORK_OLLAMA_VISION_MODEL,
+                env.OLLAMA_TIMEOUT_MS,
+              ),
+            }
+          : {}),
+        telegramToken: env.SALES_TELEGRAM_TOKEN,
+      }
+    : undefined;
+const bot = createSalesBot(
+  env.SALES_TELEGRAM_TOKEN,
+  allowed,
+  store,
+  service,
+  network,
+);
 const api = new SalesApi(
   store,
   service,
@@ -183,5 +221,8 @@ process.once('SIGINT', () => void shutdown('SIGINT'));
 void service
   .run()
   .catch((error) => logger.error({ err: error }, 'Initial sales run failed'));
-await bot.api.setMyCommands([...salesBotCommands]);
+await bot.api.setMyCommands([
+  ...salesBotCommands,
+  ...(network ? networkBotCommands : []),
+]);
 await bot.start({ onStart: () => logger.info({}, 'Sales bot started') });

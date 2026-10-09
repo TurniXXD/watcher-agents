@@ -119,6 +119,40 @@ describe('BriefingScriptGenerator', () => {
     );
   });
 
+  it('keeps Monday birthday and name-day reminders in deterministic audio', () => {
+    const monday = input([]);
+    monday.occasionReminders = {
+      status: 'AVAILABLE',
+      reminders: [
+        {
+          kind: 'BIRTHDAY',
+          leadWeeks: 1,
+          title: 'Narozeniny Jany',
+          start: '2026-10-15',
+          dateLabel: 'čtvrtek 15. října',
+        },
+        {
+          kind: 'NAME_DAY',
+          leadWeeks: 2,
+          title: 'Svátek má Petr',
+          start: '2026-10-22',
+          dateLabel: 'čtvrtek 22. října',
+        },
+      ],
+    };
+
+    const result = fallbackBriefingScript(monday);
+
+    expect(result.displayScript).toContain(
+      'Pondělní kalendářní připomínka narozenin a svátků',
+    );
+    expect(result.displayScript).toContain('V týdnu za týden');
+    expect(result.displayScript).toContain('V týdnu za dva týdny');
+    expect(result.ttsSegments.some(({ language }) => language === 'cs')).toBe(
+      true,
+    );
+  });
+
   it('speaks confirmed watchlist earnings in the fallback script even without stories', () => {
     const script = fallbackBriefingScript({
       ...input([]),
