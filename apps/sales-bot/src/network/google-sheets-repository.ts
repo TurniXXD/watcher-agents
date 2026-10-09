@@ -43,11 +43,14 @@ export const sheetRowToContact = (
     name,
     ...(optionalCell(row[1]) ? { metDate: optionalCell(row[1]) } : {}),
     ...(optionalCell(row[2]) ? { metAt: optionalCell(row[2]) } : {}),
-    ...(optionalCell(row[3]) ? { contact: optionalCell(row[3]) } : {}),
-    ...(optionalCell(row[4]) ? { meetingNote: optionalCell(row[4]) } : {}),
-    ...(optionalCell(row[5]) ? { contactType: optionalCell(row[5]) } : {}),
-    ...(optionalCell(row[6]) ? { followUp: optionalCell(row[6]) } : {}),
-    active: activeCell(row[7]),
+    ...(optionalCell(row[3]) ? { phone: optionalCell(row[3]) } : {}),
+    ...(optionalCell(row[4]) ? { email: optionalCell(row[4]) } : {}),
+    ...(optionalCell(row[5]) ? { web: optionalCell(row[5]) } : {}),
+    ...(optionalCell(row[6]) ? { socialNetwork: optionalCell(row[6]) } : {}),
+    ...(optionalCell(row[7]) ? { meetingNote: optionalCell(row[7]) } : {}),
+    ...(optionalCell(row[8]) ? { contactType: optionalCell(row[8]) } : {}),
+    ...(optionalCell(row[9]) ? { followUp: optionalCell(row[9]) } : {}),
+    active: activeCell(row[10]),
   });
   return { ...contact, id: String(rowNumber) };
 };
@@ -56,7 +59,10 @@ const contactToSheetRow = (contact: NetworkContactInput): string[] => [
   contact.name,
   contact.metDate ?? '',
   contact.metAt ?? '',
-  contact.contact ?? '',
+  contact.phone ?? '',
+  contact.email ?? '',
+  contact.web ?? '',
+  contact.socialNetwork ?? '',
   contact.meetingNote ?? '',
   contact.contactType ?? '',
   contact.followUp ?? '',
@@ -124,7 +130,7 @@ export class GoogleSheetsNetworkRepository implements NetworkRepository {
     const rowNumber = parseRowId(id);
     const response = await this.#sheets.spreadsheets.values.get({
       spreadsheetId: this.#spreadsheetId,
-      range: `${this.#sheetName}!A${rowNumber}:H${rowNumber}`,
+      range: `${this.#sheetName}!A${rowNumber}:K${rowNumber}`,
       valueRenderOption: 'FORMATTED_VALUE',
     });
     const row = response.data.values?.[0];
@@ -159,7 +165,7 @@ export class GoogleSheetsNetworkRepository implements NetworkRepository {
     const updated = networkContactInputSchema.parse({ ...existing, ...patch });
     await this.#sheets.spreadsheets.values.update({
       spreadsheetId: this.#spreadsheetId,
-      range: `${this.#sheetName}!A${rowNumber}:H${rowNumber}`,
+      range: `${this.#sheetName}!A${rowNumber}:K${rowNumber}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [contactToSheetRow(updated)] },
     });
@@ -174,7 +180,10 @@ export class GoogleSheetsNetworkRepository implements NetworkRepository {
         [
           contact.name,
           contact.metAt,
-          contact.contact,
+          contact.phone,
+          contact.email,
+          contact.web,
+          contact.socialNetwork,
           contact.meetingNote,
           contact.contactType,
           contact.followUp,

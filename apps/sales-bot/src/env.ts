@@ -78,7 +78,10 @@ export const env = z
       .optional()
       .transform((value) => value || undefined),
     GOOGLE_SHEETS_SPREADSHEET_ID: optionalString,
-    GOOGLE_SHEETS_NETWORK_RANGE: z.string().trim().default('Network!A:H'),
+    GOOGLE_SHEETS_NETWORK_RANGE: z
+      .string()
+      .trim()
+      .default("'Contact list'!A:K"),
     GOOGLE_SERVICE_ACCOUNT_EMAIL: optionalString.pipe(z.email().optional()),
     GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: optionalString,
     NETWORK_OLLAMA_VISION_MODEL: optionalString,

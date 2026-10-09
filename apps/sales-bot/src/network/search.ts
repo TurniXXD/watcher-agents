@@ -29,7 +29,10 @@ const contactText = (contact: NetworkContact): string =>
     [
       contact.name,
       contact.metAt,
-      contact.contact,
+      contact.phone,
+      contact.email,
+      contact.web,
+      contact.socialNetwork,
       contact.meetingNote,
       contact.contactType,
       contact.followUp,

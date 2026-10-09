@@ -3,15 +3,13 @@ import { splitTelegramMessage } from '@watcher/telegram';
 
 export const salesFollowupKind = 'SALES_FOLLOWUP_CALLS';
 
-type SentEmailEvent = Awaited<
-  ReturnType<SalesStore['listSentEmailEvents']>
+type CallCandidate = Awaited<
+  ReturnType<SalesStore['listCallCandidates']>
 >[number];
 
 export type FollowupSlot = {
   date: string;
-  fromDate: string;
   nextCallDate: string;
-  sunday: boolean;
 };
 
 const dateParts = (at: Date, timezone: string) =>
@@ -55,12 +53,9 @@ export const followupSlotAt = (
   )
     return undefined;
   const date = `${parts.year}-${parts.month}-${parts.day}`;
-  const sunday = parts.weekday === 'Sun';
   return {
     date,
-    fromDate: sunday ? shiftDate(date, -2) : date,
     nextCallDate: shiftDate(date, 1),
-    sunday,
   };
 };
 
@@ -70,51 +65,26 @@ const safeLine = (value: string, max = 180): string =>
     .trim()
     .slice(0, max);
 
-const statusNote = (stage: string): string => {
-  if (['BOUNCED', 'UNSUBSCRIBED', 'NOT_INTERESTED'].includes(stage))
-    return 'NEVOLAT bez ověření – negativní stav';
-  if (['REPLIED', 'INTERESTED'].includes(stage))
-    return 'odpověděl – před voláním zkontroluj reakci';
-  return 'odeslaný e-mail';
-};
-
 export const renderFollowupReport = (
   slot: FollowupSlot,
-  events: readonly SentEmailEvent[],
-  timezone: string,
+  leads: readonly CallCandidate[],
 ): string => {
-  const contacts = new Map<
-    string,
-    { lead: NonNullable<SentEmailEvent['lead']>; count: number }
-  >();
-  for (const event of events) {
-    if (!event.lead || !event.lead.email || !event.occurredAt) continue;
-    const sentDate = localDate(event.occurredAt, timezone);
-    if (sentDate < slot.fromDate || sentDate > slot.date) continue;
-    const key = event.lead.email.toLowerCase();
-    const previous = contacts.get(key);
-    contacts.set(key, {
-      lead: event.lead,
-      count: (previous?.count ?? 0) + 1,
-    });
-  }
-  const range = slot.sunday
-    ? `${slot.fromDate}–${slot.date} (pá–ne)`
-    : slot.date;
-  const heading = `📞 Cold cally na ${slot.nextCallDate}\nPotvrzené odeslané e-maily: ${range} · ${contacts.size} kontaktů`;
-  if (contacts.size === 0)
-    return `${heading}\n\nNejsou evidované žádné události email.sent. Pokud Quickly e-maily odeslalo, zkontroluj webhook.`;
-  const rows = [...contacts.values()].map(({ lead, count }, index) =>
+  const heading = `📞 Cold cally na ${slot.nextCallDate}\nVeřejné telefonní kontakty: ${leads.length}`;
+  if (leads.length === 0)
+    return `${heading}\n\nZatím nejsou žádné analyzované leady s veřejným telefonem. Importuj firmy přes /sales_find a potom spusť /sales_run.`;
+  const rows = leads.map((lead, index) =>
     [
-      `${index + 1}. ${safeLine(lead.companyName)} · ${safeLine(lead.email ?? '')}`,
-      `Telefon: ${lead.phone ? safeLine(lead.phone, 40) : 'není evidován – zkontroluj web'}`,
-      `Web: ${safeLine(lead.phoneSourceUrl ?? lead.contactSourceUrl ?? lead.websiteUrl ?? 'není evidován', 250)}`,
-      `Kampaň: ${safeLine(lead.campaign.name, 100)}${count > 1 ? ` · ${count} odeslané e-maily` : ''}`,
-      `Stav: ${statusNote(lead.stage)}`,
+      `${index + 1}. ${safeLine(lead.companyName)} · ${lead.finalScore ?? '?'} bodů`,
+      `Telefon: ${safeLine(lead.phone ?? '', 40)}`,
+      ...(lead.email ? [`E-mail: ${safeLine(lead.email, 180)}`] : []),
+      `Zdroj telefonu: ${safeLine(lead.phoneSourceUrl ?? '', 250)}`,
+      `Web: ${safeLine(lead.websiteUrl ?? 'není evidován', 250)}`,
+      `Kampaň: ${safeLine(lead.campaign.name, 100)}`,
+      `Stav: ${safeLine(lead.stage, 40)}`,
       `Detail: /sales_lead ${lead.id}`,
     ].join('\n'),
   );
-  return `${heading}\nPřed voláním ověř reakce, námitky a právní podmínky.\n\n${rows.join('\n\n')}`;
+  return `${heading}\nPřed voláním ověř firmu, zdroj telefonu a právní podmínky.\n\n${rows.join('\n\n')}`;
 };
 
 export const enqueueFollowupReports = async (
@@ -122,7 +92,7 @@ export const enqueueFollowupReports = async (
   timezone: string,
   deliveryTime: string,
   userIds: ReadonlySet<number>,
-  store: Pick<SalesStore, 'listSentEmailEvents'>,
+  store: Pick<SalesStore, 'listCallCandidates'>,
   outbox: Pick<TelegramOutboxStore, 'hasMessage' | 'enqueueMany'>,
 ): Promise<number> => {
   const slot = followupSlotAt(now, timezone, deliveryTime);
@@ -136,17 +106,8 @@ export const enqueueFollowupReports = async (
   }
   if (pendingUsers.length === 0) return 0;
 
-  // A one-day UTC margin on each side covers every supported local UTC offset.
-  const from = new Date(
-    Date.parse(`${slot.fromDate}T00:00:00.000Z`) - 86_400_000,
-  );
-  const to = new Date(
-    Date.parse(`${shiftDate(slot.date, 1)}T00:00:00.000Z`) + 86_400_000,
-  );
-  const events = await store.listSentEmailEvents(from, to);
-  const parts = splitTelegramMessage(
-    renderFollowupReport(slot, events, timezone),
-  );
+  const leads = await store.listCallCandidates(20);
+  const parts = splitTelegramMessage(renderFollowupReport(slot, leads));
   await outbox.enqueueMany(
     pendingUsers.flatMap((userId) =>
       parts.map((body, index) => ({

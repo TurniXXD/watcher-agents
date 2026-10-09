@@ -32,19 +32,17 @@ export const findDuplicateContacts = (
   input: NetworkContactInput,
   contacts: NetworkContact[],
 ): NetworkContact[] => {
-  const candidateContact = input.contact ?? '';
-  const candidateEmails = new Set(emails(candidateContact));
-  const candidatePhones = new Set(phones(candidateContact));
-  const candidateUrls = new Set(urls(candidateContact));
+  const candidateEmails = new Set(emails(input.email ?? ''));
+  const candidatePhones = new Set(phones(input.phone ?? ''));
+  const candidateUrls = new Set(urls(input.socialNetwork ?? ''));
   const candidateName = normalize(input.name);
 
   return contacts.filter((contact) => {
-    const existingContact = contact.contact ?? '';
-    if (emails(existingContact).some((email) => candidateEmails.has(email)))
+    if (emails(contact.email ?? '').some((email) => candidateEmails.has(email)))
       return true;
-    if (phones(existingContact).some((phone) => candidatePhones.has(phone)))
+    if (phones(contact.phone ?? '').some((phone) => candidatePhones.has(phone)))
       return true;
-    if (urls(existingContact).some((url) => candidateUrls.has(url)))
+    if (urls(contact.socialNetwork ?? '').some((url) => candidateUrls.has(url)))
       return true;
     return (
       candidateName.length >= 3 && normalize(contact.name) === candidateName

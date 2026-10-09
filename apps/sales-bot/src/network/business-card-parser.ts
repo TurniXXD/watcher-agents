@@ -87,14 +87,6 @@ export class OllamaBusinessCardParser implements BusinessCardParser {
       const card = businessCardSchema.parse(
         JSON.parse(parsedResponse.message.content),
       );
-      const contactParts = [
-        card.role,
-        card.company,
-        card.email,
-        card.phone,
-        card.website,
-        card.linkedin,
-      ].filter((value): value is string => Boolean(value));
       const noteParts = [
         card.company ? `Firma: ${card.company}` : undefined,
         card.role ? `Role: ${card.role}` : undefined,
@@ -102,7 +94,10 @@ export class OllamaBusinessCardParser implements BusinessCardParser {
       ].filter((value): value is string => Boolean(value));
       return networkContactInputSchema.parse({
         name: card.name,
-        ...(contactParts.length ? { contact: contactParts.join(' · ') } : {}),
+        ...(card.phone ? { phone: card.phone } : {}),
+        ...(card.email ? { email: card.email } : {}),
+        ...(card.website ? { web: card.website } : {}),
+        ...(card.linkedin ? { socialNetwork: card.linkedin } : {}),
         ...(noteParts.length ? { meetingNote: noteParts.join('. ') } : {}),
         ...(card.role ? { contactType: card.role } : {}),
         active: true,

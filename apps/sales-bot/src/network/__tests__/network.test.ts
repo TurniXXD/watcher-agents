@@ -13,7 +13,10 @@ const contact = (overrides: Partial<NetworkContact> = {}): NetworkContact => ({
   name: 'Jan Novák',
   metDate: '2026-09-12',
   metAt: 'Startup Night Brno',
-  contact: 'CEO · Example s.r.o. · jan@example.cz · +420 777 123 456',
+  phone: '+420 777 123 456',
+  email: 'jan@example.cz',
+  web: 'https://example.cz',
+  socialNetwork: 'https://linkedin.com/in/jan-novak',
   meetingNote: 'Dělá B2B sales a má kontakty ve výrobních firmách.',
   contactType: 'B2B sales',
   followUp: '2026-11-15',
@@ -22,14 +25,17 @@ const contact = (overrides: Partial<NetworkContact> = {}): NetworkContact => ({
 });
 
 describe('network sheet mapping', () => {
-  it('maps the exact eight user-provided columns without extending the sheet', () => {
+  it('maps the exact eleven user-provided columns without extending the sheet', () => {
     expect(
       sheetRowToContact(
         [
           'Jan Novák',
           '2026-09-12',
           'Startup Night Brno',
+          '+420 777 123 456',
           'jan@example.cz',
+          'https://example.cz',
+          'https://linkedin.com/in/jan-novak',
           'B2B sales',
           'Obchodní kontakt',
           '2026-11-15',
@@ -42,7 +48,10 @@ describe('network sheet mapping', () => {
       name: 'Jan Novák',
       metDate: '2026-09-12',
       metAt: 'Startup Night Brno',
-      contact: 'jan@example.cz',
+      phone: '+420 777 123 456',
+      email: 'jan@example.cz',
+      web: 'https://example.cz',
+      socialNetwork: 'https://linkedin.com/in/jan-novak',
       meetingNote: 'B2B sales',
       contactType: 'Obchodní kontakt',
       followUp: '2026-11-15',
@@ -50,30 +59,45 @@ describe('network sheet mapping', () => {
     });
   });
 
-  it('validates headers and appends in the same eight-column order', async () => {
+  it('validates headers and appends in the same eleven-column order', async () => {
     const get = vi.fn().mockResolvedValue({
       data: {
         values: [
           [
-            'Name',
+            'Jméno',
             'Datum potkání',
             'Místo potkání',
-            'Kontakt',
+            'Telefon',
+            'Email',
+            'Web',
+            'sociální síť',
             'Poznámka k potkání',
             'Typ kontaktu',
             'Domluvena další schůzka',
             'Aktivní kontakt',
           ],
-          ['Jan Novák', '', '', 'jan@example.cz', '', '', '', 'Ano'],
+          [
+            'Jan Novák',
+            '',
+            '',
+            '+420 777 123 456',
+            'jan@example.cz',
+            'https://example.cz',
+            'https://linkedin.com/in/jan-novak',
+            '',
+            '',
+            '',
+            'Ano',
+          ],
         ],
       },
     });
     const append = vi.fn().mockResolvedValue({
-      data: { updates: { updatedRange: 'Network!A3:H3' } },
+      data: { updates: { updatedRange: "'Contact list'!A3:K3" } },
     });
     const repository = new GoogleSheetsNetworkRepository({
       spreadsheetId: 'sheet-id',
-      range: 'Network!A:H',
+      range: "'Contact list'!A:K",
       serviceAccountEmail: 'service@example.test',
       serviceAccountPrivateKey: 'unused-in-test',
       sheets: {
@@ -92,7 +116,9 @@ describe('network sheet mapping', () => {
     expect(append).toHaveBeenCalledWith(
       expect.objectContaining({
         requestBody: {
-          values: [['Petra Malá', '', 'Brno', '', '', '', '', 'Ano']],
+          values: [
+            ['Petra Malá', '', 'Brno', '', '', '', '', '', '', '', 'Ano'],
+          ],
         },
       }),
     );
@@ -101,7 +127,7 @@ describe('network sheet mapping', () => {
   it('rejects a sheet whose header does not match the contract', async () => {
     const repository = new GoogleSheetsNetworkRepository({
       spreadsheetId: 'sheet-id',
-      range: 'Network!A:H',
+      range: "'Contact list'!A:K",
       serviceAccountEmail: 'service@example.test',
       serviceAccountPrivateKey: 'unused-in-test',
       sheets: {
@@ -136,12 +162,16 @@ describe('network duplicate detection and search', () => {
   });
 
   it.each([
-    ['same e-mail', 'Different Person · jan@example.cz'],
-    ['same phone', 'Different Person · +420 777 123 456'],
-  ])('detects %s as a strong duplicate', (_label, value) => {
+    ['same e-mail', { email: 'jan@example.cz' }],
+    ['same phone', { phone: '+420 777 123 456' }],
+    [
+      'same LinkedIn profile',
+      { socialNetwork: 'https://linkedin.com/in/jan-novak/' },
+    ],
+  ])('detects %s as a strong duplicate', (_label, fields) => {
     expect(
       findDuplicateContacts(
-        { name: 'Different Person', contact: value, active: true },
+        { name: 'Different Person', ...fields, active: true },
         [contact()],
       ),
     ).toHaveLength(1);

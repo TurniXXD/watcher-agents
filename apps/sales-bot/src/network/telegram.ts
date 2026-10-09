@@ -48,7 +48,10 @@ const formatContact = (
     `${contact.name}${contact.id ? ` (ID ${contact.id})` : ''}`,
     `Datum potkání: ${contact.metDate ?? 'neuvedeno'}`,
     `Místo potkání: ${contact.metAt ?? 'neuvedeno'}`,
-    `Kontakt: ${contact.contact ?? 'neuveden'}`,
+    `Telefon: ${contact.phone ?? 'neuveden'}`,
+    `Email: ${contact.email ?? 'neuveden'}`,
+    `Web: ${contact.web ?? 'neuveden'}`,
+    `Sociální síť: ${contact.socialNetwork ?? 'neuvedena'}`,
     `Typ kontaktu: ${contact.contactType ?? 'neuveden'}`,
     `Další schůzka: ${contact.followUp ?? 'neuvedena'}`,
     `Aktivní kontakt: ${contact.active ? 'Ano' : 'Ne'}`,
@@ -117,7 +120,7 @@ const downloadPhoto = async (
 
 export const networkHelp = `🤝 Network Bot
 
-Pracuje s existujícím listem Network a přesně osmi sloupci: Name, Datum potkání, Místo potkání, Kontakt, Poznámka k potkání, Typ kontaktu, Domluvena další schůzka, Aktivní kontakt.
+Pracuje s existujícím listem Contact list a přesně jedenácti sloupci: Jméno, Datum potkání, Místo potkání, Telefon, Email, Web, sociální síť, Poznámka k potkání, Typ kontaktu, Domluvena další schůzka, Aktivní kontakt.
 
 /network_add <popis> — připraví kontakt, zkontroluje duplicity a nabídne potvrzení
 /network_search <dotaz> — významové hledání v kontaktech

@@ -1,10 +1,13 @@
 import { z } from 'zod';
 
 export const networkSheetHeaders = [
-  'Name',
+  'Jméno',
   'Datum potkání',
   'Místo potkání',
-  'Kontakt',
+  'Telefon',
+  'Email',
+  'Web',
+  'sociální síť',
   'Poznámka k potkání',
   'Typ kontaktu',
   'Domluvena další schůzka',
@@ -15,7 +18,10 @@ export const networkContactInputSchema = z.object({
   name: z.string().trim().min(1).max(200),
   metDate: z.string().trim().max(80).optional(),
   metAt: z.string().trim().max(300).optional(),
-  contact: z.string().trim().max(1_000).optional(),
+  phone: z.string().trim().max(200).optional(),
+  email: z.string().trim().max(500).optional(),
+  web: z.string().trim().max(1_000).optional(),
+  socialNetwork: z.string().trim().max(1_000).optional(),
   meetingNote: z.string().trim().max(4_000).optional(),
   contactType: z.string().trim().max(300).optional(),
   followUp: z.string().trim().max(500).optional(),
