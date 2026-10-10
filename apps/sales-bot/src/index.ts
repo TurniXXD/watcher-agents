@@ -21,6 +21,7 @@ import {
 } from './followup-report.js';
 import { TwentyIntegration } from './integrations/twenty/index.js';
 import { QuicklyClient } from './providers.js';
+import { runPeriodicSalesSearch } from './periodic-search.js';
 import { SalesService } from './service.js';
 import {
   GoogleSheetsNetworkRepository,
@@ -113,6 +114,7 @@ const bot = createSalesBot(
   store,
   service,
   network,
+  env.SALES_INTERVAL_MINUTES,
 );
 const api = new SalesApi(
   store,
@@ -198,8 +200,29 @@ const outboxScheduler = new PersistentScheduler(
   30_000,
   logger,
 );
+const salesSearchScheduler = new PersistentScheduler(
+  (now) => store.claimDueSearchSubscriptions(now, 10),
+  async (due) => {
+    await runPeriodicSalesSearch(
+      due.id,
+      store,
+      service,
+      allowed,
+      async (chatId, message) => {
+        await bot.api.sendMessage(chatId, message, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+        });
+      },
+      logger,
+    );
+  },
+  30_000,
+  logger,
+);
 followupScheduler.start();
 outboxScheduler.start();
+salesSearchScheduler.start();
 const interval = setInterval(() => {
   void service
     .run()
@@ -212,6 +235,7 @@ const shutdown = async (signal: string) => {
   clearInterval(interval);
   await followupScheduler.stop();
   await outboxScheduler.stop();
+  await salesSearchScheduler.stop();
   await bot.stop();
   await api.stop();
   await database.$disconnect();

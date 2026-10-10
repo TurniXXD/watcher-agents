@@ -14,6 +14,12 @@ export type SalesLeadInput = {
   sourceData?: unknown;
 };
 
+const normalizeSearchPart = (value: string): string =>
+  value.trim().toLocaleLowerCase('cs-CZ').replace(/\s+/gu, ' ');
+
+const normalizeSearchError = (value: string): string =>
+  value.replaceAll(/\s+/gu, ' ').trim().slice(0, 2_000);
+
 export class SalesStore {
   public constructor(private readonly db: DatabaseClient) {}
 
@@ -46,6 +52,156 @@ export class SalesStore {
     },
   ) {
     return this.db.salesCampaign.update({ where: { id }, data });
+  }
+
+  public upsertSearchSubscription(input: {
+    telegramChatId: bigint;
+    telegramUserId: bigint;
+    query: string;
+    locality: string;
+    resultLimit: number;
+    intervalMinutes: number;
+    now?: Date;
+  }) {
+    const now = input.now ?? new Date();
+    const normalizedQuery = normalizeSearchPart(input.query);
+    const normalizedLocality = normalizeSearchPart(input.locality);
+    const nextRunAt = new Date(now.getTime() + input.intervalMinutes * 60_000);
+    return this.db.salesSearchSubscription.upsert({
+      where: {
+        telegramChatId_normalizedQuery_normalizedLocality: {
+          telegramChatId: input.telegramChatId,
+          normalizedQuery,
+          normalizedLocality,
+        },
+      },
+      create: {
+        telegramChatId: input.telegramChatId,
+        telegramUserId: input.telegramUserId,
+        query: input.query,
+        normalizedQuery,
+        locality: input.locality,
+        normalizedLocality,
+        resultLimit: input.resultLimit,
+        intervalMinutes: input.intervalMinutes,
+        nextRunAt,
+      },
+      update: {
+        telegramUserId: input.telegramUserId,
+        query: input.query,
+        locality: input.locality,
+        resultLimit: input.resultLimit,
+        intervalMinutes: input.intervalMinutes,
+        enabled: true,
+        nextRunAt,
+        lastError: null,
+      },
+    });
+  }
+
+  public listSearchSubscriptions(telegramChatId: bigint) {
+    return this.db.salesSearchSubscription.findMany({
+      where: { telegramChatId, enabled: true },
+      orderBy: [{ createdAt: 'asc' }],
+    });
+  }
+
+  public getSearchSubscription(id: string) {
+    return this.db.salesSearchSubscription.findUnique({ where: { id } });
+  }
+
+  public async disableSearchSubscriptions(
+    telegramChatId: bigint,
+    id?: string,
+  ): Promise<number> {
+    const result = await this.db.salesSearchSubscription.updateMany({
+      where: {
+        telegramChatId,
+        enabled: true,
+        ...(id ? { id } : {}),
+      },
+      data: { enabled: false },
+    });
+    return result.count;
+  }
+
+  public async claimDueSearchSubscriptions(now = new Date(), take = 10) {
+    const candidates = await this.db.salesSearchSubscription.findMany({
+      where: { enabled: true, nextRunAt: { lte: now } },
+      orderBy: [{ nextRunAt: 'asc' }, { createdAt: 'asc' }],
+      take,
+    });
+    const claimed = await Promise.all(
+      candidates.map(async (candidate) => {
+        const nextRunAt = new Date(
+          now.getTime() + candidate.intervalMinutes * 60_000,
+        );
+        const result = await this.db.salesSearchSubscription.updateMany({
+          where: {
+            id: candidate.id,
+            enabled: true,
+            nextRunAt: { lte: now },
+          },
+          data: { nextRunAt },
+        });
+        return result.count === 1 ? { id: candidate.id } : undefined;
+      }),
+    );
+    return claimed.filter(
+      (entry): entry is { id: string } => entry !== undefined,
+    );
+  }
+
+  public async unseenSearchResultKeys(
+    subscriptionId: string,
+    resultKeys: readonly string[],
+  ): Promise<Set<string>> {
+    if (resultKeys.length === 0) return new Set();
+    const existing = await this.db.salesSearchSeenResult.findMany({
+      where: { subscriptionId, resultKey: { in: [...resultKeys] } },
+      select: { resultKey: true },
+    });
+    const existingKeys = new Set(existing.map(({ resultKey }) => resultKey));
+    return new Set(resultKeys.filter((key) => !existingKeys.has(key)));
+  }
+
+  public async completeSearchSubscription(
+    subscriptionId: string,
+    resultKeys: readonly string[],
+    now = new Date(),
+  ): Promise<void> {
+    await this.db.$transaction([
+      ...(resultKeys.length
+        ? [
+            this.db.salesSearchSeenResult.createMany({
+              data: resultKeys.map((resultKey) => ({
+                subscriptionId,
+                resultKey,
+                firstSeenAt: now,
+              })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+      this.db.salesSearchSubscription.update({
+        where: { id: subscriptionId },
+        data: { lastRunAt: now, lastError: null },
+      }),
+    ]);
+  }
+
+  public async failSearchSubscription(
+    subscriptionId: string,
+    error: string,
+    now = new Date(),
+  ): Promise<void> {
+    await this.db.salesSearchSubscription.update({
+      where: { id: subscriptionId },
+      data: {
+        lastRunAt: now,
+        lastError: normalizeSearchError(error),
+      },
+    });
   }
 
   public discoverLead(input: SalesLeadInput) {

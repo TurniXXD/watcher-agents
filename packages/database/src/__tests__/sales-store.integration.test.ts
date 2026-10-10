@@ -106,5 +106,58 @@ describe.skipIf(!database || !store)(
         await database!.salesCampaign.delete({ where: { id: campaign.id } });
       }
     });
+
+    it('persists, deduplicates, claims, and disables periodic searches', async () => {
+      const now = new Date('2026-10-10T08:00:00Z');
+      const query = `Architects ${randomUUID()}`;
+      const first = await store!.upsertSearchSubscription({
+        telegramChatId: 123n,
+        telegramUserId: 456n,
+        query,
+        locality: 'Brno',
+        resultLimit: 10,
+        intervalMinutes: 30,
+        now,
+      });
+      try {
+        const updated = await store!.upsertSearchSubscription({
+          telegramChatId: 123n,
+          telegramUserId: 456n,
+          query: `  ${query.toUpperCase()}  `,
+          locality: ' brno ',
+          resultLimit: 20,
+          intervalMinutes: 45,
+          now,
+        });
+        expect(updated.id).toBe(first.id);
+        expect(updated.resultLimit).toBe(20);
+
+        await store!.completeSearchSubscription(first.id, ['known']);
+        await expect(
+          store!.unseenSearchResultKeys(first.id, ['known', 'new']),
+        ).resolves.toEqual(new Set(['new']));
+
+        const dueAt = new Date(now.getTime() + 46 * 60_000);
+        await expect(
+          store!.claimDueSearchSubscriptions(dueAt, 10),
+        ).resolves.toContainEqual({ id: first.id });
+        await expect(
+          store!.claimDueSearchSubscriptions(dueAt, 10),
+        ).resolves.not.toContainEqual({ id: first.id });
+
+        await expect(
+          store!.disableSearchSubscriptions(123n, first.id),
+        ).resolves.toBe(1);
+        await expect(
+          store!.listSearchSubscriptions(123n),
+        ).resolves.not.toContainEqual(
+          expect.objectContaining({ id: first.id }),
+        );
+      } finally {
+        await database!.salesSearchSubscription.delete({
+          where: { id: first.id },
+        });
+      }
+    });
   },
 );

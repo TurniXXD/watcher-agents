@@ -6,6 +6,10 @@ import {
 } from '@watcher/telegram';
 import type { SalesService } from './service.js';
 import {
+  renderSalesSearchTableMessages,
+  salesSearchResultKey,
+} from './search-table.js';
+import {
   registerNetworkHandlers,
   type NetworkBotDependencies,
 } from './network/index.js';
@@ -16,7 +20,7 @@ This private bot reviews discovered companies, prepares outreach drafts, and—w
 
 Getting started
 1. Run /sales_status to check the current pipeline counts.
-2. Run /sales_search <service> | <location> | <limit> for a one-off ARES + Geoapify search printed directly in Telegram, without a campaign or database import. Google Places is used only as an optional fallback. Example: /sales_search autoservis | Brno | 15
+2. Run /sales_search <service> | <location> | <limit> to search immediately and save a periodic ARES + Geoapify search. Google Places is used only as an optional fallback. The first result and every newly discovered contact are sent as a TSV table. Example: /sales_search autoservis | Brno | 15
 3. To import candidates for later analysis, run /sales_find <campaign-id> | <service> | <location> | <limit>. Example: /sales_find 5a... | autoservis | Brno | 15
 4. Run /sales_run to audit newly discovered websites, collect sourced public contacts, score the leads, and sync configured integrations.
 5. Use /sales_calls to get the highest-scoring public phone contacts, or /sales_leads for all recent leads.
@@ -28,7 +32,9 @@ Commands
 /about or /sales_about — explain what the bot does, how data moves, integrations, limits, and safety boundaries
 /sales_status — show campaign count, recent leads, qualified leads, and Quickly enrollments
 /sales_campaigns — list campaign IDs needed by /sales_find
-/sales_search <service> | <location> | <limit> — combine ARES and Geoapify and print up to 20 companies without a campaign or database import; Google is an optional fallback
+/sales_search <service> | <location> | <limit> — search immediately, save the periodic search, and print new contacts as a TSV table
+/sales_searches — list active periodic searches
+/sales_search_stop <id|all> — stop one or all periodic searches
 /sales_find <campaign-id> | <service> | <location> | <limit> — run the same combined discovery and import candidates with an official website
 /sales_calls [limit] — list researched leads that have a public phone and its source page, ranked by score
 /sales_leads — list the 10 most recent leads with IDs, stages, and scores
@@ -49,7 +55,7 @@ export const salesAbout = `💼 O Sales assistantovi
 Sales assistant je soukromý operátorský bot pro řízené zpracování B2B leadů. Pomáhá převzít firmy z nakonfigurovaného zdroje, dohledat veřejné kontaktní údaje, vyhodnotit obchodní relevanci, připravit návrh prvního oslovení a synchronizovat způsobilé záznamy do CRM a e-mailové platformy. Není to autonomní spamovací nástroj.
 
 Jak data procházejí systémem
-1. /sales_search kombinuje veřejný ARES s Geoapify. ARES vrací aktivní české subjekty, IČO, sídlo a CZ-NACE; Geoapify vrací provozovny a dostupný veřejný telefon, e-mail a web z OpenStreetMap. Google Places se zavolá jen jako volitelný fallback, pokud je nakonfigurovaný a primární zdroje nemají dost kontaktních výsledků. Výpis nevyžaduje kampaň a nic neukládá do databáze, CRM ani Quickly.
+1. /sales_search kombinuje veřejný ARES s Geoapify. ARES vrací aktivní české subjekty, IČO, sídlo a CZ-NACE; Geoapify vrací provozovny a dostupný veřejný telefon, e-mail a web z OpenStreetMap. Google Places se zavolá jen jako volitelný fallback, pokud je nakonfigurovaný a primární zdroje nemají dost kontaktních výsledků. Hledání se uloží do PostgreSQL a opakuje podle SALES_INTERVAL_MINUTES. První výsledek a každý později nalezený nový kontakt bot pošle jako TSV tabulku; již oznámené kontakty neopakuje. Výsledky se tímto krokem neukládají do kampaně, CRM ani Quickly.
 2. /sales_find provede stejné kombinované hledání pro zvolenou kampaň. Výsledky deduplikuje podle IČO, domény a identity zdroje, ale importuje jen kandidáty s webem, protože následný audit vyžaduje oficiální web. Alternativně discovery načte JSON feed kampaně nebo přijme lead přes Sales API.
 3. /sales_run navštíví veřejný firemní web, hledá kontaktní stránku, veřejný e-mail a telefon v explicitním tel: odkazu a ke kontaktu ukládá přesnou zdrojovou URL. Nečte telefon z volného textu a nepřebírá jej automaticky z katalogu.
 4. Sdílený ARES klient použitý Sales i OSINT botem zkusí přesnou shodu registrovaného názvu a doplní kandidátní IČO. Nejednoznačná nebo chybějící shoda se nepotvrdí a shoda v ARES sama nedokazuje vlastnictví webu.
@@ -69,7 +75,7 @@ První nastavení discovery
 4. Existující UUID vypíše /sales_campaigns. Novou kampaň vytvoř z VPS přes Sales API:
 curl -X POST http://127.0.0.1:4050/v1/campaigns -H "Authorization: Bearer $SALES_API_TOKEN" -H "Content-Type: application/json" --data '{"name":"Brno autoservisy","offer":"modernizace webu","subjectTemplate":"Nápad pro {{company}}","bodyTemplate":"Dobrý den, {{observation}} Nabízíme {{offer}}."}'
 Kampaň může zůstat disabled pro čistý research; enabled ovládá odesílání, ne analýzu.
-5. Pro okamžitý výpis bez kampaně spusť /sales_search autoservis | Brno | 15. Výsledek se nikam neukládá. Horské chaty jsou mapované na Geoapify kategorie accommodation.hut + accommodation.chalet a CZ-NACE 55200, takže funguje například /sales_search horské chaty | Moravskoslezský kraj | 15. Pro přesný obor lze použít /sales_search nace:95310 | Brno | 15 nebo Geoapify kategorii ve tvaru geo:service.vehicle.repair.car.
+5. Pro okamžitý výpis a založení periodického hledání spusť /sales_search autoservis | Brno | 15. Aktivní hledání vypíše /sales_searches a zastaví /sales_search_stop <id|all>. Horské chaty jsou mapované na Geoapify kategorie accommodation.hut + accommodation.chalet a CZ-NACE 55200, takže funguje například /sales_search horské chaty | Moravskoslezský kraj | 15. Pro přesný obor lze použít /sales_search nace:95310 | Brno | 15 nebo Geoapify kategorii ve tvaru geo:service.vehicle.repair.car.
 6. Pro import spusť /sales_find <campaign-id> | autoservis | Brno | 15, potom /sales_run a /sales_calls 20. Detail a původ každého uloženého kontaktu ověříš přes /sales_lead <id>.
 
 Zdroje a hranice discovery
@@ -104,7 +110,12 @@ export const salesBotCommands = [
   { command: 'sales_campaigns', description: 'ID a stav Sales kampaní' },
   {
     command: 'sales_search',
-    description: 'Jednorázově hledat firmy bez kampaně',
+    description: 'Hledat firmy nyní i periodicky',
+  },
+  { command: 'sales_searches', description: 'Aktivní periodická hledání' },
+  {
+    command: 'sales_search_stop',
+    description: 'Zastavit periodické hledání',
   },
   { command: 'sales_find', description: 'Najít firmy podle oboru a lokality' },
   { command: 'sales_calls', description: 'Kontakty pro ruční cold cally' },
@@ -124,6 +135,18 @@ export const salesBotCommands = [
 const send = async (ctx: Context, message: string) => {
   for (const part of splitTelegramMessage(message, 3900)) {
     await ctx.reply(part);
+  }
+};
+
+const sendSearchTable = async (
+  ctx: Context,
+  messages: readonly string[],
+): Promise<void> => {
+  for (const message of messages) {
+    await ctx.reply(message, {
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+    });
   }
 };
 
@@ -174,16 +197,20 @@ export const createSalesBot = (
   store: SalesStore,
   service: SalesService,
   network?: NetworkBotDependencies,
+  searchIntervalMinutes = 30,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedUserIds));
   bot.command(['start', 'help', 'sales_help'], (ctx) => send(ctx, salesHelp));
   bot.command(['about', 'sales_about'], (ctx) => send(ctx, salesAbout));
   bot.command('sales_status', async (ctx) => {
-    const campaigns = await store.listCampaigns();
-    const leads = await store.listLeads(undefined, 100);
+    const [campaigns, leads, searches] = await Promise.all([
+      store.listCampaigns(),
+      store.listLeads(undefined, 100),
+      store.listSearchSubscriptions(BigInt(ctx.chat.id)),
+    ]);
     await ctx.reply(
-      `Campaigns: ${campaigns.length}; recent leads: ${leads.length}; qualified: ${leads.filter((lead) => lead.stage === 'QUALIFIED').length}; Quickly enrolled: ${leads.filter((lead) => lead.stage === 'SYNCED_TO_QUICKLY').length}; Discovery: ARES active, Geoapify ${service.geoapifyConfigured ? 'configured' : 'missing GEOAPIFY_API_KEY'}, Google fallback ${service.googlePlacesConfigured ? 'configured' : 'disabled'}.`,
+      `Campaigns: ${campaigns.length}; periodic searches: ${searches.length}; recent leads: ${leads.length}; qualified: ${leads.filter((lead) => lead.stage === 'QUALIFIED').length}; Quickly enrolled: ${leads.filter((lead) => lead.stage === 'SYNCED_TO_QUICKLY').length}; Discovery: ARES active, Geoapify ${service.geoapifyConfigured ? 'configured' : 'missing GEOAPIFY_API_KEY'}, Google fallback ${service.googlePlacesConfigured ? 'configured' : 'disabled'}.`,
     );
   });
   bot.command('sales_campaigns', async (ctx) => {
@@ -208,27 +235,87 @@ export const createSalesBot = (
       );
       return;
     }
+    if (!ctx.from) {
+      await ctx.reply('Hledání lze založit jen zprávou od Telegram uživatele.');
+      return;
+    }
+    let subscriptionId: string | undefined;
     try {
+      const subscription = await store.upsertSearchSubscription({
+        telegramChatId: BigInt(ctx.chat.id),
+        telegramUserId: BigInt(ctx.from.id),
+        query: input.query,
+        locality: input.locality,
+        resultLimit: input.limit,
+        intervalMinutes: searchIntervalMinutes,
+      });
+      subscriptionId = subscription.id;
       await ctx.reply(
-        'Hledám firmy v ARES a Geoapify; Google použiji jen jako nakonfigurovaný fallback…',
+        `Hledám firmy v ARES a Geoapify; Google použiji jen jako nakonfigurovaný fallback. Hledání ukládám a zopakuji každých ${searchIntervalMinutes} minut…`,
       );
       const companies = await service.searchBusinesses(input);
-      await send(
-        ctx,
-        companies.length
-          ? `🔎 Výsledky (${companies.length}) pro „${input.query}“ · ${input.locality}\nVýsledky se neuložily do kampaně ani CRM. Veřejný kontakt sám nezakládá oprávnění firmu oslovit. Geoapify výsledky obsahují data © OpenStreetMap contributors.\n\n${companies
-              .map(
-                (company, index) =>
-                  `${index + 1}. ${company.name}\nZdroj: ${company.provider}${company.registrationId && company.provider !== 'ARES' ? ' + ARES' : ''}\nIČO: ${company.registrationId ?? 'neuvedeno'}\nCZ-NACE: ${company.naceCodes?.join(', ') ?? 'neuvedeno'}\nTelefon: ${company.phone ?? 'neuveden'}\nE-mail: ${company.email ?? 'neuveden'}\nAdresa: ${company.address ?? 'neuvedena'}\nWeb: ${company.websiteUrl ?? 'neuveden'}\nDetail zdroje: ${company.sourceUrl}`,
-              )
-              .join('\n\n')}`
-          : `Pro „${input.query}“ v lokalitě ${input.locality} nebyly nalezeny žádné firmy. Zkontroluj /sales_status a logy „Sales discovery source completed“. Pro nepodporovaný obor použij přesnou kategorii, například /sales_search geo:accommodation.hut | ${input.locality} | ${input.limit}.`,
+      if (companies.length > 0) {
+        await sendSearchTable(
+          ctx,
+          renderSalesSearchTableMessages(
+            companies,
+            input.query,
+            input.locality,
+          ),
+        );
+      } else {
+        await ctx.reply(
+          `Pro „${input.query}“ v lokalitě ${input.locality} nyní nebyly nalezeny žádné firmy. Periodické hledání ${subscription.id} zůstává aktivní.`,
+        );
+      }
+      await store.completeSearchSubscription(
+        subscription.id,
+        companies.map(salesSearchResultKey),
+      );
+      await ctx.reply(
+        `Periodické hledání je aktivní: ${subscription.id}. Bot pošle pouze nové kontakty. Zastavení: /sales_search_stop ${subscription.id}`,
       );
     } catch (error) {
+      if (subscriptionId) {
+        await store.failSearchSubscription(
+          subscriptionId,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
       await ctx.reply(
         `Hledání selhalo: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  });
+  bot.command('sales_searches', async (ctx) => {
+    const searches = await store.listSearchSubscriptions(BigInt(ctx.chat.id));
+    await send(
+      ctx,
+      searches.length
+        ? searches
+            .map(
+              (search) =>
+                `${search.id} · ${search.query} · ${search.locality} · každých ${search.intervalMinutes} min · další běh ${search.nextRunAt.toISOString()}${search.lastError ? ` · poslední chyba: ${search.lastError}` : ''}`,
+            )
+            .join('\n')
+        : 'Žádná aktivní periodická hledání.',
+    );
+  });
+  bot.command('sales_search_stop', async (ctx) => {
+    const selector = ctx.match.trim();
+    if (!selector) {
+      await ctx.reply('Použití: /sales_search_stop <id|all>');
+      return;
+    }
+    const stopped = await store.disableSearchSubscriptions(
+      BigInt(ctx.chat.id),
+      selector.toLowerCase() === 'all' ? undefined : selector,
+    );
+    await ctx.reply(
+      stopped > 0
+        ? `Zastaveno periodických hledání: ${stopped}.`
+        : 'Odpovídající aktivní hledání nebylo nalezeno.',
+    );
   });
   bot.command('sales_find', async (ctx) => {
     const input = parseSalesFind(ctx.match);

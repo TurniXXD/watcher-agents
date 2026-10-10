@@ -118,6 +118,8 @@ describe('sales bot help', () => {
       '/sales_status',
       '/sales_campaigns',
       '/sales_search <service>',
+      '/sales_searches',
+      '/sales_search_stop <id|all>',
       '/sales_find <campaign-id>',
       '/sales_calls [limit]',
       '/sales_leads',
@@ -146,6 +148,12 @@ describe('sales bot help', () => {
       expect.objectContaining({ command: 'sales_search' }),
     );
     expect(salesBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'sales_searches' }),
+    );
+    expect(salesBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'sales_search_stop' }),
+    );
+    expect(salesBotCommands).toContainEqual(
       expect.objectContaining({ command: 'sales_find' }),
     );
     expect(salesBotCommands).toContainEqual(
@@ -169,7 +177,7 @@ describe('sales bot help', () => {
     expect(parseSalesFind('campaign | autoservis | Brno | 21')).toBeUndefined();
   });
 
-  it('parses a bounded one-off search without a campaign', () => {
+  it('parses a bounded periodic search without a campaign', () => {
     expect(parseSalesSearch('autoservis | Brno | 15')).toEqual({
       query: 'autoservis',
       locality: 'Brno',
@@ -184,7 +192,7 @@ describe('sales bot help', () => {
     expect(parseSalesSearch('autoservis | Brno | 21')).toBeUndefined();
   });
 
-  it('prints one-off search results without accessing a campaign', async () => {
+  it('prints a TSV table and persists the periodic search', async () => {
     const searchBusinesses = vi.fn().mockResolvedValue([
       {
         id: 'place-1',
@@ -196,11 +204,20 @@ describe('sales bot help', () => {
         sourceUrl: 'https://maps.google.com/example',
       },
     ]);
+    const upsertSearchSubscription = vi.fn().mockResolvedValue({
+      id: 'search-1',
+    });
+    const completeSearchSubscription = vi.fn().mockResolvedValue(undefined);
     const bot = createSalesBot(
       'test-token',
       new Set([123]),
-      {} as SalesStore,
+      {
+        upsertSearchSubscription,
+        completeSearchSubscription,
+      } as unknown as SalesStore,
       { searchBusinesses } as unknown as SalesService,
+      undefined,
+      45,
     );
     bot.botInfo = {
       id: 456,
@@ -233,9 +250,25 @@ describe('sales bot help', () => {
       locality: 'Brno',
       limit: 2,
     });
-    expect(messages).toHaveLength(2);
+    expect(upsertSearchSubscription).toHaveBeenCalledWith({
+      telegramChatId: 123n,
+      telegramUserId: 123n,
+      query: 'autoservis',
+      locality: 'Brno',
+      resultLimit: 2,
+      intervalMinutes: 45,
+    });
+    expect(completeSearchSubscription).toHaveBeenCalledWith('search-1', [
+      expect.any(String),
+    ]);
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).toContain('45 minut');
+    expect(messages[1]).toContain(
+      'Jméno\tDatum potkání\tMísto potkání\tTelefon\tEmail\tWeb\tsociální síť\tPoznámka k potkání\tTyp kontaktu\tDomluvena další schůzka\tAktivní kontakt',
+    );
     expect(messages[1]).toContain('Autoservis Test');
     expect(messages[1]).toContain('+420 123 456 789');
-    expect(messages[1]).toContain('Výsledky se neuložily');
+    expect(messages[2]).toContain('search-1');
+    expect(messages[2]).toContain('pouze nové kontakty');
   });
 });

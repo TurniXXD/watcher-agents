@@ -2460,6 +2460,39 @@ model SalesCampaign {
   @@map("sales_campaigns")
 }
 
+model SalesSearchSubscription {
+  id                 String                  @id @default(uuid())
+  telegramChatId     BigInt
+  telegramUserId     BigInt
+  query              String
+  normalizedQuery    String
+  locality           String
+  normalizedLocality String
+  resultLimit        Int                     @default(10)
+  intervalMinutes    Int                     @default(30)
+  enabled            Boolean                 @default(true)
+  nextRunAt          DateTime                @default(now())
+  lastRunAt          DateTime?
+  lastError          String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  seenResults        SalesSearchSeenResult[]
+
+  @@unique([telegramChatId, normalizedQuery, normalizedLocality])
+  @@index([enabled, nextRunAt])
+  @@map("sales_search_subscriptions")
+}
+
+model SalesSearchSeenResult {
+  subscriptionId String
+  resultKey      String
+  firstSeenAt    DateTime                @default(now())
+  subscription   SalesSearchSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@id([subscriptionId, resultKey])
+  @@map("sales_search_seen_results")
+}
+
 model SalesLead {
   id              String             @id @default(uuid())
   campaignId      String
