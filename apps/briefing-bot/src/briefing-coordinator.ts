@@ -51,7 +51,7 @@ import {
 import type { WeatherProvider } from './weather.js';
 import { renderSpokenWeather } from './weather.js';
 import { waitForFreshWatcherRuns } from './briefing-freshness.js';
-import { renderGoalsMessage } from './goals.js';
+import { renderPeriodicGoalsMessage } from './goals.js';
 import { isLastCalendarDayOfMonth } from './month-end.js';
 import {
   loadWatchlistEarnings,
@@ -558,7 +558,7 @@ export class BriefingCoordinator {
         (dayPeriod === 'morning' || dayPeriod === 'evening')
       ) {
         try {
-          goalsMessage = renderGoalsMessage(
+          goalsMessage = renderPeriodicGoalsMessage(
             await this.dependencies.goals.list(telegramChatId),
             configuration.settings.timezone,
             this.dependencies.now?.() ?? new Date(),

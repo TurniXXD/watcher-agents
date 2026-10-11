@@ -32,11 +32,17 @@ const countdownLabel = (days: number): string => {
   return `${Math.abs(days)} days overdue`;
 };
 
-export const renderGoalsMessage = (
+type GoalsMessageOptions = {
+  includeIds: boolean;
+  bulletList: boolean;
+};
+
+const renderGoals = (
   goals: readonly BriefingGoalRecord[],
   timezone: string,
   now: Date,
-  limit = 10,
+  limit: number,
+  options: GoalsMessageOptions,
 ): string => {
   if (goals.length === 0) {
     return '🎯 Your goals\n\nNo goals yet. Add one with /goal_add YYYY-MM-DD Goal title.';
@@ -47,8 +53,10 @@ export const renderGoalsMessage = (
   const lines = ['🎯 Your goals', ''];
   for (const goal of shown) {
     const [year, month, day] = goal.dueOn.split('-');
+    const prefix = options.bulletList ? '• ' : '';
+    const id = options.includeIds ? `#${goal.id} ` : '';
     lines.push(
-      `#${goal.id} ${goal.title} — ${day}.${month}.${year} (${countdownLabel(daysUntilGoal(goal.dueOn, today))})`,
+      `${prefix}${id}${goal.title} — ${day}.${month}.${year} (${countdownLabel(daysUntilGoal(goal.dueOn, today))})`,
     );
   }
   if (shown.length < ordered.length) {
@@ -59,3 +67,25 @@ export const renderGoalsMessage = (
   }
   return lines.join('\n');
 };
+
+export const renderGoalsMessage = (
+  goals: readonly BriefingGoalRecord[],
+  timezone: string,
+  now: Date,
+  limit = 10,
+): string =>
+  renderGoals(goals, timezone, now, limit, {
+    includeIds: true,
+    bulletList: false,
+  });
+
+export const renderPeriodicGoalsMessage = (
+  goals: readonly BriefingGoalRecord[],
+  timezone: string,
+  now: Date,
+  limit = 10,
+): string =>
+  renderGoals(goals, timezone, now, limit, {
+    includeIds: false,
+    bulletList: true,
+  });

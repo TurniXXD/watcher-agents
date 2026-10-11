@@ -32,6 +32,20 @@ const quoteResponseSchema = z.record(z.string(), quoteSchema);
 const available = (value: string | undefined): string =>
   value && value !== 'NULL' ? value : 'not available';
 
+export type ZacksSnapshot = {
+  symbol: string;
+  companyName: string;
+  rank: '1' | '2' | '3' | '4' | '5' | null;
+  rankText: 'Strong Buy' | 'Buy' | 'Hold' | 'Sell' | 'Strong Sell' | null;
+  price: string;
+  forwardPe: string | null;
+  updated: string;
+  netChange: string;
+  percentNetChange: string;
+  marketStatus: string | null;
+  confirmedEarningsDate: string | null;
+};
+
 export class ZacksSource implements Source<ZacksConfig> {
   public readonly id = 'ZACKS';
   public readonly capabilities = {
@@ -54,28 +68,19 @@ export class ZacksSource implements Source<ZacksConfig> {
   ): Promise<WatchItem[]> {
     const symbol = config.symbol.trim().toUpperCase();
     const pageUrl = `https://www.zacks.com/stock/quote/${encodeURIComponent(symbol)}`;
-    const text = await fetchText(
-      this.fetcher,
-      `https://quote-feed.zacks.com/index.php?t=${encodeURIComponent(symbol)}`,
-      { accept: 'application/json' },
-      signal,
-    );
-    const response = quoteResponseSchema.parse(JSON.parse(text));
-    const quote = response[symbol];
-    if (!quote) throw new Error(`Zacks quote was not found for ${symbol}`);
-    if (!quote.zacks_rank || !quote.zacks_rank_text) return [];
-
-    const rank = `${quote.zacks_rank}-${quote.zacks_rank_text}`;
+    const snapshot = await this.getSnapshot(symbol, signal);
+    if (!snapshot?.rank || !snapshot.rankText) return [];
+    const rank = `${snapshot.rank}-${snapshot.rankText}`;
     const content = [
-      `Ticker: ${quote.ticker}`,
-      `Company: ${quote.name}`,
+      `Ticker: ${snapshot.symbol}`,
+      `Company: ${snapshot.companyName}`,
       `Zacks Rank: ${rank}`,
-      `Price: ${quote.last} USD`,
-      `Change: ${quote.net_change} (${quote.percent_net_change}%)`,
-      `Updated: ${quote.updated} ET`,
-      `Market status: ${available(quote.market_status)}`,
-      `Forward P/E: ${available(quote.pe_f1)}`,
-      `Confirmed earnings date: ${available(quote.confirmed_reporting_date)}`,
+      `Price: ${snapshot.price} USD`,
+      `Change: ${snapshot.netChange} (${snapshot.percentNetChange}%)`,
+      `Updated: ${snapshot.updated} ET`,
+      `Market status: ${available(snapshot.marketStatus ?? undefined)}`,
+      `Forward P/E: ${snapshot.forwardPe ?? 'not available'}`,
+      `Confirmed earnings date: ${available(snapshot.confirmedEarningsDate ?? undefined)}`,
     ].join('\n');
     const externalId = createHash('sha256').update(content).digest('hex');
 
@@ -91,28 +96,64 @@ export class ZacksSource implements Source<ZacksConfig> {
         primarySource: false,
         category: 'ANALYST_SNAPSHOT',
         normalizedFacts: {
-          rank: quote.zacks_rank,
-          rankText: quote.zacks_rank_text,
-          price: quote.last,
-          forwardPe: quote.pe_f1,
-          confirmedEarningsDate: quote.confirmed_reporting_date,
+          rank: snapshot.rank,
+          rankText: snapshot.rankText,
+          price: snapshot.price,
+          forwardPe: snapshot.forwardPe ?? undefined,
+          confirmedEarningsDate: snapshot.confirmedEarningsDate ?? undefined,
         },
-        entities: [symbol, quote.name],
+        entities: [symbol, snapshot.companyName],
         reliability: 0.65,
         metadata: {
           symbol,
-          companyName: quote.name,
-          rank: quote.zacks_rank,
-          rankText: quote.zacks_rank_text,
-          price: quote.last,
-          netChange: quote.net_change,
-          percentNetChange: quote.percent_net_change,
-          updated: quote.updated,
-          marketStatus: quote.market_status,
-          forwardPe: quote.pe_f1,
-          confirmedEarningsDate: quote.confirmed_reporting_date,
+          companyName: snapshot.companyName,
+          rank: snapshot.rank,
+          rankText: snapshot.rankText,
+          price: snapshot.price,
+          netChange: snapshot.netChange,
+          percentNetChange: snapshot.percentNetChange,
+          updated: snapshot.updated,
+          marketStatus: snapshot.marketStatus,
+          forwardPe: snapshot.forwardPe,
+          confirmedEarningsDate: snapshot.confirmedEarningsDate,
         },
       },
     ];
+  }
+
+  public async getSnapshot(
+    symbol: string,
+    signal?: AbortSignal,
+  ): Promise<ZacksSnapshot | null> {
+    const normalized = symbol.trim().toUpperCase();
+    const text = await fetchText(
+      this.fetcher,
+      `https://quote-feed.zacks.com/index.php?t=${encodeURIComponent(normalized)}`,
+      { accept: 'application/json' },
+      signal,
+    );
+    const response = quoteResponseSchema.parse(JSON.parse(text));
+    const quote = response[normalized];
+    if (!quote) throw new Error(`Zacks quote was not found for ${normalized}`);
+    return {
+      symbol: normalized,
+      companyName: quote.name,
+      rank: quote.zacks_rank,
+      rankText: quote.zacks_rank_text,
+      price: quote.last,
+      forwardPe: quote.pe_f1 && quote.pe_f1 !== 'NULL' ? quote.pe_f1 : null,
+      updated: quote.updated,
+      netChange: quote.net_change,
+      percentNetChange: quote.percent_net_change,
+      marketStatus:
+        quote.market_status && quote.market_status !== 'NULL'
+          ? quote.market_status
+          : null,
+      confirmedEarningsDate:
+        quote.confirmed_reporting_date &&
+        quote.confirmed_reporting_date !== 'NULL'
+          ? quote.confirmed_reporting_date
+          : null,
+    };
   }
 }

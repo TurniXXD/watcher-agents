@@ -33,6 +33,7 @@ import {
   NasdaqPriceSource,
   SecEdgarSource,
   TradingViewNewsSource,
+  ZacksSource,
 } from './sources/index.js';
 import {
   parseAllowedUserIds,
@@ -43,6 +44,7 @@ import { createStocksBot } from './bot.js';
 import { StockDiscoveryCoordinator } from './discovery.js';
 import { DiscoveryCatalystAnalyzer } from './discovery-catalyst.js';
 import { renderWeeklyDiscoveryReport } from './discovery-report.js';
+import { DiscoveryScreeningClient } from './discovery-screening.js';
 import { AlpacaPaperClient } from './alpaca-paper.js';
 import { Trading212Client } from './trading212.js';
 import {
@@ -384,6 +386,14 @@ runtime.reconciliation = new StockReconciliationCoordinator(
   logger,
 );
 if (env.ALPHA_VANTAGE_API_KEY) {
+  const discoveryScreening = new DiscoveryScreeningClient(
+    new NasdaqPriceSource(),
+    new ZacksSource(),
+    {
+      oversoldRsiThreshold: env.DISCOVERY_OVERSOLD_RSI_THRESHOLD,
+      maximumForwardPe: env.DISCOVERY_MAX_FORWARD_PE,
+    },
+  );
   runtime.discovery = new StockDiscoveryCoordinator(
     discoveryStore,
     new AlphaVantageDiscoveryScanner(
@@ -411,6 +421,7 @@ if (env.ALPHA_VANTAGE_API_KEY) {
         signal,
       ),
     new DiscoveryCatalystAnalyzer(ollama),
+    discoveryScreening.assess.bind(discoveryScreening),
     logger,
   );
   await discoveryStore.initializeSchedules(env.DISCOVERY_WEEKLY_SCHEDULE);

@@ -1533,6 +1533,7 @@ integration('WatcherStore with PostgreSQL', () => {
       trigger: 'PRICE_MOVE',
       reason: '+6.50% price move on 2,000,000 shares',
       fingerprint: 'discovery-fingerprint',
+      screeningSignals: [],
     };
     await expect(
       discovery.recordCandidate(
@@ -1559,6 +1560,7 @@ integration('WatcherStore with PostgreSQL', () => {
       ticker: 'MU',
       stockId: null,
       status: 'OBSERVED',
+      screeningSignals: [],
     });
 
     const configured = await universe.createCompany({

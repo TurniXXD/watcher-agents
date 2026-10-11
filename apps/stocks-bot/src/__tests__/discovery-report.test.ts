@@ -10,11 +10,15 @@ describe('renderWeeklyDiscoveryReport', () => {
         changePercent: 2.5,
         attentionScore: 80,
         reason: 'A material market signal was detected during discovery.',
+        signals: ['CATALYST'] as const,
+        rsi14: null,
+        forwardPe: null,
       })),
     );
 
     expect(report.length).toBeLessThanOrEqual(4_096);
     expect(report).toContain('Nothing was added to your watchlist.');
+    expect(report).toContain('[CATALYST]');
   });
 
   it('renders the no-candidate result without an empty list', () => {

@@ -13,7 +13,7 @@ export const stocksHelp = `/about — český průvodce používáním a strateg
 /catalysts [SYMBOL] — list active and upcoming catalysts
 /dashboard — current state of every enabled stock
 /decision SYMBOL — show the latest evidence-linked research decision card
-/discovery — discovery scanner status and recent candidates
+/discovery — scanner status and catalyst/value/oversold candidates
 /earnings SYMBOL — show the stored earnings setup and the latest expectation-versus-actual comparison
 /event_replay SYMBOL [FROM] [TO] — replay events and thesis transitions
 /health — runs, reconciliation, LLM metrics, and source health
@@ -35,7 +35,7 @@ export const stocksHelp = `/about — český průvodce používáním a strateg
 /resume — resume scheduled runs
 /risk_profile [PROFILE] [limits] — view or set paper-portfolio warning limits
 /run — run now
-/run_discovery — run the market-wide discovery report now; it never changes your watchlist
+/run_discovery — scan now for catalyst/value/oversold ideas; never changes your watchlist
 /schedule [CRON[; CRON...]] [TIMEZONE] — view or replace all schedules
 /schedule_add CRON — add one schedule without replacing the others
 /schedule_list — list numbered schedules, timezone, and next run
@@ -95,7 +95,7 @@ Režimy: \`LOW_RESOLUTION\` šetří kontroly, \`NORMAL\` je výchozí, \`HIGH_R
 *Tři praktické postupy*
 • *Dlouhodobý přehled:* přidejte firmu, označte ji \`CORE\`, sledujte \`/dashboard\`, \`/earnings MU\`, \`/valuation MU\`, \`/cashflow MU\` a změny teze. Cena nebo násobek ocenění samy o sobě nejsou verdikt.
 • *Události a katalyzátory:* použijte \`/catalysts MU\`, \`/alerts\`, \`/news MU 7d\` a \`/event_replay MU\`. \`/reaction MU\` rozlišuje pozorovaný pohyb ceny od prokázané reakce na událost.
-• *Hledání nápadů:* \`/opportunities\` ukáže zvýšenou pozornost nebo zajímavou asymetrii. Volitelný \`/run_discovery\` vyžaduje nakonfigurovaný zdroj a nic sám nepřidá; vybranou firmu přidejte ručně.
+• *Hledání nápadů:* \`/opportunities\` ukáže zvýšenou pozornost nebo zajímavou asymetrii. Volitelný \`/run_discovery\` prověří likvidní market movers a most-active tituly na katalyzátor, RSI přeprodanost a potenciálně nízké ocenění. Vyžaduje nakonfigurovaný zdroj a nic sám nepřidá; vybranou firmu přidejte ručně.
 
 *Zdroje a časování*
 Novinky pro sledované akcie se běžně kontrolují po 5 minutách; plán určuje samostatné úplné běhy. \`/sources\` mění zdroje pro všechny současné i budoucí akcie; \`/list_sources\` vysvětlí, odkud data pocházejí. \`/schedule_list\` ukáže plán, \`/schedule_add 0 8 * * *\` přidá denní běh v nastaveném časovém pásmu. \`/pause\` a \`/resume\` pozastaví či obnoví plánované běhy.

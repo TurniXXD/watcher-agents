@@ -75,6 +75,15 @@ const quoteUrl = (symbol: string, section: 'info' | 'summary'): string =>
 const detailsUrl = (symbol: string): string =>
   `https://www.nasdaq.com/market-activity/stocks/${encodeURIComponent(symbol.toLowerCase())}`;
 
+export type NasdaqDailyPrice = {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
 export class NasdaqPriceSource implements Source<{ symbol: string }> {
   public readonly id = 'PRICE';
   public readonly capabilities = {
@@ -124,45 +133,8 @@ export class NasdaqPriceSource implements Source<{ symbol: string }> {
     signal?: AbortSignal,
   ): Promise<WatchItem[]> {
     const symbol = config.symbol.trim().toUpperCase();
-    const to = this.now();
-    const from = new Date(to.getTime() - 14 * 86_400_000);
-    const url = new URL(
-      `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/historical`,
-    );
-    url.searchParams.set('assetclass', 'stocks');
-    url.searchParams.set('fromdate', from.toISOString().slice(0, 10));
-    url.searchParams.set('todate', to.toISOString().slice(0, 10));
-    url.searchParams.set('limit', '10');
-    const data = await this.request(
-      symbol,
-      url.toString(),
-      historySchema,
-      signal,
-    );
-    const rows = data.tradesTable.rows.flatMap((row) => {
-      const date = tradingDate(row.date);
-      const open = numeric(row.open);
-      const high = numeric(row.high);
-      const low = numeric(row.low);
-      const close = numeric(row.close);
-      const volume = numeric(row.volume);
-      return date &&
-        open !== null &&
-        high !== null &&
-        low !== null &&
-        close !== null &&
-        volume !== null &&
-        open > 0 &&
-        high > 0 &&
-        low > 0 &&
-        close > 0 &&
-        volume >= 0
-        ? [{ date, open, high, low, close, volume }]
-        : [];
-    });
-    const latest = rows.sort((left, right) =>
-      right.date.localeCompare(left.date),
-    )[0];
+    const rows = await this.getDailyHistory(symbol, 14, 10, signal);
+    const latest = rows.at(-1);
     if (!latest) return [];
     const externalId = `${symbol}:${latest.date}`;
     return [
@@ -190,6 +162,52 @@ export class NasdaqPriceSource implements Source<{ symbol: string }> {
         metadata: { symbol, ...latest, provider: 'Nasdaq daily historical' },
       },
     ];
+  }
+
+  public async getDailyHistory(
+    symbol: string,
+    lookbackDays = 120,
+    limit = 100,
+    signal?: AbortSignal,
+  ): Promise<NasdaqDailyPrice[]> {
+    const normalized = symbol.trim().toUpperCase();
+    const to = this.now();
+    const from = new Date(to.getTime() - lookbackDays * 86_400_000);
+    const url = new URL(
+      `https://api.nasdaq.com/api/quote/${encodeURIComponent(normalized)}/historical`,
+    );
+    url.searchParams.set('assetclass', 'stocks');
+    url.searchParams.set('fromdate', from.toISOString().slice(0, 10));
+    url.searchParams.set('todate', to.toISOString().slice(0, 10));
+    url.searchParams.set('limit', String(limit));
+    const data = await this.request(
+      normalized,
+      url.toString(),
+      historySchema,
+      signal,
+    );
+    const rows = data.tradesTable.rows.flatMap((row) => {
+      const date = tradingDate(row.date);
+      const open = numeric(row.open);
+      const high = numeric(row.high);
+      const low = numeric(row.low);
+      const close = numeric(row.close);
+      const volume = numeric(row.volume);
+      return date &&
+        open !== null &&
+        high !== null &&
+        low !== null &&
+        close !== null &&
+        volume !== null &&
+        open > 0 &&
+        high > 0 &&
+        low > 0 &&
+        close > 0 &&
+        volume >= 0
+        ? [{ date, open, high, low, close, volume }]
+        : [];
+    });
+    return rows.sort((left, right) => left.date.localeCompare(right.date));
   }
 
   public async getLatestQuote(

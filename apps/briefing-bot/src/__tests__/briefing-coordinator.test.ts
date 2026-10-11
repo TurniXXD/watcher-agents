@@ -391,8 +391,9 @@ describe('BriefingCoordinator', () => {
 
     expect(goals.list).toHaveBeenCalledWith(123n);
     expect(setup.deliveryInputs[0]?.goalsMessage).toContain(
-      '#7 Finish my degree — 16.09.2026 (in 10 days)',
+      '• Finish my degree — 16.09.2026 (in 10 days)',
     );
+    expect(setup.deliveryInputs[0]?.goalsMessage).not.toContain('#7');
   });
 
   it('does not append goals to test or afternoon briefings', async () => {

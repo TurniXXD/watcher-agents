@@ -17,8 +17,13 @@ export const renderWeeklyDiscoveryReport = (
     lines.push('No candidates met the quality filters this week.');
   } else {
     for (const candidate of candidates) {
+      const labels = candidate.signals
+        .map((signal) =>
+          signal === 'UNDERVALUED' ? 'VALUE' : signal.replaceAll('_', ' '),
+        )
+        .join(' + ');
       const entry = [
-        `• ${compact(candidate.ticker)} — ${compact(candidate.companyName)} · ${candidate.changePercent >= 0 ? '+' : ''}${candidate.changePercent.toFixed(2)}% · attention ${candidate.attentionScore}/100`,
+        `• [${labels}] ${compact(candidate.ticker)} — ${compact(candidate.companyName)} · ${candidate.changePercent >= 0 ? '+' : ''}${candidate.changePercent.toFixed(2)}% · attention ${candidate.attentionScore}/100`,
         `  ${compact(candidate.reason)}`,
       ];
       if ([...lines, ...entry].join('\n').length > telegramMessageLimit) {

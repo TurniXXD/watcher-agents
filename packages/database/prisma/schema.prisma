@@ -1645,27 +1645,28 @@ model DiscoveryScan {
 }
 
 model DiscoverySignal {
-  id              String                @id @default(uuid())
-  watcherConfigId String
-  scanId          String
-  stockId         String?
-  fingerprint     String
-  ticker          String
-  source          String
-  trigger         DiscoveryTrigger
-  observedAt      DateTime
-  price           Decimal               @db.Decimal(24, 8)
-  changePercent   Decimal               @db.Decimal(12, 6)
-  volume          BigInt
-  dollarVolume    Decimal               @db.Decimal(24, 2)
-  attentionScore  Int
-  reason          String
-  status          DiscoverySignalStatus @default(INVESTIGATING)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  watcherConfig   WatcherConfig         @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
-  scan            DiscoveryScan         @relation(fields: [scanId], references: [id], onDelete: Cascade)
-  stock           Stock?                @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  id               String                @id @default(uuid())
+  watcherConfigId  String
+  scanId           String
+  stockId          String?
+  fingerprint      String
+  ticker           String
+  source           String
+  trigger          DiscoveryTrigger
+  observedAt       DateTime
+  price            Decimal               @db.Decimal(24, 8)
+  changePercent    Decimal               @db.Decimal(12, 6)
+  volume           BigInt
+  dollarVolume     Decimal               @db.Decimal(24, 2)
+  attentionScore   Int
+  reason           String
+  screeningSignals String[]               @default([])
+  status           DiscoverySignalStatus @default(INVESTIGATING)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  watcherConfig    WatcherConfig         @relation(fields: [watcherConfigId], references: [id], onDelete: Cascade)
+  scan             DiscoveryScan         @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  stock            Stock?                @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
   @@unique([watcherConfigId, fingerprint])
   @@index([watcherConfigId, status, observedAt])

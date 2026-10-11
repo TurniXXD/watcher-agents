@@ -42,11 +42,49 @@ const businessCardJsonSchema = {
 
 const ollamaResponseSchema = z.object({
   message: z.object({ content: z.string() }),
+  done_reason: z.string().optional(),
 });
 
 export interface BusinessCardParser {
   parse(image: Uint8Array): Promise<NetworkContactInput>;
 }
+
+const structuredContent = (content: string): unknown => {
+  const trimmed = content
+    .trim()
+    .replace(/^```(?:json)?\s*/iu, '')
+    .replace(/\s*```$/u, '')
+    .trim();
+  if (!trimmed) throw new Error('vision model returned empty content');
+  const objectStart = trimmed.indexOf('{');
+  const objectEnd = trimmed.lastIndexOf('}');
+  if (objectStart < 0 || objectEnd < objectStart) {
+    throw new Error('vision model did not return a complete JSON object');
+  }
+  try {
+    return JSON.parse(trimmed.slice(objectStart, objectEnd + 1));
+  } catch {
+    throw new Error('vision model returned malformed JSON');
+  }
+};
+
+const cardToContact = (card: z.infer<typeof businessCardSchema>) => {
+  const noteParts = [
+    card.company ? `Firma: ${card.company}` : undefined,
+    card.role ? `Role: ${card.role}` : undefined,
+    card.location ? `Adresa z vizitky: ${card.location}` : undefined,
+  ].filter((value): value is string => Boolean(value));
+  return networkContactInputSchema.parse({
+    name: card.name,
+    ...(card.phone ? { phone: card.phone } : {}),
+    ...(card.email ? { email: card.email } : {}),
+    ...(card.website ? { web: card.website } : {}),
+    ...(card.linkedin ? { socialNetwork: card.linkedin } : {}),
+    ...(noteParts.length ? { meetingNote: noteParts.join('. ') } : {}),
+    ...(card.role ? { contactType: card.role } : {}),
+    active: true,
+  });
+};
 
 export class OllamaBusinessCardParser implements BusinessCardParser {
   public constructor(
@@ -60,48 +98,58 @@ export class OllamaBusinessCardParser implements BusinessCardParser {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await this.fetcher(new URL('/api/chat', this.url), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: this.model,
-          stream: false,
-          format: businessCardJsonSchema,
-          options: { temperature: 0, num_predict: 500 },
-          messages: [
-            {
-              role: 'user',
-              content:
-                'Read this business card. Extract only text visibly present or a location safely implied by a printed postal address. Never invent skills, interests, relationship strength, services, company facts, or missing values. Use null for every unknown field.',
-              images: [Buffer.from(image).toString('base64')],
-            },
-          ],
-        }),
-      });
-      if (!response.ok)
-        throw new Error(
-          `Ollama vision request failed with HTTP ${response.status}`,
-        );
-      const parsedResponse = ollamaResponseSchema.parse(await response.json());
-      const card = businessCardSchema.parse(
-        JSON.parse(parsedResponse.message.content),
+      let invalidOutput: Error | undefined;
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const response = await this.fetcher(new URL('/api/chat', this.url), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: this.model,
+            stream: false,
+            think: false,
+            format: businessCardJsonSchema,
+            options: { temperature: 0, num_predict: 700 },
+            messages: [
+              {
+                role: 'user',
+                content:
+                  attempt === 1
+                    ? 'Read this business card. Extract only text visibly present or a location safely implied by a printed postal address. Never invent skills, interests, relationship strength, services, company facts, or missing values. Use null for every unknown field. Return the complete JSON object required by the supplied schema.'
+                    : 'Retry the business-card extraction. Return one complete JSON object matching the supplied schema. Do not return markdown, commentary, or an empty response. Use null for every unknown field.',
+                images: [Buffer.from(image).toString('base64')],
+              },
+            ],
+          }),
+        });
+        if (!response.ok)
+          throw new Error(
+            `Ollama vision request failed with HTTP ${response.status}`,
+          );
+        let parsedResponse: z.infer<typeof ollamaResponseSchema>;
+        try {
+          parsedResponse = ollamaResponseSchema.parse(await response.json());
+        } catch {
+          invalidOutput = new Error(
+            'vision model returned an invalid Ollama response',
+          );
+          continue;
+        }
+        try {
+          return cardToContact(
+            businessCardSchema.parse(
+              structuredContent(parsedResponse.message.content),
+            ),
+          );
+        } catch (error) {
+          invalidOutput =
+            error instanceof Error ? error : new Error(String(error));
+        }
+      }
+      throw new Error(
+        `Ollama vision model did not return a complete business-card JSON after 2 attempts (${invalidOutput?.message ?? 'unknown output error'}). Verify that NETWORK_OLLAMA_VISION_MODEL supports images.`,
+        { cause: invalidOutput },
       );
-      const noteParts = [
-        card.company ? `Firma: ${card.company}` : undefined,
-        card.role ? `Role: ${card.role}` : undefined,
-        card.location ? `Adresa z vizitky: ${card.location}` : undefined,
-      ].filter((value): value is string => Boolean(value));
-      return networkContactInputSchema.parse({
-        name: card.name,
-        ...(card.phone ? { phone: card.phone } : {}),
-        ...(card.email ? { email: card.email } : {}),
-        ...(card.website ? { web: card.website } : {}),
-        ...(card.linkedin ? { socialNetwork: card.linkedin } : {}),
-        ...(noteParts.length ? { meetingNote: noteParts.join('. ') } : {}),
-        ...(card.role ? { contactType: card.role } : {}),
-        active: true,
-      });
     } finally {
       clearTimeout(timer);
     }

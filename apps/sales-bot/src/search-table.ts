@@ -15,6 +15,10 @@ export const salesSearchTableHeader = [
   'Aktivní kontakt',
 ].join('\t');
 
+const salesSearchTableLabels = salesSearchTableHeader.split('\t');
+const labelWidth = 23;
+const valueWidth = 34;
+
 const cell = (value: string | undefined, maxLength = 300): string =>
   (value ?? '')
     .replaceAll(/[\t\r\n]+/gu, ' ')
@@ -81,6 +85,46 @@ export const salesSearchTableRow = (
   ].join('\t');
 };
 
+const wrapCell = (value: string, width: number): string[] => {
+  if (!value) return [''];
+  const lines: string[] = [];
+  let remaining = value;
+  while (remaining.length > width) {
+    const candidate = remaining.slice(0, width + 1);
+    const lastSpace = candidate.lastIndexOf(' ');
+    const splitAt = lastSpace > 0 ? lastSpace : width;
+    lines.push(remaining.slice(0, splitAt).trimEnd());
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+  lines.push(remaining);
+  return lines;
+};
+
+const renderContactTable = (
+  company: BusinessSearchResult,
+  query: string,
+  locality: string,
+  index: number,
+): string => {
+  const values = salesSearchTableRow(company, query, locality).split('\t');
+  const horizontal = `├${'─'.repeat(labelWidth)}┼${'─'.repeat(valueWidth)}┤`;
+  const lines = [
+    `Kontakt ${index}`,
+    `┌${'─'.repeat(labelWidth)}┬${'─'.repeat(valueWidth)}┐`,
+  ];
+  for (const [rowIndex, label] of salesSearchTableLabels.entries()) {
+    const wrapped = wrapCell(values[rowIndex] ?? '', valueWidth);
+    for (const [lineIndex, value] of wrapped.entries()) {
+      lines.push(
+        `│${(lineIndex === 0 ? label : '').padEnd(labelWidth)}│${value.padEnd(valueWidth)}│`,
+      );
+    }
+    if (rowIndex < salesSearchTableLabels.length - 1) lines.push(horizontal);
+  }
+  lines.push(`└${'─'.repeat(labelWidth)}┴${'─'.repeat(valueWidth)}┘`);
+  return `<pre>${escapeHtml(lines.join('\n'))}</pre>`;
+};
+
 export const renderSalesSearchTableMessages = (
   companies: readonly BusinessSearchResult[],
   query: string,
@@ -88,19 +132,21 @@ export const renderSalesSearchTableMessages = (
   maxLength = 3_800,
 ): string[] => {
   if (companies.length === 0) return [];
-  const rows = companies.map((company) =>
-    salesSearchTableRow(company, query, locality),
+  const tables = companies.map((company, index) =>
+    renderContactTable(company, query, locality, index + 1),
   );
   const messages: string[] = [];
   let selected: string[] = [];
-  const render = (values: readonly string[]) =>
-    `<pre>${escapeHtml([salesSearchTableHeader, ...values].join('\n'))}</pre>`;
-  for (const row of rows) {
-    if (selected.length > 0 && render([...selected, row]).length > maxLength) {
+  const render = (values: readonly string[]) => values.join('\n\n');
+  for (const table of tables) {
+    if (
+      selected.length > 0 &&
+      render([...selected, table]).length > maxLength
+    ) {
       messages.push(render(selected));
       selected = [];
     }
-    selected.push(row);
+    selected.push(table);
   }
   if (selected.length > 0) messages.push(render(selected));
   return messages;

@@ -106,6 +106,7 @@ const network: NetworkBotDependencies | undefined =
             }
           : {}),
         telegramToken: env.SALES_TELEGRAM_TOKEN,
+        logger,
       }
     : undefined;
 const bot = createSalesBot(

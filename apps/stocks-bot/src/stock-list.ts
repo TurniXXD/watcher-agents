@@ -17,6 +17,7 @@ export type StockListEntry = {
   discoverySignals?: Array<{
     source: string;
     trigger: string;
+    screeningSignals: string[];
     reason: string;
   }>;
   watchReasonSource?: { source: string; url: string } | null;
@@ -49,6 +50,11 @@ const dateTime = (value: Date): string =>
 const renderEntry = (stock: StockListEntry): string => {
   const origin = stock.discoverySignals?.[0];
   const provider = origin ? discoverySource(origin.source) : undefined;
+  const discoverySignals = origin
+    ? origin.screeningSignals.length > 0
+      ? origin.screeningSignals
+      : [origin.trigger]
+    : [];
   return [
     `${stock.enabled ? '✅' : '⏸'} <b>${htmlText(stock.symbol, 20)}</b>${stock.companyName ? ` — ${htmlText(stock.companyName, 200)}` : ''}`,
     `🎯 <b>Tier:</b> ${htmlText(stock.monitoringTier, 40)}`,
@@ -58,7 +64,7 @@ const renderEntry = (stock: StockListEntry): string => {
       ? `🔎 <b>Discovery:</b> Auto-discovered · attention ${stock.attentionScore}/100`
       : '',
     stock.autoDiscovered && provider && origin
-      ? `🌐 <b>Discovery source:</b> ${optionalSourceLink(provider.name, provider.url)} · ${htmlText(displayToken(origin.trigger), 100)}`
+      ? `🌐 <b>Discovery source:</b> ${optionalSourceLink(provider.name, provider.url)} · ${htmlText(discoverySignals.map(displayToken).join(' + '), 200)}`
       : '',
     stock.autoDiscovered && origin && origin.reason !== stock.watchReason
       ? `💡 <b>Discovery reason:</b> ${htmlText(origin.reason, 500)}`

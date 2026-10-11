@@ -69,6 +69,7 @@ export type DiscoveryCandidate = MarketDiscoveryObservation & {
   attentionScore: number;
   reason: string;
   fingerprint: string;
+  screeningSignals: Array<'OVERSOLD' | 'UNDERVALUED'>;
 };
 
 export interface MarketDiscoveryScanner {
@@ -96,6 +97,13 @@ const attentionScore = (changePercent: number): number => {
   return 65;
 };
 
+const qualifiesByMarketActivity = (
+  observation: MarketDiscoveryObservation,
+  policy: DiscoveryPolicy,
+): boolean =>
+  observation.trigger === 'MOST_ACTIVE' ||
+  Math.abs(observation.changePercent) >= policy.moveThresholdPercent;
+
 export const selectDiscoveryCandidates = (
   observations: MarketDiscoveryObservation[],
   policy: DiscoveryPolicy = defaultDiscoveryPolicy,
@@ -109,11 +117,15 @@ export const selectDiscoveryCandidates = (
       observation.price < policy.minimumPrice ||
       observation.volume < policy.minimumVolume ||
       dollarVolume < policy.minimumDollarVolume ||
-      Math.abs(observation.changePercent) < policy.moveThresholdPercent
+      !qualifiesByMarketActivity(observation, policy)
     ) {
       continue;
     }
-    const reason = `${observation.changePercent >= 0 ? '+' : ''}${observation.changePercent.toFixed(2)}% price move on ${observation.volume.toLocaleString('en-US')} shares`;
+    const reason =
+      observation.trigger === 'MOST_ACTIVE' &&
+      Math.abs(observation.changePercent) < policy.moveThresholdPercent
+        ? `${observation.volume.toLocaleString('en-US')} shares in the most-active market snapshot; price move ${observation.changePercent >= 0 ? '+' : ''}${observation.changePercent.toFixed(2)}%`
+        : `${observation.changePercent >= 0 ? '+' : ''}${observation.changePercent.toFixed(2)}% price move on ${observation.volume.toLocaleString('en-US')} shares`;
     const identity = [
       observation.source,
       observation.ticker,
@@ -128,6 +140,7 @@ export const selectDiscoveryCandidates = (
       attentionScore: attentionScore(observation.changePercent),
       reason,
       fingerprint: createHash('sha256').update(identity).digest('hex'),
+      screeningSignals: [],
     };
     const current = candidates.get(candidate.ticker);
     if (

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { daysUntilGoal, renderGoalsMessage } from '../goals.js';
+import {
+  daysUntilGoal,
+  renderGoalsMessage,
+  renderPeriodicGoalsMessage,
+} from '../goals.js';
 
 describe('briefing goals', () => {
   it('counts calendar days in the configured timezone across DST', () => {
@@ -39,6 +43,29 @@ describe('briefing goals', () => {
   it('offers the add command when the list is empty', () => {
     expect(renderGoalsMessage([], 'Europe/Prague', new Date())).toContain(
       '/goal_add YYYY-MM-DD Goal title',
+    );
+  });
+
+  it('renders the periodic summary as an ordered bullet list without IDs', () => {
+    const rendered = renderPeriodicGoalsMessage(
+      [
+        { id: 91, title: 'Later goal', dueOn: '2026-10-20' },
+        { id: 15, title: 'Nearest goal', dueOn: '2026-10-12' },
+        { id: 4, title: 'Overdue goal', dueOn: '2026-10-01' },
+      ],
+      'Europe/Prague',
+      new Date('2026-10-10T08:00:00.000Z'),
+    );
+
+    expect(rendered).toContain('• Nearest goal — 12.10.2026 (in 2 days)');
+    expect(rendered).toContain('• Later goal — 20.10.2026 (in 10 days)');
+    expect(rendered).toContain('• Overdue goal — 01.10.2026 (9 days overdue)');
+    expect(rendered).not.toMatch(/#\d+/u);
+    expect(rendered.indexOf('Nearest goal')).toBeLessThan(
+      rendered.indexOf('Later goal'),
+    );
+    expect(rendered.indexOf('Later goal')).toBeLessThan(
+      rendered.indexOf('Overdue goal'),
     );
   });
 });

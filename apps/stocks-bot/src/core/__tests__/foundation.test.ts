@@ -300,11 +300,16 @@ describe('stock intelligence foundation', () => {
       },
     );
 
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]).toMatchObject({
+    expect(candidates).toHaveLength(2);
+    expect(candidates.find(({ ticker }) => ticker === 'GOOD')).toMatchObject({
       ticker: 'GOOD',
       attentionScore: 78,
       dollarVolume: 5_000_000,
+    });
+    expect(candidates.find(({ ticker }) => ticker === 'QUIET')).toMatchObject({
+      ticker: 'QUIET',
+      trigger: 'MOST_ACTIVE',
+      attentionScore: 65,
     });
   });
 

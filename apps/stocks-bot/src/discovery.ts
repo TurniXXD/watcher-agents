@@ -16,6 +16,10 @@ import {
 } from '@watcher/database';
 import { discoveryOpportunityScore } from './discovery-catalyst.js';
 import type { DiscoveryCatalystAnalyzer } from './discovery-catalyst.js';
+import {
+  screenedDiscoveryCandidate,
+  type DiscoveryScreeningAssessment,
+} from './discovery-screening.js';
 
 export type DiscoveryExecution =
   | { status: 'BUSY' }
@@ -30,6 +34,9 @@ export type DiscoveryExecution =
         changePercent: number;
         attentionScore: number;
         reason: string;
+        signals: Array<'CATALYST' | 'OVERSOLD' | 'UNDERVALUED'>;
+        rsi14: number | null;
+        forwardPe: number | null;
       }>;
       rejectedCount: number;
       durationMs: number;
@@ -41,6 +48,10 @@ type DiscoveryNewsLookup = (
   input: { symbol: string; companyName: string; exchange: string | null },
   signal?: AbortSignal,
 ) => Promise<WatchItem[]>;
+type DiscoveryScreeningLookup = (
+  ticker: string,
+  signal?: AbortSignal,
+) => Promise<DiscoveryScreeningAssessment>;
 
 const maximumCatalystReviews = 5;
 
@@ -54,6 +65,7 @@ export class StockDiscoveryCoordinator {
     private readonly policy: DiscoveryPolicy,
     private readonly fetchNews: DiscoveryNewsLookup,
     private readonly catalystAnalyzer: DiscoveryCatalystAnalyzer,
+    private readonly screenCandidate: DiscoveryScreeningLookup,
     private readonly logger?: WatcherLogger,
   ) {}
 
@@ -85,8 +97,9 @@ export class StockDiscoveryCoordinator {
       >['recommendedCandidates'] = [];
       let rejectedCount = 0;
       let resolutionFailureCount = 0;
+      let catalystReviews = 0;
 
-      for (const candidate of candidates.slice(0, maximumCatalystReviews)) {
+      for (const candidate of candidates) {
         try {
           const profile = await this.lookupCompany(candidate.ticker);
           if (!discoveryCompanyIsEligible(profile.exchange, this.policy)) {
@@ -102,6 +115,57 @@ export class StockDiscoveryCoordinator {
             );
             continue;
           }
+          const screening = await this.screenCandidate(
+            candidate.ticker,
+            signal,
+          );
+          if (screening.sourceFailures.length > 0) {
+            this.logger?.warn(
+              {
+                watcherConfigId,
+                scanId: scan.id,
+                ticker: candidate.ticker,
+                failures: screening.sourceFailures,
+              },
+              'Discovery value/oversold screening completed with partial source failures',
+            );
+          }
+          const screened = screenedDiscoveryCandidate(candidate, screening);
+          if (screened) {
+            const recorded = await this.store.recordCandidate(
+              watcherConfigId,
+              scan.id,
+              screened,
+            );
+            if (recorded.recorded) {
+              recommendedCandidates.push({
+                ticker: recorded.ticker,
+                companyName: profile.companyName,
+                changePercent: candidate.changePercent,
+                attentionScore: screening.attentionScore,
+                reason: screened.reason,
+                signals: screening.signals,
+                rsi14: screening.rsi14,
+                forwardPe: screening.forwardPe,
+              });
+            }
+            continue;
+          }
+          if (
+            Math.abs(candidate.changePercent) < this.policy.moveThresholdPercent
+          ) {
+            rejectedCount += 1;
+            this.logger?.info(
+              { watcherConfigId, scanId: scan.id, ticker: candidate.ticker },
+              'Most-active discovery candidate did not meet value or oversold screens',
+            );
+            continue;
+          }
+          if (catalystReviews >= maximumCatalystReviews) {
+            rejectedCount += 1;
+            continue;
+          }
+          catalystReviews += 1;
           const freshAfter = new Date(Date.now() - 7 * 24 * 60 * 60_000);
           const articles = (
             await this.fetchNews(
@@ -179,6 +243,9 @@ export class StockDiscoveryCoordinator {
                 `Confirmation: ${assessment.confirmation.replaceAll('_', ' ').toLowerCase()} · pricing: ${assessment.pricedIn.replaceAll('_', ' ').toLowerCase()}`,
                 `Risks: ${assessment.risks.join('; ')}`,
               ].join('\n'),
+              signals: ['CATALYST'],
+              rsi14: screening.rsi14,
+              forwardPe: screening.forwardPe,
             });
           }
         } catch (error) {

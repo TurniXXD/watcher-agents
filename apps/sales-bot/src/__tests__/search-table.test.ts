@@ -45,7 +45,7 @@ describe('sales search table', () => {
     expect(cells[7]).not.toContain('\n');
   });
 
-  it('escapes Telegram HTML and repeats the header when messages are split', () => {
+  it('renders each result as a narrow two-column table that fits Telegram', () => {
     const messages = renderSalesSearchTableMessages(
       [company, { ...company, id: 'place-2', registrationId: '87654321' }],
       'architekti',
@@ -54,10 +54,13 @@ describe('sales search table', () => {
     );
     expect(messages).toHaveLength(2);
     expect(messages.every((message) => message.startsWith('<pre>'))).toBe(true);
-    expect(messages.every((message) => message.includes('Jméno\tDatum'))).toBe(
-      true,
-    );
+    expect(messages.every((message) => message.includes('│Jméno'))).toBe(true);
+    expect(
+      messages.every((message) => message.includes('│Datum potkání')),
+    ).toBe(true);
+    expect(messages[0]).toContain('Kontakt 1');
     expect(messages[0]).toContain('Studio &lt;Test&gt; &amp; syn');
+    expect(messages[0]).not.toContain('\t');
   });
 
   it('deduplicates primarily by IČO, then normalized domain', () => {

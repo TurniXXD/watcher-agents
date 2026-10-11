@@ -40,6 +40,7 @@ describe('stock list rendering', () => {
           {
             source: 'ALPHA_VANTAGE_MARKET_MOVERS',
             trigger: 'PRICE_MOVE',
+            screeningSignals: ['OVERSOLD', 'UNDERVALUED'],
             reason: '+44.66% price move on 4,353,325 shares',
           },
         ],
@@ -63,7 +64,7 @@ describe('stock list rendering', () => {
       '⏳ <b>Investigation until:</b> 2026-09-05 21:16:44 UTC',
     );
     expect(text).toContain(
-      '🌐 <b>Discovery source:</b> <a href="https://www.alphavantage.co/">Alpha Vantage Market Movers</a> · Price Move',
+      '🌐 <b>Discovery source:</b> <a href="https://www.alphavantage.co/">Alpha Vantage Market Movers</a> · Oversold + Undervalued',
     );
     expect(text).toContain(
       '💡 <b>Discovery reason:</b> +44.66% price move on 4,353,325 shares',

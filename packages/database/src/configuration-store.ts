@@ -21,7 +21,12 @@ export class ConfigurationStore {
         discoverySignals: {
           orderBy: { createdAt: 'asc' },
           take: 1,
-          select: { source: true, trigger: true, reason: true },
+          select: {
+            source: true,
+            trigger: true,
+            screeningSignals: true,
+            reason: true,
+          },
         },
       },
       orderBy: { symbol: 'asc' },
@@ -56,7 +61,12 @@ export class ConfigurationStore {
           discoverySignals: {
             orderBy: { createdAt: 'asc' },
             take: 1,
-            select: { source: true, trigger: true, reason: true },
+            select: {
+              source: true,
+              trigger: true,
+              screeningSignals: true,
+              reason: true,
+            },
           },
         },
         orderBy: { symbol: 'asc' },

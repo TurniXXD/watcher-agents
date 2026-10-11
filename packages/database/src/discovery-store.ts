@@ -15,6 +15,7 @@ import {
   RunTrigger,
   WatcherKind,
 } from './generated/prisma/enums.js';
+import type { DiscoveryTrigger } from './generated/prisma/enums.js';
 
 export type DiscoveryLifecycleOptions = {
   investigationMs: number;
@@ -56,11 +57,14 @@ export type DiscoveryStatus = {
   }>;
   recentSignals: Array<{
     ticker: string;
+    trigger: DiscoveryTrigger;
+    screeningSignals: string[];
     changePercent: number;
     volume: bigint;
     attentionScore: number;
     status: DiscoverySignalStatus;
     observedAt: Date;
+    reason: string;
   }>;
 };
 
@@ -247,6 +251,7 @@ export class StockDiscoveryStore {
           dollarVolume: candidate.dollarVolume,
           attentionScore: candidate.attentionScore,
           reason: candidate.reason,
+          screeningSignals: candidate.screeningSignals,
           status: DiscoverySignalStatus.OBSERVED,
         },
       });
@@ -259,6 +264,8 @@ export class StockDiscoveryStore {
           occurredAt: now,
           payload: {
             ticker: candidate.ticker,
+            trigger: candidate.trigger,
+            screeningSignals: candidate.screeningSignals,
             changePercent: candidate.changePercent,
             volume: candidate.volume,
             attentionScore: candidate.attentionScore,
@@ -711,11 +718,14 @@ export class StockDiscoveryStore {
       })),
       recentSignals: signals.map((signal) => ({
         ticker: signal.ticker,
+        trigger: signal.trigger,
+        screeningSignals: signal.screeningSignals,
         changePercent: Number(signal.changePercent),
         volume: signal.volume,
         attentionScore: signal.attentionScore,
         status: signal.status,
         observedAt: signal.observedAt,
+        reason: signal.reason,
       })),
     };
   }

@@ -192,7 +192,7 @@ describe('sales bot help', () => {
     expect(parseSalesSearch('autoservis | Brno | 21')).toBeUndefined();
   });
 
-  it('prints a TSV table and persists the periodic search', async () => {
+  it('prints a narrow contact table and persists the periodic search', async () => {
     const searchBusinesses = vi.fn().mockResolvedValue([
       {
         id: 'place-1',
@@ -263,9 +263,10 @@ describe('sales bot help', () => {
     ]);
     expect(messages).toHaveLength(3);
     expect(messages[0]).toContain('45 minut');
-    expect(messages[1]).toContain(
-      'Jméno\tDatum potkání\tMísto potkání\tTelefon\tEmail\tWeb\tsociální síť\tPoznámka k potkání\tTyp kontaktu\tDomluvena další schůzka\tAktivní kontakt',
-    );
+    expect(messages[1]).toContain('│Jméno');
+    expect(messages[1]).toContain('│Datum potkání');
+    expect(messages[1]).toContain('│Domluvena další schůzka');
+    expect(messages[1]).not.toContain('\t');
     expect(messages[1]).toContain('Autoservis Test');
     expect(messages[1]).toContain('+420 123 456 789');
     expect(messages[2]).toContain('search-1');

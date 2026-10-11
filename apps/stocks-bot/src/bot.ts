@@ -156,7 +156,7 @@ const renderDiscoveryStatus = (
     ? status.recentSignals
         .map(
           (entry) =>
-            `• ${entry.ticker} · ${entry.changePercent >= 0 ? '+' : ''}${entry.changePercent.toFixed(2)}% · ${entry.volume.toLocaleString('en-US')} shares · ${entry.status}`,
+            `• ${entry.ticker} · ${(entry.screeningSignals.length > 0 ? entry.screeningSignals : [entry.trigger]).join(' + ').replaceAll('_', ' ').toLowerCase()} · ${entry.changePercent >= 0 ? '+' : ''}${entry.changePercent.toFixed(2)}% · ${entry.volume.toLocaleString('en-US')} shares · ${entry.status}\n  ${entry.reason}`,
         )
         .join('\n')
     : 'None.';
@@ -488,7 +488,7 @@ export const createStocksBot = (
         ? 'A discovery scan is already running.'
         : result.status === 'FAILED'
           ? `Discovery scan failed after ${formatRunDuration(result.durationMs)}: ${result.error}`
-          : `Weekly discovery finished in ${formatRunDuration(result.durationMs)}. Observed ${result.observedCount}, selected ${result.candidateCount}, recommended ${result.recommendedCandidates.length}${result.recommendedCandidates.length ? `:\n${result.recommendedCandidates.map((candidate) => `• ${candidate.ticker} — ${candidate.companyName} · ${candidate.changePercent >= 0 ? '+' : ''}${candidate.changePercent.toFixed(2)}% · attention ${candidate.attentionScore}/100\n  ${candidate.reason}`).join('\n')}` : ''}. Nothing was added to your watchlist. Rejected ${result.rejectedCount}.`;
+          : `Weekly discovery finished in ${formatRunDuration(result.durationMs)}. Observed ${result.observedCount}, selected ${result.candidateCount}, recommended ${result.recommendedCandidates.length}${result.recommendedCandidates.length ? `:\n${result.recommendedCandidates.map((candidate) => `• [${candidate.signals.join(' + ')}] ${candidate.ticker} — ${candidate.companyName} · ${candidate.changePercent >= 0 ? '+' : ''}${candidate.changePercent.toFixed(2)}% · attention ${candidate.attentionScore}/100\n  ${candidate.reason}`).join('\n')}` : ''}. Nothing was added to your watchlist. Rejected ${result.rejectedCount}.`;
     await ctx.api.editMessageText(ctx.chat.id, progress.message_id, message);
   });
   bot.command(['add_stock', 'addstock'], async (ctx) => {

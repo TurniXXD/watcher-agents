@@ -201,6 +201,16 @@ const schema = z
       .min(1)
       .max(100)
       .default(10),
+    DISCOVERY_OVERSOLD_RSI_THRESHOLD: z.coerce
+      .number()
+      .min(1)
+      .max(50)
+      .default(30),
+    DISCOVERY_MAX_FORWARD_PE: z.coerce
+      .number()
+      .positive()
+      .max(1000)
+      .default(15),
     DISCOVERY_SUPPORTED_EXCHANGES: z
       .string()
       .default('Nasdaq,NYSE,NYSE American'),

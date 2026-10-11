@@ -1,4 +1,6 @@
 import { InlineKeyboard, type Bot, type Context } from 'grammy';
+import { randomUUID } from 'node:crypto';
+import { errorMessage, type WatcherLogger } from '@watcher/core';
 import { splitTelegramMessage } from '@watcher/telegram';
 import type { BusinessCardParser } from './business-card-parser.js';
 import { findDuplicateContacts } from './deduplication.js';
@@ -16,6 +18,7 @@ export type NetworkBotDependencies = {
   ai: NetworkAiService;
   cardParser?: BusinessCardParser;
   telegramToken: string;
+  logger?: WatcherLogger;
 };
 
 type PendingContact = {
@@ -326,6 +329,7 @@ export const registerNetworkHandlers = (
     );
   });
   bot.on('message:photo', async (ctx) => {
+    const requestId = randomUUID();
     if (!dependencies.cardParser) {
       await ctx.reply(
         'Čtení vizitek není nakonfigurované. Nastavte Ollama model s podporou obrazu.',
@@ -339,6 +343,16 @@ export const registerNetworkHandlers = (
       return;
     }
     try {
+      const startedAt = Date.now();
+      dependencies.logger?.info(
+        {
+          requestId,
+          telegramChatId: ctx.chat.id,
+          telegramUserId: ctx.from?.id,
+          telegramFileSize: photo.file_size ?? null,
+        },
+        'Business card parsing started',
+      );
       await ctx.reply('Čtu viditelné údaje z vizitky…');
       const image = await downloadPhoto(
         bot,
@@ -350,9 +364,26 @@ export const registerNetworkHandlers = (
         await dependencies.cardParser.parse(image),
         'business_card',
       );
+      dependencies.logger?.info(
+        {
+          requestId,
+          imageBytes: image.byteLength,
+          durationMs: Date.now() - startedAt,
+        },
+        'Business card parsing completed',
+      );
     } catch (error) {
+      dependencies.logger?.error(
+        {
+          err: error,
+          requestId,
+          telegramChatId: ctx.chat.id,
+          telegramUserId: ctx.from?.id,
+        },
+        'Business card parsing failed',
+      );
       await ctx.reply(
-        `Vizitku se nepodařilo přečíst: ${error instanceof Error ? error.message : String(error)}`,
+        `Vizitku se nepodařilo přečíst: ${errorMessage(error)}\nDiagnostický kód: ${requestId}`,
       );
     }
   });

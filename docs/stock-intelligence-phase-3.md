@@ -8,6 +8,7 @@ Phase 3 finds unusual US-listed stocks with a cheap aggregate market scan, tempo
 Alpha Vantage market snapshot
   -> deterministic price/liquidity/ticker filters
   -> SEC company and exchange resolution
+  -> Nasdaq daily RSI(14) + Zacks forward-P/E/rank screens
   -> persisted discovery signal
   -> DISCOVERY/unknown -> INVESTIGATE + HIGH_RESOLUTION
   -> immediate run of every enabled company source
@@ -18,13 +19,13 @@ Alpha Vantage market snapshot
 
 `ALPHA_VANTAGE_API_KEY` enables the scanner. An empty value disables only market-wide discovery; manually configured stocks and both normal watcher schedules keep working. `EOD` is the default scan mode and interval is one day. `DELAYED` and `REALTIME` select intraday mode and must match the provider entitlement.
 
-The adapter validates the external JSON response with Zod and normalizes top gainers, top losers, and most-active entries. Provider errors and rate-limit messages become explicit failed discovery scans. The API key remains in the server runtime environment and is never included in structured logs or Telegram output.
+The adapter validates the external JSON response with Zod and normalizes top gainers, top losers, and most-active entries. Most-active names may enter the bounded screening pool even without the configured daily move. Nasdaq daily history supplies RSI(14); RSI at or below the configured threshold (default 30) is labeled `OVERSOLD`. The existing Zacks snapshot supplies forward P/E and analyst rank; a positive multiple at or below the configured maximum (default 15) plus rank 1 or 2 is labeled `UNDERVALUED`. Both are research screens, never trade recommendations. Missing or malformed data produces no label and partial-source failures are logged. The API key remains in the server runtime environment and is never included in structured logs or Telegram output.
 
 ## Quality and duplicate controls
 
 Candidates must satisfy all configured checks:
 
-- absolute price move;
+- absolute price move, unless a most-active observation is entering only the value/RSI screening pool;
 - current price and volume;
 - current dollar volume (`price × volume`);
 - supported ticker format;
@@ -50,7 +51,7 @@ An automatically promoted watch receives a configurable `watchUntil`. At expiry,
 
 `/discovery` shows whether the provider is configured, scan timestamps, active investigations, and recent signal decisions. `/run_discovery` triggers the same persisted coordinator used by the scheduler. `/stocks` labels auto-discovered names and displays their attention score and investigation deadline.
 
-Important configuration is documented in `.env.example`. The defaults select at most ten candidates above a 4% move, $2 price, 100,000 current shares, and $1 million current dollar volume; investigate for 90 minutes; poll fast sources every five minutes; keep event mode for two hours; and keep an automatically promoted watch for fourteen days.
+Important configuration is documented in `.env.example`. The defaults select at most ten liquid candidates above $2, 100,000 current shares, and $1 million current dollar volume; price-move catalyst candidates still require a 4% move. Oversold defaults to RSI(14) at or below 30. Potential value defaults to positive forward P/E at or below 15 plus rank 1 or 2. The system investigates for 90 minutes, polls fast sources every five minutes, keeps event mode for two hours, and keeps an automatically promoted watch for fourteen days.
 
 ## Known limitations
 
