@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ageAtGoal,
   daysUntilGoal,
   renderGoalsMessage,
   renderPeriodicGoalsMessage,
@@ -15,7 +16,12 @@ describe('briefing goals', () => {
         'Europe/Prague',
         new Date('2026-03-28T23:30:00.000Z'),
       ),
-    ).toContain('30.03.2026 (in 1 day)');
+    ).toContain('30.03.2026 (in 1 day · <0.01 years remaining)');
+  });
+
+  it('calculates age at the deadline around the birthday boundary', () => {
+    expect(ageAtGoal('2003-01-10', '2030-01-09')).toBe(26);
+    expect(ageAtGoal('2003-01-10', '2030-01-10')).toBe(27);
   });
 
   it('shows the 10 nearest active deadlines, then recent overdue goals', () => {
@@ -55,11 +61,19 @@ describe('briefing goals', () => {
       ],
       'Europe/Prague',
       new Date('2026-10-10T08:00:00.000Z'),
+      10,
+      '2003-01-10',
     );
 
-    expect(rendered).toContain('• Nearest goal — 12.10.2026 (in 2 days)');
-    expect(rendered).toContain('• Later goal — 20.10.2026 (in 10 days)');
-    expect(rendered).toContain('• Overdue goal — 01.10.2026 (9 days overdue)');
+    expect(rendered).toContain(
+      '• Nearest goal — 12.10.2026 (in 2 days · 0.01 years remaining · age at deadline: 23)',
+    );
+    expect(rendered).toContain(
+      '• Later goal — 20.10.2026 (in 10 days · 0.03 years remaining · age at deadline: 23)',
+    );
+    expect(rendered).toContain(
+      '• Overdue goal — 01.10.2026 (9 days overdue · 0.02 years overdue · age at deadline: 23)',
+    );
     expect(rendered).not.toMatch(/#\d+/u);
     expect(rendered.indexOf('Nearest goal')).toBeLessThan(
       rendered.indexOf('Later goal'),

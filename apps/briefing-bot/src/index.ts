@@ -233,6 +233,7 @@ const bot = createBriefingBot(
   agentTriggers,
   goals,
   journal,
+  env.BRIEFING_BIRTH_DATE,
 );
 const semanticMatcher = env.BRIEFING_EMBEDDING_MODEL
   ? new SemanticStoryMatcher(
@@ -264,6 +265,7 @@ const delivery = new BriefingDeliveryService(
 runtime.coordinator = new BriefingCoordinator({
   configuration,
   goals,
+  ...(env.BRIEFING_BIRTH_DATE ? { birthDate: env.BRIEFING_BIRTH_DATE } : {}),
   runs: briefingRuns,
   storyStates: briefingStoryStates,
   storyEngine: new StoryEngine(

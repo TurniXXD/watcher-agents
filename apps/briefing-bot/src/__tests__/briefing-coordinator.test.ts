@@ -385,13 +385,17 @@ describe('BriefingCoordinator', () => {
         { id: 7, title: 'Finish my degree', dueOn: '2026-09-16' },
       ]),
     };
-    const coordinator = new BriefingCoordinator({ ...setup.value, goals });
+    const coordinator = new BriefingCoordinator({
+      ...setup.value,
+      goals,
+      birthDate: '2003-01-10',
+    });
 
     await coordinator.generate(123n, 'SCHEDULED', currentTime);
 
     expect(goals.list).toHaveBeenCalledWith(123n);
     expect(setup.deliveryInputs[0]?.goalsMessage).toContain(
-      '• Finish my degree — 16.09.2026 (in 10 days)',
+      '• Finish my degree — 16.09.2026 (in 10 days · 0.03 years remaining · age at deadline: 23)',
     );
     expect(setup.deliveryInputs[0]?.goalsMessage).not.toContain('#7');
   });

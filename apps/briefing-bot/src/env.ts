@@ -34,6 +34,10 @@ const schema = z
       .min(1)
       .max(168)
       .default(96),
+    BRIEFING_BIRTH_DATE: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.iso.date().optional(),
+    ),
     OLLAMA_KEEP_ALIVE: z.string().min(1).default('5m'),
     OLLAMA_NUM_CTX: z.coerce.number().int().min(512).max(131_072).default(8192),
     OLLAMA_RETRIES: z.coerce.number().int().min(0).max(2).default(1),

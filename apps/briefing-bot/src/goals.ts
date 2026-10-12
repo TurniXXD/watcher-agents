@@ -2,6 +2,7 @@ import type { BriefingGoalRecord } from '@watcher/database';
 import { dateParts } from './briefing-context.js';
 
 const dayMs = 24 * 60 * 60_000;
+const averageDaysPerYear = 365.2425;
 
 export const daysUntilGoal = (dueOn: string, today: string): number =>
   Math.round(
@@ -9,6 +10,30 @@ export const daysUntilGoal = (dueOn: string, today: string): number =>
       Date.parse(`${today}T00:00:00.000Z`)) /
       dayMs,
   );
+
+const isoDateParts = (date: string): [number, number, number] => {
+  const [year, month, day] = date.split('-').map(Number);
+  return [year!, month!, day!];
+};
+
+export const ageAtGoal = (birthDate: string, dueOn: string): number => {
+  const [birthYear, birthMonth, birthDay] = isoDateParts(birthDate);
+  const [goalYear, goalMonth, goalDay] = isoDateParts(dueOn);
+  const birthdayReached =
+    goalMonth > birthMonth || (goalMonth === birthMonth && goalDay >= birthDay);
+  return goalYear - birthYear - (birthdayReached ? 0 : 1);
+};
+
+const yearsLabel = (days: number): string => {
+  if (days === 0) return '0 years remaining';
+  const years = Math.abs(days) / averageDaysPerYear;
+  const precision = years < 1 ? 2 : 1;
+  const rounded = Number(years.toFixed(precision));
+  const amount = rounded === 0 ? '<0.01' : String(rounded);
+  return days > 0
+    ? `${amount} ${rounded === 1 ? 'year' : 'years'} remaining`
+    : `${amount} ${rounded === 1 ? 'year' : 'years'} overdue`;
+};
 
 const goalOrder = (
   goals: readonly BriefingGoalRecord[],
@@ -35,6 +60,7 @@ const countdownLabel = (days: number): string => {
 type GoalsMessageOptions = {
   includeIds: boolean;
   bulletList: boolean;
+  birthDate?: string;
 };
 
 const renderGoals = (
@@ -55,8 +81,12 @@ const renderGoals = (
     const [year, month, day] = goal.dueOn.split('-');
     const prefix = options.bulletList ? '• ' : '';
     const id = options.includeIds ? `#${goal.id} ` : '';
+    const days = daysUntilGoal(goal.dueOn, today);
+    const age = options.birthDate
+      ? ` · age at deadline: ${ageAtGoal(options.birthDate, goal.dueOn)}`
+      : '';
     lines.push(
-      `${prefix}${id}${goal.title} — ${day}.${month}.${year} (${countdownLabel(daysUntilGoal(goal.dueOn, today))})`,
+      `${prefix}${id}${goal.title} — ${day}.${month}.${year} (${countdownLabel(days)} · ${yearsLabel(days)}${age})`,
     );
   }
   if (shown.length < ordered.length) {
@@ -73,10 +103,12 @@ export const renderGoalsMessage = (
   timezone: string,
   now: Date,
   limit = 10,
+  birthDate?: string,
 ): string =>
   renderGoals(goals, timezone, now, limit, {
     includeIds: true,
     bulletList: false,
+    ...(birthDate ? { birthDate } : {}),
   });
 
 export const renderPeriodicGoalsMessage = (
@@ -84,8 +116,10 @@ export const renderPeriodicGoalsMessage = (
   timezone: string,
   now: Date,
   limit = 10,
+  birthDate?: string,
 ): string =>
   renderGoals(goals, timezone, now, limit, {
     includeIds: false,
     bulletList: true,
+    ...(birthDate ? { birthDate } : {}),
   });

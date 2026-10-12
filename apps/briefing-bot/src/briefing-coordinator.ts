@@ -109,6 +109,7 @@ export class BriefingCoordinator {
       journal?: JournalProvider;
       earningsCalendar?: WatchlistEarningsSource;
       goals?: Pick<BriefingGoalStore, 'list'>;
+      birthDate?: string;
       logger?: WatcherLogger;
       ttsAttempts?: number;
       freshness?: {
@@ -579,6 +580,8 @@ export class BriefingCoordinator {
             await this.dependencies.goals.list(telegramChatId),
             configuration.settings.timezone,
             this.dependencies.now?.() ?? new Date(),
+            10,
+            this.dependencies.birthDate,
           );
         } catch (error) {
           goalsUnavailable = true;

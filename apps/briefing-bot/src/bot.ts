@@ -160,6 +160,7 @@ export const createBriefingBot = (
   agentTriggers?: AgentTriggerRunner,
   goals?: Pick<BriefingGoalStore, 'add' | 'list' | 'remove'>,
   journal?: JournalController,
+  birthDate?: string,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
@@ -415,6 +416,7 @@ export const createBriefingBot = (
       configuration.settings.timezone,
       new Date(),
       Number.MAX_SAFE_INTEGER,
+      birthDate,
     );
     for (const part of splitTelegramMessage(message)) {
       await context.reply(part);

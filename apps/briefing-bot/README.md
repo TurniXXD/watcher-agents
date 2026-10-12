@@ -14,7 +14,7 @@ Core commands include `/start`, `/briefing`, `/briefing_test`, `/briefing_time`,
 
 ## Configuration
 
-Required runtime values are `DATABASE_URL`, `BRIEFING_TELEGRAM_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, `OLLAMA_URL`, and `OLLAMA_MODEL`. Piper paths and scheduler/freshness bounds have safe defaults. Google Calendar and Notion are optional and validate as complete credential groups. Evening journaling defaults to `JOURNAL_ENABLED=true`, `JOURNAL_REMINDER_TIME=21:00`, and `JOURNAL_TIMEZONE=Europe/Prague`. Voice journaling additionally needs an OpenAI-compatible `/audio/transcriptions` endpoint in `JOURNAL_TRANSCRIPTION_URL`; its model defaults to `whisper-1`, and `JOURNAL_TRANSCRIPTION_API_KEY` is optional for a trusted local endpoint.
+Required runtime values are `DATABASE_URL`, `BRIEFING_TELEGRAM_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, `OLLAMA_URL`, and `OLLAMA_MODEL`. Piper paths and scheduler/freshness bounds have safe defaults. Set optional `BRIEFING_BIRTH_DATE=YYYY-MM-DD` to include the operator's age at each goal deadline; goal lists always include the remaining or overdue duration in years. Google Calendar and Notion are optional and validate as complete credential groups. Evening journaling defaults to `JOURNAL_ENABLED=true`, `JOURNAL_REMINDER_TIME=21:00`, and `JOURNAL_TIMEZONE=Europe/Prague`. Voice journaling additionally needs an OpenAI-compatible `/audio/transcriptions` endpoint in `JOURNAL_TRANSCRIPTION_URL`; its model defaults to `whisper-1`, and `JOURNAL_TRANSCRIPTION_API_KEY` is optional for a trusted local endpoint.
 
 Use [the briefing preset](../../deploy/presets/briefing-bot.env.example) and shared [environment inventory](../../deploy/ENVIRONMENT.md).
 
