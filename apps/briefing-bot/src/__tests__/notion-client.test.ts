@@ -3,6 +3,34 @@ import { NotionClient } from '../notion-client.js';
 import type { NotionApiError } from '../notion-client.js';
 
 describe('NotionClient', () => {
+  it('accepts response metadata added by Notion list endpoints', async () => {
+    const client = new NotionClient({
+      apiKey: 'secret',
+      fetch: vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              object: 'list',
+              type: 'page_or_data_source',
+              page_or_data_source: {},
+              request_id: 'request-id',
+              results: [],
+              has_more: false,
+              next_cursor: null,
+            }),
+            { status: 200 },
+          ),
+        ),
+      ),
+    });
+
+    await expect(client.queryDataSource('source', {})).resolves.toEqual({
+      results: [],
+      has_more: false,
+      next_cursor: null,
+    });
+  });
+
   it('retries rate limits using Retry-After without exposing response data', async () => {
     const fetcher = vi
       .fn<typeof fetch>()

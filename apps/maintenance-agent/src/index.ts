@@ -1,6 +1,8 @@
-import { createLogger } from '@watcher/core';
+import { createLogger, errorMessage, PersistentScheduler } from '@watcher/core';
 import {
   PostgresOllamaCoordinator,
+  ResourceLeaseStore,
+  TelegramOutboxStore,
   createDatabaseClient,
 } from '@watcher/database';
 import { parseAllowedUserIds } from '@watcher/telegram';
@@ -25,6 +27,8 @@ import {
 
 const logger = createLogger('maintenance-agent', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
+const resourceLeases = new ResourceLeaseStore(database);
+const telegramOutbox = new TelegramOutboxStore(database);
 const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);
 const engine = new MaintenanceEngine(
   database,
@@ -61,6 +65,7 @@ const api = createMaintenanceApi(
 const scheduler = new MaintenanceScheduler(
   engine,
   store,
+  resourceLeases,
   {
     enabled: env.MAINTENANCE_ENABLED,
     tickMs: env.MAINTENANCE_SCHEDULER_INTERVAL_MS,
@@ -70,20 +75,58 @@ const scheduler = new MaintenanceScheduler(
     weeklyMinutes: env.MAINTENANCE_WEEKLY_INTERVAL_MINUTES,
     jitterMaxSeconds: env.MAINTENANCE_JITTER_MAX_SECONDS,
   },
-  async (type, findings) => {
+  async (type, findings, runId) => {
     const important = findings.filter((finding) =>
       ['CRITICAL', 'HIGH', 'MEDIUM'].includes(finding.severity),
     );
     if (important.length === 0) return;
-    await Promise.allSettled(
-      [...allowedIds].map((chatId) =>
-        bot.api.sendMessage(
-          chatId,
-          renderReport(`${type} maintenance report`, important),
-        ),
-      ),
+    const body = renderReport(`${type} maintenance report`, important);
+    await telegramOutbox.enqueueMany(
+      [...allowedIds].map((chatId) => ({
+        kind: 'maintenance-report',
+        deduplicationKey: `${runId}:${chatId}`,
+        chatId: BigInt(chatId),
+        body,
+      })),
     );
   },
+  logger,
+);
+const reportDeliveryScheduler = new PersistentScheduler(
+  (now) => telegramOutbox.claimDue(now, 10, undefined, ['maintenance-report']),
+  async (due) => {
+    const message = due as Awaited<
+      ReturnType<typeof telegramOutbox.claimDue>
+    >[number];
+    if (!allowedIds.has(Number(message.chatId))) {
+      await telegramOutbox.markFailed(
+        message,
+        'Maintenance report recipient is not allowed',
+      );
+      return;
+    }
+    try {
+      const sent = await bot.api.sendMessage(
+        message.chatId.toString(),
+        message.body,
+      );
+      await telegramOutbox.markDelivered(message, String(sent.message_id));
+    } catch (error) {
+      const retryAt =
+        message.attemptCount >= 6
+          ? undefined
+          : new Date(
+              Date.now() +
+                Math.min(60 * 60_000, 30_000 * 2 ** (message.attemptCount - 1)),
+            );
+      await telegramOutbox.markFailed(message, errorMessage(error), retryAt);
+      logger.warn(
+        { err: error, outboxMessageId: message.id, retryAt },
+        'Maintenance report Telegram delivery failed',
+      );
+    }
+  },
+  30_000,
   logger,
 );
 const runtimeMonitor = new MaintenanceRuntimeMonitor(
@@ -162,6 +205,7 @@ void bot.start({
   },
 });
 scheduler.start();
+reportDeliveryScheduler.start();
 if (env.MAINTENANCE_RESOURCE_MONITOR_ENABLED) runtimeMonitor.start();
 
 const shutdown = async (signal: string): Promise<void> => {
@@ -172,6 +216,7 @@ const shutdown = async (signal: string): Promise<void> => {
   await releasePoll;
   await runtimeMonitor.stop();
   await scheduler.stop();
+  await reportDeliveryScheduler.stop();
   if (bot.isRunning()) await bot.stop();
   await api.close();
   await database.$disconnect();

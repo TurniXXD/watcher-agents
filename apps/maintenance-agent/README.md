@@ -4,6 +4,8 @@ Private Telegram and HTTP operational agent for deterministic source health, run
 
 It reads application health and persisted telemetry, evaluates stale/error conditions, and reports actionable recommendations. Host inspection uses read-only `/proc` and `/sys`; it does not require the Docker socket or privileged mode. Alerts use cooldowns and include a recovery message.
 
+Scheduled evaluations use a PostgreSQL advisory lease, so overlapping containers cannot run the same due interval concurrently. Daily and weekly Telegram reports are queued in the persistent outbox with a per-run, per-chat idempotency key and retried after transient delivery failures.
+
 ## Commands
 
 Use `/status`, `/summary`, `/recommendations`, `/run`, `/debug`, `/updates`, `/about`, and `/help`.

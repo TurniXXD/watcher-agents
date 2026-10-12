@@ -1,12 +1,10 @@
 import { z } from 'zod';
 
-const notionListSchema = z
-  .object({
-    results: z.array(z.record(z.string(), z.unknown())),
-    has_more: z.boolean(),
-    next_cursor: z.string().nullable(),
-  })
-  .strict();
+const notionListSchema = z.object({
+  results: z.array(z.record(z.string(), z.unknown())),
+  has_more: z.boolean(),
+  next_cursor: z.string().nullable(),
+});
 
 const notionObjectSchema = z.record(z.string(), z.unknown());
 

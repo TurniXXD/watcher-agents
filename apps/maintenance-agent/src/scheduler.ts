@@ -1,9 +1,12 @@
 import type { WatcherLogger } from '@watcher/core';
-import type { MaintenanceStore } from '@watcher/database';
+import type { MaintenanceStore, ResourceLeaseStore } from '@watcher/database';
 import type { MaintenanceEngine, EvaluationType } from './evaluation/engine.js';
 import type { Finding } from './evaluation/types.js';
 
 type ScheduledType = Exclude<EvaluationType, 'MANUAL'>;
+type ResourceLeases = Pick<ResourceLeaseStore, 'withExclusiveLease'>;
+
+export const maintenanceSchedulerLease = 'MAINTENANCE_SCHEDULER';
 
 export class MaintenanceScheduler {
   #timer: NodeJS.Timeout | undefined;
@@ -13,6 +16,7 @@ export class MaintenanceScheduler {
   public constructor(
     private readonly engine: MaintenanceEngine,
     private readonly store: MaintenanceStore,
+    private readonly resourceLeases: ResourceLeases,
     private readonly settings: {
       enabled: boolean;
       tickMs: number;
@@ -25,6 +29,7 @@ export class MaintenanceScheduler {
     private readonly onReport: (
       type: ScheduledType,
       findings: Finding[],
+      runId: string,
     ) => Promise<void>,
     private readonly logger: WatcherLogger,
   ) {}
@@ -62,38 +67,44 @@ export class MaintenanceScheduler {
     );
   }
 
-  private tick(): Promise<void> {
+  public tick(now = new Date()): Promise<void> {
     if (this.#running) {
       this.logger.info(
         'Maintenance scheduler tick skipped because the previous tick is active',
       );
       return this.#running;
     }
-    this.#running = this.executeTick().finally(() => {
-      this.#running = undefined;
-    });
+    this.#running = this.resourceLeases
+      .withExclusiveLease(
+        maintenanceSchedulerLease,
+        () => this.executeTick(now),
+        20 * 60_000,
+      )
+      .catch((error: unknown) => {
+        this.logger.error({ err: error }, 'Maintenance scheduler tick failed');
+      })
+      .finally(() => {
+        this.#running = undefined;
+      });
     return this.#running;
   }
 
-  private async executeTick(): Promise<void> {
-    try {
-      const now = new Date();
-      const candidates: Array<[ScheduledType, number, number]> = [];
-      if (this.settings.weeklyEnabled) {
-        candidates.push(['WEEKLY', this.settings.weeklyMinutes, 24 * 30]);
+  private async executeTick(now: Date): Promise<void> {
+    const candidates: Array<[ScheduledType, number, number]> = [];
+    if (this.settings.weeklyEnabled) {
+      candidates.push(['WEEKLY', this.settings.weeklyMinutes, 24 * 30]);
+    }
+    candidates.push(
+      ['DAILY', this.settings.dailyMinutes, 24 * 7],
+      ['HEALTH', this.settings.healthMinutes, 24],
+    );
+    for (const [type, interval, lookbackHours] of candidates) {
+      if (!(await this.due(type, interval, now))) continue;
+      const result = await this.engine.run(type, lookbackHours, now);
+      if (type !== 'HEALTH') {
+        await this.onReport(type, result.findings, result.runId);
       }
-      candidates.push(
-        ['DAILY', this.settings.dailyMinutes, 24 * 7],
-        ['HEALTH', this.settings.healthMinutes, 24],
-      );
-      for (const [type, interval, lookbackHours] of candidates) {
-        if (!(await this.due(type, interval, now))) continue;
-        const result = await this.engine.run(type, lookbackHours, now);
-        if (type !== 'HEALTH') await this.onReport(type, result.findings);
-        return;
-      }
-    } catch (error) {
-      this.logger.error({ err: error }, 'Maintenance scheduler tick failed');
+      return;
     }
   }
 }
