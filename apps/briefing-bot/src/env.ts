@@ -47,6 +47,25 @@ const schema = z
       .min(10_000)
       .max(600_000)
       .default(300_000),
+    NOTION_API_KEY: optionalString,
+    NOTION_JOURNAL_DATA_SOURCE_ID: optionalString,
+    NOTION_API_VERSION: z.string().min(1).default('2026-03-11'),
+    JOURNAL_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+    JOURNAL_REMINDER_TIME: z
+      .string()
+      .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u)
+      .default('21:00'),
+    JOURNAL_TIMEZONE: z.string().min(1).default('Europe/Prague'),
+    JOURNAL_TRANSCRIPTION_URL: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.url().optional(),
+    ),
+    JOURNAL_TRANSCRIPTION_MODEL: z.string().min(1).default('whisper-1'),
+    JOURNAL_TRANSCRIPTION_API_KEY: optionalString,
+    TIMEZONE: optionalString,
     DEFAULT_TIMEZONE: z.string().default('Europe/Prague'),
     LOG_LEVEL: z.string().default('info'),
     GOOGLE_CALENDAR_CLIENT_ID: optionalString,
@@ -124,6 +143,18 @@ const schema = z
       context.addIssue({
         code: 'custom',
         message: 'Google Calendar OAuth variables must be configured together',
+      });
+    }
+    const notionValues = [
+      value.NOTION_API_KEY,
+      value.NOTION_JOURNAL_DATA_SOURCE_ID,
+    ];
+    const notionConfigured = notionValues.filter(Boolean).length;
+    if (notionConfigured !== 0 && notionConfigured !== notionValues.length) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'NOTION_API_KEY and NOTION_JOURNAL_DATA_SOURCE_ID must be configured together',
       });
     }
   });

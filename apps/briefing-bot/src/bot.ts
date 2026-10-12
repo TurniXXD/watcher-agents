@@ -40,6 +40,7 @@ import {
   type AgentTriggerRunner,
 } from './agent-triggers.js';
 import { renderGoalsMessage } from './goals.js';
+import type { JournalController } from './journal-controller.js';
 
 type VoicePreview = (context: Context, voice: BriefingVoiceId) => Promise<void>;
 export type BriefingCommandRunner = (
@@ -158,6 +159,7 @@ export const createBriefingBot = (
   scheduleReader?: AgentScheduleReader,
   agentTriggers?: AgentTriggerRunner,
   goals?: Pick<BriefingGoalStore, 'add' | 'list' | 'remove'>,
+  journal?: JournalController,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
@@ -243,6 +245,22 @@ export const createBriefingBot = (
     await prompt(context, configuration);
   });
   bot.command('help', async (context) => context.reply(briefingHelp));
+  bot.command('journal', async (context) => {
+    if (journal) await journal.commandStart(context);
+    else await context.reply('Večerní reflexe není na tomto serveru zapnutá.');
+  });
+  bot.command('journal_status', async (context) => {
+    if (journal) await journal.commandStatus(context);
+    else await context.reply('Večerní reflexe není na tomto serveru zapnutá.');
+  });
+  bot.command('journal_reminder_test', async (context) => {
+    if (journal) await journal.commandReminderTest(context);
+    else await context.reply('Večerní reflexe není na tomto serveru zapnutá.');
+  });
+  bot.command('journal_cancel', async (context) => {
+    if (journal) await journal.commandCancel(context);
+    else await context.reply('Večerní reflexe není na tomto serveru zapnutá.');
+  });
   bot.command('about', async (context) => {
     await store.ensure(BigInt(context.chat.id));
     await context.reply(briefingAbout, {
@@ -799,6 +817,21 @@ export const createBriefingBot = (
   bot.callbackQuery('briefing:test', async (context) => {
     await context.answerCallbackQuery('Generating test briefing');
     await executeBriefing(context, 'TEST');
+  });
+
+  bot.callbackQuery(/^journal:([0-9a-f-]{36}):(.+)$/u, async (context) => {
+    if (!journal) {
+      await context.answerCallbackQuery('Večerní reflexe není zapnutá.');
+      return;
+    }
+    await journal.handleCallback(context, context.match[1]!, context.match[2]!);
+  });
+
+  bot.on('message:voice', async (context) => {
+    await journal?.handleVoice(context);
+  });
+  bot.on('message:text', async (context) => {
+    await journal?.handleText(context);
   });
 
   bot.catch(async (error) => {

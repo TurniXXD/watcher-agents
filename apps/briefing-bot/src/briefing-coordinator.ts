@@ -21,11 +21,13 @@ import {
   dateLabel,
   dateParts,
   loadBriefingCalendar,
+  loadBriefingJournal,
   loadMondayOccasionReminders,
   loadBriefingWeather,
   locationLabel,
   measured,
   type CalendarProvider,
+  type JournalProvider,
 } from './briefing-context.js';
 import {
   calendarActionInsights,
@@ -104,6 +106,7 @@ export class BriefingCoordinator {
       watcherTrigger?: Pick<AgentTriggerRunner, 'trigger'>;
       telemetry?: AgentTelemetryRecorder;
       calendar?: CalendarProvider;
+      journal?: JournalProvider;
       earningsCalendar?: WatchlistEarningsSource;
       goals?: Pick<BriefingGoalStore, 'list'>;
       logger?: WatcherLogger;
@@ -290,6 +293,7 @@ export class BriefingCoordinator {
       const [
         weatherResult,
         calendarResult,
+        journalResult,
         occasionRemindersResult,
         storiesResult,
         watcherHealth,
@@ -321,6 +325,14 @@ export class BriefingCoordinator {
             this.dependencies.logger,
             presentationTime,
             endOfDay ? 1 : 0,
+          ),
+        ),
+        measured(() =>
+          loadBriefingJournal(
+            this.dependencies.journal,
+            dayPeriod,
+            presentationTime,
+            this.dependencies.logger,
           ),
         ),
         measured(() =>
@@ -360,6 +372,7 @@ export class BriefingCoordinator {
       ]);
       const weather = weatherResult.value;
       const calendar = calendarResult.value;
+      const journal = journalResult.value;
       const occasionReminders = occasionRemindersResult.value;
       const storyResult = storiesResult.value;
       const coverage = calculateBriefingCoverage({
@@ -415,6 +428,9 @@ export class BriefingCoordinator {
           weatherDurationMs: weatherResult.durationMs,
           calendarStatus: calendar.status,
           calendarEventCount: calendar.value.length,
+          journalStatus: journal.status,
+          journalEntryFound: Boolean(journal.value),
+          journalDurationMs: journalResult.durationMs,
           occasionReminderStatus: occasionReminders.status,
           occasionReminderCount: occasionReminders.reminders.length,
           earningsStatus: earnings.status,
@@ -464,6 +480,7 @@ export class BriefingCoordinator {
               }
             : {}),
         },
+        journal,
         stories: selectedStories,
         earnings,
         actionAgenda,
@@ -659,6 +676,7 @@ export class BriefingCoordinator {
       const contextDegraded =
         weather.status === 'UNAVAILABLE' ||
         calendar.status === 'UNAVAILABLE' ||
+        journal.status === 'UNAVAILABLE' ||
         occasionReminders.status === 'UNAVAILABLE' ||
         earnings.status === 'UNAVAILABLE' ||
         goalsUnavailable ||

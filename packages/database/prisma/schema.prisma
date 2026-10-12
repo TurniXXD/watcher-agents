@@ -447,6 +447,28 @@ enum BriefingFeedbackRating {
   TOO_LONG
 }
 
+enum JournalMode {
+  TEXT
+  VOICE
+}
+
+enum JournalStatus {
+  REMINDER_PENDING
+  IN_PROGRESS
+  AWAITING_CONFIRMATION
+  COMPLETED
+  SKIPPED
+  CANCELLED
+}
+
+enum JournalSyncStatus {
+  NOT_READY
+  PENDING
+  SYNCED
+  FAILED
+  CONFLICT
+}
+
 enum AgentRunStatus {
   SUCCESS
   PARTIAL
@@ -650,9 +672,43 @@ model BriefingSettings {
   calendarIntegration    CalendarIntegrationState?
   feedback               BriefingFeedback[]
   goals                  BriefingGoal[]
+  journalSessions        JournalSession[]
 
   @@index([onboardingComplete, nextBriefingAt])
   @@map("briefing_settings")
+}
+
+model JournalSession {
+  id                   String            @id @default(uuid())
+  settingsId           String
+  telegramUserId       BigInt
+  journalDate          String            @db.VarChar(10)
+  mode                 JournalMode?
+  status               JournalStatus     @default(REMINDER_PENDING)
+  currentQuestion      Int               @default(0)
+  answers              Json              @default("{}")
+  transcript           String?
+  draft                Json?
+  reminderAt           DateTime
+  reminderSentAt       DateTime?
+  reminderLeaseUntil   DateTime?
+  confirmationRequired Boolean           @default(true)
+  syncStatus           JournalSyncStatus @default(NOT_READY)
+  syncAttempts         Int               @default(0)
+  syncNextAttemptAt    DateTime?
+  syncError            String?
+  notionPageId         String?
+  notionPageUrl        String?
+  syncedAnswers        Json?
+  completedAt          DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  settings             BriefingSettings  @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@unique([settingsId, telegramUserId, journalDate])
+  @@index([status, reminderAt])
+  @@index([syncStatus, syncNextAttemptAt])
+  @@map("journal_sessions")
 }
 
 model BriefingSubscription {
@@ -882,46 +938,46 @@ model TelegramChat {
 }
 
 model RealityUser {
-  id                    String         @id @default(uuid())
-  telegramChatId        BigInt         @unique
-  enabled               Boolean        @default(true)
-  reportSchedule        String         @default("0 8 1 * *")
-  timezone              String         @default("Europe/Prague")
-  nextReportAt          DateTime
-  lastReportAt          DateTime?
-  lastRunStatus         RunStatus?
-  runInProgress         Boolean        @default(false)
-  runStartedAt          DateTime?
-  locations             String[]       @default(["Brno", "Ostrava", "Frýdek-Místek"])
-  model                  Json           @default("{\"purchasePriceCzk\":3000000,\"floorAreaM2\":60,\"equityPercent\":30,\"termYears\":30,\"vacancyPercent\":5,\"annualMaintenancePercent\":1,\"annualInsuranceCzk\":3000,\"otherAnnualOwnerCostsCzk\":0}")
-  alertGrossYieldPercent Decimal        @default(6) @db.Decimal(8, 4)
-  alertDiscountPercent  Decimal        @default(15) @db.Decimal(8, 4)
-  alertCashflowRate     Decimal        @default(5) @db.Decimal(8, 4)
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  runs                  RealityRun[]
-  reports               RealityReport[]
-  alerts                RealityAlert[]
+  id                     String          @id @default(uuid())
+  telegramChatId         BigInt          @unique
+  enabled                Boolean         @default(true)
+  reportSchedule         String          @default("0 8 1 * *")
+  timezone               String          @default("Europe/Prague")
+  nextReportAt           DateTime
+  lastReportAt           DateTime?
+  lastRunStatus          RunStatus?
+  runInProgress          Boolean         @default(false)
+  runStartedAt           DateTime?
+  locations              String[]        @default(["Brno", "Ostrava", "Frýdek-Místek"])
+  model                  Json            @default("{\"purchasePriceCzk\":3000000,\"floorAreaM2\":60,\"equityPercent\":30,\"termYears\":30,\"vacancyPercent\":5,\"annualMaintenancePercent\":1,\"annualInsuranceCzk\":3000,\"otherAnnualOwnerCostsCzk\":0}")
+  alertGrossYieldPercent Decimal         @default(6) @db.Decimal(8, 4)
+  alertDiscountPercent   Decimal         @default(15) @db.Decimal(8, 4)
+  alertCashflowRate      Decimal         @default(5) @db.Decimal(8, 4)
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  runs                   RealityRun[]
+  reports                RealityReport[]
+  alerts                 RealityAlert[]
 
   @@index([enabled, nextReportAt])
   @@map("reality_users")
 }
 
 model RealityRun {
-  id             String      @id @default(uuid())
-  userId         String
-  trigger        RunTrigger
-  status         RunStatus   @default(RUNNING)
-  startedAt      DateTime    @default(now())
-  finishedAt     DateTime?
-  metricsFetched Int         @default(0)
-  listingsFetched Int        @default(0)
-  newListings    Int         @default(0)
-  alertsSent     Int         @default(0)
-  sourceFailures Json        @default("[]")
-  error          String?
-  user           RealityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
-  report         RealityReport?
+  id              String         @id @default(uuid())
+  userId          String
+  trigger         RunTrigger
+  status          RunStatus      @default(RUNNING)
+  startedAt       DateTime       @default(now())
+  finishedAt      DateTime?
+  metricsFetched  Int            @default(0)
+  listingsFetched Int            @default(0)
+  newListings     Int            @default(0)
+  alertsSent      Int            @default(0)
+  sourceFailures  Json           @default("[]")
+  error           String?
+  user            RealityUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report          RealityReport?
 
   @@index([userId, startedAt])
   @@map("reality_runs")
@@ -965,12 +1021,12 @@ model RealityListing {
   acquisitionCostsCzk      Decimal?              @db.Decimal(16, 2)
   localMedianPricePerM2Czk Decimal?              @db.Decimal(16, 2)
   publishedAt              DateTime?
-  firstSeenAt              DateTime               @default(now())
-  lastSeenAt               DateTime               @default(now())
+  firstSeenAt              DateTime              @default(now())
+  lastSeenAt               DateTime              @default(now())
   disappearedAt            DateTime?
   raw                      Json
-  createdAt                DateTime               @default(now())
-  updatedAt                DateTime               @updatedAt
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
   prices                   RealityListingPrice[]
   alerts                   RealityAlert[]
 
@@ -1660,7 +1716,7 @@ model DiscoverySignal {
   dollarVolume     Decimal               @db.Decimal(24, 2)
   attentionScore   Int
   reason           String
-  screeningSignals String[]               @default([])
+  screeningSignals String[]              @default([])
   status           DiscoverySignalStatus @default(INVESTIGATING)
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
@@ -2441,21 +2497,21 @@ model TransportFuelPriceCache {
 }
 
 model SalesCampaign {
-  id                String      @id @default(uuid())
-  name              String      @unique
-  offer             String
-  subjectTemplate   String
-  bodyTemplate      String
-  discoveryFeedUrl  String?
-  minimumLeadScore  Int         @default(70)
-  dailyOutreachLimit Int        @default(20)
-  quicklyCampaignId Int?
-  enabled           Boolean     @default(false)
-  pausedReason      String?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  leads             SalesLead[]
-  authorizations    SalesContactAuthorization[]
+  id                  String                      @id @default(uuid())
+  name                String                      @unique
+  offer               String
+  subjectTemplate     String
+  bodyTemplate        String
+  discoveryFeedUrl    String?
+  minimumLeadScore    Int                         @default(70)
+  dailyOutreachLimit  Int                         @default(20)
+  quicklyCampaignId   Int?
+  enabled             Boolean                     @default(false)
+  pausedReason        String?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  leads               SalesLead[]
+  authorizations      SalesContactAuthorization[]
   authorizationEvents SalesAuthorizationEvent[]
 
   @@map("sales_campaigns")
@@ -2495,65 +2551,65 @@ model SalesSearchSeenResult {
 }
 
 model SalesLead {
-  id              String             @id @default(uuid())
-  campaignId      String
-  companyName     String
-  entityType      String             @default("COMPANY")
-  websiteUrl      String?
-  domain          String?
-  location        String?
-  registrationId  String?
-  email           String?
-  phone           String?
-  phoneSourceUrl  String?
-  emailSyntaxValid Boolean          @default(false)
-  contactSourceUrl String?
-  source          String
-  sourceExternalId String
-  sourceUrl       String?
-  sourceData      Json?
-  countryCode     String?
-  countryConfidence Float?
-  countryDetectionSource String?
-  primaryLanguage String?
-  detectedLanguages String[]         @default([])
-  languageConfidence Float?
-  languageDetectionSource String?
-  outreachLanguage String?
-  outreachLanguageReason String?
-  outreachLanguageConfidence Float?
-  stage           SalesLeadStage     @default(DISCOVERED)
-  baseScore       Int?
-  llmAdjustment   Int?
-  finalScore      Int?
-  audit           Json?
-  analysis        Json?
-  draftSubject    String?
-  draftBody       String?
-  draftPromptVersion String?
-  draftModel      String?
-  draftPersonalizationFact String?
-  draftGenerationConfidence Float?
+  id                                   String               @id @default(uuid())
+  campaignId                           String
+  companyName                          String
+  entityType                           String               @default("COMPANY")
+  websiteUrl                           String?
+  domain                               String?
+  location                             String?
+  registrationId                       String?
+  email                                String?
+  phone                                String?
+  phoneSourceUrl                       String?
+  emailSyntaxValid                     Boolean              @default(false)
+  contactSourceUrl                     String?
+  source                               String
+  sourceExternalId                     String
+  sourceUrl                            String?
+  sourceData                           Json?
+  countryCode                          String?
+  countryConfidence                    Float?
+  countryDetectionSource               String?
+  primaryLanguage                      String?
+  detectedLanguages                    String[]             @default([])
+  languageConfidence                   Float?
+  languageDetectionSource              String?
+  outreachLanguage                     String?
+  outreachLanguageReason               String?
+  outreachLanguageConfidence           Float?
+  stage                                SalesLeadStage       @default(DISCOVERED)
+  baseScore                            Int?
+  llmAdjustment                        Int?
+  finalScore                           Int?
+  audit                                Json?
+  analysis                             Json?
+  draftSubject                         String?
+  draftBody                            String?
+  draftPromptVersion                   String?
+  draftModel                           String?
+  draftPersonalizationFact             String?
+  draftGenerationConfidence            Float?
   draftInsufficientPersonalizationData Boolean?
-  draftCreatedAt  DateTime?
-  approvedAt      DateTime?
-  approvedBy      String?
-  approvedVia     SalesDecisionSource?
-  rejectedAt      DateTime?
-  quicklyLeadId   Int?
-  quicklyEnrolledAt DateTime?
-  twentyCompanyId String?
-  twentyPersonId  String?
-  twentyOpportunityId String?
-  twentyDraftNoteId String?
-  attemptCount    Int                @default(0)
-  nextAttemptAt   DateTime           @default(now())
-  lastError       String?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  campaign        SalesCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  decisions       SalesLeadDecision[]
-  webhookEvents   SalesWebhookEvent[]
+  draftCreatedAt                       DateTime?
+  approvedAt                           DateTime?
+  approvedBy                           String?
+  approvedVia                          SalesDecisionSource?
+  rejectedAt                           DateTime?
+  quicklyLeadId                        Int?
+  quicklyEnrolledAt                    DateTime?
+  twentyCompanyId                      String?
+  twentyPersonId                       String?
+  twentyOpportunityId                  String?
+  twentyDraftNoteId                    String?
+  attemptCount                         Int                  @default(0)
+  nextAttemptAt                        DateTime             @default(now())
+  lastError                            String?
+  createdAt                            DateTime             @default(now())
+  updatedAt                            DateTime             @updatedAt
+  campaign                             SalesCampaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  decisions                            SalesLeadDecision[]
+  webhookEvents                        SalesWebhookEvent[]
 
   @@unique([campaignId, source, sourceExternalId])
   @@unique([campaignId, domain])
@@ -2563,13 +2619,13 @@ model SalesLead {
 }
 
 model SalesLeadDecision {
-  id             String              @id @default(uuid())
-  leadId         String
-  approved       Boolean
-  source         SalesDecisionSource
-  actor          String
-  createdAt      DateTime            @default(now())
-  lead           SalesLead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  id        String              @id @default(uuid())
+  leadId    String
+  approved  Boolean
+  source    SalesDecisionSource
+  actor     String
+  createdAt DateTime            @default(now())
+  lead      SalesLead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId, createdAt])
   @@map("sales_lead_decisions")
@@ -2618,16 +2674,15 @@ model SalesSuppression {
 }
 
 model SalesWebhookEvent {
-  id          String   @id
+  id          String     @id
   event       String
   payload     Json
   leadId      String?
   occurredAt  DateTime?
-  processedAt DateTime @default(now())
+  processedAt DateTime   @default(now())
   lead        SalesLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([event, occurredAt])
-
   @@map("sales_webhook_events")
 }
 

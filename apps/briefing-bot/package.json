@@ -5,6 +5,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsx watch src/index.ts",
+    "notion:check": "tsx src/notion-journal-check.ts",
+    "notion:setup": "tsx src/notion-journal-setup.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

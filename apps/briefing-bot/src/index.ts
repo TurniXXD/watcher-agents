@@ -10,6 +10,7 @@ import {
   BriefingStoryClusterStore,
   BriefingStoryStore,
   BriefingWatcherHealthStore,
+  JournalSessionStore,
   CalendarIntegrationStore,
   PostgresBriefingEventRepository,
   PostgresOllamaCoordinator,
@@ -39,6 +40,16 @@ import { StoryEngine } from './story-engine.js';
 import { SemanticStoryMatcher } from './semantic-story-matcher.js';
 import { GrammyBriefingTransport } from './telegram-transport.js';
 import { voicePreviewText } from './voice-registry.js';
+import { NotionClient } from './notion-client.js';
+import { NotionJournalRepository } from './notion-journal.js';
+import {
+  JournalController,
+  journalReminderKeyboard,
+  journalReminderText,
+} from './journal-controller.js';
+import { JournalDraftGenerator } from './journal-draft.js';
+import { JournalScheduler } from './journal-scheduler.js';
+import { OpenAiCompatibleJournalTranscriber } from './journal-transcriber.js';
 import {
   OpenMeteoGeocodingProvider,
   OpenMeteoWeatherProvider,
@@ -51,6 +62,7 @@ logger.info(
     logLevel: env.LOG_LEVEL,
     allowedUserCount: allowedUserIds.size,
     calendarConfigured: Boolean(env.GOOGLE_CALENDAR_CLIENT_ID),
+    notionJournalConfigured: Boolean(env.NOTION_API_KEY),
     ollamaModel: env.OLLAMA_MODEL,
     schedulerIntervalMs: env.BRIEFING_SCHEDULER_INTERVAL_MS,
     piperKeepTemporaryFiles: env.PIPER_KEEP_TEMP === 'true',
@@ -73,6 +85,7 @@ const briefingEvents = new PostgresBriefingEventRepository(database, logger);
 const newsConfiguration = new NewsConfigurationStore(database, logger);
 const briefingDeliveries = new BriefingDeliveryStore(database);
 const agentSchedules = new AgentScheduleStore(database);
+const journalSessions = new JournalSessionStore(database);
 const agentTriggers = new AgentTriggerService({
   watchers: agentSchedules,
   ...(env.BRNO_EVENTS_API_TOKEN
@@ -121,6 +134,17 @@ const calendarOAuth = calendarConfigured
 const calendarProvider = calendarOAuth
   ? new GoogleCalendarProvider(calendarOAuth, calendarStore)
   : undefined;
+const journalRepository =
+  env.NOTION_API_KEY && env.NOTION_JOURNAL_DATA_SOURCE_ID
+    ? new NotionJournalRepository({
+        client: new NotionClient({
+          apiKey: env.NOTION_API_KEY,
+          apiVersion: env.NOTION_API_VERSION,
+        }),
+        dataSourceId: env.NOTION_JOURNAL_DATA_SOURCE_ID,
+        timezone: env.JOURNAL_TIMEZONE,
+      })
+    : undefined;
 const calendarCommands: CalendarCommands | undefined =
   calendarOAuth && calendarProvider
     ? {
@@ -143,6 +167,39 @@ const calendarCommands: CalendarCommands | undefined =
           ),
       }
     : undefined;
+const scriptModel = new OllamaProvider({
+  url: env.OLLAMA_URL,
+  model: env.OLLAMA_MODEL,
+  keepAlive: env.OLLAMA_KEEP_ALIVE,
+  numCtx: env.OLLAMA_NUM_CTX,
+  retries: env.OLLAMA_RETRIES,
+  think: env.OLLAMA_THINK,
+  timeoutMs: env.OLLAMA_TIMEOUT_MS,
+  caller: 'briefing-bot',
+  priority: 'high',
+  coordinator: ollamaCoordinator,
+});
+const journal = env.JOURNAL_ENABLED
+  ? new JournalController({
+      store: journalSessions,
+      timezone: env.JOURNAL_TIMEZONE,
+      token: env.BRIEFING_TELEGRAM_TOKEN,
+      drafts: new JournalDraftGenerator(scriptModel),
+      ...(journalRepository ? { repository: journalRepository } : {}),
+      ...(env.JOURNAL_TRANSCRIPTION_URL
+        ? {
+            transcriber: new OpenAiCompatibleJournalTranscriber({
+              url: env.JOURNAL_TRANSCRIPTION_URL,
+              model: env.JOURNAL_TRANSCRIPTION_MODEL,
+              ...(env.JOURNAL_TRANSCRIPTION_API_KEY
+                ? { apiKey: env.JOURNAL_TRANSCRIPTION_API_KEY }
+                : {}),
+            }),
+          }
+        : {}),
+      logger,
+    })
+  : undefined;
 const runtime: { coordinator?: BriefingCoordinator } = {};
 const bot = createBriefingBot(
   env.BRIEFING_TELEGRAM_TOKEN,
@@ -175,19 +232,8 @@ const bot = createBriefingBot(
   agentSchedules,
   agentTriggers,
   goals,
+  journal,
 );
-const scriptModel = new OllamaProvider({
-  url: env.OLLAMA_URL,
-  model: env.OLLAMA_MODEL,
-  keepAlive: env.OLLAMA_KEEP_ALIVE,
-  numCtx: env.OLLAMA_NUM_CTX,
-  retries: env.OLLAMA_RETRIES,
-  think: env.OLLAMA_THINK,
-  timeoutMs: env.OLLAMA_TIMEOUT_MS,
-  caller: 'briefing-bot',
-  priority: 'high',
-  coordinator: ollamaCoordinator,
-});
 const semanticMatcher = env.BRIEFING_EMBEDDING_MODEL
   ? new SemanticStoryMatcher(
       env.BRIEFING_EMBEDDING_MODEL,
@@ -245,6 +291,7 @@ runtime.coordinator = new BriefingCoordinator({
   watcherTrigger: agentTriggers,
   telemetry: new AgentTelemetryStore(database),
   ...(calendarProvider ? { calendar: calendarProvider } : {}),
+  ...(journalRepository ? { journal: journalRepository } : {}),
   logger,
   ttsAttempts: env.BRIEFING_TTS_ATTEMPTS,
   freshness: {
@@ -287,6 +334,36 @@ const scheduler = new BriefingScheduler(
   logger,
   env.BRIEFING_SCHEDULER_MAX_DELAY_MINUTES * 60_000,
 );
+const journalScheduler = new JournalScheduler(
+  journalSessions,
+  async (session) => {
+    await bot.api.sendMessage(
+      session.telegramChatId.toString(),
+      journalReminderText,
+      {
+        reply_markup: journalReminderKeyboard(session.id),
+      },
+    );
+  },
+  async (session) => {
+    const synced = await journal?.synchronize(session);
+    if (synced) {
+      await bot.api.sendMessage(
+        session.telegramChatId.toString(),
+        synced.pageUrl
+          ? `✅ Reflexe byla dodatečně uložena do Notion: ${synced.pageUrl}`
+          : '✅ Reflexe byla dodatečně uložena do Notion.',
+      );
+    }
+  },
+  {
+    enabled: env.JOURNAL_ENABLED,
+    reminderTime: env.JOURNAL_REMINDER_TIME,
+    timezone: env.JOURNAL_TIMEZONE,
+    intervalMs: env.BRIEFING_SCHEDULER_INTERVAL_MS,
+    logger,
+  },
+);
 const oauthServer = calendarOAuth
   ? new OAuthCallbackServer(
       calendarOAuth,
@@ -314,6 +391,7 @@ const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'Shutting down');
   readiness.markApplicationStopping();
   await scheduler.stop();
+  await journalScheduler.stop();
   await oauthServer?.stop();
   await bot.stop();
   await readiness.stop();
@@ -327,6 +405,7 @@ await oauthServer?.start(
   env.CALENDAR_OAUTH_LISTEN_HOST,
 );
 scheduler.start();
+journalScheduler.start();
 await readiness.start();
 await bot.start({
   onStart: () => {

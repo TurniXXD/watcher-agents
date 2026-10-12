@@ -73,7 +73,9 @@ This file contains project-specific instructions for coding agents working on Wa
 
 - Add every used environment variable to `.env.example` with a safe placeholder or development default. Never add real secrets.
 - Persist all Telegram-editable watcher configuration in PostgreSQL.
-- Keep README commands, environment variables, source support, limitations, migrations, scheduling behavior, and deployment steps aligned with the actual implementation.
+- Each runnable app or bot under `apps/` must own a `README.md` in its main folder. Put app-specific commands, configuration, source support, limitations, scheduling behavior, and setup instructions there rather than expanding the root README.
+- Keep the root `README.md` concise: project overview, shared workspace setup, common quality gates, shared architecture/operations, and links to every app README. When adding a runnable app, add its README and root index link in the same change.
+- Keep app READMEs, shared deployment documentation, migrations, and the root app index aligned with the actual implementation.
 - Do not hard-code a personal watchlist or publication query as mandatory seed data.
 
 ## Production Deployment

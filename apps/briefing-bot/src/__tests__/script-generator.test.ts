@@ -190,6 +190,7 @@ describe('BriefingScriptGenerator', () => {
             greeting: 'Good morning.',
             weather: 'It is mild in Brno.',
             calendar: 'Your calendar is clear today.',
+            journalReflection: null,
             topStories: [
               {
                 storyId: 'S1',
@@ -259,6 +260,7 @@ describe('BriefingScriptGenerator', () => {
             weather: 'It is mild in Brno.',
             calendar:
               'You have two events today. Porada s Honzou začíná v deset hodin. Product sync starts at noon.',
+            journalReflection: null,
             topStories: [],
             watchToday: [],
             outro: 'That is your briefing.',
@@ -320,6 +322,7 @@ describe('BriefingScriptGenerator', () => {
             greeting: 'Good morning.',
             weather: null,
             calendar: 'Your calendar is clear tomorrow.',
+            journalReflection: null,
             topStories: [],
             watchToday: [],
             outro: 'That is your morning briefing.',
@@ -387,6 +390,7 @@ describe('BriefingScriptGenerator', () => {
             greeting: 'Good morning.',
             weather: null,
             calendar: null,
+            journalReflection: null,
             topStories: [
               { storyId: 'S1', text: 'Merck reported results.' },
               { storyId: 'S1', text: 'Merck announced results again.' },
@@ -416,6 +420,7 @@ describe('BriefingScriptGenerator', () => {
             greeting: 'Good morning.',
             weather: null,
             calendar: null,
+            journalReflection: null,
             topStories: [
               { storyId: 'S2', text: 'Second development details.' },
               { storyId: 'S1', text: 'First development details.' },
@@ -436,6 +441,95 @@ describe('BriefingScriptGenerator', () => {
     );
     expect(result.displayScript.match(/First development/g)).toHaveLength(1);
     expect(result.displayScript.match(/Second development/g)).toHaveLength(1);
+  });
+
+  it('adds a Czech journal reflection and the exact priority for today', async () => {
+    let prompt = '';
+    const model = {
+      async generateStructuredWithMetrics<T>(
+        value: string,
+        _format: StructuredJsonSchema,
+        schema: ZodType<T>,
+      ): Promise<StructuredGeneration<T>> {
+        prompt = value;
+        return {
+          result: schema.parse({
+            greeting: 'Good morning.',
+            weather: null,
+            calendar: null,
+            journalReflection:
+              'Včera ses soustředil na návrh a podařilo se ti ho odeslat. Pro dnešek se vyplatí navázat soustředěnou prací.',
+            topStories: [],
+            watchToday: [],
+            outro: 'Goodbye.',
+          }),
+          metrics: { llmCallCount: 1, estimatedCostUsd: 0 },
+        };
+      },
+    };
+    const withJournal: ScriptGenerationInput = {
+      ...input([]),
+      journal: {
+        status: 'AVAILABLE',
+        value: {
+          pageId: 'private-page',
+          date: '2026-09-05',
+          title: 'Deník',
+          tags: [],
+          sections: {
+            experienced: 'Dokončil jsem návrh a odeslal ho klientovi.',
+            joy: 'Měl jsem radost z klidné procházky.',
+            challenges: '',
+            learned: 'Soustředěný blok práce mi pomohl.',
+            changes: '',
+            priority: 'Dokončit nabídku pro klienta.',
+          },
+        },
+      },
+    };
+
+    const result = await new BriefingScriptGenerator(model).generate(
+      withJournal,
+    );
+
+    expect(result.displayScript).toContain('Včerejší reflexe.');
+    expect(result.displayScript).toContain(
+      'Dnešní priorita, kterou sis včera určil, je: Dokončit nabídku pro klienta.',
+    );
+    expect(result.ttsSegments.some(({ language }) => language === 'cs')).toBe(
+      true,
+    );
+    expect(prompt).toContain('untrusted quoted data');
+    expect(prompt).toContain('Dokončil jsem návrh');
+    expect(prompt).not.toContain('private-page');
+  });
+
+  it('omits invented journal prose when no journal entry exists', async () => {
+    const model = {
+      async generateStructuredWithMetrics<T>(
+        _value: string,
+        _format: StructuredJsonSchema,
+        schema: ZodType<T>,
+      ): Promise<StructuredGeneration<T>> {
+        return {
+          result: schema.parse({
+            greeting: 'Good morning.',
+            weather: null,
+            calendar: null,
+            journalReflection: 'Včera jsi vyhrál závod.',
+            topStories: [],
+            watchToday: [],
+            outro: 'Goodbye.',
+          }),
+          metrics: { llmCallCount: 1, estimatedCostUsd: 0 },
+        };
+      },
+    };
+
+    const result = await new BriefingScriptGenerator(model).generate(input([]));
+
+    expect(result.displayScript).not.toContain('Včerejší reflexe');
+    expect(result.displayScript).not.toContain('vyhrál závod');
   });
 });
 

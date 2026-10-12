@@ -90,6 +90,10 @@ Refresh tokens never appear in Telegram, logs, or ordinary environment output an
 
 Calendar failure produces a short unavailable notice and does not block the rest of a briefing.
 
+### Notion journal context
+
+The optional Notion path is a degradable morning-only input beside weather and Calendar, not a producer and not a second delivery pipeline. A narrow REST client centralizes API versioning, pagination, and bounded rate-limit/transient retries. `NotionJournalRepository` calculates the previous local calendar date in `Europe/Prague`, queries the configured data source by its explicit `Date` property, rejects ambiguous duplicate dates, recursively reads all block children, and returns six typed Czech reflection sections. The coordinator fetches it in parallel with the other context and passes only that in-memory value to the existing structured script generator. Missing entries are omitted; Notion failures mark the run partial but do not prevent script, Piper, or Telegram delivery. Journal text is neither logged nor persisted.
+
 ## 16. Watcher subscription design
 
 Subscriptions are Briefing Bot preferences keyed by Telegram chat and `WatcherBotId`. They do not enable, disable, or schedule producer bots. The UI lists only the registry entries. The retrieval query filters briefing events using enabled subscriptions and the run window. Disabling a subscription preserves old story state so re-enabling does not replay the entire history.

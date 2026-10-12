@@ -15,6 +15,7 @@ import type {
   WeatherForecastTarget,
   WeatherProvider,
 } from './weather.js';
+import type { JournalEntry } from './notion-journal.js';
 
 export type CalendarProvider = {
   listEvents: (
@@ -32,6 +33,38 @@ export type CalendarProvider = {
 export type AvailableContext<T> = {
   status: ContextAvailability;
   value: T;
+};
+
+export type JournalProvider = {
+  loadYesterday: (
+    now?: Date,
+    signal?: AbortSignal,
+  ) => Promise<JournalEntry | undefined>;
+};
+
+export type JournalContext = AvailableContext<JournalEntry | undefined>;
+
+export const loadBriefingJournal = async (
+  journal: JournalProvider | undefined,
+  dayPeriod: BriefingDayPeriod,
+  presentationTime: Date,
+  logger?: WatcherLogger,
+): Promise<JournalContext> => {
+  if (!journal || dayPeriod !== 'morning') {
+    return { status: 'DISABLED', value: undefined };
+  }
+  try {
+    return {
+      status: 'AVAILABLE',
+      value: await journal.loadYesterday(
+        presentationTime,
+        AbortSignal.timeout(15_000),
+      ),
+    };
+  } catch (error) {
+    logger?.warn({ err: error }, 'NOTION JOURNAL = DEGRADED');
+    return { status: 'UNAVAILABLE', value: undefined };
+  }
 };
 
 export const dateParts = (date: Date, timezone: string) => {
