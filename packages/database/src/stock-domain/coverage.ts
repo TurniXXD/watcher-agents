@@ -8,6 +8,7 @@ const signalCoverage: ReadonlyArray<{
   group: SignalGroup;
   weight: number;
   sources: string[];
+  optionalWhenUnconfigured?: boolean;
 }> = [
   {
     group: 'FUNDAMENTALS',
@@ -38,6 +39,7 @@ const signalCoverage: ReadonlyArray<{
     group: 'OPTIONS_POSITIONING',
     weight: 1,
     sources: ['ALPHA_VANTAGE_OPTIONS'],
+    optionalWhenUnconfigured: true,
   },
   { group: 'PRICE_ACTION', weight: 0.9, sources: ['PRICE'] },
   { group: 'VALUATION', weight: 1, sources: ['SEC', 'ZACKS'] },
@@ -102,39 +104,44 @@ export const assessSignalCoverage = (
   dataQuality: 'LOW' | 'MEDIUM' | 'HIGH';
   materialDataGaps: SignalGroup[];
 } => {
-  const dataAvailability = signalCoverage.map(({ group, weight, sources }) => {
-    const configured = sources.filter(
-      (source) =>
-        enabledSources.has(source) && (availableSourceIds?.has(source) ?? true),
-    );
-    if (!configured.length) {
+  const dataAvailability = signalCoverage.map(
+    ({ group, weight, sources, optionalWhenUnconfigured }) => {
+      const configured = sources.filter(
+        (source) =>
+          enabledSources.has(source) &&
+          (availableSourceIds?.has(source) ?? true),
+      );
+      if (!configured.length) {
+        return {
+          group,
+          weight,
+          availability: optionalWhenUnconfigured
+            ? ('NOT_APPLICABLE' as const)
+            : ('DATA_UNAVAILABLE' as const),
+          reason: optionalWhenUnconfigured
+            ? 'This optional signal has no configured provider and is not required for core thesis coverage.'
+            : 'Every provider capable of this signal group is disabled or unavailable.',
+        };
+      }
+      const usable = configured.some((source) => {
+        const status = healthBySource.get(source)?.status;
+        return status !== 'UNAVAILABLE' && status !== 'RATE_LIMITED';
+      });
       return {
         group,
         weight,
-        availability: 'DATA_UNAVAILABLE' as const,
-        reason:
-          'Every provider capable of this signal group is disabled or unavailable.',
+        availability: usable
+          ? ('AVAILABLE' as const)
+          : ('DATA_UNAVAILABLE' as const),
+        reason: usable
+          ? `Covered by configured source(s): ${configured.join(', ')}.`
+          : `Configured source(s) are unavailable: ${configured.join(', ')}.`,
       };
-    }
-    const usable = configured.some((source) => {
-      const status = healthBySource.get(source)?.status;
-      return status !== 'UNAVAILABLE' && status !== 'RATE_LIMITED';
-    });
-    return {
-      group,
-      weight,
-      availability: usable
-        ? ('AVAILABLE' as const)
-        : ('DATA_UNAVAILABLE' as const),
-      reason: usable
-        ? `Covered by configured source(s): ${configured.join(', ')}.`
-        : `Configured source(s) are unavailable: ${configured.join(', ')}.`,
-    };
-  });
-  const totalWeight = dataAvailability.reduce(
-    (total, entry) => total + entry.weight,
-    0,
+    },
   );
+  const totalWeight = dataAvailability
+    .filter(({ availability }) => availability !== 'NOT_APPLICABLE')
+    .reduce((total, entry) => total + entry.weight, 0);
   const availableWeight = dataAvailability
     .filter(({ availability }) => availability === 'AVAILABLE')
     .reduce((total, entry) => total + entry.weight, 0);

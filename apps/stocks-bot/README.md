@@ -14,6 +14,8 @@ Important commands include `/stocks`, `/add_stock`, `/remove_stock`, `/run`, `/s
 
 Start from [the stocks preset](../../deploy/presets/stocks-bot.env.example). Required values include the database, Telegram token/allowlist, Ollama connection, and an identifiable `SEC_USER_AGENT`. Alpha Vantage, Quiver, Alpaca Paper, and Trading 212 credentials are optional and activate only their owning integration.
 
+Core thesis coverage does not require paid options data. When `ALPHA_VANTAGE_OPTIONS_ENABLED=false`, `OPTIONS_POSITIONING` is marked `NOT_APPLICABLE`, excluded from the core coverage denominator, and is not reported as a material data gap. When the options integration is explicitly enabled but unhealthy, it is reported as unavailable. A manual `/thesis SYMBOL` also forces one new full analysis from the best unreviewed evidence when the stored verdict is `INSUFFICIENT_DATA`, so a stale verdict can recover without enabling Alpha Vantage.
+
 ## Detailed design
 
 - [Hybrid stock events](../../docs/stock-hybrid-events.md)

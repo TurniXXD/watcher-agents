@@ -35,7 +35,7 @@ export const runPeriodicSalesSearch = async (
   }
 
   try {
-    const companies = await service.searchBusinesses({
+    const { companies, category } = await service.searchBusinessesDetailed({
       query: subscription.query,
       locality: subscription.locality,
       limit: subscription.resultLimit,
@@ -52,6 +52,7 @@ export const runPeriodicSalesSearch = async (
       newCompanies,
       subscription.query,
       subscription.locality,
+      category,
     )) {
       await sendMessage(subscription.telegramChatId.toString(), message);
     }

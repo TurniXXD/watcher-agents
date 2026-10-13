@@ -537,6 +537,79 @@ integration('WatcherStore with PostgreSQL', () => {
     });
   });
 
+  it('forces a full manual refresh for an insufficient thesis using unreviewed evidence', async () => {
+    const chat = await store.ensureChat('STOCKS', 782n);
+    await database.companyThesisState.create({
+      data: {
+        ticker: 'MU',
+        thesis: 'The initial evidence was insufficient.',
+        verdict: 'INSUFFICIENT_DATA',
+        confidence: 0.6,
+        attentionScore: 70,
+        bullScore: 0,
+        bearScore: 0,
+        netSignal: 0,
+        signalGroups: [],
+        catalysts: [],
+        insiderConviction: null,
+        pricedIn: 'UNKNOWN',
+        primaryDrivers: [],
+        risks: [],
+        dataCoverage: 93,
+        dataQuality: 'HIGH',
+        materialDataGaps: ['OPTIONS_POSITIONING'],
+        lastEventId: 'legacy-event',
+      },
+    });
+    const firstRun = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
+    if (!firstRun) throw new Error('Expected first run');
+    expect(
+      await store.prepareItemsForRun(
+        'STOCKS',
+        firstRun.id,
+        [
+          {
+            ...watchItem('refresh-insufficient-thesis'),
+            title: 'Micron routine ownership filing',
+            category: 'INSIDER_TRANSACTION',
+            normalizedFacts: { form: '4' },
+          },
+        ],
+        5,
+      ),
+    ).toHaveLength(0);
+    await store.finishRun(chat.watcherConfig!.id, firstRun.id, {
+      status: 'SUCCESS',
+    });
+
+    const refreshRun = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');
+    if (!refreshRun) throw new Error('Expected refresh run');
+    const [prepared] = await store.prepareItemsForRun(
+      'STOCKS',
+      refreshRun.id,
+      [],
+      5,
+      { initializeStockThesisFor: new Set(['MU']) },
+    );
+
+    expect(prepared).toMatchObject({
+      item: {
+        source: 'SEC',
+        externalId: 'refresh-insufficient-thesis',
+        metadata: {
+          symbol: 'MU',
+          stockAnalysisContext: {
+            currentThesis: { verdict: 'INSUFFICIENT_DATA' },
+            event: {
+              ticker: 'MU',
+              action: 'FULL_ANALYSIS',
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('persists a versioned thesis and deterministic decision result', async () => {
     const chat = await store.ensureChat('STOCKS', 799n);
     const run = await store.claimRun(chat.watcherConfig!.id, 'MANUAL');

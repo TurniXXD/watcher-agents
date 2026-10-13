@@ -16,8 +16,11 @@ import type { GooglePlacesDiscoveryClient } from './discovery.js';
 import type { BusinessSearchResult } from './discovery-types.js';
 import { sendEligibility } from './eligibility.js';
 import {
+  type BusinessCategoryGenerator,
+  type BusinessCategoryTranslation,
   type GeoapifyDiscoveryClient,
   resolveBusinessCategory,
+  translateBusinessCategory,
 } from './geoapify.js';
 import {
   auditWebsite,
@@ -113,6 +116,7 @@ export class SalesService {
     private readonly places?: GooglePlacesDiscoveryClient,
     private readonly coldEmailGenerator?: ColdEmailGenerator,
     private readonly coldEmailModel?: string,
+    private readonly businessCategoryGenerator?: BusinessCategoryGenerator,
   ) {}
 
   public get geoapifyConfigured(): boolean {
@@ -128,7 +132,36 @@ export class SalesService {
     locality: string;
     limit: number;
   }): Promise<BusinessSearchResult[]> {
-    const category = resolveBusinessCategory(input.query);
+    return (await this.searchBusinessesDetailed(input)).companies;
+  }
+
+  public async searchBusinessesDetailed(input: {
+    query: string;
+    locality: string;
+    limit: number;
+  }): Promise<{
+    companies: BusinessSearchResult[];
+    category: BusinessCategoryTranslation;
+  }> {
+    let category: BusinessCategoryTranslation;
+    try {
+      category = await translateBusinessCategory(
+        input.query,
+        this.businessCategoryGenerator,
+      );
+    } catch (error) {
+      this.logger.warn(
+        {
+          query: input.query,
+          ...safeErrorDetails(error),
+        },
+        'Sales business category translation failed',
+      );
+      category = {
+        ...resolveBusinessCategory(input.query),
+        source: 'unresolved',
+      };
+    }
     const geoapify = this.geoapify;
     const geoapifyEligible =
       geoapify !== undefined && category.geoapifyCategory !== undefined;
@@ -151,6 +184,7 @@ export class SalesService {
       try {
         return await searchAresBusinesses({
           ...input,
+          query: category.naceCode ? `nace:${category.naceCode}` : input.query,
           ...(category.naceCode ? { naceCode: category.naceCode } : {}),
         });
       } finally {
@@ -165,6 +199,7 @@ export class SalesService {
               input.query,
               input.locality,
               input.limit,
+              category,
             );
           } finally {
             geoapifyDurationMs = Date.now() - startedAt;
@@ -338,7 +373,7 @@ export class SalesService {
       },
       'Sales business search completed',
     );
-    return companies;
+    return { companies, category };
   }
 
   public async discoverBusinesses(input: {

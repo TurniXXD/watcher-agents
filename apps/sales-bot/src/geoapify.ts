@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import type { OllamaProvider } from '@watcher/llm';
 import { z } from 'zod';
 import type { BusinessSearchResult } from './discovery-types.js';
 
@@ -128,7 +129,146 @@ const categoryRules: CategoryRule[] = [
     aliases: ['supermarket', 'potraviny'],
     geoapifyCategory: 'commercial.supermarket',
   },
+  {
+    aliases: [
+      'farma',
+      'farmy',
+      'farmar',
+      'farmari',
+      'zemedelska firma',
+      'zemedelske firmy',
+      'zemedelsky podnik',
+      'zemedelske podniky',
+      'statek',
+      'statky',
+      'agriculture',
+      'farm',
+      'farms',
+    ],
+    geoapifyCategory: 'commercial.food_and_drink.farm',
+    naceCode: '01',
+  },
 ];
+
+const geoapifyCategoryCatalog = [
+  'accommodation',
+  'accommodation.apartment',
+  'accommodation.chalet',
+  'accommodation.guest_house',
+  'accommodation.hostel',
+  'accommodation.hotel',
+  'accommodation.hut',
+  'accommodation.motel',
+  'activity',
+  'activity.community_center',
+  'activity.events_venue',
+  'activity.sport_club',
+  'catering',
+  'catering.bar',
+  'catering.cafe',
+  'catering.fast_food',
+  'catering.pub',
+  'catering.restaurant',
+  'commercial',
+  'commercial.agrarian',
+  'commercial.clothing',
+  'commercial.elektronics',
+  'commercial.florist',
+  'commercial.food_and_drink',
+  'commercial.food_and_drink.bakery',
+  'commercial.food_and_drink.butcher',
+  'commercial.food_and_drink.cheese_and_dairy',
+  'commercial.food_and_drink.farm',
+  'commercial.food_and_drink.fruit_and_vegetable',
+  'commercial.food_and_drink.honey',
+  'commercial.food_and_drink.organic',
+  'commercial.furniture_and_interior',
+  'commercial.garden',
+  'commercial.health_and_beauty',
+  'commercial.health_and_beauty.optician',
+  'commercial.houseware_and_hardware',
+  'commercial.marketplace',
+  'commercial.outdoor_and_sport',
+  'commercial.pet',
+  'commercial.supermarket',
+  'commercial.trade',
+  'commercial.vehicle',
+  'education',
+  'entertainment',
+  'healthcare',
+  'healthcare.clinic_or_praxis',
+  'healthcare.dentist',
+  'healthcare.hospital',
+  'healthcare.pharmacy',
+  'office',
+  'office.financial',
+  'office.financial_advisor',
+  'office.insurance',
+  'office.it',
+  'office.lawyer',
+  'office.logistics',
+  'office.notary',
+  'office.research',
+  'office.security',
+  'office.tax_advisor',
+  'office.telecommunication',
+  'office.travel_agent',
+  'production',
+  'production.beekeeper',
+  'production.brewery',
+  'production.cheese',
+  'production.distillery',
+  'production.factory',
+  'production.pottery',
+  'production.winery',
+  'rental',
+  'service',
+  'service.beauty.hairdresser',
+  'service.carpenter',
+  'service.cleaning',
+  'service.electrician',
+  'service.estate_agent',
+  'service.travel_agency',
+  'service.vehicle.repair.car',
+  'sport',
+  'tourism',
+] as const;
+
+const geoapifyCategorySet = new Set<string>(geoapifyCategoryCatalog);
+
+export type BusinessCategoryGenerator = Pick<
+  OllamaProvider,
+  'generateStructured'
+>;
+
+const translatedCategorySchema = z
+  .object({
+    geoapifyCategories: z.array(z.enum(geoapifyCategoryCatalog)).min(1).max(3),
+    naceCode: z
+      .string()
+      .trim()
+      .regex(/^\d{1,5}$/u)
+      .nullable(),
+  })
+  .strict();
+
+const translatedCategoryJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['geoapifyCategories', 'naceCode'],
+  properties: {
+    geoapifyCategories: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 3,
+      uniqueItems: true,
+      items: { enum: geoapifyCategoryCatalog },
+    },
+    naceCode: {
+      anyOf: [{ type: 'string', pattern: '^\\d{1,5}$' }, { type: 'null' }],
+    },
+  },
+} as const;
 
 const normalizeQuery = (value: string): string =>
   value
@@ -141,6 +281,10 @@ const normalizeQuery = (value: string): string =>
 export type ResolvedBusinessCategory = {
   geoapifyCategory?: string;
   naceCode?: string;
+};
+
+export type BusinessCategoryTranslation = ResolvedBusinessCategory & {
+  source: 'explicit' | 'rule' | 'ai' | 'unresolved';
 };
 
 export const resolveBusinessCategory = (
@@ -169,6 +313,47 @@ export const resolveBusinessCategory = (
         ...(rule.naceCode ? { naceCode: rule.naceCode } : {}),
       }
     : {};
+};
+
+export const translateBusinessCategory = async (
+  query: string,
+  generator?: BusinessCategoryGenerator,
+): Promise<BusinessCategoryTranslation> => {
+  const deterministic = resolveBusinessCategory(query);
+  const normalized = normalizeQuery(query);
+  if (deterministic.geoapifyCategory || deterministic.naceCode) {
+    return {
+      ...deterministic,
+      source: /^(?:nace|geo)\s*:/u.test(normalized) ? 'explicit' : 'rule',
+    };
+  }
+  if (!generator) return { source: 'unresolved' };
+
+  const output = await generator.generateStructured(
+    `Translate the user's Czech or English business type into the closest existing Geoapify Places categories and, only when highly confident, one Czech CZ-NACE code. Select Geoapify categories only from the supplied enum. Prefer specific categories; use a broad parent category only when no specific option fits. Never invent an identifier or a CZ-NACE code. A null CZ-NACE code is correct when uncertain. Examples: "farmy" -> commercial.food_and_drink.farm and CZ-NACE 01; "výrobci medu" -> production.beekeeper; "daňoví poradci" -> office.tax_advisor; "zubaři" -> healthcare.dentist.\n\nBUSINESS TYPE:\n${query}`,
+    translatedCategoryJsonSchema,
+    translatedCategorySchema,
+    undefined,
+    {
+      maxAttempts: 2,
+      numPredict: 180,
+      temperature: 0,
+      diagnosticLabel: 'sales-business-category-v1',
+    },
+  );
+  const categories = [
+    ...new Set(
+      output.geoapifyCategories.filter((category) =>
+        geoapifyCategorySet.has(category),
+      ),
+    ),
+  ];
+  if (categories.length === 0) return { source: 'unresolved' };
+  return {
+    geoapifyCategory: categories.join(','),
+    ...(output.naceCode ? { naceCode: output.naceCode } : {}),
+    source: 'ai',
+  };
 };
 
 const stringProperty = (
@@ -225,6 +410,7 @@ export class GeoapifyDiscoveryClient {
     query: string,
     locality: string,
     requestedLimit: number,
+    resolvedCategory?: ResolvedBusinessCategory,
   ): Promise<BusinessSearchResult[]> {
     const input = z
       .object({
@@ -233,7 +419,7 @@ export class GeoapifyDiscoveryClient {
         limit: z.number().int().min(1).max(20),
       })
       .parse({ query, locality, limit: requestedLimit });
-    const category = resolveBusinessCategory(input.query);
+    const category = resolvedCategory ?? resolveBusinessCategory(input.query);
     if (!category.geoapifyCategory) return [];
 
     const geocodeUrl = new URL('https://api.geoapify.com/v1/geocode/search');

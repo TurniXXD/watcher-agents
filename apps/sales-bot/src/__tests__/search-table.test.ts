@@ -50,6 +50,7 @@ describe('sales search table', () => {
       [company, { ...company, id: 'place-2', registrationId: '87654321' }],
       'architekti',
       'Brno',
+      undefined,
       500,
     );
     expect(messages).toHaveLength(2);
@@ -61,6 +62,25 @@ describe('sales search table', () => {
     expect(messages[0]).toContain('Kontakt 1');
     expect(messages[0]).toContain('Studio &lt;Test&gt; &amp; syn');
     expect(messages[0]).not.toContain('\t');
+  });
+
+  it('prints the translated Geoapify and CZ-NACE categories above results', () => {
+    const [message] = renderSalesSearchTableMessages(
+      [company],
+      'farmy',
+      'Brno',
+      {
+        geoapifyCategory: 'commercial.food_and_drink.farm',
+        naceCode: '01',
+        source: 'rule',
+      },
+    );
+
+    expect(message).toContain(
+      'Geoapify kategorie: commercial.food_and_drink.farm',
+    );
+    expect(message).toContain('CZ-NACE: 01');
+    expect(message).toContain('Překlad oboru „farmy“: slovník');
   });
 
   it('deduplicates primarily by IČO, then normalized domain', () => {

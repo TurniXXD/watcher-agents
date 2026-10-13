@@ -121,6 +121,45 @@ describe('SalesService discovery orchestration', () => {
     ]);
   });
 
+  it('turns a natural farm query into category filters instead of an ARES name search', async () => {
+    sourceMocks.searchAresBusinesses.mockResolvedValue({
+      total: 0,
+      subjects: [],
+    });
+    const geoapifySearch = vi.fn().mockResolvedValue([]);
+    const service = new SalesService(
+      {} as SalesStore,
+      logger,
+      undefined,
+      undefined,
+      { search: geoapifySearch } as unknown as GeoapifyDiscoveryClient,
+    );
+
+    const result = await service.searchBusinessesDetailed({
+      query: 'farmy',
+      locality: 'Brno',
+      limit: 10,
+    });
+
+    expect(result.category).toEqual({
+      geoapifyCategory: 'commercial.food_and_drink.farm',
+      naceCode: '01',
+      source: 'rule',
+    });
+    expect(sourceMocks.searchAresBusinesses).toHaveBeenCalledWith({
+      query: 'nace:01',
+      locality: 'Brno',
+      limit: 10,
+      naceCode: '01',
+    });
+    expect(geoapifySearch).toHaveBeenCalledWith(
+      'farmy',
+      'Brno',
+      10,
+      result.category,
+    );
+  });
+
   it('uses Google only as a fallback for missing contact results', async () => {
     sourceMocks.searchAresBusinesses.mockResolvedValue({
       total: 1,

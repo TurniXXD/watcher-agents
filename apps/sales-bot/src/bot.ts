@@ -7,6 +7,7 @@ import {
 import type { SalesService } from './service.js';
 import {
   renderSalesSearchTableMessages,
+  salesSearchCategorySummary,
   salesSearchResultKey,
 } from './search-table.js';
 import {
@@ -55,7 +56,7 @@ export const salesAbout = `💼 O Sales assistantovi
 Sales assistant je soukromý operátorský bot pro řízené zpracování B2B leadů. Pomáhá převzít firmy z nakonfigurovaného zdroje, dohledat veřejné kontaktní údaje, vyhodnotit obchodní relevanci, připravit návrh prvního oslovení a synchronizovat způsobilé záznamy do CRM a e-mailové platformy. Není to autonomní spamovací nástroj.
 
 Jak data procházejí systémem
-1. /sales_search kombinuje veřejný ARES s Geoapify. ARES vrací aktivní české subjekty, IČO, sídlo a CZ-NACE; Geoapify vrací provozovny a dostupný veřejný telefon, e-mail a web z OpenStreetMap. Google Places se zavolá jen jako volitelný fallback, pokud je nakonfigurovaný a primární zdroje nemají dost kontaktních výsledků. Hledání se uloží do PostgreSQL a opakuje podle SALES_INTERVAL_MINUTES. První výsledek a každý později nalezený nový kontakt bot pošle jako TSV tabulku; již oznámené kontakty neopakuje. Výsledky se tímto krokem neukládají do kampaně, CRM ani Quickly.
+1. /sales_search kombinuje veřejný ARES s Geoapify. Běžný český nebo anglický popis oboru nejprve přeloží na ověřené Geoapify kategorie a podle dostupnosti také na CZ-NACE: známé výrazy řeší deterministický slovník a ostatní nakonfigurovaná Ollama. Použité kategorie bot vždy vypíše nad výsledkem. ARES vrací aktivní české subjekty, IČO, sídlo a CZ-NACE; Geoapify vrací provozovny a dostupný veřejný telefon, e-mail a web z OpenStreetMap. Google Places se zavolá jen jako volitelný fallback, pokud je nakonfigurovaný a primární zdroje nemají dost kontaktních výsledků. Hledání se uloží do PostgreSQL a opakuje podle SALES_INTERVAL_MINUTES. První výsledek a každý později nalezený nový kontakt bot pošle jako TSV tabulku; již oznámené kontakty neopakuje. Výsledky se tímto krokem neukládají do kampaně, CRM ani Quickly.
 2. /sales_find provede stejné kombinované hledání pro zvolenou kampaň. Výsledky deduplikuje podle IČO, domény a identity zdroje, ale importuje jen kandidáty s webem, protože následný audit vyžaduje oficiální web. Alternativně discovery načte JSON feed kampaně nebo přijme lead přes Sales API.
 3. /sales_run navštíví veřejný firemní web, hledá kontaktní stránku, veřejný e-mail a telefon v explicitním tel: odkazu a ke kontaktu ukládá přesnou zdrojovou URL. Nečte telefon z volného textu a nepřebírá jej automaticky z katalogu.
 4. Sdílený ARES klient použitý Sales i OSINT botem zkusí přesnou shodu registrovaného názvu a doplní kandidátní IČO. Nejednoznačná nebo chybějící shoda se nepotvrdí a shoda v ARES sama nedokazuje vlastnictví webu.
@@ -69,7 +70,7 @@ Jak data procházejí systémem
 12. Twenty uchovává idempotentně dohledanou nebo vytvořenou Company a návrh jako nativní Note. Quickly řídí e-mailovou kampaň, odesílací schránku, sekvence a reakce.
 
 První nastavení discovery
-1. ARES nevyžaduje API key a zůstává aktivní vždy. Pro známé obory bot mapuje běžný text na kategorii; přesný ARES filtr lze zadat jako nace:95310. Neznámý text ARES hledá v obchodním názvu.
+1. ARES nevyžaduje API key a zůstává aktivní vždy. Pro známé obory bot mapuje běžný text slovníkem; například „farmy“ znamenají Geoapify commercial.food_and_drink.farm a CZ-NACE 01. Ostatní přirozené popisy mapuje nakonfigurovaná Ollama do omezeného katalogu platných Geoapify kategorií. Přesný ARES filtr lze stále zadat jako nace:95310. Pokud překlad nenajde CZ-NACE, ARES hledá původní text v obchodním názvu.
 2. V Geoapify vytvoř bezplatný API key a na VPS nastav GEOAPIFY_API_KEY v tajném sales-bot.env. Geoapify je primární zdroj provozoven a kontaktů. Klíč neposílej do Telegramu ani do repozitáře.
 3. Volitelně nastav GOOGLE_PLACES_API_KEY. Google se použije pouze jako fallback pro chybějící kontaktní výsledky; bez klíče bot normálně funguje přes ARES a Geoapify. Potom znovu nasaď nebo restartuj sales-bot.
 4. Existující UUID vypíše /sales_campaigns. Novou kampaň vytvoř z VPS přes Sales API:
@@ -253,7 +254,8 @@ export const createSalesBot = (
       await ctx.reply(
         `Hledám firmy v ARES a Geoapify; Google použiji jen jako nakonfigurovaný fallback. Hledání ukládám a zopakuji každých ${searchIntervalMinutes} minut…`,
       );
-      const companies = await service.searchBusinesses(input);
+      const { companies, category } =
+        await service.searchBusinessesDetailed(input);
       if (companies.length > 0) {
         await sendSearchTable(
           ctx,
@@ -261,11 +263,12 @@ export const createSalesBot = (
             companies,
             input.query,
             input.locality,
+            category,
           ),
         );
       } else {
         await ctx.reply(
-          `Pro „${input.query}“ v lokalitě ${input.locality} nyní nebyly nalezeny žádné firmy. Periodické hledání ${subscription.id} zůstává aktivní.`,
+          `${salesSearchCategorySummary(input.query, category)}\n\nPro „${input.query}“ v lokalitě ${input.locality} nyní nebyly nalezeny žádné firmy. Periodické hledání ${subscription.id} zůstává aktivní.`,
         );
       }
       await store.completeSearchSubscription(

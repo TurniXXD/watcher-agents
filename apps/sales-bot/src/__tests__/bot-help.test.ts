@@ -193,17 +193,24 @@ describe('sales bot help', () => {
   });
 
   it('prints a narrow contact table and persists the periodic search', async () => {
-    const searchBusinesses = vi.fn().mockResolvedValue([
-      {
-        id: 'place-1',
-        name: 'Autoservis Test',
-        provider: 'GEOAPIFY',
-        phone: '+420 123 456 789',
-        address: 'Brno',
-        websiteUrl: 'https://autoservis.example',
-        sourceUrl: 'https://maps.google.com/example',
+    const searchBusinessesDetailed = vi.fn().mockResolvedValue({
+      companies: [
+        {
+          id: 'place-1',
+          name: 'Autoservis Test',
+          provider: 'GEOAPIFY',
+          phone: '+420 123 456 789',
+          address: 'Brno',
+          websiteUrl: 'https://autoservis.example',
+          sourceUrl: 'https://maps.google.com/example',
+        },
+      ],
+      category: {
+        geoapifyCategory: 'service.vehicle.repair.car',
+        naceCode: '95310',
+        source: 'rule',
       },
-    ]);
+    });
     const upsertSearchSubscription = vi.fn().mockResolvedValue({
       id: 'search-1',
     });
@@ -215,7 +222,7 @@ describe('sales bot help', () => {
         upsertSearchSubscription,
         completeSearchSubscription,
       } as unknown as SalesStore,
-      { searchBusinesses } as unknown as SalesService,
+      { searchBusinessesDetailed } as unknown as SalesService,
       undefined,
       45,
     );
@@ -245,7 +252,7 @@ describe('sales bot help', () => {
 
     await bot.handleUpdate(update('/sales_search autoservis | Brno | 2', 500));
 
-    expect(searchBusinesses).toHaveBeenCalledWith({
+    expect(searchBusinessesDetailed).toHaveBeenCalledWith({
       query: 'autoservis',
       locality: 'Brno',
       limit: 2,
@@ -269,6 +276,9 @@ describe('sales bot help', () => {
     expect(messages[1]).not.toContain('\t');
     expect(messages[1]).toContain('Autoservis Test');
     expect(messages[1]).toContain('+420 123 456 789');
+    expect(messages[1]).toContain(
+      'Geoapify kategorie: service.vehicle.repair.car',
+    );
     expect(messages[2]).toContain('search-1');
     expect(messages[2]).toContain('pouze nové kontakty');
   });

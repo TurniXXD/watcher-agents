@@ -43,7 +43,13 @@ describe('periodic sales search', () => {
       failSearchSubscription: vi.fn(),
     } as unknown as SalesStore;
     const service = {
-      searchBusinesses: vi.fn().mockResolvedValue(companies),
+      searchBusinessesDetailed: vi.fn().mockResolvedValue({
+        companies,
+        category: {
+          geoapifyCategory: 'office',
+          source: 'ai',
+        },
+      }),
     } as unknown as SalesService;
     const sendMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -62,6 +68,9 @@ describe('periodic sales search', () => {
       expect.stringContaining('New Studio'),
     );
     expect(sendMessage.mock.calls[0]?.[1]).not.toContain('Old Studio');
+    expect(sendMessage.mock.calls[0]?.[1]).toContain(
+      'Geoapify kategorie: office',
+    );
     expect(completeSearchSubscription).toHaveBeenCalledWith(subscription.id, [
       expect.any(String),
       expect.any(String),
@@ -75,7 +84,9 @@ describe('periodic sales search', () => {
       failSearchSubscription,
     } as unknown as SalesStore;
     const service = {
-      searchBusinesses: vi.fn().mockRejectedValue(new Error('provider down')),
+      searchBusinessesDetailed: vi
+        .fn()
+        .mockRejectedValue(new Error('provider down')),
     } as unknown as SalesService;
 
     await expect(
@@ -99,12 +110,12 @@ describe('periodic sales search', () => {
       getSearchSubscription: vi.fn().mockResolvedValue(subscription),
       disableSearchSubscriptions,
     } as unknown as SalesStore;
-    const searchBusinesses = vi.fn();
+    const searchBusinessesDetailed = vi.fn();
 
     const result = await runPeriodicSalesSearch(
       subscription.id,
       store,
-      { searchBusinesses } as unknown as SalesService,
+      { searchBusinessesDetailed } as unknown as SalesService,
       new Set(),
       vi.fn(),
     );
@@ -114,6 +125,6 @@ describe('periodic sales search', () => {
       subscription.telegramChatId,
       subscription.id,
     );
-    expect(searchBusinesses).not.toHaveBeenCalled();
+    expect(searchBusinessesDetailed).not.toHaveBeenCalled();
   });
 });

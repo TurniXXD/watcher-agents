@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { BusinessSearchResult } from './discovery-types.js';
+import type { BusinessCategoryTranslation } from './geoapify.js';
 
 export const salesSearchTableHeader = [
   'Jméno',
@@ -31,6 +32,37 @@ const escapeHtml = (value: string): string =>
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
+
+const translationSourceLabel = (
+  source: BusinessCategoryTranslation['source'],
+): string =>
+  ({
+    explicit: 'explicitní kód',
+    rule: 'slovník',
+    ai: 'AI překladač',
+    unresolved: 'bez překladu',
+  })[source];
+
+export const salesSearchCategorySummary = (
+  query: string,
+  category: BusinessCategoryTranslation,
+): string => {
+  const geoapifyCategories = category.geoapifyCategory
+    ?.split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return [
+    `Překlad oboru „${query}“: ${translationSourceLabel(category.source)}`,
+    `Geoapify kategorie: ${geoapifyCategories?.join(', ') || 'nenalezena'}`,
+    `CZ-NACE: ${category.naceCode ?? 'nepoužit'}`,
+  ].join('\n');
+};
+
+const salesSearchCategorySummaryHtml = (
+  query: string,
+  category: BusinessCategoryTranslation,
+): string =>
+  `<b>Vyhledávané kategorie</b>\n${escapeHtml(salesSearchCategorySummary(query, category))}`;
 
 const websiteIdentity = (
   websiteUrl: string | undefined,
@@ -129,6 +161,7 @@ export const renderSalesSearchTableMessages = (
   companies: readonly BusinessSearchResult[],
   query: string,
   locality: string,
+  category?: BusinessCategoryTranslation,
   maxLength = 3_800,
 ): string[] => {
   if (companies.length === 0) return [];
@@ -149,5 +182,8 @@ export const renderSalesSearchTableMessages = (
     selected.push(table);
   }
   if (selected.length > 0) messages.push(render(selected));
+  if (category && messages[0]) {
+    messages[0] = `${salesSearchCategorySummaryHtml(query, category)}\n\n${messages[0]}`;
+  }
   return messages;
 };

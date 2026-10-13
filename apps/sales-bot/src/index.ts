@@ -82,6 +82,7 @@ const service = new SalesService(
   places,
   coldEmailGenerator,
   env.OLLAMA_MODEL,
+  ollamaProvider,
 );
 const allowed = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
 const network: NetworkBotDependencies | undefined =

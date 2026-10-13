@@ -553,12 +553,35 @@ export class WatcherStore implements PipelineRepository {
         const bypassRunLimit =
           event.materiality === 'HIGH' || event.materiality === 'EXTREME';
         if (remainingAnalysisSlots <= 0 && !bypassRunLimit) continue;
-        if (await this.stockEvents.claimAnalysis(event)) {
-          const stockAnalysisContext =
-            await this.stockEvents.getAnalysisContext(
-              event.eventId,
-              run.watcherConfigId,
-            );
+        const forceInsufficientThesisRefresh =
+          options.initializeStockThesisFor?.has(event.ticker) === true &&
+          (
+            await this.db.companyThesisState.findUnique({
+              where: { ticker: event.ticker },
+              select: { verdict: true },
+            })
+          )?.verdict === 'INSUFFICIENT_DATA';
+        if (
+          await this.stockEvents.claimAnalysis(
+            event,
+            new Date(),
+            false,
+            forceInsufficientThesisRefresh,
+          )
+        ) {
+          let stockAnalysisContext = await this.stockEvents.getAnalysisContext(
+            event.eventId,
+            run.watcherConfigId,
+          );
+          if (forceInsufficientThesisRefresh) {
+            stockAnalysisContext = {
+              ...stockAnalysisContext,
+              event: {
+                ...stockAnalysisContext.event,
+                action: 'FULL_ANALYSIS',
+              },
+            };
+          }
           prepared.push({
             recordId,
             item: {
@@ -581,11 +604,14 @@ export class WatcherStore implements PipelineRepository {
       for (const rawTicker of options.initializeStockThesisFor ?? []) {
         const ticker = rawTicker.trim().toUpperCase();
         if (!ticker || preparedTickers.has(ticker)) continue;
-        if (
-          await this.db.companyThesisState.findUnique({ where: { ticker } })
-        ) {
-          continue;
-        }
+        const currentThesis = await this.db.companyThesisState.findUnique({
+          where: { ticker },
+          select: { verdict: true },
+        });
+        const forceInitialThesis = currentThesis === null;
+        const forceInsufficientThesisRefresh =
+          currentThesis?.verdict === 'INSUFFICIENT_DATA';
+        if (!forceInitialThesis && !forceInsufficientThesisRefresh) continue;
         const event = await this.db.canonicalEvent.findFirst({
           where: { ticker, thesisRevision: { is: null } },
           orderBy: [
@@ -607,13 +633,23 @@ export class WatcherStore implements PipelineRepository {
             ),
           },
           new Date(),
-          true,
+          forceInitialThesis,
+          forceInsufficientThesisRefresh,
         );
         if (!claimed) continue;
-        const stockAnalysisContext = await this.stockEvents.getAnalysisContext(
+        let stockAnalysisContext = await this.stockEvents.getAnalysisContext(
           event.id,
           run.watcherConfigId,
         );
+        if (forceInsufficientThesisRefresh) {
+          stockAnalysisContext = {
+            ...stockAnalysisContext,
+            event: {
+              ...stockAnalysisContext.event,
+              action: 'FULL_ANALYSIS',
+            },
+          };
+        }
         const evidence = event.primaryEvidence;
         prepared.push({
           recordId: evidence.id,

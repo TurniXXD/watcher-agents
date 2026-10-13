@@ -71,7 +71,7 @@ Soukromý pomocník pro sledování akcií. Sbírá zprávy, firemní oznámení
 3. \`/dashboard\` dá rychlý přehled, \`/alerts\` nové důležité události a \`/catalysts MU\` blížící se katalyzátory.
 
 *Jak číst tezi*
-\`/thesis MU\` ukazuje hlavní důvody pro a proti, rizika, scénáře růstu/základu/poklesu, jistotu analýzy a pokrytí dat. Skóre není pravděpodobnost výnosu. \`/decision MU\` je výzkumná karta, ne pokyn k nákupu. Ověřujte původní zdroje a datum údajů.
+\`/thesis MU\` ukazuje hlavní důvody pro a proti, rizika, scénáře růstu/základu/poklesu, jistotu analýzy a pokrytí dat. Placená opční data nejsou pro základní tezi povinná. Pokud je uložený verdict \`INSUFFICIENT_DATA\`, ruční \`/thesis MU\` vynutí novou plnou analýzu z nejlepšího dosud nevyhodnoceného podkladu. Skóre není pravděpodobnost výnosu. \`/decision MU\` je výzkumná karta, ne pokyn k nákupu. Ověřujte původní zdroje a datum údajů.
 
 *Když teze ještě není*
 „THESIS NOT READY“ znamená, že chybí úspěšně analyzovaná použitelná událost. Další čekání samo o sobě nic nezaručí. Zkontrolujte \`/health\` (zdroje a model), potom lze \`/thesis MU\` zopakovat. Bot nesmí vymýšlet závěr ze starých dat.`,

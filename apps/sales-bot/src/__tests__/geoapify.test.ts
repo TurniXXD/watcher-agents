@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   GeoapifyDiscoveryClient,
   resolveBusinessCategory,
+  translateBusinessCategory,
 } from '../geoapify.js';
 
 describe('GeoapifyDiscoveryClient', () => {
@@ -21,6 +22,26 @@ describe('GeoapifyDiscoveryClient', () => {
       geoapifyCategory: 'accommodation.hut,accommodation.chalet',
       naceCode: '55200',
     });
+    expect(resolveBusinessCategory('farmy')).toEqual({
+      geoapifyCategory: 'commercial.food_and_drink.farm',
+      naceCode: '01',
+    });
+  });
+
+  it('uses structured AI translation for an unknown natural-language category', async () => {
+    const generateStructured = vi.fn().mockResolvedValue({
+      geoapifyCategories: ['healthcare.dentist'],
+      naceCode: '86230',
+    });
+
+    await expect(
+      translateBusinessCategory('zubní ordinace', { generateStructured }),
+    ).resolves.toEqual({
+      geoapifyCategory: 'healthcare.dentist',
+      naceCode: '86230',
+      source: 'ai',
+    });
+    expect(generateStructured).toHaveBeenCalledOnce();
   });
 
   it('geocodes the locality, finds places, and enriches missing contacts', async () => {
