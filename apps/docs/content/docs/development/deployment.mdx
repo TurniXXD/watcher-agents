@@ -1,0 +1,46 @@
+---
+title: Deployment
+description: Production application rollout and private Vercel documentation deployment.
+---
+
+## Watcher runtime
+
+The production workflow builds one shared image tagged with the exact commit
+SHA. Deployment is serialized and follows this order:
+
+1. Establish least-privilege Tailscale/SSH transport.
+2. Back up PostgreSQL.
+3. Pull the immutable application image.
+4. Run committed Prisma migrations.
+5. Roll out independent Compose services.
+6. Verify health checks and capture failure logs.
+7. Roll back the application image when health verification fails.
+
+Runtime secrets remain on the server in mode-`0600` files under
+`deploy/runtime`. Ollama remains external to Compose.
+
+## Documentation on Vercel
+
+Create a Vercel project from the same repository with:
+
+| Setting           | Value                                        |
+| ----------------- | -------------------------------------------- |
+| Root Directory    | `apps/docs`                                  |
+| Framework         | Next.js                                      |
+| Install command   | `cd ../.. && pnpm install --frozen-lockfile` |
+| Build command     | `cd ../.. && pnpm docs:build`                |
+| Output            | Next.js default                              |
+| Production domain | `docs.vantuch.dev`                           |
+
+Set `NEXT_PUBLIC_DOCS_URL=https://docs.vantuch.dev` for production. Do not copy
+bot or VPS secrets into the docs project.
+
+<Callout type="warn" title="Access protection is mandatory">
+  Enable Vercel Deployment Protection, SSO, or equivalent authenticated access
+  before attaching the production domain. The generated `noindex` metadata and
+  deny-all `robots.txt` do not prevent an unauthorized visitor from reading an
+  otherwise public deployment.
+</Callout>
+
+DNS and deployment are manual. This repository does not create the Vercel
+project, modify DNS, or make the documentation public automatically.

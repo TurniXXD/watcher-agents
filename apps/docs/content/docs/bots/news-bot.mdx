@@ -1,0 +1,56 @@
+---
+title: News Bot
+description: RSS and Atom monitoring with configurable categories and relevance analysis.
+---
+
+## Overview
+
+News Bot monitors built-in and custom RSS/Atom feeds, normalizes and deduplicates
+entries, applies structured significance/relevance analysis, filters disabled
+categories, and publishes durable `news` events for Briefing. Topics start empty
+and steer relevance without being presented as sourced facts.
+
+Commands: `/start`, `/help`, `/topics`, `/feeds`, `/feed_add`, `/feed_remove`,
+`/categories`, `/run`, `/schedule`, `/pause`, `/resume`, `/status`, and
+`/about`. `/help` contains the complete feed, topic, category, and scheduling
+syntax.
+
+## Architecture and flow
+
+Feed adapters use safe HTTP behavior and validate redirects against private,
+loopback, link-local, and unsafe targets. Entries normalize into the common
+watcher shape before deduplication and bounded Ollama analysis. Useful events are
+persisted for downstream Briefing consumption.
+
+## Configuration
+
+Required: `DATABASE_URL`, `NEWS_TELEGRAM_TOKEN`,
+`TELEGRAM_ALLOWED_USER_IDS`, `OLLAMA_URL`, and `OLLAMA_MODEL`. Configure optional
+LLM bounds, source backoff/concurrency, `DEFAULT_TIMEZONE`, and `LOG_LEVEL`.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/news-bot dev
+pnpm --filter @watcher/news-bot typecheck
+pnpm exec vitest run apps/news-bot/src/__tests__
+```
+
+Manual and persisted scheduled runs share the same pipeline. The Global profile
+contains public news, science, technology, health, European, and space feeds;
+retired Czech and GDELT-only entries remain disabled.
+
+## Integrations
+
+RSS/Atom feeds are primary. PostgreSQL stores feed configuration, normalized
+items, schedules, and events. Ollama adds validated relevance analysis; Telegram
+is the private operator UI; Briefing consumes durable news events.
+
+## Troubleshooting
+
+- A custom feed rejection usually means an invalid URL, unsafe destination, or
+  redirect.
+- An empty topic list is valid but provides no operator-specific relevance cue.
+- Inspect per-source health before changing global concurrency.
+- Scheduled empty results are intentionally silent; use `/run` for explicit
+  confirmation.

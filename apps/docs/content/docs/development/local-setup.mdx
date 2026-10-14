@@ -1,0 +1,48 @@
+---
+title: Local development
+description: Workspace commands, focused iteration, tests, and database development.
+---
+
+## Workspace workflow
+
+```bash
+pnpm install --frozen-lockfile
+pnpm db:generate
+pnpm --filter @watcher/news-bot typecheck
+pnpm exec vitest run apps/news-bot/src/__tests__
+pnpm --filter @watcher/news-bot dev
+```
+
+Use focused commands while iterating, then run the complete root quality gate
+before finishing. The GitHub Actions CI workflow is the merge authority.
+
+## Database work
+
+Use PostgreSQL rather than an incompatible substitute for behavior that depends
+on Prisma constraints or transactions.
+
+```bash
+DATABASE_URL=postgresql://... pnpm db:migrate
+pnpm db:generate
+pnpm db:validate
+```
+
+Migrations are committed and deployed non-interactively with `pnpm db:deploy`.
+Schema changes must preserve rollback compatibility with the previous app image.
+
+## Source and integration tests
+
+External HTTP clients are injectable and mockable. Unit tests use fixtures and
+must not call live Telegram, Ollama, SEC, PubMed, or other providers. Important
+failure paths include partial source failure, malformed LLM output, unsafe URLs,
+authorization, deduplication, and overlap prevention.
+
+## Documentation work
+
+```bash
+pnpm docs:dev
+pnpm --filter @watcher/docs typecheck
+pnpm --filter @watcher/docs lint
+pnpm --filter @watcher/docs check:links
+pnpm docs:build
+```

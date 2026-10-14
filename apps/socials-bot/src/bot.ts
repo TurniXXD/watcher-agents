@@ -19,11 +19,12 @@ import { parseTrendImport } from './trends/import.js';
 import type { SocialTrendIntelligence } from './trends/runner.js';
 import { trendSourceIdSchema, type TrendSourceId } from './trends/types.js';
 
-const helpText = `📣 Socials Bot
+export const socialsHelp = `📣 Socials Bot
 
 Databáze je zdroj pravdy, Telegram je ovládání a Notion redakční prostor. Bot nic automaticky nepublikuje.
 
-/socials — hlavní menu
+/start nebo /socials — hlavní menu
+/help nebo /socials_help — tato nápověda
 /socials_plan — nedělní plánování
 /socials_ideas — zásobník nápadů
 /socials_add [nápad] — uložit nápad
@@ -49,7 +50,6 @@ Databáze je zdroj pravdy, Telegram je ovládání a Notion redakční prostor. 
 /socials_trend_feedback ID relevant|not_relevant|saturated|good|published|leads
 /socials_trend_import — ruční CSV/JSON import pro TikTok, Instagram a Google Trends
 /socials_trend_settings — zdroje, klíčová slova a denní plán
-/socials_help — tato nápověda
 
 Uložení draftu: /socials_drafts a vyber položku. Publikaci potvrď ručně:
 /socials_status ID PUBLISHED https://...
@@ -538,7 +538,9 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
       reply_markup: mainKeyboard(),
     });
   });
-  bot.command('socials_help', async (ctx) => replyLong(ctx, helpText));
+  bot.command(['help', 'socials_help'], async (ctx) =>
+    replyLong(ctx, socialsHelp),
+  );
   bot.command('socials_trends', async (ctx) => {
     if (!ctx.from || !ctx.chat) return;
     await dependencies.store.ensureSettings(

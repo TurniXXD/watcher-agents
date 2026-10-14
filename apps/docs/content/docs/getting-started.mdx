@@ -1,0 +1,66 @@
+---
+title: Getting started
+description: Prepare the Watcher workspace and run one application locally.
+icon: Rocket
+---
+
+## Prerequisites
+
+- Node.js 24 or newer
+- pnpm 11 (the repository pins `pnpm@11.6.0`)
+- PostgreSQL 16 with pgvector
+- Docker and Docker Compose for the production-like stack
+- An external Ollama instance for applications that enable LLM analysis
+
+## Install and prepare
+
+```bash
+pnpm install --frozen-lockfile
+pnpm db:generate
+DATABASE_URL=postgresql://... pnpm db:deploy
+pnpm build
+```
+
+Use `.env.example` and the safe examples under `deploy/presets/` as an
+inventory. Put populated values only in an untracked private environment file.
+Never commit Telegram tokens, database passwords, API keys, OAuth secrets, or a
+secret-bearing connection URL.
+
+## Run an application
+
+Every runtime app has its own `dev`, `build`, and `typecheck` scripts. For
+example:
+
+```bash
+pnpm --filter @watcher/briefing-bot dev
+pnpm --filter @watcher/briefing-bot typecheck
+pnpm exec vitest run apps/briefing-bot/src/__tests__
+```
+
+The process validates its environment at startup. A missing required variable
+is expected to fail fast rather than leave a partially configured bot running.
+
+## Run the documentation
+
+```bash
+pnpm docs:dev
+```
+
+The docs application is independent of PostgreSQL, Telegram, Ollama, and all
+provider credentials. Its only optional build-time value is
+`NEXT_PUBLIC_DOCS_URL`, which defaults to `https://docs.vantuch.dev`.
+
+## Quality gates
+
+```bash
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm db:validate
+pnpm --filter @watcher/docs check:links
+```
+
+Database-backed integration tests require `TEST_DATABASE_URL`. Unit tests never
+make live Telegram, Ollama, SEC, PubMed, or other provider calls.

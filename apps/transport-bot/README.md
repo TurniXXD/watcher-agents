@@ -4,6 +4,10 @@ Private Telegram decision engine for a single van operator. It normalizes a conf
 
 Manual search and proactive discovery share the same evaluator. Planned-trip recommendations charge only incremental distance and time. Unknown cargo dimensions or weight are never treated as compatible. The MVP never bids, accepts jobs, or contacts customers.
 
+## Commands
+
+Use `/start` to initialize the bot and begin vehicle setup when required. `/help` shows the current guide without changing setup or conversation state. Vehicle, cost, preference, immediate search, planned-trip, and return-load actions are available from the Telegram keyboard.
+
 ## Data and configuration
 
 `TRANSPORT_REQUEST_FEED_URL` returns an array or `{ "requests": [...] }` of normalized requests. Missing values must be omitted. An optional bearer token is supported. Configure a production-grade `TRANSPORT_OSRM_URL`; the public project service is development-only. Fuel uses the European Commission bulletin converted with the CNB daily rate unless overridden.

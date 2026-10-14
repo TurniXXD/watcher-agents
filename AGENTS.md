@@ -78,6 +78,16 @@ This file contains project-specific instructions for coding agents working on Wa
 - Keep app READMEs, shared deployment documentation, migrations, and the root app index aligned with the actual implementation.
 - Do not hard-code a personal watchlist or publication query as mandatory seed data.
 
+### Documentation Maintenance
+
+- Versioned documentation is located in `apps/docs` and its local MDX content is under `apps/docs/content/docs`.
+- Whenever modifying bot behavior, integrations, environment variables, configuration, APIs or interfaces, scheduling, deployment, or architecture, update the corresponding documentation in the same change.
+- When introducing a new bot or runnable application, create both its main-folder `README.md` and its dedicated documentation page, then link both from their indexes.
+- When removing functionality, remove or update obsolete documentation.
+- Never document secrets, tokens, private credentials, or real private data.
+- Do not invent functionality that has not been implemented. Ground technical claims in the codebase and current operational contracts.
+- Prefer updating an existing page instead of creating redundant documentation.
+
 ## Production Deployment
 
 - Keep the production release contract aligned across `.github/workflows/deploy-vps.yml`, `docker-compose.production.yml`, and `deploy/deploy.sh`.

@@ -1,0 +1,68 @@
+---
+title: Architecture
+description: Runtime boundaries, shared packages, data flow, and reliability contracts.
+icon: Network
+---
+
+Watcher is a pnpm/Turborepo workspace. Runtime ownership stays under `apps/`;
+only behavior with concrete cross-application consumers belongs under
+`packages/`.
+
+<Mermaid
+  chart={`flowchart LR
+    U[Allowed Telegram user] --> A[Independent app process]
+    A --> DB[(PostgreSQL + pgvector)]
+    A --> P[Official APIs, feeds, public sources]
+    A --> O[External Ollama]
+    P --> N[Normalize and validate]
+    N --> D[Durable deduplication]
+    D --> L[Bounded analysis]
+    L --> T[Telegram delivery]
+    A -. telemetry .-> M[Maintenance Agent]
+    E[Events and observations] --> B[Briefing Bot]
+    DB --> E`}
+/>
+
+## Application boundary
+
+Each bot, monitor, or agent has its own entry point, environment schema,
+scheduler, graceful shutdown, Docker Compose service, and main-folder README.
+Manual and scheduled operations call the same owning pipeline. Independent
+sources run with failure isolation so one upstream failure does not cancel a
+complete run result.
+
+## Shared packages
+
+| Package                  | Responsibility                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| `@watcher/core`          | Watcher contracts, scheduling, retry, safe networking, run primitives, and shared types.      |
+| `@watcher/database`      | Prisma client/schema, migrations, repositories, persistence helpers, and durable idempotency. |
+| `@watcher/llm`           | Ollama provider contract, bounded generation, structured parsing, and validation.             |
+| `@watcher/notion`        | Retrying Notion API client and response validation.                                           |
+| `@watcher/observability` | Run, source, feedback, release, and resource telemetry contracts.                             |
+| `@watcher/sources`       | Reusable source adapters, caching, and normalized provider data.                              |
+| `@watcher/telegram`      | Authorization, common commands, keyboards, rendering, outbox helpers, and message splitting.  |
+
+## Data and execution flow
+
+1. Validate environment and operator input with Zod.
+2. Fetch configured sources independently, preferring official APIs, structured
+   endpoints, and feeds.
+3. Normalize provider-specific data before analysis.
+4. Enforce stable identity and idempotency with database constraints.
+5. Send only useful, bounded evidence to Ollama and validate structured output.
+6. Persist the run result, including source failures.
+7. Deliver through the authorized Telegram surface; retry transient delivery
+   from durable state where the app supports an outbox.
+
+## Production topology
+
+Production publishes one immutable Watcher image tagged with the exact commit
+SHA. Compose starts PostgreSQL, runs migrations, then starts each configured app
+as a separate service. PostgreSQL remains on the private Compose network.
+Ollama is intentionally external and reached through its configured URL.
+
+Runtime secrets are rendered into mode-`0600` files under `deploy/runtime` on
+the VPS. GitHub holds only deployment transport credentials. Database migrations
+must remain compatible with the previous application image because rollback
+does not reverse an applied migration.

@@ -29,6 +29,7 @@ Getting started
 7. Use /sales_approve <id> or /sales_reject <id> only after reviewing the company, contact evidence, draft, and outreach basis.
 
 Commands
+/start — show this guide
 /help or /sales_help — show this guide
 /about or /sales_about — explain what the bot does, how data moves, integrations, limits, and safety boundaries
 /sales_status — show campaign count, recent leads, qualified leads, and Quickly enrollments

@@ -12,11 +12,15 @@ pnpm-debug.log*
 dist/
 build/
 coverage/
+.next/
+.source/
+out/
 .turbo/
 .twenty/
 **/.twenty/
 *.tsbuildinfo
 **/generated/
+next-env.d.ts
 
 # Local database files and generated artifacts
 *.db

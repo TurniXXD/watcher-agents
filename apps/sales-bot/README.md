@@ -10,7 +10,7 @@ The same bot can manage an existing private Google Sheet named `Contact list` wi
 
 ## Commands
 
-Sales commands include `/sales_status`, `/sales_campaigns`, `/sales_search`, `/sales_searches`, `/sales_search_stop`, `/sales_find`, `/sales_calls`, `/sales_leads`, `/sales_lead`, `/sales_approve`, `/sales_reject`, and `/sales_run`.
+Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands include `/sales_status`, `/sales_campaigns`, `/sales_search`, `/sales_searches`, `/sales_search_stop`, `/sales_find`, `/sales_calls`, `/sales_leads`, `/sales_lead`, `/sales_approve`, `/sales_reject`, and `/sales_run`.
 
 `/sales_search <business type> | <location> | <limit>` accepts a Czech or English business type. Known aliases are translated deterministically to Geoapify and CZ-NACE (for example, `farmy` becomes `commercial.food_and_drink.farm` plus CZ-NACE `01`); other descriptions are mapped by the configured Ollama model to a validated Geoapify category catalog. Every immediate and periodic result prints the categories actually used. Explicit `geo:<category>` and `nace:<code>` inputs remain supported.
 

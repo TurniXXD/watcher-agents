@@ -18,6 +18,7 @@ Rychlý začátek
 4. Dlouhodobé sledování změn zapni přes /watch.
 
 Založení a přehled
+/start — zobrazí tento návod
 /help — zobrazí tento návod
 /about nebo /osint_about — vysvětlí účel, datový model, zdroje, automatizaci, omezení a bezpečnostní hranice
 /investigate <dotaz> — založí investigation a ihned spustí podporované collectory

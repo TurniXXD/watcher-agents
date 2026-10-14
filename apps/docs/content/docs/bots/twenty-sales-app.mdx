@@ -1,0 +1,50 @@
+---
+title: Twenty Sales App
+description: Versioned Watcher CRM fields, relationships, and referral metadata for Twenty.
+---
+
+## Overview
+
+The Twenty Sales App extends native Company, Person, and Opportunity objects with
+Watcher sales metadata and adds Relationship and Referral objects with
+bidirectional relations. It contains no scraping, sending, or payment automation.
+It targets Twenty 2.43 or newer.
+
+## Architecture
+
+This package is declarative Twenty metadata, not a server process. The official
+Twenty CLI plans and applies the versioned app to a self-hosted workspace. Sales
+Bot uses the resulting fields only when `TWENTY_APP_FIELDS_ENABLED=true`.
+
+## Configuration
+
+Authenticate a named CLI remote against the browser-facing Twenty URL. Never
+commit an API key. `WEB_DEVELOPMENT_REFERRAL_PERCENTAGE` defaults to 10 and is
+metadata only; it does not create a payable commission or infer paid revenue.
+
+## Execution
+
+```bash
+pnpm --filter @watcher/twenty-sales-app twenty remote:add \
+  --as watcher-production --url https://your-twenty.example.com
+pnpm --filter @watcher/twenty-sales-app twenty plan apps/twenty-sales-app
+pnpm --filter @watcher/twenty-sales-app twenty apply \
+  --no-delete apps/twenty-sales-app
+```
+
+There is no scheduler or long-running process. Preview the plan before applying.
+`--no-delete` prevents unrelated workspace metadata from being removed.
+
+## Integrations
+
+After a successful apply, create a least-privilege Twenty API key for Sales Bot,
+set `TWENTY_API_KEY`, and then enable custom fields. The main Sales integration
+also needs `TWENTY_BASE_URL`.
+
+## Troubleshooting
+
+- If Sales writes fail after enabling fields, verify the app was applied to the
+  same workspace and the API key has access.
+- A plan showing unrelated deletions must not be applied; retain `--no-delete`.
+- Remote authentication must use the browser-facing URL, not an internal Compose
+  hostname unavailable to the CLI host.

@@ -1,0 +1,74 @@
+---
+title: Briefing Bot
+description: Personalized audio briefings, calendar context, goals, and the Notion-backed evening journal.
+---
+
+## Overview
+
+Briefing Bot combines persisted watcher events with weather, Google Calendar,
+stock earnings, goals, and optional Notion journal context. It asks Ollama for
+one bounded spoken script, synthesizes it through Piper, and delivers audio plus
+a compact Telegram index.
+
+Use `/start` for onboarding and `/help` for the authoritative complete list.
+Primary commands include `/briefing`, `/briefing_test`, `/briefing_time`,
+`/briefing_duration`, `/subscriptions`, `/location_set`, `/voice_set`,
+`/calendar_connect`, `/goals`, `/journal`, `/agents`, `/trigger`, and `/schedules`.
+
+## Architecture and flow
+
+`BriefingCoordinator` loads independent contexts in parallel, clusters and ranks
+persisted events, calls `BriefingScriptGenerator`, then passes the script through
+Piper and the idempotent delivery service. Scheduled, manual, and test runs share
+this path. Optional context failures degrade the run without cancelling the
+remaining briefing.
+
+The journal stores resumable question state immediately. Voice input is
+transcribed in memory and shown as an editable preview before confirmation.
+Morning journal context is read from the previous Prague calendar day and is
+never logged or persisted by the briefing path.
+
+## Configuration
+
+Required: `DATABASE_URL`, `BRIEFING_TELEGRAM_TOKEN`,
+`TELEGRAM_ALLOWED_USER_IDS`, `OLLAMA_URL`, and `OLLAMA_MODEL`.
+
+Optional groups include Google Calendar OAuth (`GOOGLE_CALENDAR_CLIENT_ID`,
+`GOOGLE_CALENDAR_CLIENT_SECRET`, `GOOGLE_CALENDAR_REDIRECT_URI`, and
+`CALENDAR_TOKEN_ENCRYPTION_KEY`), Notion (`NOTION_API_KEY` with
+`NOTION_JOURNAL_DATA_SOURCE_ID`), journal transcription, Piper/FFmpeg paths,
+embedding settings, agent API tokens, and scheduler/freshness bounds. A partial
+OAuth or Notion group fails validation.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/briefing-bot dev
+pnpm --filter @watcher/briefing-bot typecheck
+pnpm exec vitest run apps/briefing-bot/src/__tests__
+```
+
+The scheduler polls persisted configuration, enforces a maximum delay window,
+and uses the same coordinator as manual commands. Evening journaling defaults to
+21:00 in `Europe/Prague`; the operator can change reminder and briefing settings
+through Telegram-backed persisted configuration.
+
+## Integrations
+
+- Telegram and PostgreSQL are required.
+- Ollama generates the grounded script; Piper produces speech and FFmpeg probes
+  or converts media.
+- Google Calendar is optional OAuth context.
+- Notion Daily Journal is optional and requires the parent/data source to be
+  shared with the integration.
+- Authenticated Brno Events and MU Clubs APIs can publish briefing context.
+
+## Troubleshooting
+
+- A startup credential-group error means all values in that optional group must
+  be set together or removed together.
+- A missing journal row is omitted; duplicate dates are rejected as ambiguous.
+- If voice journaling is unavailable, set an OpenAI-compatible transcription URL
+  or use text input.
+- If audio fails, verify Piper data, Python, FFmpeg, voice files, and writable
+  temporary storage before changing LLM settings.

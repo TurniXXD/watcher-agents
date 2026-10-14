@@ -1,0 +1,69 @@
+---
+title: Sales Bot
+description: Czech lead research, call preparation, controlled outreach, CRM, and personal-network workflows.
+---
+
+## Overview
+
+Sales Bot discovers Czech businesses through ARES and Geoapify, optionally uses
+Google Places fallback, crawls public company websites, stores evidence, scores
+leads, prepares grounded drafts, and integrates with Quickly and Twenty when
+configured. It also manages an existing private Google Sheet for personal
+network contacts with preview-and-confirm writes.
+
+Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands
+include `/sales_status`, `/sales_campaigns`, `/sales_search`,
+`/sales_searches`, `/sales_search_stop`, `/sales_find`, `/sales_calls`,
+`/sales_leads`, `/sales_lead`, `/sales_approve`, `/sales_reject`, and
+`/sales_run`. Network commands start with `/network_`.
+
+## Architecture and flow
+
+Discovery maps a Czech or English business description to validated Geoapify and
+CZ-NACE categories, queries providers, enriches public sites, records evidence,
+and scores leads. Periodic search stores its cursor and emits only new contacts.
+Lead research and call lists do not send email.
+
+Quickly enrollment fails closed unless a qualified approved lead has explicit
+`RECIPIENT_OPT_IN` or `EXISTING_CUSTOMER` evidence, no suppression, an enabled
+campaign, and available capacity. Public contact data or Telegram approval alone
+is not consent.
+
+## Configuration
+
+Required: `DATABASE_URL`, `SALES_TELEGRAM_TOKEN`,
+`TELEGRAM_ALLOWED_USER_IDS`, distinct `SALES_API_TOKEN` and
+`SALES_WEBHOOK_TOKEN`. Configure scheduler/follow-up timezone and intervals.
+Geoapify, Google Places, Ollama, Quickly, Twenty, and Google Sheets/service
+account groups are optional. Partial Google Sheets credentials or an Ollama URL
+without a model fail validation.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/sales-bot dev
+pnpm --filter @watcher/sales-bot typecheck
+pnpm exec vitest run apps/sales-bot/src/__tests__
+```
+
+Periodic work defaults to 30-minute intervals; follow-up reporting defaults to
+20:00 in `Europe/Prague`. Manual and scheduled discovery use the same persisted
+search and lead pipeline.
+
+## Integrations
+
+ARES and Geoapify are primary discovery sources; Google Places is an optional
+fallback. Quickly owns explicitly authorized campaigns. Twenty stores CRM state,
+and the versioned Twenty Sales App adds custom relationships/fields. Google
+Sheets is limited to the configured private contact range.
+
+## Troubleshooting
+
+- An empty call list means no analyzed lead currently has a public phone; run
+  search/discovery and analysis, then inspect evidence.
+- Category mapping prints the Geoapify/CZ-NACE categories actually used. Supply
+  `geo:` or `nace:` for an explicit override.
+- A business-card timeout should leave the preview unsaved; retry or enter the
+  contact manually.
+- Quickly refusal is expected when consent, suppression, campaign, or capacity
+  requirements are not satisfied.

@@ -1,0 +1,55 @@
+---
+title: Reality Bot
+description: Czech real-estate monitoring with persisted investment and stress calculations.
+---
+
+## Overview
+
+Reality Bot monitors Czech property listings and produces periodic reports or
+alerts only when persisted yield, discount, and cashflow gates pass. It models
+purchase price, equity, mortgage terms, vacancy, maintenance, insurance, yields,
+annuity payments, and stress cashflows.
+
+Commands: `/start`, `/help`, `/about`, `/status`, `/run`, `/pause`, `/resume`,
+`/schedule`, `/locations`, `/location_add`, `/location_remove`, and `/model`.
+
+## Architecture and flow
+
+DigiReality RSS records are validated, normalized, cached, and persisted with
+listing history. Historical observations support measured discount and
+time-on-market calculations. Photographs are not downloaded; malformed listings
+are dropped instead of repaired with guesses.
+
+## Configuration
+
+Required: `DATABASE_URL`, `REALITY_TELEGRAM_TOKEN`, and
+`TELEGRAM_ALLOWED_USER_IDS`. `REALITY_DIGIREALITY_KEY` is optional. Locations,
+monthly report cron, monitor interval, health port, timezone, and log level have
+defaults; `REALITY_DEFAULT_LOCATIONS` begins with Brno, Ostrava, and
+Frýdek-Místek unless overridden.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/reality-bot dev
+pnpm --filter @watcher/reality-bot typecheck
+pnpm exec vitest run apps/reality-bot/src/__tests__
+```
+
+Monitoring defaults to every 30 minutes. The report schedule defaults to 08:00
+on the first day of each month. Telegram changes persist in PostgreSQL.
+
+## Integrations
+
+The current listing source is DigiReality RSS. PostgreSQL stores models,
+locations, listing history, schedules, and alerts. Telegram provides all
+operator actions.
+
+## Troubleshooting
+
+- Missing source fields are not inferred; inspect the dropped-listing log.
+- Discount and time-on-market require prior persisted observations.
+- If no alerts arrive, review model thresholds and configured locations before
+  changing the monitor cadence.
+- A missing optional DigiReality key may reduce access but should not be replaced
+  with scraped credentials.

@@ -10,7 +10,7 @@ See [the detailed architecture](../../docs/morning-briefing-architecture.md).
 
 ## Commands
 
-Core commands include `/start`, `/briefing`, `/briefing_test`, `/briefing_time`, `/briefing_duration`, `/briefing_max_duration`, `/briefing_transcript`, `/subscriptions`, `/location_set`, `/voice_set`, `/calendar_connect`, `/goals`, `/goal_add`, `/journal`, `/journal_status`, `/journal_cancel`, `/journal_reminder_test`, `/agents`, `/trigger`, and `/schedules`.
+Core commands include `/start`, `/help`, `/briefing`, `/briefing_test`, `/briefing_time`, `/briefing_duration`, `/briefing_max_duration`, `/briefing_transcript`, `/subscriptions`, `/location_set`, `/voice_set`, `/calendar_connect`, `/goals`, `/goal_add`, `/journal`, `/journal_status`, `/journal_cancel`, `/journal_reminder_test`, `/agents`, `/trigger`, and `/schedules`. `/help` is the authoritative complete command list.
 
 ## Configuration
 

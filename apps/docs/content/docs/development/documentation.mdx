@@ -1,0 +1,41 @@
+---
+title: Documentation maintenance
+description: Keep Git-versioned documentation aligned with implementation changes.
+---
+
+Documentation is reviewed and versioned with application code. No separate
+content repository or CMS exists.
+
+## Update policy
+
+Update the relevant page in the same change whenever behavior, integrations,
+environment variables, configuration, API contracts, scheduling, deployment, or
+architecture changes. New runnable apps require:
+
+1. A main-folder `README.md`.
+2. A dedicated page under `content/docs/bots`.
+3. An entry in the root README and application index.
+4. Any related environment and integration updates.
+
+Prefer editing an existing page over adding overlapping prose. Remove obsolete
+documentation when functionality is removed. Never use real identifiers,
+credentials, customer data, or copied private output as an example.
+
+## Authoring
+
+Pages are MDX with frontmatter. Fumadocs supplies headings, syntax-highlighted
+code, tables, cards, callouts, automatic table of contents, sidebar navigation,
+and previous/next navigation. Use the local `Mermaid` component only when a
+diagram materially clarifies a multi-step or multi-service relationship.
+
+## Verification
+
+```bash
+pnpm --filter @watcher/docs check:links
+pnpm --filter @watcher/docs typecheck
+pnpm --filter @watcher/docs lint
+pnpm docs:build
+```
+
+Also verify that every documented command and environment variable exists in
+the owning code or deployment inventory.

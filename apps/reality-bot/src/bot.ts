@@ -16,7 +16,10 @@ export type RealityDefaults = {
   locations: readonly string[];
 };
 
-const help = [
+export const realityHelp = [
+  '/start – inicializovat bota a zobrazit nápovědu',
+  '/help – zobrazit tento seznam příkazů',
+  '/about – účel, datové oblasti a investiční omezení',
   '/status – stav, lokality, plán a poslední běh',
   '/run – načíst data a poslat market report ihned',
   '/pause, /resume – vypnout nebo zapnout reporty a alerty',
@@ -49,7 +52,7 @@ export const createRealityBot = (
 
   bot.command(['start', 'help'], async (context) => {
     await user(context.chat.id);
-    await context.reply(`🏠 Reality Investment Analyst\n\n${help}`);
+    await context.reply(`🏠 Reality Investment Analyst\n\n${realityHelp}`);
   });
   bot.command('about', async (context) => {
     await context.reply(

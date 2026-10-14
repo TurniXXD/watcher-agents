@@ -8,7 +8,7 @@ Scheduled evaluations use a PostgreSQL advisory lease, so overlapping containers
 
 ## Commands
 
-Use `/status`, `/summary`, `/recommendations`, `/run`, `/debug`, `/updates`, `/about`, and `/help`.
+Use `/start`, `/status`, `/summary`, `/recommendations`, `/run`, `/debug`, `/updates`, `/about`, and `/help`. `/help` shows the current complete command list.
 
 ## Configuration
 

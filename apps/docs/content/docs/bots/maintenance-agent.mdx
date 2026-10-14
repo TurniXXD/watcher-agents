@@ -1,0 +1,55 @@
+---
+title: Maintenance Agent
+description: Deterministic health, quality, release, and host/Ollama capacity monitoring.
+---
+
+## Overview
+
+Maintenance Agent evaluates source health, run quality, deployment updates, and
+host/Ollama capacity. Host inspection is read-only through `/proc` and `/sys`; it
+does not require the Docker socket or privileged mode. It sends cooldown-aware
+alerts and recovery messages.
+
+Commands: `/start`, `/status`, `/summary`, `/recommendations`, `/run`, `/debug`,
+`/updates`, `/about`, and `/help`.
+
+## Architecture and flow
+
+Scheduled evaluations claim a PostgreSQL advisory lease so multiple containers
+cannot run the same due interval. Daily and weekly reports are placed in the
+persistent Telegram outbox with per-run/per-chat idempotency and transient retry.
+Recommendations are diagnostic and never apply production changes automatically.
+
+## Configuration
+
+Required: `DATABASE_URL`, `MAINTENANCE_API_TOKEN`,
+`MAINTENANCE_TELEGRAM_TOKEN`, and `TELEGRAM_ALLOWED_USER_IDS`. Configure health,
+daily/weekly analysis, jitter, stale/error windows, CPU/memory/GPU thresholds,
+release/changelog paths, resource monitoring, and external `OLLAMA_URL`. Self
+review defaults off.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/maintenance-agent dev
+pnpm --filter @watcher/maintenance-agent typecheck
+pnpm exec vitest run apps/maintenance-agent/src/__tests__
+```
+
+The scheduler polls every 30 seconds by default. Health analysis defaults to six
+hours, daily analysis to 24 hours, and weekly analysis to seven days.
+
+## Integrations
+
+The agent reads shared PostgreSQL telemetry, host metrics, NVIDIA data when
+available, Ollama status, release/changelog files, an authenticated internal HTTP
+surface, and Telegram.
+
+## Troubleshooting
+
+- Duplicate reports indicate delivery/idempotency state, not necessarily two
+  analyses; inspect outbox keys and scheduler ownership.
+- Missing GPU data should remain unavailable on non-NVIDIA hosts.
+- A latency regression recommendation requires profiling source and LLM latency
+  before increasing concurrency.
+- Verify the release/changelog mounts when update messages are missing.

@@ -22,6 +22,7 @@ Each application owns its setup, commands, configuration, source behavior, and l
 | Brno Events Agent | Brno event discovery and briefing publication                        | [README](apps/brno-events-agent/README.md) |
 | MU Clubs Monitor  | Masaryk University club activity monitoring                          | [README](apps/mu-clubs-monitor/README.md)  |
 | Twenty Sales App  | Versioned Twenty CRM extension                                       | [README](apps/twenty-sales-app/README.md)  |
+| Documentation     | Versioned Fumadocs architecture and operations site                  | [README](apps/docs/README.md)              |
 
 ## Requirements and local development
 
@@ -37,6 +38,7 @@ pnpm db:generate
 pnpm db:deploy
 pnpm build
 pnpm --filter @watcher/briefing-bot dev
+pnpm docs:dev
 ```
 
 Use a private environment file rather than adding secrets to `.env.example`:
@@ -79,5 +81,6 @@ Production publishes one immutable image per commit and runs each application as
 - [Evening journal workflow](docs/evening-journal.md)
 - [Stock intelligence documentation](docs/stock-intelligence-phase-1.md)
 - [OSINT architecture](docs/osint-architecture.md)
+- [Versioned documentation website](apps/docs/README.md)
 
 See [AGENTS.md](AGENTS.md) for repository constraints and completion criteria.

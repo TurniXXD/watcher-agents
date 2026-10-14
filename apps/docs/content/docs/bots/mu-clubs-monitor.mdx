@@ -1,0 +1,47 @@
+---
+title: MU Clubs Monitor
+description: Internal monitor for public Masaryk University club activity.
+---
+
+## Overview
+
+MU Clubs Monitor discovers and normalizes public club website and Instagram
+observations, classifies activities, persists source health, and publishes
+briefing events through an authenticated internal API.
+
+## Architecture and flow
+
+Per-source due checks and shared Instagram caching bound polling. Observations
+are normalized and classified before persistence. Source failures are isolated
+and exposed in health/run results instead of converted into empty data.
+
+## Configuration
+
+Required: `DATABASE_URL` and a minimum-16-character `MU_CLUBS_API_TOKEN`.
+Configure host/port, monitor interval, scheduler polling, Instagram cache TTL,
+minimum request interval, maximum posts per fetch, and log level.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/mu-clubs-monitor dev
+pnpm --filter @watcher/mu-clubs-monitor typecheck
+pnpm exec vitest run apps/mu-clubs-monitor/src/__tests__
+```
+
+Monitoring defaults to hourly; scheduler due checks default to every 30 seconds.
+
+## Integrations
+
+The monitor reads public club sites and bounded Instagram observations. `GET
+/healthz` is unauthenticated; other API endpoints require the MU Clubs bearer
+token. Briefing consumes the normalized event output.
+
+## Troubleshooting
+
+- Source latency should be separated from classification latency before changing
+  concurrency or polling.
+- Cache settings intentionally limit repeated Instagram requests.
+- A 401 from Briefing means the shared bearer token is inconsistent.
+- Missing activity is not fabricated when a page or public observation is
+  unavailable.

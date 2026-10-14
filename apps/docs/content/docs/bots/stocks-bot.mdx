@@ -1,0 +1,67 @@
+---
+title: Stocks Bot
+description: Evidence-backed stock monitoring, thesis updates, alerts, discovery, and paper workflows.
+---
+
+## Overview
+
+Stocks Bot watches an operator-managed list for filings, issuer news, market
+observations, catalysts, earnings, thesis changes, alerts, portfolio context,
+discovery, replay, and paper workflows. The watchlist starts empty and provider
+evidence never becomes automatic investment advice.
+
+Use `/start` or `/help` for the authoritative complete command list. Commands
+include `/stocks`, `/add_stock`, `/remove_stock`, `/run`, `/sources`,
+`/schedule`, `/thesis`, `/valuation`, `/earnings`, `/catalysts`, `/dashboard`,
+`/opportunities`, `/alerts`, `/health`, `/discovery`, `/reconcile`, `/backtest`,
+`/calibration`, and `/replay` plus paper/portfolio commands.
+
+## Architecture and flow
+
+Source adapters normalize observations before canonical event deduplication,
+materiality policy, bounded Ollama analysis, thesis updates, and Telegram
+delivery. Independent sources settle separately. High/extreme failures remain
+visible and retryable. The database stores source health, evidence, theses,
+alerts, baselines, portfolio state, and validation outcomes.
+
+## Configuration
+
+Required: `DATABASE_URL`, `STOCKS_TELEGRAM_TOKEN`,
+`TELEGRAM_ALLOWED_USER_IDS`, `OLLAMA_URL`, `OLLAMA_MODEL`, and an identifiable
+`SEC_USER_AGENT`. `STOCKS_MONITOR_SCHEDULE`, source backoff/concurrency, alert
+windows, anomaly thresholds, discovery gates, and validation sizes have bounded
+defaults.
+
+Optional credential groups activate Alpha Vantage, Quiver, Alpaca Paper, or
+Trading 212. Set both credentials for Alpaca or Trading 212. Core thesis coverage
+does not require paid options data: with `ALPHA_VANTAGE_OPTIONS_ENABLED=false`,
+options positioning is not counted as a material gap.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/stocks-bot dev
+pnpm --filter @watcher/stocks-bot typecheck
+pnpm exec vitest run apps/stocks-bot/src/__tests__
+```
+
+`STOCKS_MONITOR_SCHEDULE` defaults to every five minutes. Discovery has a weekly
+schedule plus bounded high-resolution and event-mode windows. Manual runs use the
+same source and analysis pipeline.
+
+## Integrations
+
+Sources include SEC EDGAR, issuer feeds, TradingView, FINVIZ, Zacks, Earnings
+Whispers, Nasdaq, FINRA, ClinicalTrials.gov, and openFDA. Alpha Vantage and Quiver
+are optional. Alpaca Paper and Trading 212 are explicitly credential-gated.
+
+## Troubleshooting
+
+- `INSUFFICIENT_DATA` means required evidence is missing or stale, not a neutral
+  investment verdict. `/thesis SYMBOL` can force a full analysis from unreviewed
+  evidence.
+- SEC errors commonly indicate a missing or non-identifying `SEC_USER_AGENT`.
+- Optional-source failure should appear in source health; do not hide it by
+  fabricating an empty successful response.
+- Reconciliation discrepancies should be resolved before trusting downstream
+  portfolio reporting.

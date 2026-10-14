@@ -1,0 +1,50 @@
+---
+title: Brno Events Agent
+description: Internal normalized event discovery and authenticated briefing API.
+---
+
+## Overview
+
+Brno Events Agent fetches public Brno listings from Meetup, GoOut, VisitBrno/TIC,
+MUNI, VUT, JIC, and CEITEC. It normalizes events, deduplicates cross-source
+coverage, evaluates relevance, persists results, and exposes internal endpoints
+used by Briefing and Socials.
+
+## Architecture and flow
+
+Each provider has its own enable switch, interval, URL, parser, and source-health
+record. Due providers run independently; failures remain visible and do not
+cancel successful sources. Manual source runs reuse the scheduled pipeline.
+
+## Configuration
+
+Required: `DATABASE_URL` and a minimum-16-character `BRNO_EVENTS_API_TOKEN`.
+Configure host/port, scheduler polling, and each provider's `*_ENABLED`,
+`*_INTERVAL_MINUTES`, and optional `*_URL`. Timezone is fixed to
+`Europe/Prague`.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/brno-events-agent dev
+pnpm --filter @watcher/brno-events-agent typecheck
+pnpm exec vitest run apps/brno-events-agent/src/__tests__
+```
+
+Default provider intervals range from three hours to twelve hours. The scheduler
+polls due state every 30 seconds by default.
+
+## Integrations
+
+`GET /health` is unauthenticated. Event, briefing, and manual-run routes require
+`Authorization: Bearer $BRNO_EVENTS_API_TOKEN`. Briefing consumes selected events;
+Socials reuses normalized records for networking recommendations.
+
+## Troubleshooting
+
+- A high duplicate count is normal when periodic sources repeat unchanged
+  listings; created/updated counts and cross-source identity are more useful.
+- Inspect the named source health record for parser or HTTP changes.
+- A 401 means the caller and service token differ.
+- Disable a broken provider explicitly rather than treating its failure as an
+  empty successful result.

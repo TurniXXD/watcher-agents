@@ -1,0 +1,21 @@
+{
+  "title": "Applications",
+  "icon": "Bot",
+  "pages": [
+    "index",
+    "briefing-bot",
+    "stocks-bot",
+    "publications-bot",
+    "news-bot",
+    "reality-bot",
+    "osint-bot",
+    "sales-bot",
+    "socials-bot",
+    "study-bot",
+    "transport-bot",
+    "maintenance-agent",
+    "brno-events-agent",
+    "mu-clubs-monitor",
+    "twenty-sales-app"
+  ]
+}

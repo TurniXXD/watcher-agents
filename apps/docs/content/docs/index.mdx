@@ -1,0 +1,57 @@
+---
+title: Watcher documentation
+description: Source-grounded guidance for the Watcher automation monorepo.
+icon: BookOpen
+---
+
+Watcher is a self-hosted TypeScript monorepo for private Telegram bots and
+supporting agents. Each application is a separate long-running process. They
+share PostgreSQL and focused workspace packages while external Ollama provides
+optional local inference.
+
+<Callout type="warn" title="Private operational documentation">
+  This website describes internal architecture and configuration. Keep its
+  deployment access-protected. `noindex` and `robots.txt` are not
+  authentication.
+</Callout>
+
+## Start here
+
+<Cards>
+  <Card
+    title="Getting started"
+    description="Install, configure, migrate, and run the workspace."
+    href="./getting-started.mdx"
+  />
+  <Card
+    title="Architecture"
+    description="Understand service boundaries and the shared pipeline."
+    href="./architecture.mdx"
+  />
+  <Card
+    title="Applications"
+    description="Open the operating guide for a bot, monitor, or agent."
+    href="./bots/index.mdx"
+  />
+  <Card
+    title="Environment"
+    description="Learn where configuration lives and how secrets are handled."
+    href="./configuration/environment.mdx"
+  />
+</Cards>
+
+## Documentation contract
+
+- MDX lives in `apps/docs/content/docs` in the same Git history as the code.
+- Application behavior, integrations, configuration, scheduling, and deployment
+  changes update their corresponding page in the same pull request.
+- Main-folder READMEs remain the concise application-level setup reference.
+- The website has no content database, CMS, or access to application secrets.
+
+## System guarantees
+
+Watcher treats Telegram as a private administration surface, validates external
+data at boundaries, isolates independent source failures, and persists
+idempotency in PostgreSQL. Scheduled empty runs are silent where appropriate;
+manual runs explain when nothing useful was found. Provider evidence is kept
+separate from inference.

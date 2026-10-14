@@ -1,0 +1,50 @@
+---
+title: Environment configuration
+description: Configuration sources, validation, secrets, and runtime rendering.
+---
+
+## Sources of truth
+
+| Location                       | Purpose                                                       |
+| ------------------------------ | ------------------------------------------------------------- |
+| `.env.example`                 | Safe workspace-level inventory and development defaults.      |
+| `deploy/presets/*.env.example` | Per-service safe templates.                                   |
+| `deploy/ENVIRONMENT.md`        | Complete shared environment inventory.                        |
+| `apps/*/src/env.ts`            | Executable Zod validation and defaults.                       |
+| `deploy/runtime/*.env`         | Untracked, mode-`0600` production files generated on the VPS. |
+
+The executable environment schema is authoritative when prose and code differ.
+Variables with blank-string normalization are intentionally optional; paired
+credential groups must be complete.
+
+## Shared variables
+
+- `DATABASE_URL` is required by every database-backed runtime.
+- `TELEGRAM_ALLOWED_USER_IDS` is required by private Telegram apps.
+- Each bot uses its own `*_TELEGRAM_TOKEN`.
+- `OLLAMA_URL`, `OLLAMA_MODEL`, and the bounded `OLLAMA_*` controls configure
+  inference where enabled.
+- `LOG_LEVEL` controls structured logging without enabling secret logging.
+- Timezones use IANA names, normally `Europe/Prague`.
+
+## Secret handling
+
+Never put populated secrets into documentation, examples, Git, Telegram-editable
+settings, or client-side variables. `NEXT_PUBLIC_DOCS_URL` contains only the
+public canonical docs origin; no bot runtime variable is exposed to the docs
+bundle.
+
+Production application secrets stay on the VPS. The deployment workflow renders
+the private source into `deploy/runtime`, applies file permissions, and keeps
+those files outside CI artifacts and source control.
+
+## Validate changes
+
+When adding or renaming a variable:
+
+1. Update the owning Zod schema.
+2. Add a safe placeholder/default to `.env.example` and the owning preset.
+3. Update `deploy/render-env.sh` and `deploy/ENVIRONMENT.md` when production uses
+   the value.
+4. Update the corresponding application page in this site.
+5. Run typecheck, tests, and Compose rendering.

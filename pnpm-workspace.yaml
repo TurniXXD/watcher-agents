@@ -6,11 +6,17 @@ allowBuilds:
   '@prisma/engines': true
   esbuild: true
   prisma: true
+  unrs-resolver: true
 
 overrides:
-  '@jridgewell/sourcemap-codec': 1.5.5
+  '@jridgewell/sourcemap-codec': 1.6.0
 
 onlyBuiltDependencies:
   - '@prisma/engines'
   - esbuild
   - prisma
+
+minimumReleaseAgeExclude:
+  - '@fumadocs/base-ui@16.17.3'
+  - fumadocs-core@16.17.3
+  - lucide-react@1.57.0

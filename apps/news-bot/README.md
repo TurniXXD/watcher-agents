@@ -6,7 +6,7 @@ The Global profile contains public news, science, technology, health, European, 
 
 ## Commands
 
-Use `/topics`, `/feeds`, `/feed_add`, `/feed_remove`, `/categories`, `/run`, `/schedule`, `/pause`, `/resume`, `/status`, and `/about`.
+Use `/start`, `/help`, `/topics`, `/feeds`, `/feed_add`, `/feed_remove`, `/categories`, `/run`, `/schedule`, `/pause`, `/resume`, `/status`, and `/about`. `/help` shows every available feed, topic, category, and scheduling command.
 
 ## Configuration
 

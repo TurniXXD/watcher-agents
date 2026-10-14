@@ -1,0 +1,57 @@
+---
+title: Study Bot
+description: PDF-grounded lectures, audio, summaries, quizzes, and Anki exports.
+---
+
+## Overview
+
+Study Bot accepts text-based university PDFs, stores the source in S3-compatible
+storage, extracts page text, creates cited facts through the shared Ollama queue,
+writes a spoken lecture, synthesizes OGG/Opus audio with Piper, and returns a
+Telegram voice message. Completion actions can resend audio, summarize, quiz, or
+export an Anki-compatible UTF-8 TSV deck.
+
+Upload a PDF to begin. `/start` initializes the bot, `/help` shows the current
+guide, `/status` reports the latest job, and `/cancel` stops safely between
+stages.
+
+## Architecture and flow
+
+The job validates file bounds, stores the original, extracts page text, rejects
+scanned/near-empty documents, chunks evidence, coordinates Ollama work, creates
+cited output, synthesizes media, persists progress, and delivers through
+Telegram. Generated questions and cards retain page citations.
+
+## Configuration
+
+Configure the database, dedicated Telegram token and allowlist, Ollama, Piper,
+`STUDY_S3_ENDPOINT`, application-specific S3 credentials, document/media buckets,
+PDF/page bounds, and the Czech TTS voice. The complete executable inventory is in
+the Study deployment preset and runtime configuration.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/study-bot dev
+pnpm --filter @watcher/study-bot typecheck
+pnpm exec vitest run apps/study-bot/src/__tests__
+```
+
+Jobs are upload-triggered rather than scheduled. Cancellation is cooperative at
+safe stage boundaries.
+
+## Integrations
+
+Telegram receives uploads and returns output. S3-compatible storage keeps source
+documents and media. pdf.js extracts text. Ollama and the shared queue generate
+grounded study content. Piper provides speech.
+
+## Troubleshooting
+
+- OCR-required means the PDF has insufficient extractable text; preprocess it
+  with OCR before retrying.
+- S3 failures require checking endpoint, bucket names, credentials, and prefix
+  permissions without logging secrets.
+- A cancelled job may finish its current atomic stage before stopping.
+- Missing audio usually points to Piper voice/runtime configuration after the
+  text stages have succeeded.

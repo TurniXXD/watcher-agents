@@ -1,0 +1,32 @@
+---
+title: Integrations
+description: Shared platform and external-provider integration boundaries.
+---
+
+Watcher enables integrations only when their owning environment group is valid.
+Optional providers remain disabled or visibly unavailable when credentials are
+absent. Source adapters are injectable and tests use fixtures rather than live
+third-party calls.
+
+<Cards>
+  <Card
+    title="Platform services"
+    description="Telegram, PostgreSQL, Ollama, Notion, and object storage."
+    href="./platform-services.mdx"
+  />
+  <Card
+    title="External providers"
+    description="Research, market, calendar, CRM, routing, and discovery APIs."
+    href="./external-providers.mdx"
+  />
+</Cards>
+
+## Authentication principles
+
+- Every Telegram command and callback is checked against
+  `TELEGRAM_ALLOWED_USER_IDS`.
+- Internal HTTP APIs use distinct bearer tokens; health endpoints are the only
+  documented unauthenticated routes.
+- OAuth credentials, API keys, webhook tokens, and service-account material stay
+  server-side and are never editable through Telegram.
+- A public URL is not proof of authorization, consent, identity, or data quality.

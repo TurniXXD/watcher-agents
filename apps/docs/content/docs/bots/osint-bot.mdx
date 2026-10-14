@@ -1,0 +1,58 @@
+---
+title: OSINT Bot
+description: Provenance-backed public-source investigations with strict identity and privacy boundaries.
+---
+
+## Overview
+
+OSINT Bot investigates names, Czech company identifiers, domains, labelled
+addresses, cadastral selectors, public profile URLs, and supported public
+identifiers. Name matches remain candidates. Public-register birth dates and
+residential addresses are discarded; LLM inference is labelled and never stored
+as a sourced fact.
+
+`/start` and `/help` show the complete evidence and safety guide. Commands
+include `/investigate`, `/investigations`, `/investigation`, `/evidence`,
+`/entity`, `/relations`, `/timeline`, `/expand`, `/report`, `/watch`, `/unwatch`,
+`/status`, `/sources`, `/pause`, `/resume`, and `/stop`.
+
+## Architecture and flow
+
+An investigation fans out over bounded collectors, normalizes evidence with
+provenance, resolves candidate entities conservatively, stores relations and
+timeline events, and renders a Telegram report. Watch polling revisits persisted
+targets. Optional Ollama produces clearly marked synthesis after deterministic
+collection.
+
+## Configuration
+
+Required: `DATABASE_URL`, `OSINT_TELEGRAM_TOKEN`, and
+`TELEGRAM_ALLOWED_USER_IDS`. `OSINT_MAX_COLLECTORS`,
+`OSINT_WATCH_POLL_MINUTES`, `OSINT_HEALTH_PORT`, and `LOG_LEVEL` have defaults.
+`OLLAMA_URL` and `OLLAMA_MODEL` are optional and should be configured together.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/osint-bot dev
+pnpm --filter @watcher/osint-bot typecheck
+pnpm exec vitest run apps/osint-bot/src/__tests__
+```
+
+Manual investigations run immediately. Persisted watches are polled on the
+configured interval, default five minutes, without overlapping the same work.
+
+## Integrations
+
+Collectors include ARES, Registr smluv, RÚIAN, ČÚZK INSPIRE, website metadata,
+DNS, RDAP, Certificate Transparency, Wayback, Wikipedia, GitHub, Reddit, ORCID,
+Crossref, selected public social metadata, and public Bitcoin/Ethereum summaries.
+
+## Troubleshooting
+
+- CAPTCHA or blocked cadastral pages are terminal source limitations; the bot
+  does not bypass them or scrape Nahlížení do KN.
+- Multiple name candidates are not an identity error—add stronger selectors.
+- Review `/sources`, evidence provenance, and collector errors before enabling
+  more concurrency.
+- Phone-number reverse lookup is intentionally unsupported.

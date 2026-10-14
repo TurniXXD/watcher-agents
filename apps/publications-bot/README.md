@@ -6,7 +6,7 @@ The query list starts empty. Topics are stored exactly for display and in normal
 
 ## Commands
 
-Use `/queries`, `/add_query`, `/add_queries`, `/remove_query`, `/sources`, `/run`, `/schedule`, `/pause`, `/resume`, `/status`, and `/about`.
+Use `/start`, `/help`, `/queries`, `/add_query`, `/add_queries`, `/remove_query`, `/sources`, `/run`, `/schedule`, `/pause`, `/resume`, `/status`, and `/about`. `/help` shows the complete command list and schedule syntax.
 
 ## Configuration
 

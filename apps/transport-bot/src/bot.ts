@@ -67,6 +67,21 @@ const vehiclePrompt = [
   'VW; Transporter T5.1 Long; 2013; diesel; 8.5; 3000; 2000; 1000; 290; 170; 140; 6.9; 3; refrigerated',
 ].join('\n');
 
+export const transportHelp = `🚚 Transport Opportunity Bot
+
+/start — initialize the bot and start vehicle setup when needed
+/help — show this guide without changing setup progress
+
+Main menu
+🚐 Vehicle — add or replace vehicle dimensions, weight, and restrictions
+📊 Cost settings — configure operating costs and optional fuel price
+⚙️ Preferences — configure profit, distance, detour, and confidence limits
+🔎 Find jobs — search the current request feed now
+🛣️ I'm planning a trip — find compatible incremental loads for a route
+🔄 Find return load — reverse the latest planned trip and search again
+
+The bot only recommends loads whose known cargo fits the saved vehicle and whose calculated economics pass your thresholds. It never bids, accepts a job, or contacts a customer.`;
+
 const opportunityKeyboard = (
   id: string,
   opportunity: Opportunity,
@@ -117,7 +132,7 @@ export const createTransportBot = (input: {
   const bot = new Bot(input.token);
   bot.use(authorizationMiddleware(input.allowedUserIds));
 
-  bot.command(['start', 'help'], async (ctx) => {
+  bot.command('start', async (ctx) => {
     const user = await input.service.initializeUser(BigInt(ctx.chat.id));
     await ctx.reply(
       user.onboardingComplete
@@ -131,6 +146,9 @@ export const createTransportBot = (input: {
       });
       await ctx.reply(vehiclePrompt);
     }
+  });
+  bot.command('help', async (ctx) => {
+    await ctx.reply(transportHelp, { reply_markup: mainKeyboard });
   });
 
   bot.hears('🚐 Vehicle', async (ctx) => {

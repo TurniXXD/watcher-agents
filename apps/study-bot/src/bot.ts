@@ -5,10 +5,11 @@ import type { StudyStore } from '@watcher/database';
 import type { StudyStorage } from './storage/s3-storage.js';
 import type { StudyService, StudyTransport } from './study-service.js';
 
-const help = `📚 Study bot
+export const studyHelp = `📚 Study bot
 
 Send a text-based PDF and I will create a source-grounded spoken lecture. Scanned PDFs need OCR first.
 
+/start — initialize the bot and show this guide
 /status — latest document job
 /cancel — cancel latest running job
 /help — this help`;
@@ -78,7 +79,7 @@ export const createStudyBot = (dependencies: {
 }): Bot => {
   const bot = new Bot(dependencies.token);
   bot.use(authorizationMiddleware(dependencies.allowedIds));
-  bot.command(['start', 'help'], async (ctx) => ctx.reply(help));
+  bot.command(['start', 'help'], async (ctx) => ctx.reply(studyHelp));
   bot.command('status', async (ctx) => {
     const job = await dependencies.store.latestJob(BigInt(ctx.chat.id));
     if (!job) {

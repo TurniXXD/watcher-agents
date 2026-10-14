@@ -1,0 +1,71 @@
+---
+title: Socials Bot
+description: Relational content planning, US/Czech trend intelligence, and genuine professional networking.
+---
+
+## Overview
+
+Socials Bot is a private Czech Telegram workflow for personal-brand planning and
+professional networking. PostgreSQL is authoritative, Notion is an optional
+editorial mirror, and ChatGPT remains a manual high-quality writing step. The bot
+does not publish to social networks, a website, or a newsletter.
+
+Use `/start` or `/socials` for the main menu and `/help` or `/socials_help` for
+the complete command guide. Core commands include `/socials_plan`, `/socials_add`, `/socials_ideas`,
+`/socials_week`, `/socials_pack`, `/socials_drafts`, `/socials_status`,
+`/socials_analytics`, `/socials_networking`, `/socials_events`, and the
+`/socials_trend*` Trend Intelligence commands.
+
+## Architecture and flow
+
+`SocialsStore` owns relational persistence and versions; `SocialsService` owns
+capture, planning, packs, analytics, events, and optional Notion sync;
+`SocialsScheduler` owns durable reminders; lightweight Qwen classification has a
+deterministic fallback.
+
+Trend Intelligence gathers bounded YouTube and approved Reddit evidence, accepts
+authorized manual imports, clusters repeated observations, compares US and Czech
+signals, keeps opportunity score separate from evidence confidence, and produces
+schema-validated Czech concepts. Feedback applies only a small transparent
+future-ranking correction.
+
+## Configuration
+
+Required: `DATABASE_URL`, `SOCIALS_TELEGRAM_TOKEN`, and
+`TELEGRAM_ALLOWED_USER_IDS`. Ollama defaults exist and can be disabled with
+`SOCIALS_OLLAMA_ENABLED=false`. Notion requires `NOTION_API_KEY` paired with
+`NOTION_SOCIALS_DATA_SOURCE_ID`. Transcription, trend schedule/report size,
+YouTube API key, and the complete Reddit OAuth group are optional.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/socials-bot dev
+pnpm --filter @watcher/socials-bot typecheck
+pnpm exec vitest run apps/socials-bot/src/__tests__
+```
+
+The scheduler polls durable jobs for Sunday planning, Monday networking,
+pre/post-event reminders, and daily trend research. Content publication status
+changes only through an explicit operator action with a real URL.
+
+## Integrations
+
+- Brno Events supplies normalized event records; unsupported locations/providers
+  remain manual.
+- Notion mirrors the content calendar with two-sided conflict detection.
+- YouTube Data API v3 and approved Reddit OAuth are automated trend sources.
+- Google Trends, TikTok, and broad Instagram discovery are manual-only without an
+  authorized supported API.
+- An OpenAI-compatible endpoint can transcribe voice input.
+
+## Troubleshooting
+
+- Notion `object_not_found` means the data source/page was not shared with the
+  integration or the wrong data-source ID was configured.
+- First-day trend momentum is normally unknown because growth needs repeated
+  observations.
+- Missing source credentials appear as unavailable and do not block other
+  sources.
+- A conflict status protects simultaneous local and Notion edits; resolve it
+  manually instead of overwriting one side.

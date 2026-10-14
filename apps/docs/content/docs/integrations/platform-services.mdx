@@ -1,0 +1,38 @@
+---
+title: Platform services
+description: Contracts for Telegram, PostgreSQL, Ollama, Notion, and object storage.
+---
+
+## Telegram
+
+grammY powers all operator-facing bots. Each app uses a distinct bot token and
+the shared allowlist middleware. Message splitting and durable delivery helpers
+live in `@watcher/telegram`. Telegram is the application UI; the Fumadocs site is
+read-only operational documentation.
+
+## PostgreSQL and Prisma
+
+PostgreSQL 16 with pgvector is the shared source of truth. Prisma migrations are
+committed under `packages/database/prisma/migrations`. Apps use repositories from
+`@watcher/database` instead of querying Prisma in Telegram handlers or provider
+clients. Production runs committed migrations before rollout.
+
+## Ollama
+
+Ollama runs outside Docker Compose. LLM-enabled apps configure `OLLAMA_URL` and
+`OLLAMA_MODEL`; generation is bounded by context, prediction, retry, and timeout
+settings. Structured output is validated and malformed output receives only a
+small retry budget. Deterministic evidence stays distinguishable from inference.
+
+## Notion
+
+Briefing uses an optional Daily Journal data source; Socials uses an optional
+Content Calendar mirror. Each integration requires `NOTION_API_KEY` paired with
+its data-source ID and uses the shared retrying client. The database is still
+authoritative. Notion conflict policies avoid silently overwriting manual edits.
+
+## S3-compatible storage
+
+Study Bot stores source PDFs and generated media in separately configured
+buckets through the S3 API. Credentials should be application-scoped, and object
+permissions limited to the bot's document and media prefixes.

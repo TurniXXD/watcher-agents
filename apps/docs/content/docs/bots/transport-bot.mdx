@@ -1,0 +1,58 @@
+---
+title: Transport Bot
+description: Load compatibility, routing, and profitability decisions for a single van operator.
+---
+
+## Overview
+
+Transport Bot normalizes a configured request feed, rejects loads that cannot be
+proven to fit, routes viable candidates, and ranks only opportunities satisfying
+persisted profit, profit/hour, empty-distance, detour, and confidence thresholds.
+It never bids, accepts jobs, or contacts customers.
+
+Use `/start` to initialize the bot and begin vehicle setup when required.
+`/help` shows the complete keyboard guide without changing onboarding or the
+current conversation. Vehicle, costs, preferences, immediate search,
+planned-trip, and return-load actions are selected from the Telegram keyboard.
+
+## Architecture and flow
+
+Manual search and proactive discovery share one evaluator. Cargo dimensions and
+weight must be known before compatibility passes. Planned-trip recommendations
+charge incremental distance and time. Routing uses an OSRM-compatible service;
+fuel cost can use the European Commission bulletin converted with the CNB daily
+rate.
+
+## Configuration
+
+Required: `DATABASE_URL`, `TRANSPORT_TELEGRAM_TOKEN`,
+`TELEGRAM_ALLOWED_USER_IDS`, and `TRANSPORT_REQUEST_FEED_URL`. The feed can use
+an optional bearer token. Configure a production `TRANSPORT_OSRM_URL`, discovery
+interval, optional fuel/CNB URLs, health port, and log level.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/transport-bot dev
+pnpm --filter @watcher/transport-bot typecheck
+pnpm exec vitest run apps/transport-bot/src/__tests__
+```
+
+Proactive discovery defaults to every 15 minutes. The feed accepts an array or
+`{ "requests": [...] }`; absent values must be omitted rather than represented as
+made-up zeroes.
+
+## Integrations
+
+The request feed is operator-owned, routing is OSRM-compatible, fuel pricing can
+come from the European Commission bulletin, and currency conversion can use CNB.
+Telegram and PostgreSQL provide control and persisted thresholds.
+
+## Troubleshooting
+
+- Unknown cargo dimensions/weight intentionally produce incompatibility rather
+  than optimistic ranking.
+- The public OSRM project service is development-only; use a production-grade
+  endpoint for reliable operation.
+- Missing fuel/rate data lowers confidence and should not be silently replaced.
+- Validate the normalized request shape when the feed returns zero candidates.

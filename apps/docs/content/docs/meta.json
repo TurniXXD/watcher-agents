@@ -1,0 +1,12 @@
+{
+  "title": "Watcher",
+  "pages": [
+    "index",
+    "getting-started",
+    "architecture",
+    "bots",
+    "integrations",
+    "configuration",
+    "development"
+  ]
+}

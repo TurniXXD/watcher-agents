@@ -8,7 +8,7 @@ Collectors include ARES, Registr smluv, RÚIAN, ČÚZK INSPIRE services, website
 
 ## Commands
 
-Use `/investigate`, `/investigations`, `/investigation`, `/evidence`, `/entity`, `/relations`, `/timeline`, `/expand`, `/report`, `/watch`, `/unwatch`, `/status`, `/sources`, `/pause`, `/resume`, `/stop`, `/about`, and `/help`.
+Use `/start`, `/investigate`, `/investigations`, `/investigation`, `/evidence`, `/entity`, `/relations`, `/timeline`, `/expand`, `/report`, `/watch`, `/unwatch`, `/status`, `/sources`, `/pause`, `/resume`, `/stop`, `/about`, and `/help`. `/start` and `/help` both show the complete evidence and safety guide.
 
 ## Configuration
 

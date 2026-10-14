@@ -1,0 +1,53 @@
+---
+title: Publications Bot
+description: Private publication and clinical-topic monitoring through official data sources.
+---
+
+## Overview
+
+Publications Bot monitors an operator-managed query list through PubMed, bioRxiv,
+ClinicalTrials.gov, and openFDA. The list starts empty. Topics preserve their
+display text and a normalized value prevents duplicates.
+
+Commands: `/start`, `/help`, `/queries`, `/add_query`, `/add_queries`,
+`/remove_query`, `/sources`, `/run`, `/schedule`, `/pause`, `/resume`, `/status`,
+and `/about`. `/help` contains the complete source and schedule syntax.
+
+## Architecture and flow
+
+Each source adapter retrieves and normalizes records independently. The shared
+watcher pipeline deduplicates, analyzes bounded evidence with Ollama, persists
+outcomes, and renders Telegram digests. A source failure does not cancel other
+sources. Scheduled empty runs stay silent; manual empty runs report the result.
+
+## Configuration
+
+Required: `DATABASE_URL`, `PUBLICATIONS_TELEGRAM_TOKEN`,
+`TELEGRAM_ALLOWED_USER_IDS`, `OLLAMA_URL`, and `OLLAMA_MODEL`. Optional bounded
+controls include `OLLAMA_*`, `SOURCE_BACKOFF_BASE_SECONDS`,
+`SOURCE_BACKOFF_MAX_MINUTES`, `SOURCE_MAX_CONCURRENCY`, `DEFAULT_TIMEZONE`, and
+`LOG_LEVEL`.
+
+## Execution and scheduling
+
+```bash
+pnpm --filter @watcher/publications-bot dev
+pnpm --filter @watcher/publications-bot typecheck
+pnpm exec vitest run apps/publications-bot/src/__tests__
+```
+
+Schedules and pause state are stored in PostgreSQL and managed through Telegram.
+CSV import accepts a `query` or `topic` column.
+
+## Integrations
+
+The bot uses public PubMed, bioRxiv, ClinicalTrials.gov, and openFDA interfaces,
+the shared Ollama provider, PostgreSQL, and Telegram.
+
+## Troubleshooting
+
+- No results with an empty query list is expected; add a query first.
+- Inspect `/sources` and structured logs for partial upstream failures.
+- Repeated malformed Ollama output is recorded as failed analysis rather than
+  crashing the run.
+- Verify timezone and persisted schedule before diagnosing a missing digest.

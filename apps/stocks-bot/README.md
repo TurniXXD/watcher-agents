@@ -8,7 +8,7 @@ Primary sources include SEC EDGAR, issuer feeds, TradingView, FINVIZ, Zacks, Ear
 
 ## Commands
 
-Important commands include `/stocks`, `/add_stock`, `/remove_stock`, `/run`, `/sources`, `/schedule`, `/thesis`, `/valuation`, `/earnings`, `/catalysts`, `/dashboard`, `/opportunities`, `/alerts`, `/health`, `/discovery`, `/reconcile`, `/backtest`, `/calibration`, `/replay`, and the paper/portfolio commands.
+Use `/start` or `/help` for the authoritative complete command list. Important commands include `/stocks`, `/add_stock`, `/remove_stock`, `/run`, `/sources`, `/schedule`, `/thesis`, `/valuation`, `/earnings`, `/catalysts`, `/dashboard`, `/opportunities`, `/alerts`, `/health`, `/discovery`, `/reconcile`, `/backtest`, `/calibration`, `/replay`, and the paper/portfolio commands.
 
 ## Configuration
 
