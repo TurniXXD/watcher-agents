@@ -64,6 +64,7 @@ jobs:
             test -f deploy/presets/mu-clubs-monitor.env.example
             test -f deploy/presets/brno-events-agent.env.example
             test -f deploy/presets/briefing-bot.env.example
+            test -f deploy/presets/socials-bot.env.example
             test -f deploy/presets/maintenance-agent.env.example
             test -f deploy/presets/transport-bot.env.example
             test -f deploy/presets/sales-bot.env.example
@@ -181,6 +182,7 @@ jobs:
             cp deploy/presets/mu-clubs-monitor.env.example deploy/runtime/mu-clubs-monitor.env
             cp deploy/presets/brno-events-agent.env.example deploy/runtime/brno-events-agent.env
             cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
+            cp deploy/presets/socials-bot.env.example deploy/runtime/socials-bot.env
             cp deploy/presets/study-bot.env.example deploy/runtime/study-bot.env
             cp deploy/presets/maintenance-agent.env.example deploy/runtime/maintenance-agent.env
             cp deploy/presets/transport-bot.env.example deploy/runtime/transport-bot.env

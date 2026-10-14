@@ -26,6 +26,7 @@ COPY apps/stocks-bot/package.json apps/stocks-bot/package.json
 COPY apps/study-bot/package.json apps/study-bot/package.json
 COPY apps/transport-bot/package.json apps/transport-bot/package.json
 COPY apps/sales-bot/package.json apps/sales-bot/package.json
+COPY apps/socials-bot/package.json apps/socials-bot/package.json
 COPY apps/osint-bot/package.json apps/osint-bot/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/database/package.json packages/database/package.json
@@ -33,6 +34,7 @@ COPY packages/sources/package.json packages/sources/package.json
 COPY packages/llm/package.json packages/llm/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 COPY packages/observability/package.json packages/observability/package.json
+COPY packages/notion/package.json packages/notion/package.json
 
 FROM manifests AS dependencies
 
@@ -71,6 +73,7 @@ COPY --from=production-dependencies --chown=node:node /app/apps/stocks-bot/node_
 COPY --from=production-dependencies --chown=node:node /app/apps/study-bot/node_modules ./apps/study-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/transport-bot/node_modules ./apps/transport-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/sales-bot/node_modules ./apps/sales-bot/node_modules
+COPY --from=production-dependencies --chown=node:node /app/apps/socials-bot/node_modules ./apps/socials-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/osint-bot/node_modules ./apps/osint-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/package.json /app/pnpm-workspace.yaml ./
@@ -96,6 +99,8 @@ COPY --from=build --chown=node:node /app/apps/transport-bot/package.json ./apps/
 COPY --from=build --chown=node:node /app/apps/transport-bot/dist ./apps/transport-bot/dist
 COPY --from=build --chown=node:node /app/apps/sales-bot/package.json ./apps/sales-bot/package.json
 COPY --from=build --chown=node:node /app/apps/sales-bot/dist ./apps/sales-bot/dist
+COPY --from=build --chown=node:node /app/apps/socials-bot/package.json ./apps/socials-bot/package.json
+COPY --from=build --chown=node:node /app/apps/socials-bot/dist ./apps/socials-bot/dist
 COPY --from=build --chown=node:node /app/apps/osint-bot/package.json ./apps/osint-bot/package.json
 COPY --from=build --chown=node:node /app/apps/osint-bot/dist ./apps/osint-bot/dist
 COPY --from=build --chown=node:node /app/packages/core/dist ./packages/core/dist
@@ -106,6 +111,7 @@ COPY --from=build --chown=node:node /app/packages/sources/dist ./packages/source
 COPY --from=build --chown=node:node /app/packages/llm/dist ./packages/llm/dist
 COPY --from=build --chown=node:node /app/packages/telegram/dist ./packages/telegram/dist
 COPY --from=build --chown=node:node /app/packages/observability/dist ./packages/observability/dist
+COPY --from=build --chown=node:node /app/packages/notion/dist ./packages/notion/dist
 COPY --from=build --chown=node:node /app/docs/maintenance-changelog.md ./docs/maintenance-changelog.md
 
 USER node

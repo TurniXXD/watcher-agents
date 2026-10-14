@@ -2852,3 +2852,682 @@ model OsintWatch {
   @@index([enabled, nextRunAt])
   @@map("osint_watches")
 }
+
+enum SocialProjectStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum SocialVisibility {
+  PUBLIC
+  PRIVATE
+  CONFIDENTIAL
+}
+
+enum SocialTopicStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum SocialIdeaStatus {
+  BACKLOG
+  PLANNED
+  USED
+  ARCHIVED
+}
+
+enum SocialPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum SocialBusinessObjective {
+  QUALIFIED_LEADS
+  CREDIBILITY
+  PERSONAL_BRAND
+  AUDIENCE_GROWTH
+  TRAFFIC
+  NEWSLETTER_GROWTH
+  LEARNING
+}
+
+enum SocialChannel {
+  LINKEDIN
+  INSTAGRAM
+  BLOG
+  NEWSLETTER
+}
+
+enum SocialContentFormat {
+  TEXT_POST
+  REEL
+  CAROUSEL
+  STORY
+  BLOG_ARTICLE
+  NEWSLETTER_ISSUE
+}
+
+enum SocialContentStatus {
+  IDEA
+  PLANNED
+  PROMPT_READY
+  DRAFT
+  READY
+  SCHEDULED
+  PUBLISHED
+  SKIPPED
+  ARCHIVED
+}
+
+enum SocialVersionSource {
+  MANUAL
+  CHATGPT
+  LOCAL_LLM
+  IMPORTED
+  NOTION
+}
+
+enum SocialVerificationStatus {
+  UNVERIFIED
+  PARTIALLY_VERIFIED
+  VERIFIED
+  STALE
+  FAILED
+}
+
+enum SocialWeeklyPlanStatus {
+  DRAFT
+  APPROVED
+  SKIPPED
+  COMPLETED
+  ARCHIVED
+}
+
+enum SocialSyncStatus {
+  PENDING
+  SYNCED
+  CONFLICT
+  FAILED
+}
+
+enum SocialSchedulerStatus {
+  PENDING
+  CLAIMED
+  COMPLETED
+  SKIPPED
+  FAILED
+}
+
+enum SocialEventFormat {
+  IN_PERSON
+  ONLINE
+  HYBRID
+  UNKNOWN
+}
+
+enum SocialPriceStatus {
+  FREE
+  PAID
+  UNKNOWN
+}
+
+enum SocialAccessType {
+  PUBLIC
+  REGISTRATION_REQUIRED
+  MEMBERS_ONLY
+  INVITE_ONLY
+  UNKNOWN
+}
+
+enum SocialEventStatus {
+  SCHEDULED
+  CANCELLED
+  POSTPONED
+  COMPLETED
+  UNKNOWN
+}
+
+enum SocialAttendanceStatus {
+  SUGGESTED
+  INTERESTED
+  REGISTERED
+  ATTENDED
+  MISSED
+  CANCELLED
+}
+
+enum SocialFollowUpStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+model SocialProject {
+  id             String              @id @default(uuid())
+  ownerUserId    BigInt
+  name           String
+  normalizedName String
+  description    String?
+  category       String
+  technologies   String[]            @default([])
+  status         SocialProjectStatus @default(ACTIVE)
+  repositoryUrl  String?
+  websiteUrl     String?
+  visibility     SocialVisibility    @default(PRIVATE)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  ideas          SocialIdeaProject[]
+  contentItems   SocialContentItemProject[]
+
+  @@unique([ownerUserId, normalizedName])
+  @@index([ownerUserId, status])
+  @@map("social_projects")
+}
+
+model SocialTopic {
+  id           String            @id @default(uuid())
+  ownerUserId  BigInt
+  name         String
+  slug         String
+  description  String?
+  pillar       String
+  status       SocialTopicStatus @default(ACTIVE)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  ideas        SocialIdeaTopic[]
+  contentItems SocialContentItemTopic[]
+
+  @@unique([ownerUserId, slug])
+  @@index([ownerUserId, status, pillar])
+  @@map("social_topics")
+}
+
+model SocialSource {
+  id                 String                   @id @default(uuid())
+  ownerUserId        BigInt
+  title              String
+  url                String?
+  canonicalUrl       String?
+  sourceType         String
+  publishedAt        DateTime?
+  accessedAt         DateTime                 @default(now())
+  summary            String?
+  verificationStatus SocialVerificationStatus @default(UNVERIFIED)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  ideas              SocialIdeaSource[]
+  contentItems       SocialContentItemSource[]
+
+  @@unique([ownerUserId, canonicalUrl])
+  @@index([ownerUserId, sourceType])
+  @@map("social_sources")
+}
+
+model SocialContentIdea {
+  id                String                  @id @default(uuid())
+  ownerUserId       BigInt
+  title             String
+  normalizedTitle   String
+  description       String
+  sourceType        String
+  sourceReference   String?
+  status            SocialIdeaStatus        @default(BACKLOG)
+  priority          SocialPriority          @default(MEDIUM)
+  businessObjective SocialBusinessObjective @default(QUALIFIED_LEADS)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  topics            SocialIdeaTopic[]
+  projects          SocialIdeaProject[]
+  sources           SocialIdeaSource[]
+  contentItems      SocialContentItem[]
+  eventLinks        SocialEventContentIdea[]
+
+  @@unique([ownerUserId, normalizedTitle])
+  @@index([ownerUserId, status, priority])
+  @@map("social_content_ideas")
+}
+
+model SocialIdeaTopic {
+  ideaId  String
+  topicId String
+  idea    SocialContentIdea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  topic   SocialTopic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@id([ideaId, topicId])
+  @@index([topicId])
+  @@map("social_idea_topics")
+}
+
+model SocialIdeaProject {
+  ideaId    String
+  projectId String
+  idea      SocialContentIdea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  project   SocialProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([ideaId, projectId])
+  @@index([projectId])
+  @@map("social_idea_projects")
+}
+
+model SocialIdeaSource {
+  ideaId   String
+  sourceId String
+  idea     SocialContentIdea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  source   SocialSource      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@id([ideaId, sourceId])
+  @@index([sourceId])
+  @@map("social_idea_sources")
+}
+
+model SocialTelegramSession {
+  id          String   @id @default(uuid())
+  ownerUserId BigInt
+  chatId      BigInt
+  sessionType String
+  state       String
+  payload     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime
+  weeklyPlans SocialWeeklyPlan[]
+
+  @@index([ownerUserId, chatId, expiresAt])
+  @@map("social_telegram_sessions")
+}
+
+model SocialWeeklyPlan {
+  id                String                 @id @default(uuid())
+  ownerUserId       BigInt
+  weekStart         DateTime               @db.Date
+  weekEnd           DateTime               @db.Date
+  version           Int                    @default(1)
+  status            SocialWeeklyPlanStatus @default(DRAFT)
+  planningSessionId String?
+  approvedAt        DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  planningSession   SocialTelegramSession? @relation(fields: [planningSessionId], references: [id], onDelete: SetNull)
+  contentItems      SocialContentItem[]
+  checklistItems    SocialChecklistItem[]
+  packs             SocialContentPack[]
+
+  @@unique([ownerUserId, weekStart, version])
+  @@index([ownerUserId, status, weekStart])
+  @@map("social_weekly_plans")
+}
+
+model SocialContentItem {
+  id                          String                  @id @default(uuid())
+  ownerUserId                 BigInt
+  ideaId                      String
+  weeklyPlanId                String?
+  title                       String
+  slug                        String?
+  channel                     SocialChannel
+  format                      SocialContentFormat
+  contentPillar               String
+  targetAudience              String
+  objective                   SocialBusinessObjective
+  angle                       String
+  planningReason              String
+  similarityWarning           String?
+  hook                        String?
+  outline                     Json?
+  prompt                      String?
+  draft                       String?
+  finalContent                String?
+  cta                         String?
+  requiredAssets              String[]                @default([])
+  plannedAt                   DateTime?
+  scheduledAt                 DateTime?
+  publishedAt                 DateTime?
+  publishedUrl                String?
+  status                      SocialContentStatus      @default(IDEA)
+  estimatedPreparationMinutes Int                     @default(30)
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+  idea                        SocialContentIdea       @relation(fields: [ideaId], references: [id], onDelete: Restrict)
+  weeklyPlan                  SocialWeeklyPlan?       @relation(fields: [weeklyPlanId], references: [id], onDelete: SetNull)
+  topics                      SocialContentItemTopic[]
+  projects                    SocialContentItemProject[]
+  sources                     SocialContentItemSource[]
+  versions                    SocialContentVersion[]
+  metrics                     SocialContentMetric[]
+  relatedFrom                 SocialContentRelation[] @relation("SocialContentFrom")
+  relatedTo                   SocialContentRelation[] @relation("SocialContentTo")
+  checklistItems              SocialChecklistItem[]
+
+  @@index([ownerUserId, status, plannedAt])
+  @@index([ownerUserId, channel, publishedAt])
+  @@index([ideaId])
+  @@map("social_content_items")
+}
+
+model SocialContentItemTopic {
+  contentItemId String
+  topicId       String
+  contentItem   SocialContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  topic         SocialTopic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@id([contentItemId, topicId])
+  @@index([topicId])
+  @@map("social_content_item_topics")
+}
+
+model SocialContentItemProject {
+  contentItemId String
+  projectId     String
+  contentItem   SocialContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  project       SocialProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([contentItemId, projectId])
+  @@index([projectId])
+  @@map("social_content_item_projects")
+}
+
+model SocialContentItemSource {
+  contentItemId String
+  sourceId      String
+  contentItem   SocialContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  source        SocialSource      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@id([contentItemId, sourceId])
+  @@index([sourceId])
+  @@map("social_content_item_sources")
+}
+
+model SocialContentRelation {
+  fromContentItemId String
+  toContentItemId   String
+  relationType      String @default("REPURPOSED_FROM")
+  createdAt         DateTime @default(now())
+  fromContentItem   SocialContentItem @relation("SocialContentFrom", fields: [fromContentItemId], references: [id], onDelete: Cascade)
+  toContentItem     SocialContentItem @relation("SocialContentTo", fields: [toContentItemId], references: [id], onDelete: Cascade)
+
+  @@id([fromContentItemId, toContentItemId])
+  @@index([toContentItemId])
+  @@map("social_content_relations")
+}
+
+model SocialContentVersion {
+  id            String              @id @default(uuid())
+  contentItemId String
+  versionNumber Int
+  content       String
+  source        SocialVersionSource
+  createdAt     DateTime            @default(now())
+  contentItem   SocialContentItem   @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([contentItemId, versionNumber])
+  @@index([contentItemId, createdAt])
+  @@map("social_content_versions")
+}
+
+model SocialContentMetric {
+  id                String            @id @default(uuid())
+  contentItemId     String
+  recordedAt        DateTime          @default(now())
+  impressions       Int?
+  reach             Int?
+  likes             Int?
+  comments          Int?
+  shares            Int?
+  saves             Int?
+  clicks            Int?
+  websiteVisits     Int?
+  leads             Int?
+  qualifiedLeads    Int?
+  customersAcquired Int?
+  notes             String?
+  contentItem       SocialContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@index([contentItemId, recordedAt])
+  @@map("social_content_metrics")
+}
+
+model SocialChecklistItem {
+  id            String             @id @default(uuid())
+  weeklyPlanId  String
+  contentItemId String?
+  title         String
+  completed     Boolean            @default(false)
+  completedAt   DateTime?
+  sortOrder     Int
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  weeklyPlan    SocialWeeklyPlan   @relation(fields: [weeklyPlanId], references: [id], onDelete: Cascade)
+  contentItem   SocialContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+
+  @@index([weeklyPlanId, sortOrder])
+  @@map("social_checklist_items")
+}
+
+model SocialContentPack {
+  id           String           @id @default(uuid())
+  weeklyPlanId String
+  version      Int
+  contentHash  String
+  markdown     String
+  createdAt    DateTime         @default(now())
+  weeklyPlan   SocialWeeklyPlan @relation(fields: [weeklyPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([weeklyPlanId, version])
+  @@unique([weeklyPlanId, contentHash])
+  @@map("social_content_packs")
+}
+
+model SocialExternalSync {
+  id                 String           @id @default(uuid())
+  ownerUserId        BigInt
+  localEntityType    String
+  localEntityId      String
+  provider           String
+  externalId         String
+  lastLocalHash      String?
+  lastRemoteEditedAt DateTime?
+  lastSyncedAt       DateTime?
+  syncStatus         SocialSyncStatus @default(PENDING)
+  lastError          String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([provider, externalId])
+  @@unique([ownerUserId, localEntityType, localEntityId, provider])
+  @@index([ownerUserId, syncStatus])
+  @@map("social_external_syncs")
+}
+
+model SocialSettings {
+  ownerUserId                  BigInt   @id
+  chatId                       BigInt
+  timezone                     String   @default("Europe/Prague")
+  sundayReminderTime           String   @default("09:00")
+  mondayNetworkingReminder     Boolean  @default(true)
+  preferredCities              String[] @default(["Brno", "Ostrava", "Frýdek-Místek"])
+  travelRadiusKm               Int      @default(80)
+  maximumEventPriceCzk         Int      @default(0)
+  weeklyRecommendationCount    Int      @default(5)
+  preferredEventCategories     String[] @default(["startup", "entrepreneurship", "business", "programming", "ai", "networking"])
+  enabledEventSources          String[] @default(["brno-events"])
+  reminderPreferences          Json
+  cadence                      Json
+  pillarDistribution           Json
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@unique([chatId])
+  @@map("social_settings")
+}
+
+model SocialScheduledJob {
+  id          String                @id @default(uuid())
+  ownerUserId BigInt
+  chatId      BigInt
+  kind        String
+  scheduledFor DateTime
+  status      SocialSchedulerStatus @default(PENDING)
+  claimedAt   DateTime?
+  completedAt DateTime?
+  lastError   String?
+  payload     Json
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@unique([ownerUserId, kind, scheduledFor])
+  @@index([status, scheduledFor])
+  @@map("social_scheduled_jobs")
+}
+
+model SocialNetworkingEvent {
+  id                  String                    @id @default(uuid())
+  ownerUserId         BigInt
+  title               String
+  normalizedTitle     String
+  description         String?
+  organizer           String?
+  venue               String?
+  city                String?
+  address             String?
+  startAt             DateTime
+  endAt               DateTime?
+  timezone            String                    @default("Europe/Prague")
+  format              SocialEventFormat         @default(UNKNOWN)
+  categories          String[]                  @default([])
+  audience            String?
+  priceAmount         Decimal?                  @db.Decimal(12, 2)
+  currency            String?
+  priceStatus         SocialPriceStatus         @default(UNKNOWN)
+  accessType          SocialAccessType          @default(UNKNOWN)
+  registrationUrl     String?
+  canonicalUrl        String?
+  sourceProvider      String
+  sourceExternalId    String?
+  retrievedAt         DateTime                  @default(now())
+  verifiedAt          DateTime?
+  verificationStatus  SocialVerificationStatus  @default(UNVERIFIED)
+  status              SocialEventStatus         @default(SCHEDULED)
+  relevanceScore      Int                       @default(0)
+  relevanceReasons    String[]                  @default([])
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  sourceReferences    SocialNetworkingEventSource[]
+  attendances         SocialEventAttendance[]
+
+  @@unique([ownerUserId, canonicalUrl])
+  @@unique([ownerUserId, sourceProvider, sourceExternalId])
+  @@index([ownerUserId, startAt, city])
+  @@index([ownerUserId, priceStatus, startAt])
+  @@map("social_networking_events")
+}
+
+model SocialNetworkingEventSource {
+  id          String                @id @default(uuid())
+  eventId     String
+  provider    String
+  externalId  String?
+  sourceUrl   String
+  officialUrl String?
+  retrievedAt DateTime              @default(now())
+  event       SocialNetworkingEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, sourceUrl])
+  @@index([provider, externalId])
+  @@map("social_networking_event_sources")
+}
+
+model SocialEventAttendance {
+  id           String                 @id @default(uuid())
+  ownerUserId  BigInt
+  eventId      String
+  weeklyPlanId String?
+  status       SocialAttendanceStatus @default(SUGGESTED)
+  registeredAt DateTime?
+  attendedAt   DateTime?
+  notes        String?
+  highlights   String?
+  lessons      String?
+  privacy      SocialVisibility       @default(PRIVATE)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  event        SocialNetworkingEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contacts     SocialAttendanceContact[]
+  followUps    SocialNetworkingFollowUp[]
+  contentIdeas SocialEventContentIdea[]
+
+  @@unique([ownerUserId, eventId])
+  @@index([ownerUserId, status, updatedAt])
+  @@index([weeklyPlanId])
+  @@map("social_event_attendances")
+}
+
+model SocialNetworkingContact {
+  id                     String                    @id @default(uuid())
+  ownerUserId            BigInt
+  displayName            String
+  normalizedName         String
+  organization           String?
+  role                   String?
+  profileUrl             String?
+  preferredContactMethod String?
+  notes                  String?
+  consentOrContext       String?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  attendances            SocialAttendanceContact[]
+  followUps              SocialNetworkingFollowUp[]
+
+  @@unique([ownerUserId, normalizedName, organization])
+  @@index([ownerUserId, updatedAt])
+  @@map("social_networking_contacts")
+}
+
+model SocialAttendanceContact {
+  attendanceId     String
+  contactId        String
+  conversationNotes String?
+  followUpIntent   String?
+  createdAt        DateTime                @default(now())
+  attendance       SocialEventAttendance   @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  contact          SocialNetworkingContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([attendanceId, contactId])
+  @@index([contactId])
+  @@map("social_attendance_contacts")
+}
+
+model SocialNetworkingFollowUp {
+  id           String                    @id @default(uuid())
+  ownerUserId  BigInt
+  contactId    String
+  attendanceId String?
+  title        String
+  dueAt        DateTime
+  status       SocialFollowUpStatus      @default(OPEN)
+  completedAt  DateTime?
+  notes        String?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  contact      SocialNetworkingContact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  attendance   SocialEventAttendance?    @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+
+  @@index([ownerUserId, status, dueAt])
+  @@map("social_networking_follow_ups")
+}
+
+model SocialEventContentIdea {
+  eventAttendanceId String
+  contentIdeaId     String
+  provenanceNotes  String
+  createdAt         DateTime              @default(now())
+  eventAttendance  SocialEventAttendance @relation(fields: [eventAttendanceId], references: [id], onDelete: Cascade)
+  contentIdea       SocialContentIdea     @relation(fields: [contentIdeaId], references: [id], onDelete: Cascade)
+
+  @@id([eventAttendanceId, contentIdeaId])
+  @@index([contentIdeaId])
+  @@map("social_event_content_ideas")
+}

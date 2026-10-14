@@ -26,6 +26,7 @@ required_files=(
   deploy/runtime/mu-clubs-monitor.env
   deploy/runtime/brno-events-agent.env
   deploy/runtime/briefing-bot.env
+  deploy/runtime/socials-bot.env
   # The optional Study Bot still has an env file so Compose can parse the full
   # service definition. Its credentials are validated only when it is started.
   deploy/runtime/study-bot.env
@@ -71,6 +72,11 @@ required_env_values=(
   "deploy/runtime/briefing-bot.env:BRIEFING_MU_CLUBS_URL"
   "deploy/runtime/briefing-bot.env:OLLAMA_URL"
   "deploy/runtime/briefing-bot.env:OLLAMA_MODEL"
+  "deploy/runtime/socials-bot.env:DATABASE_URL"
+  "deploy/runtime/socials-bot.env:SOCIALS_TELEGRAM_TOKEN"
+  "deploy/runtime/socials-bot.env:TELEGRAM_ALLOWED_USER_IDS"
+  "deploy/runtime/socials-bot.env:OLLAMA_URL"
+  "deploy/runtime/socials-bot.env:OLLAMA_MODEL"
   "deploy/runtime/maintenance-agent.env:DATABASE_URL"
   "deploy/runtime/maintenance-agent.env:MAINTENANCE_API_TOKEN"
   "deploy/runtime/maintenance-agent.env:MAINTENANCE_TELEGRAM_TOKEN"
@@ -101,7 +107,7 @@ required_env_values=(
 
 legacy_watcher_services=(
   stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent
-  briefing-bot maintenance-agent transport-bot
+  briefing-bot socials-bot maintenance-agent transport-bot
 )
 watcher_services=("${legacy_watcher_services[@]}" osint-bot sales-bot)
 integration_services=(quickly twenty-server twenty-worker)

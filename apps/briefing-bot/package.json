@@ -14,6 +14,7 @@
     "@watcher/core": "workspace:*",
     "@watcher/database": "workspace:*",
     "@watcher/llm": "workspace:*",
+    "@watcher/notion": "workspace:*",
     "@watcher/observability": "workspace:*",
     "@watcher/telegram": "workspace:*",
     "grammy": "1.46.0",

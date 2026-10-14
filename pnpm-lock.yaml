@@ -55,6 +55,9 @@ importers:
       '@watcher/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@watcher/notion':
+        specifier: workspace:*
+        version: link:../../packages/notion
       '@watcher/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -308,6 +311,37 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  apps/socials-bot:
+    dependencies:
+      '@watcher/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@watcher/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@watcher/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@watcher/notion':
+        specifier: workspace:*
+        version: link:../../packages/notion
+      '@watcher/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@watcher/telegram':
+        specifier: workspace:*
+        version: link:../../packages/telegram
+      grammy:
+        specifier: 1.46.0
+        version: 1.46.0
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   apps/stocks-bot:
     dependencies:
       '@watcher/core':
@@ -468,6 +502,16 @@ importers:
       '@watcher/observability':
         specifier: workspace:*
         version: link:../observability
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/notion:
+    dependencies:
       zod:
         specifier: 4.4.3
         version: 4.4.3

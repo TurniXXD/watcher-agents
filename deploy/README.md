@@ -2,7 +2,7 @@
 
 Production deployment uses GitHub Actions, GitHub Container Registry (GHCR), Tailscale, OpenSSH, Docker Compose, and a server-managed runtime configuration. The `deploy-vps` workflow runs after `watcher-ci` succeeds on `main`; it can also be started manually from the Actions page.
 
-GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `maintenance-agent`, `transport-bot`, `osint-bot`, `sales-bot`, and the one-shot `migrate` service. Reality Bot joins the release after its private runtime file is configured; until then deployment reports that it was skipped without blocking established services. Quickly and Twenty are required companion services for the sales stack. Ollama remains outside this Compose stack.
+GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `socials-bot`, `maintenance-agent`, `transport-bot`, `osint-bot`, `sales-bot`, and the one-shot `migrate` service. Reality Bot joins the release after its private runtime file is configured; until then deployment reports that it was skipped without blocking established services. Quickly and Twenty are required companion services for the sales stack. Ollama remains outside this Compose stack.
 
 ## Security model
 
@@ -145,6 +145,7 @@ Runtime credentials are intentionally not uploaded by GitHub Actions. Create the
 | `deploy/runtime/mu-clubs-monitor.env`  | MU Clubs API and polling settings                               |
 | `deploy/runtime/brno-events-agent.env` | Brno event API and per-source polling settings                  |
 | `deploy/runtime/briefing-bot.env`      | Morning briefing bot credentials                                |
+| `deploy/runtime/socials-bot.env`       | Socials planning bot credentials and optional integrations      |
 | `deploy/runtime/study-bot.env`         | Optional Study Bot, Anki export, and object-storage credentials |
 | `deploy/runtime/maintenance-agent.env` | Maintenance API, Telegram, and scheduler values                 |
 | `deploy/runtime/transport-bot.env`     | Transport bot credentials, request feed, and routing settings   |
@@ -170,6 +171,7 @@ cp deploy/presets/reality-bot.env.example deploy/runtime/reality-bot.env
 cp deploy/presets/mu-clubs-monitor.env.example deploy/runtime/mu-clubs-monitor.env
 cp deploy/presets/brno-events-agent.env.example deploy/runtime/brno-events-agent.env
 cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
+cp deploy/presets/socials-bot.env.example deploy/runtime/socials-bot.env
 cp deploy/presets/study-bot.env.example deploy/runtime/study-bot.env
 cp deploy/presets/maintenance-agent.env.example deploy/runtime/maintenance-agent.env
 cp deploy/presets/transport-bot.env.example deploy/runtime/transport-bot.env
@@ -247,7 +249,7 @@ docker compose \
   --env-file deploy/runtime/compose.env \
   --env-file .release.env \
   -f docker-compose.production.yml \
-  logs --tail 200 stocks-bot publications-bot news-bot reality-bot mu-clubs-monitor brno-events-agent briefing-bot maintenance-agent transport-bot osint-bot sales-bot quickly twenty-server twenty-worker
+  logs --tail 200 stocks-bot publications-bot news-bot reality-bot mu-clubs-monitor brno-events-agent briefing-bot socials-bot maintenance-agent transport-bot osint-bot sales-bot quickly twenty-server twenty-worker
 ```
 
 Backups are stored in `/opt/watcher/backups` and retained for 14 days by default. Override `BACKUP_RETENTION_DAYS` only when invoking `deploy/deploy.sh` manually.

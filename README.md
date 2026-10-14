@@ -15,6 +15,7 @@ Each application owns its setup, commands, configuration, source behavior, and l
 | Reality Bot       | Real-estate monitoring and investment calculations                   | [README](apps/reality-bot/README.md)       |
 | OSINT Bot         | Provenance-backed public-source investigations                       | [README](apps/osint-bot/README.md)         |
 | Sales Bot         | Lead research, outreach preparation, and personal network management | [README](apps/sales-bot/README.md)         |
+| Socials Bot       | Relational content planning, personal brand, and networking workflow | [README](apps/socials-bot/README.md)       |
 | Study Bot         | PDF lectures, quizzes, summaries, and flashcards                     | [README](apps/study-bot/README.md)         |
 | Transport Bot     | Van-load compatibility and profitability decisions                   | [README](apps/transport-bot/README.md)     |
 | Maintenance Agent | Health, quality, capacity, and release monitoring                    | [README](apps/maintenance-agent/README.md) |
@@ -66,6 +67,7 @@ Run `pnpm db:validate` after Prisma changes and `docker compose config --quiet` 
 - `packages/sources`: reusable source adapters, safe HTTP behavior, and caching
 - `packages/telegram`: authorization, keyboards, rendering, and message splitting
 - `packages/observability`: run, source, feedback, and resource telemetry
+- `packages/notion`: shared retrying Notion API client
 
 Independent sources use failure isolation and normalized `WatchItem` records. PostgreSQL constraints provide durable idempotency. Telegram commands and callbacks are private administration surfaces protected by `TELEGRAM_ALLOWED_USER_IDS`.
 
