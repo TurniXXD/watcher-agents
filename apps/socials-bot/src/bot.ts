@@ -1,5 +1,5 @@
 import { assertPublicHttpUrl } from '@watcher/core';
-import type { SocialsStore } from '@watcher/database';
+import type { SocialsStore, SocialTrendStore } from '@watcher/database';
 import {
   authorizationMiddleware,
   splitTelegramMessage,
@@ -14,6 +14,10 @@ import {
   nextPlanningWeek,
 } from './time.js';
 import { socialEventSources } from './source-registry.js';
+import { contentConceptSchema } from './trends/content-agent.js';
+import { parseTrendImport } from './trends/import.js';
+import type { SocialTrendIntelligence } from './trends/runner.js';
+import { trendSourceIdSchema, type TrendSourceId } from './trends/types.js';
 
 const helpText = `📣 Socials Bot
 
@@ -38,6 +42,13 @@ Databáze je zdroj pravdy, Telegram je ovládání a Notion redakční prostor. 
 /socials_event_add — ruční přidání ověřitelné akce
 /socials_sources — registry zdrojů a jejich skutečný stav
 /socials_contacts — kontakty a schválené follow-upy
+/socials_trends — Trend Intelligence přehled nebo denní report
+/socials_trends run [YOUTUBE,REDDIT] — ruční výzkumný běh
+/socials_trend ID — evidence, skóre a české obsahové návrhy
+/socials_trend_use ID — přidat příležitost do zásobníku nápadů
+/socials_trend_feedback ID relevant|not_relevant|saturated|good|published|leads
+/socials_trend_import — ruční CSV/JSON import pro TikTok, Instagram a Google Trends
+/socials_trend_settings — zdroje, klíčová slova a denní plán
 /socials_help — tato nápověda
 
 Uložení draftu: /socials_drafts a vyber položku. Publikaci potvrď ručně:
@@ -55,7 +66,9 @@ const mainKeyboard = (): InlineKeyboard =>
     .text('🤝 Networking', 'social:networking')
     .row()
     .text('📦 Content Pack', 'social:pack')
-    .text('📅 Tento týden', 'social:week');
+    .text('📅 Tento týden', 'social:week')
+    .row()
+    .text('🔭 Trend Intelligence', 'social:trends');
 
 const commandArgument = (ctx: Context): string =>
   typeof ctx.match === 'string' ? ctx.match.trim() : '';
@@ -90,6 +103,14 @@ const debriefPayloadSchema = z.object({
   index: z.number().int().min(0).max(3),
   answers: z.record(z.string(), z.string()),
 });
+const trendFeedbackSchema = z.enum([
+  'RELEVANT',
+  'NOT_RELEVANT',
+  'ALREADY_SATURATED',
+  'GOOD_IDEA',
+  'PUBLISHED',
+  'GENERATED_LEADS',
+]);
 const debriefQuestions = [
   ['highlights', 'Co bylo na akci nejzajímavější?'],
   ['lessons', 'Co konkrétního sis odnesl nebo naučil?'],
@@ -101,10 +122,94 @@ type SocialBotDependencies = {
   allowedIds: ReadonlySet<number>;
   store: SocialsStore;
   service: SocialsService;
+  trendStore: SocialTrendStore;
+  trendIntelligence: SocialTrendIntelligence;
+  defaultTrendSources: readonly TrendSourceId[];
   timezone: string;
   transcriber?: SocialTranscriber;
   download?: (fileId: string) => Promise<Uint8Array>;
   reportError: (error: unknown) => void;
+};
+
+const renderTrendOverview = async (
+  ctx: Context,
+  dependencies: SocialBotDependencies,
+): Promise<void> => {
+  if (!ctx.from) return;
+  const ownerUserId = BigInt(ctx.from.id);
+  const profile =
+    await dependencies.trendIntelligence.ensureProfile(ownerUserId);
+  const report = await dependencies.trendStore.latestReport(ownerUserId);
+  const availability = dependencies.trendIntelligence
+    .sourceAvailability()
+    .map(
+      (source) =>
+        `• ${source.id}: ${source.enabled ? 'připraven' : 'nenakonfigurován / jen ruční import'} — ${source.name}`,
+    )
+    .join('\n');
+  await replyLong(
+    ctx,
+    `🔭 Trend Intelligence\nStav: ${profile.enabled ? 'zapnuto' : 'vypnuto'}\nPlán: ${profile.schedule} (${profile.timezone})\nDalší běh: ${profile.nextRunAt?.toISOString() ?? 'nenaplánován'}\nPoslední běh: ${profile.lastRunAt?.toISOString() ?? 'zatím žádný'}\n\nDostupnost zdrojů:\n${availability}\n\n${report?.text ?? 'Zatím není žádný report. Spusť /socials_trends run.'}`,
+  );
+  const opportunities = report?.run.opportunities ?? [];
+  for (const opportunity of opportunities.slice(0, 5)) {
+    await ctx.reply(
+      `${opportunity.opportunityScore}/100 · jistota ${opportunity.confidence}/100\n${opportunity.title}\nID: ${opportunity.id}`,
+      {
+        reply_markup: new InlineKeyboard()
+          .text('🔎 Detail', `social:trend:${opportunity.id}`)
+          .text('💡 Do zásobníku', `social:trenduse:${opportunity.id}`)
+          .row()
+          .text('👍 Relevantní', `social:tf:R:${opportunity.id}`)
+          .text('👎 Nerelevantní', `social:tf:N:${opportunity.id}`),
+      },
+    );
+  }
+};
+
+const renderTrendDetail = async (
+  ctx: Context,
+  dependencies: SocialBotDependencies,
+  opportunityId: string,
+): Promise<void> => {
+  if (!ctx.from) return;
+  const opportunity = await dependencies.trendStore.opportunity(
+    BigInt(ctx.from.id),
+    opportunityId,
+  );
+  if (!opportunity) {
+    await ctx.reply('Trendová příležitost nebyla nalezena.');
+    return;
+  }
+  const concept = contentConceptSchema.parse(opportunity.contentConcept);
+  const comparison = opportunity.cluster.comparisons[0];
+  const sourceLines = opportunity.cluster.signals
+    .slice(0, 10)
+    .map(
+      (signal) =>
+        `• ${signal.source}/${signal.region}: ${signal.title}\n  ${signal.sourceUrl}`,
+    )
+    .join('\n');
+  const carousel = concept.carousel
+    .map(
+      (slide, index) =>
+        `${index + 1}. ${slide.title}\n${slide.content}\nVizuál: ${slide.visual}`,
+    )
+    .join('\n\n');
+  await replyLong(
+    ctx,
+    `🔭 ${opportunity.title}\nSkóre ${opportunity.opportunityScore}/100 · jistota ${opportunity.confidence}/100\nČeský status: ${opportunity.czechMarketStatus}\nFormát: ${opportunity.recommendedChannel}/${opportunity.recommendedFormat}\nCíl: ${opportunity.objective} · ${opportunity.estimatedEffortMinutes} min\n\nFAKTA A PROVENIENCE\n${sourceLines || 'Žádné zdrojové odkazy'}\n\nODHAD A NEJISTOTA\n${comparison?.explanation ?? opportunity.explanation}\nChybí: ${opportunity.missingData.join(', ') || 'žádná zásadní data'}\n\nPROČ TO ŘEŠIT\n${concept.research.whyTrending}\n${concept.research.businessRelevance}\n\nHOOKY\n1. ${concept.hooks.curiosity}\n2. ${concept.hooks.problem}\n3. ${concept.hooks.practical}\n\nVIDEO 30–60 s\n${concept.shortVideo.opening}\n${concept.shortVideo.explanation}\nPříklad: ${concept.shortVideo.example}\nPointa: ${concept.shortVideo.takeaway}\nCTA: ${concept.shortVideo.cta}\n\nLINKEDIN\n${concept.linkedInPost}\n\nCAROUSEL\n${carousel}\n\nPRODUKCE\nScreenshoty: ${concept.suggestedScreenshots.join('; ') || 'nejsou nutné'}\nOvěřit: ${concept.claimsToVerify.join('; ') || 'běžná redakční kontrola'}\n${concept.originalityNote}\n\nID: ${opportunity.id}`,
+  );
+  await ctx.reply('Akce s příležitostí:', {
+    reply_markup: new InlineKeyboard()
+      .text('💡 Přidat do zásobníku', `social:trenduse:${opportunity.id}`)
+      .row()
+      .text('👍 Relevantní', `social:tf:R:${opportunity.id}`)
+      .text('💚 Dobrý nápad', `social:tf:G:${opportunity.id}`)
+      .row()
+      .text('📈 Nasycené', `social:tf:S:${opportunity.id}`)
+      .text('👎 Nerelevantní', `social:tf:N:${opportunity.id}`),
+  });
 };
 
 const renderIdeas = async (
@@ -346,6 +451,38 @@ const handleSessionAnswer = async (
     }
     return true;
   }
+  if (session.sessionType === 'TREND_IMPORT') {
+    let signals: ReturnType<typeof parseTrendImport>;
+    try {
+      signals = parseTrendImport(text);
+    } catch {
+      await ctx.reply(
+        'Import se nepodařilo ověřit. Zkontroluj CSV/JSON, povinná pole title a url a použij pouze veřejné HTTP(S) odkazy.',
+      );
+      return true;
+    }
+    if (!signals.length) {
+      await ctx.reply('Import neobsahuje žádné platné řádky.');
+      return true;
+    }
+    await dependencies.store.endSession(session.id);
+    await ctx.reply(
+      `🔭 Importuji ${signals.length} ověřitelných referencí a připravuji report…`,
+    );
+    const report = await dependencies.trendIntelligence.run({
+      ownerUserId: BigInt(ctx.from.id),
+      chatId: BigInt(ctx.chat.id),
+      trigger: 'MANUAL',
+      selectedSources: [],
+      seedSignals: signals,
+    });
+    await replyLong(
+      ctx,
+      report?.text ??
+        'Import byl uložen, ale nevznikla žádná dostatečně doložená příležitost.',
+    );
+    return true;
+  }
   if (session.sessionType !== 'WEEKLY_PLANNING') return false;
   const payload = planningPayloadSchema.parse(session.payload);
   const question = planningQuestions[payload.index];
@@ -402,6 +539,195 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
     });
   });
   bot.command('socials_help', async (ctx) => replyLong(ctx, helpText));
+  bot.command('socials_trends', async (ctx) => {
+    if (!ctx.from || !ctx.chat) return;
+    await dependencies.store.ensureSettings(
+      BigInt(ctx.from.id),
+      BigInt(ctx.chat.id),
+    );
+    const argument = commandArgument(ctx);
+    if (!argument.toLocaleLowerCase('en-US').startsWith('run')) {
+      await renderTrendOverview(ctx, dependencies);
+      return;
+    }
+    const requested = argument
+      .slice(3)
+      .trim()
+      .split(',')
+      .map((value) => value.trim().toUpperCase())
+      .filter(Boolean);
+    let selected: TrendSourceId[];
+    if (requested.length) {
+      const parsedSources = z.array(trendSourceIdSchema).safeParse(requested);
+      if (!parsedSources.success) {
+        await ctx.reply(
+          'Neznámý zdroj. Použij YOUTUBE, REDDIT, GOOGLE_TRENDS, TIKTOK, INSTAGRAM nebo MANUAL.',
+        );
+        return;
+      }
+      selected = parsedSources.data;
+    } else {
+      selected = [...dependencies.defaultTrendSources];
+    }
+    await ctx.reply(
+      `🔭 Spouštím výzkum: ${selected.join(', ') || 'žádné automatické zdroje'}… Jednotlivé zdroje se zpracují nezávisle.`,
+    );
+    const report = await dependencies.trendIntelligence.run({
+      ownerUserId: BigInt(ctx.from.id),
+      chatId: BigInt(ctx.chat.id),
+      trigger: 'MANUAL',
+      selectedSources: selected,
+    });
+    await replyLong(
+      ctx,
+      report?.text ?? 'Výzkum neskončil použitelným reportem.',
+    );
+  });
+  bot.command('socials_trend', async (ctx) => {
+    const id = commandArgument(ctx);
+    if (!id) {
+      await ctx.reply('Použití: /socials_trend OPPORTUNITY_ID');
+      return;
+    }
+    await renderTrendDetail(ctx, dependencies, id);
+  });
+  bot.command('socials_trend_use', async (ctx) => {
+    if (!ctx.from) return;
+    const id = commandArgument(ctx);
+    if (!id) {
+      await ctx.reply('Použití: /socials_trend_use OPPORTUNITY_ID');
+      return;
+    }
+    const idea = await dependencies.trendStore.convertOpportunityToIdea(
+      BigInt(ctx.from.id),
+      id,
+    );
+    await ctx.reply(
+      `✅ Příležitost je v zásobníku nápadů: ${idea.title}\nID: ${idea.id}`,
+    );
+  });
+  bot.command('socials_trend_feedback', async (ctx) => {
+    if (!ctx.from) return;
+    const [opportunityId, rawKind, ...notes] =
+      commandArgument(ctx).split(/\s+/u);
+    const feedbackKinds: Record<string, z.infer<typeof trendFeedbackSchema>> = {
+      relevant: 'RELEVANT',
+      not_relevant: 'NOT_RELEVANT',
+      saturated: 'ALREADY_SATURATED',
+      good: 'GOOD_IDEA',
+      published: 'PUBLISHED',
+      leads: 'GENERATED_LEADS',
+    };
+    const kind = rawKind
+      ? feedbackKinds[rawKind.toLocaleLowerCase('en-US')]
+      : undefined;
+    const parsedKind = trendFeedbackSchema.safeParse(kind);
+    if (!opportunityId || !parsedKind.success) {
+      await ctx.reply(
+        'Použití: /socials_trend_feedback ID relevant|not_relevant|saturated|good|published|leads [poznámka]',
+      );
+      return;
+    }
+    await dependencies.trendStore.addFeedback({
+      ownerUserId: BigInt(ctx.from.id),
+      opportunityId,
+      kind: parsedKind.data,
+      ...(notes.length ? { notes: notes.join(' ') } : {}),
+    });
+    await ctx.reply(
+      '✅ Feedback uložen. Budoucí pořadí ho použije jako malou transparentní korekci, ne jako důkaz kauzality.',
+    );
+  });
+  bot.command('socials_trend_import', async (ctx) => {
+    if (!ctx.from || !ctx.chat) return;
+    await dependencies.store.startSession({
+      ownerUserId: BigInt(ctx.from.id),
+      chatId: BigInt(ctx.chat.id),
+      sessionType: 'TREND_IMPORT',
+      state: 'WAITING_FOR_FILE',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60_000),
+    });
+    await ctx.reply(
+      'Pošli CSV nebo JSON do 1 MB. Povinné sloupce: title,url. Volitelné: source,id,description,region,publishedAt,views,likes,comments,shares,searchInterest. Povolené ruční zdroje: GOOGLE_TRENDS, TIKTOK, INSTAGRAM, MANUAL.',
+    );
+  });
+  bot.command('socials_trend_settings', async (ctx) => {
+    if (!ctx.from) return;
+    const ownerUserId = BigInt(ctx.from.id);
+    const profile =
+      await dependencies.trendIntelligence.ensureProfile(ownerUserId);
+    const argument = commandArgument(ctx);
+    if (!argument) {
+      await ctx.reply(
+        `🔭 Nastavení trendů\nStav: ${profile.enabled ? 'on' : 'off'}\nPlán: ${profile.schedule} | ${profile.timezone}\nZdroje: ${profile.enabledSources.join(', ')}\nReport: ${profile.reportSize}\nKeywords: ${profile.keywords.join(', ')}\nSubreddits: ${profile.subreddits.join(', ')}\n\nZměny:\n/socials_trend_settings on|off\n/socials_trend_settings sources YOUTUBE,REDDIT\n/socials_trend_settings schedule 0 7 * * * | Europe/Prague\n/socials_trend_settings report 5\n/socials_trend_settings keywords AI automation,local LLM\n/socials_trend_settings subreddits artificial,LocalLLaMA`,
+      );
+      return;
+    }
+    const lower = argument.toLocaleLowerCase('en-US');
+    if (lower === 'on' || lower === 'off') {
+      await dependencies.trendStore.updateProfile(ownerUserId, {
+        enabled: lower === 'on',
+      });
+    } else if (lower.startsWith('sources ')) {
+      const values = argument
+        .slice(8)
+        .split(',')
+        .map((value) => value.trim().toUpperCase())
+        .filter(Boolean);
+      const parsedSources = z.array(trendSourceIdSchema).safeParse(values);
+      if (!parsedSources.success) {
+        await ctx.reply(
+          'Neznámý zdroj. Použij YOUTUBE, REDDIT, GOOGLE_TRENDS, TIKTOK, INSTAGRAM nebo MANUAL.',
+        );
+        return;
+      }
+      await dependencies.trendStore.updateProfile(ownerUserId, {
+        enabledSources: parsedSources.data,
+      });
+    } else if (lower.startsWith('schedule ')) {
+      const [schedule, timezone] = argument
+        .slice(9)
+        .split('|')
+        .map((value) => value.trim());
+      if (!schedule || !timezone) {
+        await ctx.reply(
+          'Použití: /socials_trend_settings schedule 0 7 * * * | Europe/Prague',
+        );
+        return;
+      }
+      await dependencies.trendStore.updateProfile(ownerUserId, {
+        schedule,
+        timezone,
+      });
+    } else if (lower.startsWith('report ')) {
+      const reportSize = Number.parseInt(argument.slice(7).trim(), 10);
+      if (!Number.isInteger(reportSize) || reportSize < 1 || reportSize > 10) {
+        await ctx.reply('Velikost reportu musí být 1 až 10.');
+        return;
+      }
+      await dependencies.trendStore.updateProfile(ownerUserId, { reportSize });
+    } else if (lower.startsWith('keywords ')) {
+      const keywords = argument
+        .slice(9)
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .slice(0, 30);
+      await dependencies.trendStore.updateProfile(ownerUserId, { keywords });
+    } else if (lower.startsWith('subreddits ')) {
+      const subreddits = argument
+        .slice(11)
+        .split(',')
+        .map((value) => value.trim().replace(/^r\//u, ''))
+        .filter((value) => /^[A-Za-z0-9_]{2,50}$/u.test(value))
+        .slice(0, 30);
+      await dependencies.trendStore.updateProfile(ownerUserId, { subreddits });
+    } else {
+      await ctx.reply('Neznámé nastavení. Použij /socials_trend_settings.');
+      return;
+    }
+    await ctx.reply('✅ Nastavení Trend Intelligence bylo uloženo.');
+  });
   bot.command('socials_add', async (ctx) => {
     if (!ctx.from || !ctx.chat) return;
     const note = commandArgument(ctx);
@@ -840,6 +1166,45 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
     await ctx.answerCallbackQuery();
     await renderIdeas(ctx, dependencies);
   });
+  bot.callbackQuery('social:trends', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await renderTrendOverview(ctx, dependencies);
+  });
+  bot.callbackQuery(/^social:trend:([\w-]+)$/u, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await renderTrendDetail(ctx, dependencies, ctx.match[1]!);
+  });
+  bot.callbackQuery(/^social:trenduse:([\w-]+)$/u, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!ctx.from) return;
+    const idea = await dependencies.trendStore.convertOpportunityToIdea(
+      BigInt(ctx.from.id),
+      ctx.match[1]!,
+    );
+    await ctx.reply(`✅ Přidáno do zásobníku: ${idea.title}`);
+  });
+  bot.callbackQuery(/^social:tf:([RNSGPL]):([\w-]+)$/u, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!ctx.from) return;
+    const kind = trendFeedbackSchema.parse(
+      (
+        {
+          R: 'RELEVANT',
+          N: 'NOT_RELEVANT',
+          S: 'ALREADY_SATURATED',
+          G: 'GOOD_IDEA',
+          P: 'PUBLISHED',
+          L: 'GENERATED_LEADS',
+        } as const
+      )[ctx.match[1] as 'R' | 'N' | 'S' | 'G' | 'P' | 'L'],
+    );
+    await dependencies.trendStore.addFeedback({
+      ownerUserId: BigInt(ctx.from.id),
+      opportunityId: ctx.match[2]!,
+      kind,
+    });
+    await ctx.reply('✅ Feedback uložen.');
+  });
   bot.callbackQuery('social:week', async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderPlan(ctx, dependencies);
@@ -1043,14 +1408,30 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
       BigInt(ctx.from.id),
       BigInt(ctx.chat.id),
     );
-    if (session?.sessionType !== 'CONTENT_IMPORT') return;
-    const document = ctx.message.document;
     if (
-      !document.file_name?.toLowerCase().endsWith('.md') &&
-      document.mime_type !== 'text/markdown' &&
-      document.mime_type !== 'text/plain'
+      session?.sessionType !== 'CONTENT_IMPORT' &&
+      session?.sessionType !== 'TREND_IMPORT'
     ) {
-      await ctx.reply('Pro import použij Markdown nebo textový soubor.');
+      return;
+    }
+    const document = ctx.message.document;
+    const filename = document.file_name?.toLocaleLowerCase('en-US') ?? '';
+    const allowed =
+      session.sessionType === 'TREND_IMPORT'
+        ? filename.endsWith('.json') ||
+          filename.endsWith('.csv') ||
+          document.mime_type === 'application/json' ||
+          document.mime_type === 'text/csv' ||
+          document.mime_type === 'text/plain'
+        : filename.endsWith('.md') ||
+          document.mime_type === 'text/markdown' ||
+          document.mime_type === 'text/plain';
+    if (!allowed) {
+      await ctx.reply(
+        session.sessionType === 'TREND_IMPORT'
+          ? 'Pro trendový import použij CSV nebo JSON soubor.'
+          : 'Pro import použij Markdown nebo textový soubor.',
+      );
       return;
     }
     const bytes = await dependencies.download(document.file_id);

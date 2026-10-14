@@ -1,6 +1,7 @@
 import { computeNextRun, errorMessage } from '@watcher/core';
 import type { SocialsStore } from '@watcher/database';
 import type { SocialsService } from './service.js';
+import type { SocialTrendIntelligence } from './trends/runner.js';
 import { formatPragueDateTime, nextSundayReminder } from './time.js';
 
 type SchedulerTransport = {
@@ -22,6 +23,7 @@ export class SocialsScheduler {
   public constructor(
     private readonly options: {
       store: SocialsStore;
+      trendIntelligence: SocialTrendIntelligence;
       service: SocialsService;
       transport: SchedulerTransport;
       intervalMs: number;
@@ -62,6 +64,17 @@ export class SocialsScheduler {
       const timezone = setting.timezone || this.options.defaultTimezone;
       const reminderTime =
         setting.sundayReminderTime || this.options.defaultReminderTime;
+      const trendProfile = await this.options.trendIntelligence.ensureProfile(
+        setting.ownerUserId,
+      );
+      if (trendProfile.enabled && trendProfile.nextRunAt) {
+        await this.options.store.upsertScheduledJob({
+          ownerUserId: setting.ownerUserId,
+          chatId: setting.chatId,
+          kind: 'DAILY_TRENDS',
+          scheduledFor: trendProfile.nextRunAt,
+        });
+      }
       const lastSunday = nextSundayReminder(
         previousWindow(now),
         timezone,
@@ -163,6 +176,21 @@ export class SocialsScheduler {
       ['SUNDAY_PLANNING', 'MONDAY_NETWORKING'].includes(job.kind) &&
       now.getTime() - job.scheduledFor.getTime() > 3 * 60 * 60_000
     ) {
+      return;
+    }
+    if (job.kind === 'DAILY_TRENDS') {
+      if (now.getTime() - job.scheduledFor.getTime() > 12 * 60 * 60_000) {
+        return;
+      }
+      const report = await this.options.trendIntelligence.run({
+        ownerUserId: job.ownerUserId,
+        chatId: job.chatId,
+        trigger: 'SCHEDULED',
+        now,
+      });
+      if (report?.text) {
+        await this.options.transport.send(job.chatId, report.text);
+      }
       return;
     }
     if (job.kind === 'SUNDAY_PLANNING') {

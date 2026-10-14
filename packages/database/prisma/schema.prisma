@@ -3006,6 +3006,65 @@ enum SocialFollowUpStatus {
   CANCELLED
 }
 
+enum SocialTrendSourceKind {
+  GOOGLE_TRENDS
+  REDDIT
+  YOUTUBE
+  TIKTOK
+  INSTAGRAM
+  MANUAL
+}
+
+enum SocialTrendSourceAvailability {
+  ACTIVE
+  DISABLED
+  UNAVAILABLE
+  CREDENTIALS_REQUIRED
+  QUOTA_EXHAUSTED
+  ERROR
+}
+
+enum SocialTrendRegion {
+  US
+  CZ
+  GLOBAL
+  UNKNOWN
+}
+
+enum SocialTrendStage {
+  EARLY_EMERGING
+  RAPIDLY_GROWING
+  ESTABLISHED
+  DECLINING
+  EVERGREEN
+  UNKNOWN
+}
+
+enum SocialCzechMarketStatus {
+  EARLY_OPPORTUNITY
+  EMERGING_BOTH
+  ESTABLISHED
+  UNCERTAIN
+  NOT_RELEVANT
+}
+
+enum SocialTrendRunStatus {
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+enum SocialTrendFeedbackKind {
+  RELEVANT
+  NOT_RELEVANT
+  ALREADY_SATURATED
+  GOOD_IDEA
+  PUBLISHED
+  GENERATED_LEADS
+}
+
 model SocialProject {
   id             String              @id @default(uuid())
   ownerUserId    BigInt
@@ -3085,10 +3144,248 @@ model SocialContentIdea {
   sources           SocialIdeaSource[]
   contentItems      SocialContentItem[]
   eventLinks        SocialEventContentIdea[]
+  trendOpportunities SocialTrendOpportunity[]
 
   @@unique([ownerUserId, normalizedTitle])
   @@index([ownerUserId, status, priority])
   @@map("social_content_ideas")
+}
+
+model SocialTrendProfile {
+  ownerUserId          BigInt   @id
+  enabled              Boolean  @default(true)
+  sourceRegion         String   @default("US")
+  targetRegion         String   @default("CZ")
+  primaryLanguage      String   @default("cs")
+  secondaryLanguage    String   @default("en")
+  focusTopics          String[] @default(["web development", "AI integrations", "business automation", "custom software", "local AI", "small business digitalization", "technology entrepreneurship", "productivity systems"])
+  audiences            String[] @default(["Czech business owners", "small and medium-sized companies", "entrepreneurs", "technology enthusiasts", "potential clients"])
+  keywords             String[] @default(["AI automation", "local LLM", "AI agents", "business automation", "web development", "small business software", "SaaS", "developer tools"])
+  subreddits           String[] @default(["artificial", "LocalLLaMA", "ChatGPT", "Entrepreneur", "smallbusiness", "SaaS", "webdev", "technology", "startups"])
+  youtubeChannelIds    String[] @default([])
+  enabledSources       SocialTrendSourceKind[] @default([REDDIT, YOUTUBE])
+  schedule             String   @default("0 7 * * *")
+  timezone             String   @default("Europe/Prague")
+  reportSize           Int      @default(5)
+  scoringWeights       Json
+  quotaLimits          Json
+  retentionDays        Int      @default(180)
+  nextRunAt            DateTime?
+  lastRunAt            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("social_trend_profiles")
+}
+
+model SocialTrendSourceConfig {
+  id                 String                        @id @default(uuid())
+  ownerUserId        BigInt
+  source             SocialTrendSourceKind
+  enabled            Boolean                       @default(false)
+  availability       SocialTrendSourceAvailability @default(DISABLED)
+  config             Json
+  lastAttemptAt      DateTime?
+  lastSuccessfulAt   DateTime?
+  lastError          String?
+  quotaDate          DateTime?                     @db.Date
+  quotaUsed          Int                           @default(0)
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  @@unique([ownerUserId, source])
+  @@index([ownerUserId, enabled, availability])
+  @@map("social_trend_source_configs")
+}
+
+model SocialTrendSignal {
+  id          String                @id @default(uuid())
+  ownerUserId BigInt
+  source      SocialTrendSourceKind
+  externalId  String
+  fingerprint String
+  sourceUrl   String
+  title       String
+  description String?
+  region      SocialTrendRegion
+  publishedAt DateTime?
+  firstSeenAt DateTime              @default(now())
+  lastSeenAt  DateTime              @default(now())
+  collectedAt DateTime              @default(now())
+  metrics     Json
+  metadata    Json
+  clusterId   String?
+  cluster     SocialTrendCluster?   @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  observations SocialTrendObservation[]
+
+  @@unique([ownerUserId, source, externalId])
+  @@unique([ownerUserId, fingerprint])
+  @@index([ownerUserId, region, collectedAt])
+  @@index([clusterId, collectedAt])
+  @@map("social_trend_signals")
+}
+
+model SocialTrendObservation {
+  id             String            @id @default(uuid())
+  signalId       String
+  observedAt     DateTime          @default(now())
+  views          BigInt?
+  likes          BigInt?
+  comments       BigInt?
+  shares         BigInt?
+  searchInterest Float?
+  metrics        Json
+  signal         SocialTrendSignal @relation(fields: [signalId], references: [id], onDelete: Cascade)
+
+  @@unique([signalId, observedAt])
+  @@index([signalId, observedAt])
+  @@map("social_trend_observations")
+}
+
+model SocialTrendCluster {
+  id             String                @id @default(uuid())
+  ownerUserId    BigInt
+  canonicalKey   String
+  title          String
+  description    String?
+  keywords       String[]              @default([])
+  stage          SocialTrendStage      @default(UNKNOWN)
+  firstSeenAt    DateTime              @default(now())
+  lastSeenAt     DateTime              @default(now())
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  signals        SocialTrendSignal[]
+  comparisons    SocialTrendMarketComparison[]
+  opportunities  SocialTrendOpportunity[]
+
+  @@unique([ownerUserId, canonicalKey])
+  @@index([ownerUserId, stage, lastSeenAt])
+  @@map("social_trend_clusters")
+}
+
+model SocialTrendMarketComparison {
+  id             String                  @id @default(uuid())
+  clusterId      String
+  researchedAt   DateTime                @default(now())
+  status         SocialCzechMarketStatus
+  usEvidence     Json
+  czEvidence     Json
+  explanation    String
+  confidence     Float
+  missingData    String[]                @default([])
+  cluster        SocialTrendCluster      @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+
+  @@index([clusterId, researchedAt])
+  @@map("social_trend_market_comparisons")
+}
+
+model SocialTrendResearchRun {
+  id             String               @id @default(uuid())
+  ownerUserId    BigInt
+  chatId         BigInt
+  idempotencyKey String               @unique
+  trigger        String
+  requestedSources SocialTrendSourceKind[]
+  status         SocialTrendRunStatus @default(RUNNING)
+  startedAt      DateTime             @default(now())
+  finishedAt     DateTime?
+  signalCount    Int                  @default(0)
+  clusterCount   Int                  @default(0)
+  opportunityCount Int               @default(0)
+  sourceFailures Int                  @default(0)
+  error          String?
+  sourceRuns     SocialTrendSourceRun[]
+  opportunities  SocialTrendOpportunity[]
+  report         SocialTrendReport?
+
+  @@index([ownerUserId, startedAt])
+  @@index([status, startedAt])
+  @@map("social_trend_research_runs")
+}
+
+model SocialTrendSourceRun {
+  id          String                        @id @default(uuid())
+  runId       String
+  source      SocialTrendSourceKind
+  status      SocialTrendSourceAvailability
+  itemCount   Int                           @default(0)
+  quotaUsed   Int                           @default(0)
+  durationMs  Int
+  error       String?
+  createdAt   DateTime                      @default(now())
+  run         SocialTrendResearchRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, source])
+  @@index([source, createdAt])
+  @@map("social_trend_source_runs")
+}
+
+model SocialTrendOpportunity {
+  id                    String                   @id @default(uuid())
+  ownerUserId           BigInt
+  runId                 String
+  clusterId             String
+  fingerprint           String                   @unique
+  title                 String
+  description           String
+  czechMarketStatus     SocialCzechMarketStatus
+  opportunityScore      Int
+  confidence            Int
+  usMomentumScore       Int
+  czechOpportunityScore Int
+  audienceRelevanceScore Int
+  businessPotentialScore Int
+  contentFeasibilityScore Int
+  evidenceQualityScore  Int
+  missingData           String[]                 @default([])
+  explanation           String
+  evidence              Json
+  contentConcept        Json
+  recommendedChannel    SocialChannel
+  recommendedFormat     SocialContentFormat
+  objective             SocialBusinessObjective
+  estimatedEffortMinutes Int
+  contentIdeaId         String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  run                   SocialTrendResearchRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  cluster               SocialTrendCluster       @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  contentIdea           SocialContentIdea?       @relation(fields: [contentIdeaId], references: [id], onDelete: SetNull)
+  feedback              SocialTrendFeedback[]
+
+  @@index([ownerUserId, opportunityScore, createdAt])
+  @@index([clusterId, createdAt])
+  @@map("social_trend_opportunities")
+}
+
+model SocialTrendFeedback {
+  id            String                  @id @default(uuid())
+  ownerUserId   BigInt
+  opportunityId String
+  kind          SocialTrendFeedbackKind
+  notes         String?
+  createdAt     DateTime                @default(now())
+  opportunity   SocialTrendOpportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([ownerUserId, kind, createdAt])
+  @@index([opportunityId, createdAt])
+  @@map("social_trend_feedback")
+}
+
+model SocialTrendReport {
+  id           String                 @id @default(uuid())
+  ownerUserId  BigInt
+  runId        String                 @unique
+  researchDate DateTime               @db.Date
+  contentHash  String
+  text         String
+  report       Json
+  createdAt    DateTime               @default(now())
+  run          SocialTrendResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerUserId, researchDate, contentHash])
+  @@index([ownerUserId, researchDate])
+  @@map("social_trend_reports")
 }
 
 model SocialIdeaTopic {

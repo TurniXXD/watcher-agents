@@ -32,6 +32,7 @@ export * from './trading212-schedule-store.js';
 export * from './transport-store.js';
 export * from './sales-store.js';
 export * from './socials-store.js';
+export * from './social-trend-store.js';
 export * from './osint-store.js';
 export * from './source-health-store.js';
 export * from './resource-lease-store.js';

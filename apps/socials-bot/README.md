@@ -54,26 +54,33 @@ Projects marked `PRIVATE` or `CONFIDENTIAL` are excluded from ChatGPT prompts an
 
 ## Telegram commands
 
-| Command                | Behavior                                                                   |
-| ---------------------- | -------------------------------------------------------------------------- |
-| `/socials`             | Main inline menu.                                                          |
-| `/socials_plan`        | Start or view the persistent six-question planning flow.                   |
-| `/socials_add [text]`  | Capture one idea, relate topics/projects, and show similarity warnings.    |
-| `/socials_ideas`       | Browse the idea backlog.                                                   |
-| `/socials_projects`    | Browse projects or add one with its description and visibility.            |
-| `/socials_topics`      | Browse reusable topics and pillars.                                        |
-| `/socials_week`        | Show the next editorial week, explanations, warnings, and checklist.       |
-| `/socials_pack`        | Download an idempotent versioned Markdown Content Pack.                    |
-| `/socials_drafts`      | Select an item and paste/upload a new draft version.                       |
-| `/socials_status`      | Show production progress; `ID STATUS [published URL]` updates it manually. |
-| `/socials_history`     | Published content and URLs.                                                |
-| `/socials_analytics`   | Correlation-only review and manual metric entry.                           |
-| `/socials_networking`  | Selected events, confirmed attendance, and fresh recommendations.          |
-| `/socials_events`      | Upcoming verified/unverified event records.                                |
-| `/socials_events_free` | Only events explicitly marked free by a source.                            |
-| `/socials_event_add`   | Add a manually verified event record and official source URL.              |
-| `/socials_sources`     | Operational, aggregated, and manual-only source registry.                  |
-| `/socials_contacts`    | Private contacts; supports `add`, `followup`, `done`, and `delete`.        |
+| Command                   | Behavior                                                                   |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `/socials`                | Main inline menu.                                                          |
+| `/socials_plan`           | Start or view the persistent six-question planning flow.                   |
+| `/socials_add [text]`     | Capture one idea, relate topics/projects, and show similarity warnings.    |
+| `/socials_ideas`          | Browse the idea backlog.                                                   |
+| `/socials_projects`       | Browse projects or add one with its description and visibility.            |
+| `/socials_topics`         | Browse reusable topics and pillars.                                        |
+| `/socials_week`           | Show the next editorial week, explanations, warnings, and checklist.       |
+| `/socials_pack`           | Download an idempotent versioned Markdown Content Pack.                    |
+| `/socials_drafts`         | Select an item and paste/upload a new draft version.                       |
+| `/socials_status`         | Show production progress; `ID STATUS [published URL]` updates it manually. |
+| `/socials_history`        | Published content and URLs.                                                |
+| `/socials_analytics`      | Correlation-only review and manual metric entry.                           |
+| `/socials_networking`     | Selected events, confirmed attendance, and fresh recommendations.          |
+| `/socials_events`         | Upcoming verified/unverified event records.                                |
+| `/socials_events_free`    | Only events explicitly marked free by a source.                            |
+| `/socials_event_add`      | Add a manually verified event record and official source URL.              |
+| `/socials_sources`        | Operational, aggregated, and manual-only source registry.                  |
+| `/socials_contacts`       | Private contacts; supports `add`, `followup`, `done`, and `delete`.        |
+| `/socials_trends`         | Latest Trend Intelligence status, report, and top opportunities.           |
+| `/socials_trends run`     | Idempotent manual research run, optionally for selected sources.           |
+| `/socials_trend`          | Evidence, score breakdown, scripts, posts, carousel, and production notes. |
+| `/socials_trend_use`      | Relate an opportunity to the existing content-idea workflow.               |
+| `/socials_trend_feedback` | Add transparent relevance, saturation, publication, or lead feedback.      |
+| `/socials_trend_import`   | Import compliant CSV/JSON research for manual-only platforms.              |
+| `/socials_trend_settings` | Schedule, source selection, keywords, subreddits, and report size.         |
 
 Every command and callback passes the shared Telegram allowlist middleware. Sessions, answers, content, and callback-owned records are scoped to the Telegram user ID.
 
@@ -83,6 +90,8 @@ Argument examples:
 /socials_projects add Název | popis | PUBLIC
 /socials_analytics add CONTENT_ID | impressions | likes | comments | qualified leads
 /socials_event_add Název | 2026-10-20 18:00 | Brno | https://official.example/event | free
+/socials_trends run YOUTUBE,REDDIT
+/socials_trend_feedback OPPORTUNITY_ID good praktický úhel pro lokální firmy
 ```
 
 ## Sunday workflow and content lifecycle
@@ -113,6 +122,65 @@ Pillar percentages are rolling strategy metadata, not hard weekly quotas. Simila
 Prompts are deterministic TypeScript templates containing platform, format, Czech SME audience, business objective, angle, verified sources, public project context, output structure, CTA, restrictions, and a verification checklist. Private project context and unverified claims are excluded. Qwen never writes complete posts.
 
 The Content Pack is versioned by content hash. Re-exporting an unchanged plan returns the same database pack instead of creating a duplicate.
+
+## Trend Intelligence
+
+Trend Intelligence is an evidence-preserving extension of the same Socials process, not a separate agent stack or database. Its default persisted schedule is `0 7 * * *` in `Europe/Prague`. The daily workflow is:
+
+```mermaid
+flowchart LR
+  S[Permitted source adapters] --> N[Zod normalization]
+  N --> D[Fingerprint deduplication]
+  D --> O[Historical observations]
+  O --> C[Deterministic clustering]
+  C --> M[Momentum and US/CZ comparison]
+  M --> SCORE[Explainable weighted score]
+  SCORE --> A[Grounded Czech content adaptation]
+  A --> R[Telegram daily report]
+  R --> I[Existing idea backlog]
+  I --> P[Existing planning and metrics]
+```
+
+Each source runs independently with `Promise.allSettled`; one unavailable provider cannot discard successful evidence. The research date plus source selection and manual-import fingerprint form the run idempotency key. Repeated platform metrics create observations, and momentum remains `UNKNOWN` until at least two comparable observations exist. Missing Czech data produces `UNCERTAIN`, never a claim that a trend is absent.
+
+### Source integrations and access
+
+| Source              | Automation status                           | Setup and limitations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| YouTube Data API v3 | Operational with API key                    | Enable the API in a Google Cloud project and set `SOCIALS_YOUTUBE_API_KEY`. Keyword discovery runs for `US` and `CZ`, then `videos.list` adds available statistics. `regionCode` affects discovery; it does not prove viewer geography. Searches are capped by `SOCIALS_YOUTUBE_MAX_SEARCHES_PER_RUN` and identical requests are cached for six hours. See the official [getting-started](https://developers.google.com/youtube/v3/getting-started), [search.list](https://developers.google.com/youtube/v3/docs/search/list), and [quota](https://developers.google.com/youtube/v3/determine_quota_cost) documentation. |
+| Reddit Data API     | Operational with approved OAuth credentials | Configure the client ID, secret, and an identifying user agent. Only configured communities are read, excerpts are bounded, author identities are not retained, and API failures are isolated. Access is subject to Reddit approval, limits, retention rules, and the current [Data API Terms](https://redditinc.com/policies/data-api-terms); unavailable access stays disabled rather than falling back to scraping.                                                                                                                                                                                                   |
+| Google Trends       | Limited-access/manual                       | Google documents an official [Trends API alpha](https://developers.google.com/search/apis/trends), but it is not generally available. This implementation does not call undocumented endpoints. Import a permitted export with `/socials_trend_import`; `searchInterest` remains relative interest, not search volume.                                                                                                                                                                                                                                                                                                   |
+| TikTok              | Manual import                               | No Creative Center scraping or anti-bot bypass exists. Import an authorized CSV/JSON export or public reference URL. Missing metrics stay missing. Official access may be added only through an appropriate authorized TikTok API.                                                                                                                                                                                                                                                                                                                                                                                       |
+| Instagram           | Manual import                               | Broad public trend discovery is not inferred from the Instagram Graph API. Import authorized analytics or public references; the existing bot never fabricates reach or demographics.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+Manual CSV fields are `source,title,url,region` plus optional `id,description,publishedAt,views,likes,comments,shares,searchInterest`. JSON accepts an array with the same names. `source` may be `GOOGLE_TRENDS`, `TIKTOK`, `INSTAGRAM`, or `MANUAL`. Imports are limited to 500 records and 1 MB, validate public URLs, and label supplied metrics as operator-provided.
+
+### Scoring and learning
+
+The initial deterministic score is `US momentum 25% + Czech opportunity 25% + audience relevance 20% + business potential 15% + content feasibility 10% + evidence quality 5%`. Every factor is `0..100`; the weighted opportunity score and evidence confidence are separate. Missing observations reduce confidence rather than automatically turning a potentially useful topic into a low score. Telegram settings persist per operator and the weights are stored as configuration for future editing.
+
+Feedback (`relevant`, `not_relevant`, `saturated`, `good`, `published`, `leads`) applies a small bounded adjustment to future audience relevance. Published Socials items and their manual metrics remain connected through the converted content idea. Reports describe associations only and never claim that a trend caused engagement or leads.
+
+Qwen receives bounded structured evidence with explicit prompt-injection instructions and Zod-validated output. It interprets why a topic may matter and produces an original Czech concept, three hooks, a 30–60 second script, LinkedIn post, carousel, CTA, production guidance, and claims to verify. If Qwen is disabled or invalid, a conservative deterministic concept is produced. Neither path claims personal implementation or customer results without project evidence.
+
+### Synthetic report example
+
+The following is **synthetic documentation data**, never a production seed:
+
+```text
+🔭 Trend Intelligence · 2026-10-14
+Čerstvost dat: 2026-10-14T05:00:00.000Z
+Zdroje: YOUTUBE=ACTIVE, REDDIT=ACTIVE
+
+1. Jak ověřit AI telefonního asistenta v malé české firmě
+Platformy: YOUTUBE, REDDIT
+US momentum: rychle rostoucí
+Český trh: časná česká příležitost
+Skóre: 78/100 · jistota 61/100
+Chybějící data: delší česká historie
+```
+
+Estimated additional infrastructure cost is approximately zero when using the existing PostgreSQL, scheduler, Telegram bot, local Ollama, and provider allocations already granted to the operator. API availability and quota policies can change; no provider is described as unlimited or guaranteed free.
 
 ## Notion setup and conflict policy
 
@@ -149,19 +217,29 @@ Create a manual reminder with `/socials_contacts followup CONTACT_ID | Co uděla
 
 Start with [`deploy/presets/socials-bot.env.example`](../../deploy/presets/socials-bot.env.example).
 
-| Variable                                          | Required          | Purpose                                                      |
-| ------------------------------------------------- | ----------------- | ------------------------------------------------------------ |
-| `DATABASE_URL`                                    | Yes               | Shared PostgreSQL database.                                  |
-| `SOCIALS_TELEGRAM_TOKEN`                          | Yes               | Dedicated bot token.                                         |
-| `TELEGRAM_ALLOWED_USER_IDS`                       | Yes               | Authorized Telegram users.                                   |
-| `OLLAMA_URL`, `OLLAMA_MODEL`                      | When Qwen enabled | Existing local Qwen endpoint/model.                          |
-| `SOCIALS_OLLAMA_ENABLED`                          | No                | Default `true`; set `false` for deterministic-only planning. |
-| `NOTION_API_KEY`, `NOTION_SOCIALS_DATA_SOURCE_ID` | No, paired        | Content Calendar synchronization.                            |
-| `SOCIALS_TIMEZONE`                                | No                | Default `Europe/Prague`.                                     |
-| `SOCIALS_SUNDAY_REMINDER_TIME`                    | No                | Default `09:00`.                                             |
-| `SOCIALS_SCHEDULER_INTERVAL_MS`                   | No                | Durable-job polling, default 30000.                          |
-| `SOCIALS_TRANSCRIPTION_URL`                       | No                | OpenAI-compatible transcription endpoint.                    |
-| `SOCIALS_TRANSCRIPTION_API_KEY`                   | No                | Optional transcription credential.                           |
+| Variable                                          | Required          | Purpose                                                       |
+| ------------------------------------------------- | ----------------- | ------------------------------------------------------------- |
+| `DATABASE_URL`                                    | Yes               | Shared PostgreSQL database.                                   |
+| `SOCIALS_TELEGRAM_TOKEN`                          | Yes               | Dedicated bot token.                                          |
+| `TELEGRAM_ALLOWED_USER_IDS`                       | Yes               | Authorized Telegram users.                                    |
+| `OLLAMA_URL`, `OLLAMA_MODEL`                      | When Qwen enabled | Existing local Qwen endpoint/model.                           |
+| `SOCIALS_OLLAMA_ENABLED`                          | No                | Default `true`; set `false` for deterministic-only planning.  |
+| `NOTION_API_KEY`, `NOTION_SOCIALS_DATA_SOURCE_ID` | No, paired        | Content Calendar synchronization.                             |
+| `SOCIALS_TIMEZONE`                                | No                | Default `Europe/Prague`.                                      |
+| `SOCIALS_SUNDAY_REMINDER_TIME`                    | No                | Default `09:00`.                                              |
+| `SOCIALS_SCHEDULER_INTERVAL_MS`                   | No                | Durable-job polling, default 30000.                           |
+| `SOCIALS_TRANSCRIPTION_URL`                       | No                | OpenAI-compatible transcription endpoint.                     |
+| `SOCIALS_TRANSCRIPTION_API_KEY`                   | No                | Optional transcription credential.                            |
+| `SOCIALS_TRENDS_ENABLED`                          | No                | Enables persisted daily research, default `true`.             |
+| `SOCIALS_TRENDS_SCHEDULE`                         | No                | Cron schedule, default `0 7 * * *`.                           |
+| `SOCIALS_TRENDS_REPORT_SIZE`                      | No                | Credible opportunities per report, default `5`, maximum `10`. |
+| `SOCIALS_TREND_SOURCES`                           | No                | Initial comma-separated automated sources.                    |
+| `SOCIALS_TREND_HTTP_TIMEOUT_MS`                   | No                | External-source timeout, default `20000`.                     |
+| `SOCIALS_YOUTUBE_API_KEY`                         | For YouTube       | Server-only YouTube Data API v3 key.                          |
+| `SOCIALS_YOUTUBE_MAX_SEARCHES_PER_RUN`            | No                | Hard per-run search cap, default `8`.                         |
+| `SOCIALS_REDDIT_CLIENT_ID`                        | For Reddit        | Approved Reddit OAuth client ID.                              |
+| `SOCIALS_REDDIT_CLIENT_SECRET`                    | For Reddit        | Approved Reddit OAuth client secret.                          |
+| `SOCIALS_REDDIT_USER_AGENT`                       | For Reddit        | Required identifying application/user agent.                  |
 
 Cadence, pillars, cities, radius, preferred maximum event price, categories, source switches, and reminders are persisted per operator in `social_settings`. Cities, radius, maximum price, recommendation count, and the Monday reminder are editable through `/socials_networking prefs`; infrastructure secrets remain environment-only.
 
@@ -188,6 +266,8 @@ Manual smoke test:
 6. Add real metrics and inspect `/socials_analytics`.
 7. Open `/socials_networking`, select an event, confirm actual attendance, complete the debrief, and optionally create a linked idea.
 8. Restart the container during a planning question and confirm the next answer resumes the persisted session.
+9. Configure one permitted trend source, run `/socials_trends run`, open a detail, provide feedback, and convert it with `/socials_trend_use`.
+10. Import a small synthetic local CSV through `/socials_trend_import`; confirm the rows are labelled as manually supplied and are not duplicated on retry.
 
 ## Known limitations
 
@@ -198,3 +278,7 @@ Manual smoke test:
 - Notion rich-text properties have provider limits; very large drafts remain authoritative in PostgreSQL even if Notion cannot represent every byte.
 - Analytics are manual and show association, not causal attribution.
 - Native website deployment and newsletter-provider campaigns are outside this version.
+- Google Trends automation needs official alpha access; TikTok and broad Instagram discovery remain manual-only rather than using unsupported scraping.
+- Reddit and YouTube access, quotas, and terms are controlled by their providers. A configured adapter may become unavailable and will be shown as such without blocking other sources.
+- Momentum needs repeated observations. The first successful day normally reports unknown momentum and lower confidence.
+- Telegram is the project-wide UI by design; “Trend Explorer,” detail, settings, and content actions are Telegram commands and inline keyboards rather than a new web dashboard.
