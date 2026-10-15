@@ -236,6 +236,10 @@ export class YouTubeTrendSource implements TrendSource {
               ? { description: safeExternalExcerpt(video.snippet.description) }
               : {}),
             region: discovery.region,
+            ...(video.snippet.channelTitle
+              ? { author: video.snippet.channelTitle }
+              : {}),
+            keywords: [discovery.keyword],
             publishedAt: new Date(video.snippet.publishedAt),
             collectedAt: context.now,
             metrics: {
@@ -295,6 +299,7 @@ const redditListingSchema = z.object({
           score: z.number().int(),
           num_comments: z.number().int().nonnegative(),
           subreddit: z.string().min(1),
+          author: z.string().optional(),
           url: z.string().optional(),
         }),
       }),
@@ -409,6 +414,8 @@ export class RedditTrendSource implements TrendSource {
                 ? { description: safeExternalExcerpt(data.selftext) }
                 : {}),
               region: 'US',
+              ...(data.author ? { author: data.author } : {}),
+              keywords: [data.subreddit],
               publishedAt: new Date(data.created_utc * 1_000),
               collectedAt: context.now,
               metrics: {

@@ -5,6 +5,8 @@
 !.env.example
 **/node_modules
 **/dist
+**/.next
+**/.source
 coverage
 .turbo
 backups

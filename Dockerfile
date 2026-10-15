@@ -28,6 +28,7 @@ COPY apps/transport-bot/package.json apps/transport-bot/package.json
 COPY apps/sales-bot/package.json apps/sales-bot/package.json
 COPY apps/socials-bot/package.json apps/socials-bot/package.json
 COPY apps/osint-bot/package.json apps/osint-bot/package.json
+COPY apps/docs/package.json apps/docs/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/sources/package.json packages/sources/package.json
@@ -103,6 +104,8 @@ COPY --from=build --chown=node:node /app/apps/socials-bot/package.json ./apps/so
 COPY --from=build --chown=node:node /app/apps/socials-bot/dist ./apps/socials-bot/dist
 COPY --from=build --chown=node:node /app/apps/osint-bot/package.json ./apps/osint-bot/package.json
 COPY --from=build --chown=node:node /app/apps/osint-bot/dist ./apps/osint-bot/dist
+COPY --from=build --chown=node:node /app/apps/docs/.next/standalone ./docs-runtime
+COPY --from=build --chown=node:node /app/apps/docs/.next/static ./docs-runtime/apps/docs/.next/static
 COPY --from=build --chown=node:node /app/packages/core/dist ./packages/core/dist
 COPY --from=build --chown=node:node /app/packages/database/dist ./packages/database/dist
 COPY --from=build --chown=node:node /app/packages/database/prisma ./packages/database/prisma

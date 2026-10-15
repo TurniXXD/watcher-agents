@@ -115,10 +115,21 @@ export class MaintenanceEngine {
       }
       const evaluatedFingerprints = [
         ...new Set(runs.map((run) => run.agentName)),
-      ].flatMap((agentName) => [
-        findingFingerprint(agentName, 'RECURRING_FAILURE', 'runs'),
-        findingFingerprint(agentName, 'NOISY_OUTPUT', 'downstream-filtering'),
-      ]);
+      ].flatMap((agentName) =>
+        [
+          ['RECURRING_FAILURE', 'runs'],
+          ['NOISY_OUTPUT', 'downstream-filtering'],
+          ['NOISY_OUTPUT', 'volume-regression'],
+          ['LOW_VALUE_OUTPUT', 'consumer-feedback'],
+          ['LOW_VALUE_OUTPUT', 'briefing-usage'],
+          ['DUPLICATE_OUTPUT', 'items'],
+          ['POOR_CLASSIFICATION', 'feedback'],
+          ['HIGH_LATENCY', 'run'],
+          ['HIGH_COST', 'llm'],
+        ].map(([findingType, scope]) =>
+          findingFingerprint(agentName, findingType!, scope),
+        ),
+      );
       for (const health of sourceHealth) {
         evaluatedFingerprints.push(
           findingFingerprint(
@@ -129,6 +140,12 @@ export class MaintenanceEngine {
           findingFingerprint(
             health.agentName,
             'SOURCE_DEGRADATION',
+            health.sourceId,
+          ),
+          findingFingerprint(health.agentName, 'STALE_SOURCE', health.sourceId),
+          findingFingerprint(
+            health.agentName,
+            'SCHEDULE_ISSUE',
             health.sourceId,
           ),
         );

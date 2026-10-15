@@ -19,6 +19,12 @@ Scheduled evaluations claim a PostgreSQL advisory lease so multiple containers
 cannot run the same due interval. Daily and weekly reports are placed in the
 persistent Telegram outbox with per-run/per-chat idempotency and transient retry.
 Recommendations are diagnostic and never apply production changes automatically.
+Source freshness is based on successful requests relative to each source's own
+cadence. A successful request with zero items is healthy. Likewise,
+`duplicatesRemoved` measures duplicates prevented before delivery; a duplicate
+output finding requires direct feedback that repeated content reached a user.
+When a later evaluation no longer supports a deterministic finding, the agent
+resolves it before reopening only findings backed by current evidence.
 
 ## Configuration
 
@@ -49,6 +55,10 @@ surface, and Telegram.
 
 - Duplicate reports indicate delivery/idempotency state, not necessarily two
   analyses; inspect outbox keys and scheduler ownership.
+- High source duplicate counters are expected for periodic snapshot providers
+  when unchanged records are filtered before analysis or delivery.
+- A stale-source finding means successful source requests have stopped relative
+  to their prior cadence; successful empty responses do not trigger it.
 - Missing GPU data should remain unavailable on non-NVIDIA hosts.
 - A latency regression recommendation requires profiling source and LLM latency
   before increasing concurrency.

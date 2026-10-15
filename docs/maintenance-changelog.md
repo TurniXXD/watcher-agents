@@ -2,6 +2,18 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-15 — Self-hosted documentation service
+
+- Added the standalone Fumadocs application to the shared production image and Docker Compose release.
+- Exposed the service on VPS loopback port `3001` and on the external `lateralis` network as `http://docs:3000` for the existing Cloudflare Tunnel.
+- Added a dedicated health endpoint and release health check; Cloudflare Access remains required for the private documentation hostname.
+
+## 2026-10-15 — Maintenance detector semantics
+
+- Stopped treating duplicates prevented by an agent as duplicate output delivered to the user; duplicate-delivery findings now require direct feedback evidence.
+- Source freshness now measures successful requests, so successful empty results no longer create stale-source alerts.
+- Deterministic findings are resolved when a later evaluation no longer supports them, including duplicate and stale-source findings.
+
 ## 2026-10-01 — Prevent repeated briefing stories
 
 - The spoken briefing now requires one script paragraph per selected story ID, rejects missing or repeated IDs, and inserts a count-only preview instead of allowing the model to narrate the same event again in the preview. A malformed script uses the existing sourced deterministic fallback.

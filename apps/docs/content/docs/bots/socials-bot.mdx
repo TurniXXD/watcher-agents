@@ -23,11 +23,12 @@ capture, planning, packs, analytics, events, and optional Notion sync;
 `SocialsScheduler` owns durable reminders; lightweight Qwen classification has a
 deterministic fallback.
 
-Trend Intelligence gathers bounded YouTube and approved Reddit evidence, accepts
-authorized manual imports, clusters repeated observations, compares US and Czech
-signals, keeps opportunity score separate from evidence confidence, and produces
-schema-validated Czech concepts. Feedback applies only a small transparent
-future-ranking correction.
+Trend Intelligence gathers bounded YouTube and approved Reddit evidence plus
+credential-free Bluesky, Hacker News, public Mastodon trends, and configured
+RSS/Atom feeds. It accepts authorized manual imports, clusters repeated
+observations, compares US and Czech signals, keeps opportunity score separate
+from evidence confidence, and produces schema-validated Czech concepts.
+Feedback applies only a small transparent future-ranking correction.
 
 ## Configuration
 
@@ -35,7 +36,17 @@ Required: `DATABASE_URL`, `SOCIALS_TELEGRAM_TOKEN`, and
 `TELEGRAM_ALLOWED_USER_IDS`. Ollama defaults exist and can be disabled with
 `SOCIALS_OLLAMA_ENABLED=false`. Notion requires `NOTION_API_KEY` paired with
 `NOTION_SOCIALS_DATA_SOURCE_ID`. Transcription, trend schedule/report size,
-YouTube API key, and the complete Reddit OAuth group are optional.
+YouTube API key, the complete Reddit OAuth group, and all free-source settings
+are optional. Enable sources with `SOCIALS_TREND_SOURCES`; RSS additionally needs
+at least one URL in `SOCIALS_RSS_FEEDS`.
+
+```bash
+SOCIALS_TREND_SOURCES=YOUTUBE,BLUESKY,HACKERNEWS,MASTODON,RSS
+SOCIALS_BLUESKY_KEYWORDS=AI agents,local AI,automation
+SOCIALS_HACKERNEWS_CATEGORIES=top,new,best
+SOCIALS_MASTODON_INSTANCES=https://mastodon.social
+SOCIALS_RSS_FEEDS=https://hnrss.org/frontpage
+```
 
 ## Execution and scheduling
 
@@ -54,7 +65,9 @@ changes only through an explicit operator action with a real URL.
 - Brno Events supplies normalized event records; unsupported locations/providers
   remain manual.
 - Notion mirrors the content calendar with two-sided conflict detection.
-- YouTube Data API v3 and approved Reddit OAuth are automated trend sources.
+- YouTube Data API v3, approved Reddit OAuth, public Bluesky AppView, Hacker
+  News Firebase, Mastodon trend endpoints, and RSS/Atom are automated trend
+  sources.
 - Google Trends, TikTok, and broad Instagram discovery are manual-only without an
   authorized supported API.
 - An OpenAI-compatible endpoint can transcribe voice input.
@@ -65,6 +78,9 @@ changes only through an explicit operator action with a real URL.
   integration or the wrong data-source ID was configured.
 - First-day trend momentum is normally unknown because growth needs repeated
   observations.
+- Mastodon instances may disable or protect trend endpoints; configure multiple
+  instances so one server does not represent the entire Fediverse.
+- RSS URLs and every redirect must resolve only to public HTTP(S) addresses.
 - Missing source credentials appear as unavailable and do not block other
   sources.
 - A conflict status protects simultaneous local and Notion edits; resolve it

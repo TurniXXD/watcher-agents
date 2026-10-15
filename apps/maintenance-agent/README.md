@@ -15,3 +15,10 @@ Use `/start`, `/status`, `/summary`, `/recommendations`, `/run`, `/debug`, `/upd
 Configure the database, `MAINTENANCE_TELEGRAM_TOKEN`, allowlist, API token, health/scheduler intervals, stale/error windows, resource thresholds, optional weekly analysis, changelog/release paths, and external Ollama URL. See [the maintenance preset](../../deploy/presets/maintenance-agent.env.example) and [environment inventory](../../deploy/ENVIRONMENT.md).
 
 See [maintenance architecture](../../docs/maintenance-agent.md) and [the changelog](../../docs/maintenance-changelog.md).
+
+Source freshness tracks successful requests relative to each source's own
+successful-request cadence. Successful empty responses are healthy.
+`duplicatesRemoved` means duplicate work was prevented before delivery; the
+duplicate-output detector requires direct feedback that repeated content
+actually reached a user. Findings that are no longer supported are resolved on
+the next evaluation.

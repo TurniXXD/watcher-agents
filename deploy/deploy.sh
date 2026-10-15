@@ -109,7 +109,7 @@ legacy_watcher_services=(
   stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent
   briefing-bot socials-bot maintenance-agent transport-bot
 )
-watcher_services=("${legacy_watcher_services[@]}" osint-bot sales-bot)
+watcher_services=("${legacy_watcher_services[@]}" osint-bot sales-bot docs)
 integration_services=(quickly twenty-server twenty-worker)
 
 reality_bot_env_values=(
@@ -478,6 +478,20 @@ if ! compose_candidate up \
       done
       rollback_services=("${rollback_services_without_reality[@]}")
       compose_candidate stop reality-bot || true
+    fi
+    if ! compose_release run --rm --no-deps --entrypoint sh docs \
+      -c 'test -f /app/docs-runtime/apps/docs/server.js'; then
+      # The first self-hosted docs rollout replaces an image that did not
+      # contain the standalone Next.js server.
+      echo "Previous image predates the documentation service; excluding it from rollback." >&2
+      rollback_services_without_docs=()
+      for rollback_service in "${rollback_services[@]}"; do
+        if [[ "$rollback_service" != docs ]]; then
+          rollback_services_without_docs+=("$rollback_service")
+        fi
+      done
+      rollback_services=("${rollback_services_without_docs[@]}")
+      compose_candidate stop docs || true
     fi
     if ! compose_release run --rm --no-deps --entrypoint sh osint-bot \
       -c 'test -f apps/osint-bot/dist/health.js'; then

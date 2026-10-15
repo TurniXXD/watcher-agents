@@ -37,6 +37,8 @@ export type StoredTrendSignal = {
   sourceUrl: string;
   title: string;
   description?: string | undefined;
+  author?: string | undefined;
+  keywords?: readonly string[] | undefined;
   region: keyof typeof SocialTrendRegion;
   publishedAt?: Date | undefined;
   collectedAt: Date;
@@ -389,6 +391,8 @@ export class SocialTrendStore {
         sourceUrl: input.sourceUrl,
         title: input.title,
         description: input.description ?? null,
+        author: input.author ?? null,
+        keywords: [...(input.keywords ?? [])],
         region: SocialTrendRegion[input.region],
         publishedAt: input.publishedAt ?? null,
         firstSeenAt: input.collectedAt,
@@ -401,6 +405,8 @@ export class SocialTrendStore {
         sourceUrl: input.sourceUrl,
         title: input.title,
         description: input.description ?? null,
+        author: input.author ?? null,
+        keywords: [...(input.keywords ?? [])],
         publishedAt: input.publishedAt ?? null,
         lastSeenAt: input.collectedAt,
         collectedAt: input.collectedAt,

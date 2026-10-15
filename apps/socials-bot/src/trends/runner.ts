@@ -12,6 +12,7 @@ import {
 } from './analysis.js';
 import type { CzechTrendContentAgent } from './content-agent.js';
 import {
+  deduplicateTrendSignals,
   trendFingerprint,
   type TrendSignal,
   type TrendSource,
@@ -152,7 +153,7 @@ const isRelevant = (
     typeof signal.metadata?.keyword === 'string' ? signal.metadata.keyword : '';
   const candidate = new Set(
     trendTokens(
-      `${signal.title} ${signal.description ?? ''} ${metadataKeyword}`,
+      `${signal.title} ${signal.description ?? ''} ${signal.author ?? ''} ${signal.keywords.join(' ')} ${metadataKeyword}`,
     ),
   );
   const expected = [...focusTopics, ...keywords].flatMap(trendTokens);
@@ -200,7 +201,10 @@ export class SocialTrendIntelligence {
     signals: readonly TrendSignal[];
   }) {
     const unique = new Map(
-      input.signals.map((signal) => [trendFingerprint(signal), signal]),
+      deduplicateTrendSignals(input.signals).map((signal) => [
+        trendFingerprint(signal),
+        signal,
+      ]),
     );
     const stored = [];
     for (const [fingerprint, signal] of unique) {
@@ -350,8 +354,9 @@ export class SocialTrendIntelligence {
           isRelevant(signal, profile.focusTopics, profile.keywords),
         );
       const uniqueSignals = new Map<string, TrendSignal>();
-      for (const signal of relevantSignals)
+      for (const signal of deduplicateTrendSignals(relevantSignals)) {
         uniqueSignals.set(trendFingerprint(signal), signal);
+      }
       const storedSignals: Array<TrendSignal & { id: string }> = [];
       for (const [fingerprint, signal] of uniqueSignals) {
         const stored = await this.options.store.upsertSignal(

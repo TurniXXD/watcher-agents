@@ -13,7 +13,21 @@ const commaSeparated = z.string().transform((value) =>
     .filter(Boolean),
 );
 
-export const env = z
+const commaSeparatedText = z.string().transform((value) =>
+  value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean),
+);
+
+const commaSeparatedLowercase = z.string().transform((value) =>
+  value
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+export const socialsEnvironmentSchema = z
   .object({
     DATABASE_URL: z.string().min(1),
     SOCIALS_TELEGRAM_TOKEN: z.string().min(1),
@@ -79,6 +93,53 @@ export const env = z
     SOCIALS_REDDIT_CLIENT_ID: optionalText,
     SOCIALS_REDDIT_CLIENT_SECRET: optionalText,
     SOCIALS_REDDIT_USER_AGENT: optionalText,
+    SOCIALS_BLUESKY_API_URL: z.url().default('https://public.api.bsky.app'),
+    SOCIALS_BLUESKY_KEYWORDS: commaSeparatedText.default([]),
+    SOCIALS_BLUESKY_MAX_POSTS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(500)
+      .default(50),
+    SOCIALS_BLUESKY_LOOKBACK_HOURS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 30)
+      .default(24 * 7),
+    SOCIALS_HACKERNEWS_API_URL: z
+      .url()
+      .default('https://hacker-news.firebaseio.com/v0'),
+    SOCIALS_HACKERNEWS_CATEGORIES: commaSeparatedLowercase
+      .pipe(z.array(z.enum(['top', 'new', 'best'])).min(1))
+      .default(['top', 'new', 'best']),
+    SOCIALS_HACKERNEWS_MAX_STORIES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(500)
+      .default(100),
+    SOCIALS_MASTODON_INSTANCES: commaSeparatedText
+      .pipe(z.array(z.url()).min(1).max(10))
+      .default(['https://mastodon.social']),
+    SOCIALS_MASTODON_TREND_TYPES: commaSeparatedLowercase
+      .pipe(z.array(z.enum(['tags', 'statuses', 'links'])).min(1))
+      .default(['tags', 'statuses', 'links']),
+    SOCIALS_MASTODON_MAX_ITEMS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(50),
+    SOCIALS_RSS_FEEDS: commaSeparatedText
+      .pipe(z.array(z.url()).max(30))
+      .default([]),
+    SOCIALS_RSS_MAX_ITEMS_PER_FEED: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(30),
     LOG_LEVEL: z
       .enum(['trace', 'debug', 'info', 'warn', 'error'])
       .default('info'),
@@ -101,6 +162,10 @@ export const env = z
       'YOUTUBE',
       'TIKTOK',
       'INSTAGRAM',
+      'BLUESKY',
+      'HACKERNEWS',
+      'MASTODON',
+      'RSS',
       'MANUAL',
     ]);
     for (const source of value.SOCIALS_TREND_SOURCES) {
@@ -125,5 +190,9 @@ export const env = z
           'Reddit trend access requires client ID, client secret, and an identifying user agent together.',
       });
     }
-  })
-  .parse(process.env);
+  });
+
+export const parseSocialsEnvironment = (input: NodeJS.ProcessEnv) =>
+  socialsEnvironmentSchema.parse(input);
+
+export const env = parseSocialsEnvironment(process.env);

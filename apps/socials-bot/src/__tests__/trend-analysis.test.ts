@@ -3,8 +3,10 @@ import {
   assessMomentum,
   clusterTrendSignals,
   compareMarkets,
+  normalizedEngagementIndex,
   scoreTrendOpportunity,
 } from '../trends/analysis.js';
+import { deduplicateTrendSignals } from '../trends/types.js';
 import type { TrendSignal } from '../trends/types.js';
 
 const signal = (
@@ -18,6 +20,7 @@ const signal = (
   source,
   sourceUrl: `https://example.com/${id}`,
   title,
+  keywords: [],
   region,
   collectedAt: new Date('2026-10-14T05:00:00.000Z'),
   metrics: {},
@@ -76,7 +79,7 @@ describe('trend intelligence analysis', () => {
       },
       {
         observedAt: new Date('2026-10-14T00:00:00Z'),
-        views: 160n,
+        views: 400n,
         likes: null,
         comments: null,
         shares: null,
@@ -101,7 +104,32 @@ describe('trend intelligence analysis', () => {
       new Date('2026-10-14T06:00:00Z'),
     );
     expect(momentum.stage).toBe('RAPIDLY_GROWING');
-    expect(momentum.growthPercent).toBe(60);
+    expect(momentum.growthPercent).toBeGreaterThan(25);
+  });
+
+  it('normalizes engagement by provider instead of comparing raw counts', () => {
+    const observation = {
+      observedAt: new Date('2026-10-14T00:00:00Z'),
+      views: 1_000n,
+      likes: 100n,
+      comments: 10n,
+      shares: 5n,
+      searchInterest: null,
+    };
+    expect(normalizedEngagementIndex('YOUTUBE', observation)).not.toBe(
+      normalizedEngagementIndex('HACKERNEWS', observation),
+    );
+  });
+
+  it('deduplicates canonical URLs across providers', () => {
+    const youtube = signal('1', 'AI automation', 'YOUTUBE', 'GLOBAL');
+    const rss = {
+      ...signal('2', 'AI automation', 'RSS', 'GLOBAL'),
+      sourceUrl: `${youtube.sourceUrl}?utm_source=feed`,
+    };
+    const result = deduplicateTrendSignals([youtube, rss]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.metadata?.duplicateSources).toEqual(['RSS']);
   });
 
   it('treats missing Czech data as uncertainty instead of absence', () => {

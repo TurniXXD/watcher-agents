@@ -3,17 +3,17 @@ title: External providers
 description: Provider families used by Watcher applications and their operational constraints.
 ---
 
-| Area                       | Providers used by current code                                                                                           | Owning applications            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| Calendar and transcription | Google Calendar OAuth, OpenAI-compatible audio transcription                                                             | Briefing, Socials              |
-| Research publications      | PubMed, bioRxiv, ClinicalTrials.gov, openFDA                                                                             | Publications, Stocks           |
-| Market intelligence        | SEC EDGAR, issuer feeds, TradingView, FINVIZ, Zacks, Earnings Whispers, Nasdaq, FINRA; optional Alpha Vantage and Quiver | Stocks                         |
-| Czech public data          | ARES, Registr smluv, RÚIAN, ČÚZK INSPIRE                                                                                 | OSINT, Sales                   |
-| Business discovery and CRM | Geoapify, optional Google Places, Quickly, Twenty, Google Sheets                                                         | Sales                          |
-| Events and communities     | Meetup, GoOut, VisitBrno, MUNI, VUT, JIC, CEITEC, public club websites and Instagram observations                        | Brno Events, MU Clubs, Socials |
-| Content trends             | YouTube Data API v3, approved Reddit OAuth, authorized manual imports                                                    | Socials                        |
-| Routing and rates          | OSRM-compatible routing, European Commission fuel bulletin, CNB daily rates                                              | Transport                      |
-| Property listings          | DigiReality RSS                                                                                                          | Reality                        |
+| Area                       | Providers used by current code                                                                                                                 | Owning applications            |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Calendar and transcription | Google Calendar OAuth, OpenAI-compatible audio transcription                                                                                   | Briefing, Socials              |
+| Research publications      | PubMed, bioRxiv, ClinicalTrials.gov, openFDA                                                                                                   | Publications, Stocks           |
+| Market intelligence        | SEC EDGAR, issuer feeds, TradingView, FINVIZ, Zacks, Earnings Whispers, Nasdaq, FINRA; optional Alpha Vantage and Quiver                       | Stocks                         |
+| Czech public data          | ARES, Registr smluv, RÚIAN, ČÚZK INSPIRE                                                                                                       | OSINT, Sales                   |
+| Business discovery and CRM | Geoapify, optional Google Places, Quickly, Twenty, Google Sheets                                                                               | Sales                          |
+| Events and communities     | Meetup, GoOut, VisitBrno, MUNI, VUT, JIC, CEITEC, public club websites and Instagram observations                                              | Brno Events, MU Clubs, Socials |
+| Content trends             | YouTube Data API v3, approved Reddit OAuth, Bluesky AppView, Hacker News Firebase, Mastodon public trends, RSS/Atom, authorized manual imports | Socials                        |
+| Routing and rates          | OSRM-compatible routing, European Commission fuel bulletin, CNB daily rates                                                                    | Transport                      |
+| Property listings          | DigiReality RSS                                                                                                                                | Reality                        |
 
 ## Failure and quota policy
 
@@ -22,6 +22,12 @@ rate-limit backoff, source concurrency, and caches are bounded by configuration.
 A failing source is recorded and does not become an empty-success result.
 Scraping that bypasses CAPTCHA, authentication, or anti-bot controls is not a
 fallback.
+
+Socials retries transient failures and HTTP 429 responses with bounded backoff.
+RSS/Atom requests validate DNS targets and every redirect against private and
+special-purpose networks, and reuse `ETag`/`Last-Modified` validators. Generic
+social/news sources remain `GLOBAL` unless a provider supplies defensible
+regional evidence.
 
 ## Optional providers
 

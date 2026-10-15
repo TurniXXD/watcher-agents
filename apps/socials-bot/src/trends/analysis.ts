@@ -53,7 +53,9 @@ export const clusterTrendSignals = (
   for (const signal of [...signals].sort((a, b) =>
     a.title.localeCompare(b.title),
   )) {
-    const tokens = trendTokens(`${signal.title} ${signal.description ?? ''}`);
+    const tokens = trendTokens(
+      `${signal.title} ${signal.description ?? ''} ${signal.keywords.join(' ')}`,
+    );
     const best = clusters
       .map((cluster) => ({
         cluster,
@@ -89,18 +91,40 @@ type Observation = {
   searchInterest: number | null;
 };
 
-const observationIndex = (observation: Observation): number | undefined => {
-  if (observation.searchInterest !== null) return observation.searchInterest;
+const logMetric = (value: bigint | null): number | undefined =>
+  value === null ? undefined : Math.log1p(Number(value));
+
+export const normalizedEngagementIndex = (
+  source: string,
+  observation: Observation,
+): number | undefined => {
+  if (observation.searchInterest !== null) {
+    return Math.log1p(observation.searchInterest) * 10;
+  }
+  const weights =
+    source === 'YOUTUBE'
+      ? { views: 8, likes: 12, comments: 16, shares: 14 }
+      : source === 'HACKERNEWS'
+        ? { views: 0, likes: 18, comments: 20, shares: 0 }
+        : source === 'BLUESKY' || source === 'MASTODON'
+          ? { views: 0, likes: 12, comments: 18, shares: 20 }
+          : source === 'REDDIT'
+            ? { views: 0, likes: 15, comments: 20, shares: 0 }
+            : { views: 8, likes: 12, comments: 16, shares: 16 };
   const values = [
-    observation.views === null ? undefined : Number(observation.views),
-    observation.likes === null ? undefined : Number(observation.likes) * 2,
-    observation.comments === null
+    logMetric(observation.views) === undefined
       ? undefined
-      : Number(observation.comments) * 5,
-    observation.shares === null ? undefined : Number(observation.shares) * 4,
-  ].filter(
-    (value): value is number => value !== undefined && Number.isFinite(value),
-  );
+      : logMetric(observation.views)! * weights.views,
+    logMetric(observation.likes) === undefined
+      ? undefined
+      : logMetric(observation.likes)! * weights.likes,
+    logMetric(observation.comments) === undefined
+      ? undefined
+      : logMetric(observation.comments)! * weights.comments,
+    logMetric(observation.shares) === undefined
+      ? undefined
+      : logMetric(observation.shares)! * weights.shares,
+  ].filter((value): value is number => value !== undefined && value > 0);
   return values.length
     ? values.reduce((sum, value) => sum + value, 0)
     : undefined;
@@ -151,7 +175,7 @@ export const assessMomentum = (
     const measured = signal.observations
       .map((observation) => ({
         observedAt: observation.observedAt,
-        value: observationIndex(observation),
+        value: normalizedEngagementIndex(signal.source, observation),
       }))
       .filter(
         (entry): entry is { observedAt: Date; value: number } =>
@@ -324,7 +348,7 @@ export const scoreTrendOpportunity = (input: {
   ).length;
   const sourceCount = new Set(input.cluster.signals.map(({ source }) => source))
     .size;
-  const usMomentum =
+  const baseMomentum =
     input.momentum.stage === 'RAPIDLY_GROWING'
       ? 90
       : input.momentum.stage === 'EARLY_EMERGING'
@@ -336,6 +360,15 @@ export const scoreTrendOpportunity = (input: {
             : input.momentum.stage === 'DECLINING'
               ? 25
               : 50;
+  const recencyAdjustment =
+    input.momentum.ageDays <= 2
+      ? 8
+      : input.momentum.ageDays <= 7
+        ? 4
+        : input.momentum.ageDays > 45
+          ? -8
+          : 0;
+  const usMomentum = bounded(baseMomentum + recencyAdjustment);
   const czechOpportunity =
     input.comparison.status === 'EARLY_OPPORTUNITY'
       ? 90

@@ -7,6 +7,10 @@ export const trendSourceIdSchema = z.enum([
   'YOUTUBE',
   'TIKTOK',
   'INSTAGRAM',
+  'BLUESKY',
+  'HACKERNEWS',
+  'MASTODON',
+  'RSS',
   'MANUAL',
 ]);
 export type TrendSourceId = z.infer<typeof trendSourceIdSchema>;
@@ -28,6 +32,8 @@ export const trendSignalSchema = z.object({
   sourceUrl: z.url(),
   title: z.string().trim().min(2).max(500),
   description: z.string().trim().max(2_000).optional(),
+  author: z.string().trim().min(1).max(300).optional(),
+  keywords: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
   region: trendRegionSchema,
   publishedAt: z.date().optional(),
   collectedAt: z.date(),
@@ -74,9 +80,94 @@ export const trendFingerprint = (signal: TrendSignal): string =>
     )
     .digest('hex');
 
+const trackingParameters = new Set([
+  'fbclid',
+  'gclid',
+  'mc_cid',
+  'mc_eid',
+  'ref',
+  'referrer',
+]);
+
+export const canonicalTrendUrl = (value: string): string => {
+  const url = new URL(value);
+  url.hash = '';
+  for (const key of [...url.searchParams.keys()]) {
+    const normalizedKey = key.toLowerCase();
+    if (
+      normalizedKey.startsWith('utm_') ||
+      trackingParameters.has(normalizedKey)
+    ) {
+      url.searchParams.delete(key);
+    }
+  }
+  url.hostname = url.hostname.toLowerCase();
+  if (url.pathname !== '/') {
+    url.pathname = url.pathname.replace(/\/+$/u, '');
+  }
+  return url.toString();
+};
+
+export const trendContentFingerprint = (signal: TrendSignal): string =>
+  createHash('sha256')
+    .update(canonicalTrendUrl(signal.sourceUrl).toLocaleLowerCase('en-US'))
+    .digest('hex');
+
+export const deduplicateTrendSignals = (
+  signals: readonly TrendSignal[],
+): TrendSignal[] => {
+  const unique = new Map<string, TrendSignal>();
+  for (const signal of signals) {
+    const key = trendContentFingerprint(signal);
+    const existing = unique.get(key);
+    if (!existing) {
+      unique.set(key, signal);
+      continue;
+    }
+    const existingMetricCount = Object.keys(existing.metrics).length;
+    const candidateMetricCount = Object.keys(signal.metrics).length;
+    if (candidateMetricCount > existingMetricCount) {
+      unique.set(key, {
+        ...signal,
+        metadata: {
+          ...signal.metadata,
+          duplicateSources: [existing.source],
+        },
+      });
+      continue;
+    }
+    unique.set(key, {
+      ...existing,
+      metadata: {
+        ...existing.metadata,
+        duplicateSources: [
+          ...new Set([
+            ...((existing.metadata?.duplicateSources as string[] | undefined) ??
+              []),
+            signal.source,
+          ]),
+        ],
+      },
+    });
+  }
+  return [...unique.values()];
+};
+
 export const safeExternalExcerpt = (
   value: string | undefined,
 ): string | undefined => {
-  const normalized = value?.replaceAll(/\s+/gu, ' ').trim().slice(0, 1_200);
+  const normalized = value
+    ?.replace(/<script[\s\S]*?<\/script>/giu, ' ')
+    .replace(/<style[\s\S]*?<\/style>/giu, ' ')
+    .replace(/<[^>]+>/gu, ' ')
+    .replaceAll('&nbsp;', ' ')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll(/\s+/gu, ' ')
+    .trim()
+    .slice(0, 1_200);
   return normalized || undefined;
 };

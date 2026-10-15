@@ -16,6 +16,10 @@ import { SocialsScheduler } from './scheduler.js';
 import { SocialsService } from './service.js';
 import { HttpSocialTranscriber } from './transcription.js';
 import { CzechTrendContentAgent } from './trends/content-agent.js';
+import { BlueskyTrendSource } from './trends/bluesky-source.js';
+import { HackerNewsTrendSource } from './trends/hacker-news-source.js';
+import { MastodonTrendSource } from './trends/mastodon-source.js';
+import { RssTrendSource } from './trends/rss-source.js';
 import { SocialTrendIntelligence } from './trends/runner.js';
 import {
   RedditTrendSource,
@@ -90,6 +94,30 @@ const trendSources = [
     ...(env.SOCIALS_REDDIT_USER_AGENT
       ? { userAgent: env.SOCIALS_REDDIT_USER_AGENT }
       : {}),
+    timeoutMs: env.SOCIALS_TREND_HTTP_TIMEOUT_MS,
+  }),
+  new BlueskyTrendSource({
+    apiUrl: env.SOCIALS_BLUESKY_API_URL,
+    keywords: env.SOCIALS_BLUESKY_KEYWORDS,
+    maxPosts: env.SOCIALS_BLUESKY_MAX_POSTS,
+    lookbackHours: env.SOCIALS_BLUESKY_LOOKBACK_HOURS,
+    timeoutMs: env.SOCIALS_TREND_HTTP_TIMEOUT_MS,
+  }),
+  new HackerNewsTrendSource({
+    apiUrl: env.SOCIALS_HACKERNEWS_API_URL,
+    categories: env.SOCIALS_HACKERNEWS_CATEGORIES,
+    maxStories: env.SOCIALS_HACKERNEWS_MAX_STORIES,
+    timeoutMs: env.SOCIALS_TREND_HTTP_TIMEOUT_MS,
+  }),
+  new MastodonTrendSource({
+    instances: env.SOCIALS_MASTODON_INSTANCES,
+    trendTypes: env.SOCIALS_MASTODON_TREND_TYPES,
+    maxItems: env.SOCIALS_MASTODON_MAX_ITEMS,
+    timeoutMs: env.SOCIALS_TREND_HTTP_TIMEOUT_MS,
+  }),
+  new RssTrendSource({
+    feeds: env.SOCIALS_RSS_FEEDS,
+    maxItemsPerFeed: env.SOCIALS_RSS_MAX_ITEMS_PER_FEED,
     timeoutMs: env.SOCIALS_TREND_HTTP_TIMEOUT_MS,
   }),
   new UnavailableTrendSource(

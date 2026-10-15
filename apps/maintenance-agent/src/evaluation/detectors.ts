@@ -342,37 +342,38 @@ export const detectDuplicateOutput = (
   const findings: Finding[] = [];
   for (const agentName of new Set(runs.map((run) => run.agentName))) {
     const selected = runs.filter((run) => run.agentName === agentName);
-    const duplicates = selected.reduce(
-      (sum, run) => sum + (run.duplicatesRemoved ?? 0),
-      0,
+    const feedback = selected.flatMap((run) => run.feedback);
+    const duplicateFeedback = feedback.filter((item) =>
+      /\b(?:duplicate|duplicated|duplication|repeated|same (?:item|content|story)|already (?:sent|seen)|duplicit\w*|opakovan\w*|stejn\w*)\b/iu.test(
+        item.reason ?? '',
+      ),
     );
-    const found = selected.reduce(
-      (sum, run) => sum + (run.itemsFetched ?? 0),
-      0,
-    );
-    const rate = found === 0 ? 0 : duplicates / found;
-    if (found < 10 || rate < 0.25) continue;
+    const rate =
+      feedback.length === 0 ? 0 : duplicateFeedback.length / feedback.length;
+    if (duplicateFeedback.length < 2 || (feedback.length >= 4 && rate < 0.25))
+      continue;
     findings.push({
       ...base(agentName, 'DUPLICATE_OUTPUT', 'items', now),
-      severity: rate >= 0.6 ? 'HIGH' : 'MEDIUM',
-      title: `${agentName} has a high duplicate rate`,
-      description: `${duplicates} of ${found} fetched items were duplicates.`,
+      severity:
+        duplicateFeedback.length >= 5 || rate >= 0.6 ? 'HIGH' : 'MEDIUM',
+      title: `${agentName} may be delivering duplicate output`,
+      description: `${duplicateFeedback.length} feedback records report repeated or duplicate output.`,
       evidence: {
         runCount: selected.length,
+        feedbackCount: feedback.length,
+        duplicateFeedbackCount: duplicateFeedback.length,
         observedValue: rate,
         expectedValue: '< 0.25',
+        examples: duplicateFeedback.slice(0, 3).map((item) => ({
+          description: item.reason ?? item.action,
+        })),
       },
-      confidence: 0.9,
+      confidence: Math.min(0.98, 0.75 + duplicateFeedback.length / 100),
       recommendation: {
-        type: 'CONFIG_CHANGE',
-        title: 'Increase and unify the deduplication window',
+        type: 'CODE_CHANGE',
+        title: 'Audit delivery idempotency and retry handling',
         rationale:
-          'Stable IDs and cross-source fingerprints should prevent repeated work.',
-        proposal: {
-          configDiff: {
-            deduplicationWindow: configDiff('current', 'increase after review'),
-          },
-        },
+          'Direct consumer feedback indicates repeated delivery; duplicates removed before delivery are healthy and are not evidence of this problem.',
       },
     });
   }
@@ -429,30 +430,36 @@ export const detectStaleSources = (
   calculateSourceHealth(runs, now).flatMap((health): Finding[] => {
     const medianDays = health.historicalMedianUpdateDays;
     const staleDays = health.staleDays;
+    const staleThresholdDays =
+      medianDays === undefined ? undefined : Math.max(7, medianDays * 4);
     if (
       health.totalRuns < 5 ||
       medianDays === undefined ||
       staleDays === undefined ||
-      staleDays < Math.max(7, medianDays * 4)
+      staleThresholdDays === undefined ||
+      staleDays < staleThresholdDays
     )
       return [];
     return [
       {
         ...base(health.agentName, 'STALE_SOURCE', health.sourceId, now),
-        severity: staleDays > medianDays * 10 ? 'HIGH' : 'MEDIUM',
+        severity:
+          staleDays > Math.max(staleThresholdDays * 2, medianDays * 10)
+            ? 'HIGH'
+            : 'MEDIUM',
         title: `${health.sourceId} appears stale`,
-        description: `No new items for ${staleDays.toFixed(1)} days versus a ${medianDays.toFixed(1)} day historical median.`,
+        description: `No successful source request for ${staleDays.toFixed(1)} days versus a ${medianDays.toFixed(1)} day historical median.`,
         evidence: {
           sourceId: health.sourceId,
           observedValue: staleDays,
-          expectedValue: `< ${Math.max(7, medianDays * 4).toFixed(1)} days`,
+          expectedValue: `< ${staleThresholdDays.toFixed(1)} days`,
         },
         confidence: 0.9,
         recommendation: {
-          type: 'SCRAPER_CHANGE',
-          title: `Verify ${health.sourceId} parsing and upstream activity`,
+          type: 'SOURCE_CHANGE',
+          title: `Verify ${health.sourceId} scheduling and availability`,
           rationale:
-            'Successful fetches without content exceed the source-specific cadence.',
+            'The source has not completed successfully within its own observed request cadence.',
         },
       },
     ];
@@ -561,54 +568,6 @@ export const detectSourceDegradationAndSchedules = (
         },
       });
     }
-    if (
-      health.totalRuns >= 8 &&
-      health.historicalMedianUpdateDays !== undefined &&
-      health.itemsProduced > 0
-    ) {
-      const rows = runs
-        .filter((run) => run.agentName === health.agentName)
-        .flatMap((run) => run.sources)
-        .filter((source) => source.sourceId === health.sourceId)
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-      const pollIntervals = rows
-        .slice(1)
-        .map(
-          (row, index) =>
-            (row.createdAt.getTime() - rows[index]!.createdAt.getTime()) /
-            86_400_000,
-        );
-      const pollMedian = median(pollIntervals);
-      if (pollMedian && pollMedian * 8 < health.historicalMedianUpdateDays) {
-        findings.push({
-          ...base(health.agentName, 'SCHEDULE_ISSUE', health.sourceId, now),
-          severity: 'LOW',
-          title: `${health.sourceId} may be polled too frequently`,
-          description:
-            'Polling cadence is far shorter than observed content cadence.',
-          evidence: {
-            sourceId: health.sourceId,
-            observedValue: pollMedian,
-            expectedValue: health.historicalMedianUpdateDays,
-          },
-          confidence: 0.78,
-          recommendation: {
-            type: 'SCHEDULE_CHANGE',
-            title: `Review the ${health.sourceId} polling interval`,
-            rationale:
-              'The source is polled at least eight times faster than it publishes.',
-            proposal: {
-              configDiff: {
-                intervalDays: configDiff(
-                  pollMedian,
-                  health.historicalMedianUpdateDays / 2,
-                ),
-              },
-            },
-          },
-        });
-      }
-    }
   }
   return findings;
 };
@@ -643,7 +602,8 @@ export const detectAll = (
         .filter((finding) => {
           const sourceId = finding.evidence['sourceId'];
           return !(
-            finding.type === 'SOURCE_DEGRADATION' &&
+            (finding.type === 'SOURCE_DEGRADATION' ||
+              finding.type === 'STALE_SOURCE') &&
             typeof sourceId === 'string' &&
             recurringSourceFailures.has(`${finding.agentName}\u0000${sourceId}`)
           );

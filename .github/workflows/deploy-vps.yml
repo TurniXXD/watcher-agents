@@ -282,6 +282,10 @@ jobs:
               echo '=== sales stack logs ==='
               IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
                 docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 sales-bot quickly twenty-server twenty-worker || true
+              echo
+              echo '=== documentation logs ==='
+              IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
+                docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 docs || true
             }
 
             trap 'dump_logs' ERR

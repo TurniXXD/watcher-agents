@@ -440,6 +440,40 @@ services:
     tmpfs:
       - /tmp
 
+  docs:
+    image: ${WATCHER_IMAGE:-watcher:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ['node', '/app/docs-runtime/apps/docs/server.js']
+    environment:
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - '${DOCS_BIND_ADDRESS:-127.0.0.1}:${DOCS_HOST_PORT:-3001}:3000'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+      - /app/docs-runtime/apps/docs/.next/cache
+
   quickly-postgres:
     image: postgres:15-alpine
     env_file:

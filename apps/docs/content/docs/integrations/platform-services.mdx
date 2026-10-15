@@ -36,3 +36,11 @@ authoritative. Notion conflict policies avoid silently overwriting manual edits.
 Study Bot stores source PDFs and generated media in separately configured
 buckets through the S3 API. Credentials should be application-scoped, and object
 permissions limited to the bot's document and media prefixes.
+
+## Cloudflare Tunnel
+
+The production documentation container joins the external `lateralis` Docker
+network. The existing token-managed `cloudflared` container routes the private
+hostname to `http://docs:3000`; tunnel credentials and ingress configuration stay
+outside this repository. Cloudflare Access is required because `noindex` and
+`robots.txt` do not provide authorization.

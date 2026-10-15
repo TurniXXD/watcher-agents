@@ -42,15 +42,16 @@ export const calculateSourceHealth = (
       (row) => row.status.toLowerCase() === 'success',
     );
     const produced = successful.filter((row) => (row.itemCount ?? 0) > 0);
-    const intervals = produced
+    const intervals = successful
       .slice(1)
       .map(
         (row, index) =>
-          (row.createdAt.getTime() - produced[index]!.createdAt.getTime()) /
+          (row.createdAt.getTime() - successful[index]!.createdAt.getTime()) /
           dayMs,
       );
     const updateMedian = median(intervals);
     const lastNewItemAt = produced.at(-1)?.createdAt;
+    const lastSuccessfulAt = successful.at(-1)?.createdAt;
     let consecutiveFailures = 0;
     for (const row of [...ordered].reverse()) {
       if (row.status.toLowerCase() === 'success') break;
@@ -70,9 +71,7 @@ export const calculateSourceHealth = (
       failedRuns: ordered.length - successful.length,
       successRate:
         ordered.length === 0 ? 1 : successful.length / ordered.length,
-      ...(successful.at(-1)
-        ? { lastSuccessfulAt: successful.at(-1)!.createdAt }
-        : {}),
+      ...(lastSuccessfulAt ? { lastSuccessfulAt } : {}),
       ...(lastNewItemAt ? { lastNewItemAt } : {}),
       ...(ordered.some(
         (row) => row.latencyMs !== null && row.latencyMs !== undefined,
@@ -88,8 +87,8 @@ export const calculateSourceHealth = (
       consecutiveFailures,
       itemsProduced: totalItems,
       uniqueItemsProduced: totalItems,
-      ...(lastNewItemAt
-        ? { staleDays: (now.getTime() - lastNewItemAt.getTime()) / dayMs }
+      ...(lastSuccessfulAt
+        ? { staleDays: (now.getTime() - lastSuccessfulAt.getTime()) / dayMs }
         : {}),
       ...(updateMedian === undefined
         ? {}

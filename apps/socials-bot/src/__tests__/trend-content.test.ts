@@ -14,6 +14,7 @@ const input = {
         source: 'YOUTUBE' as const,
         sourceUrl: 'https://www.youtube.com/watch?v=example',
         title: 'AI agents for small business',
+        keywords: [],
         region: 'US' as const,
         collectedAt: new Date('2026-10-14T05:00:00Z'),
         metrics: {},

@@ -44,7 +44,7 @@ Databáze je zdroj pravdy, Telegram je ovládání a Notion redakční prostor. 
 /socials_sources — registry zdrojů a jejich skutečný stav
 /socials_contacts — kontakty a schválené follow-upy
 /socials_trends — Trend Intelligence přehled nebo denní report
-/socials_trends run [YOUTUBE,REDDIT] — ruční výzkumný běh
+/socials_trends run [YOUTUBE,REDDIT,BLUESKY,HACKERNEWS,MASTODON,RSS] — ruční výzkumný běh
 /socials_trend ID — evidence, skóre a české obsahové návrhy
 /socials_trend_use ID — přidat příležitost do zásobníku nápadů
 /socials_trend_feedback ID relevant|not_relevant|saturated|good|published|leads
@@ -563,7 +563,7 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
       const parsedSources = z.array(trendSourceIdSchema).safeParse(requested);
       if (!parsedSources.success) {
         await ctx.reply(
-          'Neznámý zdroj. Použij YOUTUBE, REDDIT, GOOGLE_TRENDS, TIKTOK, INSTAGRAM nebo MANUAL.',
+          'Neznámý zdroj. Použij YOUTUBE, REDDIT, BLUESKY, HACKERNEWS, MASTODON, RSS, GOOGLE_TRENDS, TIKTOK, INSTAGRAM nebo MANUAL.',
         );
         return;
       }
@@ -661,7 +661,7 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
     const argument = commandArgument(ctx);
     if (!argument) {
       await ctx.reply(
-        `🔭 Nastavení trendů\nStav: ${profile.enabled ? 'on' : 'off'}\nPlán: ${profile.schedule} | ${profile.timezone}\nZdroje: ${profile.enabledSources.join(', ')}\nReport: ${profile.reportSize}\nKeywords: ${profile.keywords.join(', ')}\nSubreddits: ${profile.subreddits.join(', ')}\n\nZměny:\n/socials_trend_settings on|off\n/socials_trend_settings sources YOUTUBE,REDDIT\n/socials_trend_settings schedule 0 7 * * * | Europe/Prague\n/socials_trend_settings report 5\n/socials_trend_settings keywords AI automation,local LLM\n/socials_trend_settings subreddits artificial,LocalLLaMA`,
+        `🔭 Nastavení trendů\nStav: ${profile.enabled ? 'on' : 'off'}\nPlán: ${profile.schedule} | ${profile.timezone}\nZdroje: ${profile.enabledSources.join(', ')}\nReport: ${profile.reportSize}\nKeywords: ${profile.keywords.join(', ')}\nSubreddits: ${profile.subreddits.join(', ')}\n\nZměny:\n/socials_trend_settings on|off\n/socials_trend_settings sources YOUTUBE,BLUESKY,HACKERNEWS,MASTODON,RSS\n/socials_trend_settings schedule 0 7 * * * | Europe/Prague\n/socials_trend_settings report 5\n/socials_trend_settings keywords AI automation,local LLM\n/socials_trend_settings subreddits artificial,LocalLLaMA`,
       );
       return;
     }
@@ -679,7 +679,7 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
       const parsedSources = z.array(trendSourceIdSchema).safeParse(values);
       if (!parsedSources.success) {
         await ctx.reply(
-          'Neznámý zdroj. Použij YOUTUBE, REDDIT, GOOGLE_TRENDS, TIKTOK, INSTAGRAM nebo MANUAL.',
+          'Neznámý zdroj. Použij YOUTUBE, REDDIT, BLUESKY, HACKERNEWS, MASTODON, RSS, GOOGLE_TRENDS, TIKTOK, INSTAGRAM nebo MANUAL.',
         );
         return;
       }

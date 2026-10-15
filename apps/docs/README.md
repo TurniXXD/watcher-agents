@@ -15,15 +15,27 @@ pnpm --filter @watcher/docs typecheck
 pnpm --filter @watcher/docs check:links
 ```
 
-The production URL defaults to `https://docs.vantuch.dev`. Override it at build
-time with `NEXT_PUBLIC_DOCS_URL` when previewing another deployment.
+The canonical production URL defaults to `https://docs.vantuch.dev`. Override it
+at build time with `NEXT_PUBLIC_DOCS_URL` when using another hostname.
 
 ## Deployment
 
-Import the repository into Vercel, set the Root Directory to `apps/docs`, and
-enable Vercel Deployment Protection before attaching the production domain.
-This repository intentionally emits `noindex` metadata and a deny-all
-`robots.txt`; those controls discourage indexing but are not authentication.
+The shared Watcher image contains the standalone Next.js server and Compose runs
+it as the `docs` service. The default addresses are:
+
+- VPS loopback: `http://127.0.0.1:3001`
+- Compose origin: `http://docs:3000`
+- Cloudflare hostname: `https://docs.vantuch.dev`
+
+The production service joins the external `lateralis` network used by the
+existing token-managed `cloudflared` container. In Cloudflare Zero Trust, map
+`docs.vantuch.dev` to `http://docs:3000`. The tunnel configuration and token are
+not stored in this repository.
+
+Enable Cloudflare Access before exposing the hostname. This repository emits
+`noindex` metadata and a deny-all `robots.txt`, but those controls are not
+authentication. Keep `DOCS_BIND_ADDRESS=127.0.0.1` unless direct network access
+is explicitly required.
 
 The website must remain private unless publication is explicitly approved. Do
 not put runtime bot secrets into the docs project.

@@ -41,7 +41,7 @@ describe('maintenance evaluation', () => {
     expect(finding?.evidence['failureCount']).toBe(7);
   });
 
-  it('detects a stale source relative to its historical cadence', () => {
+  it('does not treat successful empty source responses as stale', () => {
     const daysAgo = [24, 22, 20, 15, 10, 5, 0];
     const runs = daysAgo.map((days, index) =>
       run(index, {
@@ -55,7 +55,26 @@ describe('maintenance evaluation', () => {
         ],
       }),
     );
-    expect(detectStaleSources(runs, now)[0]?.type).toBe('STALE_SOURCE');
+    expect(detectStaleSources(runs, now)).toEqual([]);
+  });
+
+  it('detects a source with no successful request relative to its cadence', () => {
+    const daysAgo = [24, 22, 20, 15, 10, 5, 0];
+    const runs = daysAgo.map((days, index) =>
+      run(index, {
+        sources: [
+          {
+            sourceId: 'rss',
+            status: days >= 20 ? 'success' : 'failed',
+            itemCount: days >= 20 ? 1 : 0,
+            createdAt: new Date(now.getTime() - days * 86_400_000),
+          },
+        ],
+      }),
+    );
+    const finding = detectStaleSources(runs, now)[0];
+    expect(finding?.type).toBe('STALE_SOURCE');
+    expect(finding?.description).toContain('No successful source request');
   });
 
   it('detects 82 percent downstream filtering as noisy output', () => {
@@ -115,9 +134,26 @@ describe('maintenance evaluation', () => {
     ).toBe(true);
   });
 
-  it('detects a high duplicate rate', () => {
-    const runs = [run(1, { itemsFetched: 100, duplicatesRemoved: 41 })];
-    expect(detectDuplicateOutput(runs, now)[0]?.type).toBe('DUPLICATE_OUTPUT');
+  it('does not treat successfully removed duplicates as duplicate output', () => {
+    const runs = [run(1, { itemsFetched: 100, duplicatesRemoved: 90 })];
+    expect(detectDuplicateOutput(runs, now)).toEqual([]);
+  });
+
+  it('detects feedback-backed duplicate delivery', () => {
+    const feedback = [
+      { action: 'DISMISSED', reason: 'duplicate story already sent' },
+      { action: 'DISMISSED', reason: 'repeated content' },
+      { action: 'OPENED', reason: 'useful' },
+      { action: 'OPENED', reason: 'useful' },
+    ];
+    expect(detectDuplicateOutput([run(1, { feedback })], now)[0]).toMatchObject(
+      {
+        type: 'DUPLICATE_OUTPUT',
+        recommendation: {
+          title: 'Audit delivery idempotency and retry handling',
+        },
+      },
+    );
   });
 
   it('detects feedback-backed poor classification', () => {

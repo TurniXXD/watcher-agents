@@ -2,7 +2,7 @@
 
 Production deployment uses GitHub Actions, GitHub Container Registry (GHCR), Tailscale, OpenSSH, Docker Compose, and a server-managed runtime configuration. The `deploy-vps` workflow runs after `watcher-ci` succeeds on `main`; it can also be started manually from the Actions page.
 
-GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `socials-bot`, `maintenance-agent`, `transport-bot`, `osint-bot`, `sales-bot`, and the one-shot `migrate` service. Reality Bot joins the release after its private runtime file is configured; until then deployment reports that it was skipped without blocking established services. Quickly and Twenty are required companion services for the sales stack. Ollama remains outside this Compose stack.
+GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `socials-bot`, `maintenance-agent`, `transport-bot`, `osint-bot`, `sales-bot`, the self-hosted `docs` application, and the one-shot `migrate` service. Reality Bot joins the release after its private runtime file is configured; until then deployment reports that it was skipped without blocking established services. Quickly and Twenty are required companion services for the sales stack. Ollama remains outside this Compose stack.
 
 ## Security model
 
@@ -13,15 +13,16 @@ GitHub publishes one immutable Watcher image. The VPS runs that image with separ
 - GitHub stores deployment transport credentials only. Bot tokens, database credentials, allowlisted Telegram IDs, Ollama settings, and the SEC user agent stay only in mode-`0600` files on the VPS.
 - GitHub's production environment can require approval before its secrets are released to a job.
 
-## Cloudflare Tunnel access to Sales API
+## Cloudflare Tunnel origins
 
-The production `sales-bot` service joins both the private Compose network and the existing external `lateralis` network. A token-managed `cloudflared` container already attached to `lateralis` can route a Cloudflare public hostname to this Docker origin:
+The production `sales-bot` and `docs` services join both the private Compose network and the existing external `lateralis` network. A token-managed `cloudflared` container already attached to `lateralis` can route Cloudflare public hostnames to these Docker origins:
 
 ```text
-http://sales-bot:4050
+Sales API:      http://sales-bot:4050
+Documentation:  http://docs:3000
 ```
 
-Create the public-hostname mapping in Cloudflare Zero Trust; token-managed tunnel ingress is not stored in this repository. Keep the host port bound to `127.0.0.1`. The public hostname exposes a REST API, not a browser UI. Protect operator-facing access with Cloudflare Access and continue sending `Authorization: Bearer $SALES_API_TOKEN` to every `/v1/*` endpoint. The Quickly webhook uses the separate `SALES_WEBHOOK_TOKEN`; the Compose deployment should normally keep its origin internal at `http://sales-bot:4050/v1/webhooks/quickly`.
+Create the public-hostname mappings in Cloudflare Zero Trust; token-managed tunnel ingress is not stored in this repository. Keep host ports bound to `127.0.0.1`. Protect `docs.vantuch.dev` with Cloudflare Access because the site contains operational documentation and `noindex` is not authentication. The Sales public hostname exposes a REST API, not a browser UI; continue sending `Authorization: Bearer $SALES_API_TOKEN` to every `/v1/*` endpoint. The Quickly webhook uses the separate `SALES_WEBHOOK_TOKEN`; the Compose deployment should normally keep its origin internal at `http://sales-bot:4050/v1/webhooks/quickly`.
 
 ## VPS prerequisites
 
@@ -221,13 +222,13 @@ The workflow then:
 5. Starts the pinned PostgreSQL 16 image with pgvector and waits for readiness.
 6. Creates compressed pre-deployment backups of Watcher, Quickly, and Twenty PostgreSQL databases. Running databases are backed up before their container images can be replaced.
 7. Applies committed Prisma migrations and verifies that the `vector` extension is installed.
-8. Starts the required bots, Quickly, Twenty, and their private databases/Redis, then waits for health checks. If Study Bot is configured, it is started separately; a Study Bot failure does not roll back the core release.
+8. Starts the required bots, the documentation site, Quickly, Twenty, and their private databases/Redis, then waits for health checks. If Study Bot is configured, it is started separately; a Study Bot failure does not roll back the core release.
 9. Restores the prior image tag if the new containers fail health checks.
 
 When the VPS has `nvidia-smi` and Docker reports the NVIDIA runtime, deployment automatically layers `docker-compose.nvidia.yml` onto the production definition. This grants only GPU utility access to the maintenance container, allowing utilization, VRAM, and NVIDIA compute-process reporting. Install and configure NVIDIA Container Toolkit on an NVIDIA host if the deployment warns that the runtime is unavailable. AMD and Intel detection uses the read-only host DRM sysfs mount and does not require this overlay.
 
 Migrations must remain backward-compatible with the previous application image because container rollback does not reverse a database migration.
-On the first release that makes OSINT and sales mandatory, a rollback to an older image without OSINT readiness restores the previously supported core services and stops the new stack; a later successful release enables full-stack rollback.
+On the first release that makes OSINT, sales, or self-hosted docs mandatory, a rollback to an older image without the relevant runtime files restores the previously supported services and stops the new service; a later successful release enables full-stack rollback.
 
 ## Operations
 

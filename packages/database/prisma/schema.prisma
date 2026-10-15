@@ -3012,6 +3012,10 @@ enum SocialTrendSourceKind {
   YOUTUBE
   TIKTOK
   INSTAGRAM
+  BLUESKY
+  HACKERNEWS
+  MASTODON
+  RSS
   MANUAL
 }
 
@@ -3207,6 +3211,8 @@ model SocialTrendSignal {
   sourceUrl   String
   title       String
   description String?
+  author      String?
+  keywords    String[]              @default([])
   region      SocialTrendRegion
   publishedAt DateTime?
   firstSeenAt DateTime              @default(now())

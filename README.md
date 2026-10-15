@@ -73,7 +73,7 @@ Run `pnpm db:validate` after Prisma changes and `docker compose config --quiet` 
 
 Independent sources use failure isolation and normalized `WatchItem` records. PostgreSQL constraints provide durable idempotency. Telegram commands and callbacks are private administration surfaces protected by `TELEGRAM_ALLOWED_USER_IDS`.
 
-Production publishes one immutable image per commit and runs each application as its own Compose service. PostgreSQL remains private, runtime secrets live only in mode-`0600` files under `deploy/runtime`, and Ollama remains external.
+Production publishes one immutable image per commit and runs each application as its own Compose service. The documentation service is available on VPS loopback at `http://127.0.0.1:3001` by default and to the existing Cloudflare Tunnel at `http://docs:3000` on the external `lateralis` network. PostgreSQL remains private, runtime secrets live only in mode-`0600` files under `deploy/runtime`, and Ollama remains external.
 
 - [Production deployment](deploy/README.md)
 - [Environment inventory](deploy/ENVIRONMENT.md)
