@@ -8,12 +8,7 @@ import { Bot, InlineKeyboard, InputFile, type Context } from 'grammy';
 import { z } from 'zod';
 import type { SocialsService } from './service.js';
 import type { SocialTranscriber } from './transcription.js';
-import {
-  dateInTimezone,
-  formatPragueDateTime,
-  nextPlanningWeek,
-} from './time.js';
-import { socialEventSources } from './source-registry.js';
+import { formatPragueDateTime, nextPlanningWeek } from './time.js';
 import { contentConceptSchema } from './trends/content-agent.js';
 import { parseTrendImport } from './trends/import.js';
 import type { SocialTrendIntelligence } from './trends/runner.js';
@@ -36,13 +31,6 @@ Databáze je zdroj pravdy, Telegram je ovládání a Notion redakční prostor. 
 /socials_status — stav výroby nebo ruční změna stavu
 /socials_history — publikovaná historie
 /socials_analytics — ručně zaznamenané výsledky
-/socials_networking — doporučené akce a účast
-/socials_events — nadcházející akce
-/socials_events_free — bezplatné akce
-/socials_events_week — akce pro příští týden
-/socials_event_add — ruční přidání ověřitelné akce
-/socials_sources — registry zdrojů a jejich skutečný stav
-/socials_contacts — kontakty a schválené follow-upy
 /socials_trends — Trend Intelligence přehled nebo denní report
 /socials_trends run [YOUTUBE,REDDIT,BLUESKY,HACKERNEWS,MASTODON,RSS] — ruční výzkumný běh
 /socials_trend ID — evidence, skóre a české obsahové návrhy
@@ -63,8 +51,6 @@ const mainKeyboard = (): InlineKeyboard =>
     .text('💡 Zásobník nápadů', 'social:ideas')
     .row()
     .text('📊 Historie a výsledky', 'social:history')
-    .text('🤝 Networking', 'social:networking')
-    .row()
     .text('📦 Content Pack', 'social:pack')
     .text('📅 Tento týden', 'social:week')
     .row()
@@ -98,11 +84,6 @@ const planningPayloadSchema = z.object({
 
 const importPayloadSchema = z.object({ contentItemId: z.string().uuid() });
 const editPayloadSchema = z.object({ contentItemId: z.string().uuid() });
-const debriefPayloadSchema = z.object({
-  attendanceId: z.string().uuid(),
-  index: z.number().int().min(0).max(3),
-  answers: z.record(z.string(), z.string()),
-});
 const trendFeedbackSchema = z.enum([
   'RELEVANT',
   'NOT_RELEVANT',
@@ -111,11 +92,6 @@ const trendFeedbackSchema = z.enum([
   'PUBLISHED',
   'GENERATED_LEADS',
 ]);
-const debriefQuestions = [
-  ['highlights', 'Co bylo na akci nejzajímavější?'],
-  ['lessons', 'Co konkrétního sis odnesl nebo naučil?'],
-  ['notes', 'S kým nebo o čem jsi mluvil? Neuváděj citlivé údaje bez důvodu.'],
-] as const;
 
 type SocialBotDependencies = {
   token: string;
@@ -285,44 +261,6 @@ const renderPlan = async (
   await ctx.reply(text, { reply_markup: keyboard });
 };
 
-const renderEvents = async (
-  ctx: Context,
-  dependencies: SocialBotDependencies,
-  freeOnly = false,
-): Promise<void> => {
-  if (!ctx.from) return;
-  const events = await dependencies.service.discoverEvents(
-    BigInt(ctx.from.id),
-    BigInt(ctx.chat!.id),
-    { freeOnly },
-  );
-  if (!events.length) {
-    await ctx.reply(
-      'Nenašel jsem žádnou odpovídající a dostatečně doloženou akci. Nevymýšlím náhrady; přidej akci přes /socials_event_add.',
-    );
-    return;
-  }
-  for (const event of events) {
-    const source = event.sourceReferences[0]?.officialUrl ?? event.canonicalUrl;
-    const price =
-      event.priceStatus === 'FREE'
-        ? 'zdarma (doloženo zdrojem)'
-        : event.priceStatus === 'PAID'
-          ? `${event.priceAmount === null ? '?' : String(event.priceAmount)} ${event.currency ?? ''}`.trim()
-          : 'cena neověřena';
-    await ctx.reply(
-      `🤝 ${event.title}\n${formatPragueDateTime(event.startAt, event.timezone)}\n${event.venue ?? event.city ?? 'místo neověřeno'} · ${price}\nProč: ${event.relevanceReasons.join('; ') || 'odpovídá vybraným kategoriím'}\nOvěření: ${event.verificationStatus}\n${source ?? ''}`,
-      {
-        reply_markup: new InlineKeyboard()
-          .text('⭐ Mám zájem', `social:att:INTERESTED:${event.id}`)
-          .text('✅ Přihlásil jsem se', `social:att:REGISTERED:${event.id}`)
-          .row()
-          .text('❌ Nezajímá mě', `social:att:CANCELLED:${event.id}`),
-      },
-    );
-  }
-};
-
 const startPlanning = async (
   ctx: Context,
   dependencies: SocialBotDependencies,
@@ -411,44 +349,6 @@ const handleSessionAnswer = async (
     );
     await dependencies.store.endSession(session.id);
     await ctx.reply('✅ Položka plánu byla upravena.');
-    return true;
-  }
-  if (session.sessionType === 'EVENT_DEBRIEF') {
-    const payload = debriefPayloadSchema.parse(session.payload);
-    const question = debriefQuestions[payload.index];
-    if (!question) return true;
-    const answers = { ...payload.answers, [question[0]]: text };
-    const nextIndex = payload.index + 1;
-    if (nextIndex < debriefQuestions.length) {
-      await dependencies.store.updateSession(session.id, 'QUESTION', {
-        ...payload,
-        index: nextIndex,
-        answers,
-      });
-      await ctx.reply(debriefQuestions[nextIndex]![1]);
-    } else {
-      await dependencies.store.saveAttendanceDebrief({
-        ownerUserId: BigInt(ctx.from.id),
-        attendanceId: payload.attendanceId,
-        ...(answers.notes ? { notes: answers.notes } : {}),
-        ...(answers.highlights ? { highlights: answers.highlights } : {}),
-        ...(answers.lessons ? { lessons: answers.lessons } : {}),
-      });
-      await dependencies.store.completeSession(session.id, {
-        ...payload,
-        index: nextIndex,
-        answers,
-      });
-      await ctx.reply(
-        '✅ Debrief uložen soukromě. Chceš-li z něj vytvořit nápad bez jmen kontaktů, použij tlačítko.',
-        {
-          reply_markup: new InlineKeyboard().text(
-            '💡 Vytvořit nápad',
-            `social:eventidea:${payload.attendanceId}`,
-          ),
-        },
-      );
-    }
     return true;
   }
   if (session.sessionType === 'TREND_IMPORT') {
@@ -946,220 +846,6 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
       `📊 Obsahová analytika\nPublikováno: ${analytics.published}\n${analytics.topics.map(([topic, values]) => `• ${topic}: ${values.published} položek, engagement ${values.engagement}, kvalifikované leady ${values.leads}`).join('\n') || 'Zatím nejsou ručně zadané výsledky.'}\n\n${analytics.caveat}`,
     );
   });
-  bot.command(['socials_events', 'socials_events_week'], (ctx) =>
-    renderEvents(ctx, dependencies),
-  );
-  bot.command('socials_networking', async (ctx) => {
-    if (!ctx.from) return;
-    const argument = commandArgument(ctx);
-    if (argument.toLowerCase().startsWith('prefs ')) {
-      if (!ctx.chat) return;
-      const values: Record<string, string> = {};
-      for (const part of argument.slice(6).split(';')) {
-        const separator = part.indexOf('=');
-        if (separator <= 0) continue;
-        const key = part.slice(0, separator).trim();
-        const value = part.slice(separator + 1).trim();
-        if (key && value) values[key] = value;
-      }
-      const settings = await dependencies.store.ensureSettings(
-        BigInt(ctx.from.id),
-        BigInt(ctx.chat.id),
-      );
-      const positiveInteger = (
-        value: string | undefined,
-        fallback: number,
-      ): number => {
-        const parsed = Number(value);
-        return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
-      };
-      const updated = await dependencies.store.updateSettings(
-        BigInt(ctx.from.id),
-        {
-          ...(values.cities
-            ? {
-                preferredCities: values.cities
-                  .split(',')
-                  .map((city: string) => city.trim())
-                  .filter(Boolean),
-              }
-            : {}),
-          travelRadiusKm: positiveInteger(
-            values.radius,
-            settings.travelRadiusKm,
-          ),
-          maximumEventPriceCzk: positiveInteger(
-            values.max,
-            settings.maximumEventPriceCzk,
-          ),
-          weeklyRecommendationCount: Math.min(
-            20,
-            Math.max(
-              1,
-              positiveInteger(values.count, settings.weeklyRecommendationCount),
-            ),
-          ),
-          mondayNetworkingReminder:
-            values.monday === undefined
-              ? settings.mondayNetworkingReminder
-              : values.monday.toLowerCase() !== 'off',
-        },
-      );
-      await ctx.reply(
-        `✅ Preference uloženy: ${updated.preferredCities.join(', ')}, rádius ${updated.travelRadiusKm} km, preferovaná maximální cena ${updated.maximumEventPriceCzk} Kč, ${updated.weeklyRecommendationCount} doporučení, pondělní připomínka ${updated.mondayNetworkingReminder ? 'zapnuta' : 'vypnuta'}.\n\nPoužití: /socials_networking prefs cities=Brno,Ostrava; radius=80; max=0; count=5; monday=on`,
-      );
-      return;
-    }
-    const attendances = await dependencies.store.listAttendances(
-      BigInt(ctx.from.id),
-    );
-    for (const attendance of attendances.slice(0, 10)) {
-      const keyboard = new InlineKeyboard();
-      if (
-        ['INTERESTED', 'REGISTERED'].includes(attendance.status) &&
-        attendance.event.startAt.getTime() <= Date.now()
-      ) {
-        keyboard.text(
-          '✅ Opravdu jsem se zúčastnil',
-          `social:attended:${attendance.id}`,
-        );
-      }
-      await ctx.reply(
-        `${attendance.event.title}\n${formatPragueDateTime(attendance.event.startAt, attendance.event.timezone)} · ${attendance.status}\nAttendance ID: ${attendance.id}`,
-        keyboard.inline_keyboard.length ? { reply_markup: keyboard } : {},
-      );
-    }
-    await renderEvents(ctx, dependencies);
-  });
-  bot.command('socials_events_free', (ctx) =>
-    renderEvents(ctx, dependencies, true),
-  );
-  bot.command('socials_event_add', async (ctx) => {
-    if (!ctx.from) return;
-    const [title, dateTime, city, sourceUrl, price] = commandArgument(ctx)
-      .split('|')
-      .map((part) => part.trim());
-    const dateMatch = dateTime?.match(
-      /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/u,
-    );
-    if (!title || !dateMatch || !sourceUrl) {
-      await ctx.reply(
-        'Použití: /socials_event_add Název | 2026-10-20 18:00 | Brno | https://oficialni-url | free/paid/unknown',
-      );
-      return;
-    }
-    const event = await dependencies.service.addManualEvent({
-      ownerUserId: BigInt(ctx.from.id),
-      title,
-      startAt: dateInTimezone(
-        {
-          year: Number(dateMatch[1]),
-          month: Number(dateMatch[2]),
-          day: Number(dateMatch[3]),
-          hour: Number(dateMatch[4]),
-          minute: Number(dateMatch[5]),
-        },
-        dependencies.timezone,
-      ),
-      ...(city ? { city } : {}),
-      sourceUrl,
-      priceStatus:
-        price?.toLowerCase() === 'free'
-          ? 'FREE'
-          : price?.toLowerCase() === 'paid'
-            ? 'PAID'
-            : 'UNKNOWN',
-    });
-    await ctx.reply(
-      `✅ Akce uložena jako ${event.verificationStatus}; cena se bez důkazu nepovažuje za bezplatnou.`,
-    );
-  });
-  bot.command('socials_sources', async (ctx) => {
-    await replyLong(
-      ctx,
-      `🔎 Zdroje akcí\n\n${socialEventSources.map((source) => `• ${source.name} — ${source.mode}\n  ${source.notes}\n  ${source.url}`).join('\n\n')}`,
-    );
-  });
-  bot.command('socials_contacts', async (ctx) => {
-    if (!ctx.from) return;
-    const argument = commandArgument(ctx);
-    if (argument.toLowerCase().startsWith('add ')) {
-      const [attendanceId, displayName, organization, notes] = argument
-        .slice(4)
-        .split('|')
-        .map((part) => part.trim());
-      if (!attendanceId || !displayName) {
-        await ctx.reply(
-          'Použití: /socials_contacts add ATTENDANCE_ID | Jméno | organizace | poznámka',
-        );
-        return;
-      }
-      await dependencies.store.addContact({
-        ownerUserId: BigInt(ctx.from.id),
-        attendanceId,
-        displayName,
-        ...(organization ? { organization } : {}),
-        ...(notes ? { conversationNotes: notes } : {}),
-      });
-      await ctx.reply(
-        '✅ Kontakt uložen soukromě. Žádná zpráva nebude automaticky odeslána.',
-      );
-      return;
-    }
-    if (argument.toLowerCase().startsWith('followup ')) {
-      const [contactId, title, dueDate] = argument
-        .slice(9)
-        .split('|')
-        .map((part) => part.trim());
-      const match = dueDate?.match(/^(\d{4})-(\d{2})-(\d{2})$/u);
-      if (!contactId || !title || !match) {
-        await ctx.reply(
-          'Použití: /socials_contacts followup CONTACT_ID | Co udělat | 2026-10-20',
-        );
-        return;
-      }
-      const followUp = await dependencies.store.createFollowUp({
-        ownerUserId: BigInt(ctx.from.id),
-        contactId,
-        title,
-        dueAt: dateInTimezone(
-          {
-            year: Number(match[1]),
-            month: Number(match[2]),
-            day: Number(match[3]),
-            hour: 9,
-            minute: 0,
-          },
-          dependencies.timezone,
-        ),
-      });
-      await ctx.reply(
-        `✅ Follow-up uložen. ID: ${followUp.id}. Bot pouze připomene; nic neodešle za tebe.`,
-      );
-      return;
-    }
-    if (argument.toLowerCase().startsWith('done ')) {
-      await dependencies.store.completeFollowUp(
-        BigInt(ctx.from.id),
-        argument.slice(5).trim(),
-      );
-      await ctx.reply('✅ Follow-up označen jako dokončený.');
-      return;
-    }
-    if (argument.toLowerCase().startsWith('delete ')) {
-      await dependencies.store.deleteContact(
-        BigInt(ctx.from.id),
-        argument.slice(7).trim(),
-      );
-      await ctx.reply('🗑️ Kontakt a jeho follow-upy byly odstraněny.');
-      return;
-    }
-    const contacts = await dependencies.store.listContacts(BigInt(ctx.from.id));
-    await replyLong(
-      ctx,
-      `👥 Kontakty a follow-upy\n${contacts.map((contact) => `• ${contact.displayName}${contact.organization ? ` · ${contact.organization}` : ''}\n  Contact ID: ${contact.id}\n${contact.followUps.map((followUp) => `  ⏰ ${formatPragueDateTime(followUp.dueAt, dependencies.timezone)} — ${followUp.title} (${followUp.id})`).join('\n') || '  bez otevřeného follow-upu'}`).join('\n') || 'Žádné kontakty.'}\n\nPříkazy: add · followup · done · delete. Nic se neposílá automaticky kontaktům.`,
-    );
-  });
   bot.callbackQuery('social:plan', async (ctx) => {
     await ctx.answerCallbackQuery();
     await startPlanning(ctx, dependencies);
@@ -1210,10 +896,6 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
   bot.callbackQuery('social:week', async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderPlan(ctx, dependencies);
-  });
-  bot.callbackQuery('social:networking', async (ctx) => {
-    await ctx.answerCallbackQuery();
-    await renderEvents(ctx, dependencies);
   });
   bot.callbackQuery('social:history', async (ctx) => {
     await ctx.answerCallbackQuery();
@@ -1318,69 +1000,6 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
       ctx.match[1]!,
     );
     await ctx.reply(`🗑️ Z neschváleného plánu odstraněno: ${removed.title}`);
-  });
-  bot.callbackQuery(
-    /^social:att:(INTERESTED|REGISTERED|CANCELLED):([\w-]+)$/u,
-    async (ctx) => {
-      await ctx.answerCallbackQuery();
-      if (!ctx.from) return;
-      const attendance = await dependencies.store.setAttendance({
-        ownerUserId: BigInt(ctx.from.id),
-        eventId: ctx.match[2]!,
-        status: ctx.match[1] as 'INTERESTED' | 'REGISTERED' | 'CANCELLED',
-      });
-      await ctx.reply(
-        `✅ Stav účasti: ${attendance.status}. Otevření odkazu se samo nepovažuje za registraci.`,
-      );
-    },
-  );
-  bot.callbackQuery(/^social:attended:([\w-]+)$/u, async (ctx) => {
-    await ctx.answerCallbackQuery();
-    if (!ctx.from || !ctx.chat) return;
-    await dependencies.store.startSession({
-      ownerUserId: BigInt(ctx.from.id),
-      chatId: BigInt(ctx.chat.id),
-      sessionType: 'EVENT_DEBRIEF',
-      state: 'QUESTION',
-      payload: { attendanceId: ctx.match[1]!, index: 0, answers: {} },
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60_000),
-    });
-    await ctx.reply(debriefQuestions[0][1]);
-  });
-  bot.callbackQuery(/^social:eventidea:([\w-]+)$/u, async (ctx) => {
-    await ctx.answerCallbackQuery();
-    if (!ctx.from || !ctx.chat) return;
-    const attendances = await dependencies.store.listAttendances(
-      BigInt(ctx.from.id),
-    );
-    const attendance = attendances.find((item) => item.id === ctx.match[1]);
-    if (!attendance || attendance.status !== 'ATTENDED') {
-      await ctx.reply(
-        'Nápad lze vytvořit jen z potvrzené účasti a vlastního debriefu.',
-      );
-      return;
-    }
-    const note = `Co jsem si odnesl z akce ${attendance.event.title}: ${attendance.lessons ?? attendance.highlights ?? attendance.notes ?? 'bez dostatečných vlastních poznámek'}`;
-    const captured = await dependencies.service.captureIdea(
-      BigInt(ctx.from.id),
-      BigInt(ctx.chat.id),
-      note,
-      'NETWORKING_EVENT',
-    );
-    if (captured.created) {
-      await dependencies.store.linkEventIdea({
-        ownerUserId: BigInt(ctx.from.id),
-        attendanceId: attendance.id,
-        contentIdeaId: captured.idea.id,
-        provenanceNotes:
-          'Vytvořeno pouze z potvrzené účasti a soukromého debriefu; jména kontaktů nebyla zahrnuta.',
-      });
-    }
-    await ctx.reply(
-      captured.created
-        ? `✅ Volitelný nápad uložen: ${captured.idea.title}`
-        : `Podobný nápad už existuje: ${captured.idea.title}`,
-    );
   });
   bot.on('message:voice', async (ctx) => {
     if (!dependencies.transcriber || !dependencies.download) {

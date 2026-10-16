@@ -27,6 +27,7 @@ required_files=(
   deploy/runtime/brno-events-agent.env
   deploy/runtime/briefing-bot.env
   deploy/runtime/socials-bot.env
+  deploy/runtime/networking-bot.env
   # The optional Study Bot still has an env file so Compose can parse the full
   # service definition. Its credentials are validated only when it is started.
   deploy/runtime/study-bot.env
@@ -77,6 +78,9 @@ required_env_values=(
   "deploy/runtime/socials-bot.env:TELEGRAM_ALLOWED_USER_IDS"
   "deploy/runtime/socials-bot.env:OLLAMA_URL"
   "deploy/runtime/socials-bot.env:OLLAMA_MODEL"
+  "deploy/runtime/networking-bot.env:DATABASE_URL"
+  "deploy/runtime/networking-bot.env:NETWORKING_TELEGRAM_TOKEN"
+  "deploy/runtime/networking-bot.env:TELEGRAM_ALLOWED_USER_IDS"
   "deploy/runtime/maintenance-agent.env:DATABASE_URL"
   "deploy/runtime/maintenance-agent.env:MAINTENANCE_API_TOKEN"
   "deploy/runtime/maintenance-agent.env:MAINTENANCE_TELEGRAM_TOKEN"
@@ -109,7 +113,7 @@ legacy_watcher_services=(
   stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent
   briefing-bot socials-bot maintenance-agent transport-bot
 )
-watcher_services=("${legacy_watcher_services[@]}" osint-bot sales-bot docs)
+watcher_services=("${legacy_watcher_services[@]}" osint-bot sales-bot networking-bot docs)
 integration_services=(quickly twenty-server twenty-worker)
 
 reality_bot_env_values=(
@@ -493,6 +497,20 @@ if ! compose_candidate up \
       rollback_services=("${rollback_services_without_docs[@]}")
       compose_candidate stop docs || true
     fi
+    if ! compose_release run --rm --no-deps --entrypoint sh networking-bot \
+      -c 'test -f apps/networking-bot/dist/index.js'; then
+      # The first Networking Bot rollout may replace an image that predates
+      # the dedicated service. Keep the old Sales/Socials release recoverable.
+      echo "Previous image predates Networking Bot; excluding it from rollback." >&2
+      rollback_services_without_networking=()
+      for rollback_service in "${rollback_services[@]}"; do
+        if [[ "$rollback_service" != networking-bot ]]; then
+          rollback_services_without_networking+=("$rollback_service")
+        fi
+      done
+      rollback_services=("${rollback_services_without_networking[@]}")
+      compose_candidate stop networking-bot || true
+    fi
     if ! compose_release run --rm --no-deps --entrypoint sh osint-bot \
       -c 'test -f apps/osint-bot/dist/health.js'; then
       # The first mandatory rollout may replace an image that predates OSINT
@@ -501,7 +519,7 @@ if ! compose_candidate up \
       echo "Previous image predates OSINT readiness; restoring legacy services only." >&2
       rollback_services=("${legacy_watcher_services[@]}")
       legacy_rollback=true
-      compose_candidate stop osint-bot sales-bot quickly twenty-server twenty-worker quickly-postgres twenty-postgres twenty-redis || true
+      compose_candidate stop osint-bot sales-bot networking-bot quickly twenty-server twenty-worker quickly-postgres twenty-postgres twenty-redis || true
     fi
     compose_release pull "${rollback_services[@]}"
     if [[ "$legacy_rollback" == false ]]; then

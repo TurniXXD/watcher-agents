@@ -6,9 +6,9 @@ description: Internal normalized event discovery and authenticated briefing API.
 ## Overview
 
 Brno Events Agent fetches public Brno listings from Meetup, GoOut, VisitBrno/TIC,
-MUNI, VUT, JIC, and CEITEC. It normalizes events, deduplicates cross-source
+MUNI, VUT, JIC, CEITEC, Velvet Innovation Meetups, and SideQuesty. It normalizes events, deduplicates cross-source
 coverage, evaluates relevance, persists results, and exposes internal endpoints
-used by Briefing and Socials.
+used by Briefing and Networking Bot.
 
 ## Architecture and flow
 
@@ -38,7 +38,7 @@ polls due state every 30 seconds by default.
 
 `GET /health` is unauthenticated. Event, briefing, and manual-run routes require
 `Authorization: Bearer $BRNO_EVENTS_API_TOKEN`. Briefing consumes selected events;
-Socials reuses normalized records for networking recommendations.
+Networking Bot reuses normalized records for recommendations and attendance.
 
 ## Troubleshooting
 

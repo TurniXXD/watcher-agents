@@ -367,6 +367,47 @@ services:
         max-file: '3'
         max-size: 10m
 
+  networking-bot:
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    command: ['node', 'apps/networking-bot/dist/index.js']
+    env_file:
+      - ./deploy/runtime/networking-bot.env
+    environment:
+      NODE_ENV: production
+      TZ: Europe/Prague
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      brno-events-agent:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:'+(process.env.NETWORKING_HEALTH_PORT||'4070')+'/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+
   maintenance-agent:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
     command: ['node', 'apps/maintenance-agent/dist/index.js']
@@ -585,8 +626,6 @@ services:
       HOSTNAME: 0.0.0.0
       NODE_ENV: production
       PORT: 3000
-    ports:
-      - '${DOCS_BIND_ADDRESS:-127.0.0.1}:${DOCS_HOST_PORT:-3001}:3000'
     networks:
       - default
       - lateralis

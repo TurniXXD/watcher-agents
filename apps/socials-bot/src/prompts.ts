@@ -104,7 +104,6 @@ export const buildSundayContentPack = (input: {
   weekLabel: string;
   planId: string;
   items: readonly PromptItem[];
-  networkingIdeas?: readonly string[];
 }): string => {
   const totalMinutes = input.items.reduce(
     (sum, item) => sum + item.estimatedPreparationMinutes,
@@ -139,9 +138,6 @@ ${overview || 'Pro tento týden nejsou naplánované položky. Nebyl vytvořen �
 
 ## Vizuální checklist
 ${assets.length ? assets.map((asset) => `- [ ] ${asset}`).join('\n') : '- [ ] Nejsou vyžadované zvláštní vizuály.'}
-
-## Volitelné networkingové podněty
-${input.networkingIdeas?.length ? input.networkingIdeas.map((idea) => `- ${idea}`).join('\n') : '- Žádný podnět bez potvrzené účasti a vlastních poznámek.'}
 
 ## Prompty pro ChatGPT
 

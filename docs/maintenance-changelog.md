@@ -2,10 +2,16 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-16 — Dedicated Networking Bot and event sources
+
+- Added a standalone private Networking Bot for event discovery, attendance, debriefs, contacts, business-card OCR, and follow-up reminders; Socials now claims only content and trend jobs.
+- Shared the preview-and-confirm Google Sheets contact workflow with Sales for backward compatibility, and added Velvet Innovation Meetups plus SideQuesty to Brno Events.
+- Added actionable YouTube trend-source diagnostics and removed the production docs host-port binding so Cloudflared reaches `http://docs:3000` only through `lateralis`.
+
 ## 2026-10-15 — Self-hosted documentation service
 
 - Added the standalone Fumadocs application to the shared production image and Docker Compose release.
-- Exposed the service on VPS loopback port `3001` and on the external `lateralis` network as `http://docs:3000` for the existing Cloudflare Tunnel.
+- Attached the production service to the external `lateralis` network as `http://docs:3000` for the existing Cloudflare Tunnel without publishing a conflicting host port.
 - Added a dedicated health endpoint and release health check; Cloudflare Access remains required for the private documentation hostname.
 
 ## 2026-10-15 — Maintenance detector semantics

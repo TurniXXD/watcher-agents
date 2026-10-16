@@ -12,6 +12,45 @@ import {
 
 type Fetch = typeof fetch;
 
+const googleApiErrorSchema = z.object({
+  error: z
+    .object({
+      message: z.string().optional(),
+      errors: z.array(z.object({ reason: z.string().optional() })).optional(),
+    })
+    .optional(),
+});
+
+const youtubeApiFailure = async (response: Response): Promise<Error> => {
+  let reason: string | undefined;
+  let message: string | undefined;
+  try {
+    const parsed = googleApiErrorSchema.safeParse(await response.json());
+    reason = parsed.success
+      ? parsed.data.error?.errors?.find((entry) => entry.reason)?.reason
+      : undefined;
+    message = parsed.success ? parsed.data.error?.message : undefined;
+  } catch {
+    // A non-JSON provider error still retains its HTTP status below.
+  }
+  const guidance =
+    reason === 'quotaExceeded' || reason === 'dailyLimitExceeded'
+      ? 'YouTube quota is exhausted; wait for reset or reduce searches per run.'
+      : reason === 'keyInvalid'
+        ? 'The YouTube API key is invalid.'
+        : reason === 'accessNotConfigured'
+          ? 'Enable YouTube Data API v3 for the key project.'
+          : response.status === 403
+            ? 'Check YouTube Data API v3 enablement, quota, and API-key restrictions.'
+            : undefined;
+  const detail = [reason, guidance, message?.slice(0, 300)]
+    .filter(Boolean)
+    .join(' — ');
+  return new Error(
+    `YouTube API returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+  );
+};
+
 const youtubeSearchSchema = z.object({
   items: z.array(
     z.object({
@@ -106,7 +145,7 @@ export class YouTubeTrendSource implements TrendSource {
           signal: AbortSignal.timeout(this.options.timeoutMs ?? 20_000),
         });
         if (!result.ok) {
-          throw new Error(`YouTube API returned HTTP ${result.status}`);
+          throw await youtubeApiFailure(result);
         }
         return result;
       },

@@ -1,25 +1,25 @@
 ---
 title: Socials Bot
-description: Relational content planning, US/Czech trend intelligence, and genuine professional networking.
+description: Relational content planning and US/Czech trend intelligence.
 ---
 
 ## Overview
 
 Socials Bot is a private Czech Telegram workflow for personal-brand planning and
-professional networking. PostgreSQL is authoritative, Notion is an optional
+trend intelligence. PostgreSQL is authoritative, Notion is an optional
 editorial mirror, and ChatGPT remains a manual high-quality writing step. The bot
 does not publish to social networks, a website, or a newsletter.
 
 Use `/start` or `/socials` for the main menu and `/help` or `/socials_help` for
 the complete command guide. Core commands include `/socials_plan`, `/socials_add`, `/socials_ideas`,
 `/socials_week`, `/socials_pack`, `/socials_drafts`, `/socials_status`,
-`/socials_analytics`, `/socials_networking`, `/socials_events`, and the
+`/socials_analytics` and the
 `/socials_trend*` Trend Intelligence commands.
 
 ## Architecture and flow
 
 `SocialsStore` owns relational persistence and versions; `SocialsService` owns
-capture, planning, packs, analytics, events, and optional Notion sync;
+capture, planning, packs, analytics, and optional Notion sync;
 `SocialsScheduler` owns durable reminders; lightweight Qwen classification has a
 deterministic fallback.
 
@@ -56,14 +56,12 @@ pnpm --filter @watcher/socials-bot typecheck
 pnpm exec vitest run apps/socials-bot/src/__tests__
 ```
 
-The scheduler polls durable jobs for Sunday planning, Monday networking,
-pre/post-event reminders, and daily trend research. Content publication status
+The scheduler polls durable jobs for Sunday planning and daily trend research.
+Content publication status
 changes only through an explicit operator action with a real URL.
 
 ## Integrations
 
-- Brno Events supplies normalized event records; unsupported locations/providers
-  remain manual.
 - Notion mirrors the content calendar with two-sided conflict detection.
 - YouTube Data API v3, approved Reddit OAuth, public Bluesky AppView, Hacker
   News Firebase, Mastodon trend endpoints, and RSS/Atom are automated trend
@@ -78,6 +76,13 @@ changes only through an explicit operator action with a real URL.
   integration or the wrong data-source ID was configured.
 - First-day trend momentum is normally unknown because growth needs repeated
   observations.
+- A source marked `ERROR` now includes a bounded diagnostic below the report.
+  For YouTube, check API enablement, key restrictions, and daily quota; the
+  report distinguishes common Google API reasons such as `quotaExceeded`.
+- To keep research running without YouTube credentials, use
+  `/socials_trends run BLUESKY,HACKERNEWS,MASTODON`. A same-day run with the
+  same source set is intentionally cached; changing the set creates a distinct
+  idempotency key.
 - Mastodon instances may disable or protect trend endpoints; configure multiple
   instances so one server does not represent the entire Fediverse.
 - RSS URLs and every redirect must resolve only to public HTTP(S) addresses.

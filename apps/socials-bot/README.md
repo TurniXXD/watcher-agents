@@ -1,6 +1,6 @@
 # Socials Bot
 
-Socials Bot is a private Czech Telegram workflow for personal-brand content planning and genuine professional networking. PostgreSQL is authoritative, Telegram is the interaction layer, Notion is an optional editorial mirror, and ChatGPT remains a manual high-quality writing step. The bot never publishes to LinkedIn, Instagram, the website, or a newsletter.
+Socials Bot is a private Czech Telegram workflow for personal-brand content planning and trend intelligence. PostgreSQL is authoritative, Telegram is the interaction layer, Notion is an optional editorial mirror, and ChatGPT remains a manual high-quality writing step. The bot never publishes to LinkedIn, Instagram, the website, or a newsletter. Contacts, business cards, events, and follow-ups belong to the separate [Networking Bot](../networking-bot/README.md).
 
 ## Architecture
 
@@ -10,7 +10,6 @@ flowchart LR
   BOT --> DB[(PostgreSQL source of truth)]
   BOT --> Q[Local Qwen metadata helper]
   BOT --> N[Notion Content Calendar]
-  BOT --> E[Brno Events normalized records]
   BOT --> PACK[Sunday Content Pack Markdown]
   PACK --> GPT[Manual ChatGPT workflow]
   GPT --> TG
@@ -20,10 +19,10 @@ flowchart LR
 
 The main service boundaries are:
 
-- `SocialsStore`: ownership-scoped persistence, transactions, versions, plans, reminders, networking, and external identities.
-- `SocialsService`: idea capture, deterministic planning, pack export, analytics, event import, and optional Notion sync.
+- `SocialsStore`: ownership-scoped persistence, transactions, versions, plans, reminders, and external identities.
+- `SocialsService`: idea capture, deterministic planning, pack export, analytics, and optional Notion sync.
 - `LightweightIdeaClassifier`: deterministic Czech keyword/project matching with a small, schema-validated Qwen request as an optional enhancement.
-- `SocialsScheduler`: idempotent Sunday planning, Monday networking, pre-event, and post-event jobs.
+- `SocialsScheduler`: idempotent Sunday planning and daily trend jobs.
 - `SocialNotionSync`: stable page identities, local hashes, Notion imports, and two-sided conflict detection.
 
 ## Relational model
@@ -42,12 +41,6 @@ erDiagram
   SOCIAL_WEEKLY_PLAN ||--o{ SOCIAL_CONTENT_PACK : exports
   SOCIAL_CONTENT_ITEM ||--o{ SOCIAL_CONTENT_VERSION : versions
   SOCIAL_CONTENT_ITEM ||--o{ SOCIAL_CONTENT_METRIC : measures
-  SOCIAL_NETWORKING_EVENT ||--o{ SOCIAL_EVENT_ATTENDANCE : attendance
-  SOCIAL_EVENT_ATTENDANCE ||--o{ SOCIAL_ATTENDANCE_CONTACT : conversations
-  SOCIAL_NETWORKING_CONTACT ||--o{ SOCIAL_ATTENDANCE_CONTACT : appears_at
-  SOCIAL_NETWORKING_CONTACT ||--o{ SOCIAL_NETWORKING_FOLLOW_UP : follow_up
-  SOCIAL_EVENT_ATTENDANCE ||--o{ SOCIAL_EVENT_CONTENT_IDEA : provenance
-  SOCIAL_CONTENT_IDEA ||--o{ SOCIAL_EVENT_CONTENT_IDEA : optional_content
 ```
 
 Projects marked `PRIVATE` or `CONFIDENTIAL` are excluded from ChatGPT prompts and Notion project labels. Content versions are append-only. A scheduled timestamp never changes a content item to `PUBLISHED`; publication requires a manual status change with a URL.
@@ -69,12 +62,6 @@ Projects marked `PRIVATE` or `CONFIDENTIAL` are excluded from ChatGPT prompts an
 | `/socials_status`         | Show production progress; `ID STATUS [published URL]` updates it manually. |
 | `/socials_history`        | Published content and URLs.                                                |
 | `/socials_analytics`      | Correlation-only review and manual metric entry.                           |
-| `/socials_networking`     | Selected events, confirmed attendance, and fresh recommendations.          |
-| `/socials_events`         | Upcoming verified/unverified event records.                                |
-| `/socials_events_free`    | Only events explicitly marked free by a source.                            |
-| `/socials_event_add`      | Add a manually verified event record and official source URL.              |
-| `/socials_sources`        | Operational, aggregated, and manual-only source registry.                  |
-| `/socials_contacts`       | Private contacts; supports `add`, `followup`, `done`, and `delete`.        |
 | `/socials_trends`         | Latest Trend Intelligence status, report, and top opportunities.           |
 | `/socials_trends run`     | Idempotent manual research run, optionally for selected sources.           |
 | `/socials_trend`          | Evidence, score breakdown, scripts, posts, carousel, and production notes. |
@@ -90,7 +77,6 @@ Argument examples:
 ```text
 /socials_projects add Název | popis | PUBLIC
 /socials_analytics add CONTENT_ID | impressions | likes | comments | qualified leads
-/socials_event_add Název | 2026-10-20 18:00 | Brno | https://official.example/event | free
 /socials_trends run YOUTUBE,REDDIT
 /socials_trend_feedback OPPORTUNITY_ID good praktický úhel pro lokální firmy
 ```
@@ -173,6 +159,8 @@ SOCIALS_RSS_FEEDS=https://hnrss.org/frontpage
 
 After deploying the migration and restarting `socials-bot`, run `/socials_trends run` from an allowed Telegram account. Existing profiles keep their persisted source selection; use the Trend Intelligence source settings in Telegram to enable newly added providers or recreate/update the profile selection.
 
+Source failures now include a bounded `Diagnostika zdrojů` section. For a YouTube `403`, it distinguishes common Google reasons such as exhausted quota, an invalid key, or a disabled API. Credential-free research can be forced with `/socials_trends run BLUESKY,HACKERNEWS,MASTODON`; the same research date and source set intentionally returns the cached idempotent report.
+
 ### Scoring and learning
 
 The initial deterministic score is `US momentum 25% + Czech opportunity 25% + audience relevance 20% + business potential 15% + content feasibility 10% + evidence quality 5%`. Every factor is `0..100`; the weighted opportunity score and evidence confidence are separate. Engagement is log-normalized with provider-specific weights, recency affects momentum, and velocity is calculated only from repeated observations of the same signal. Cross-provider confirmation improves evidence quality; canonical-URL duplicates do not count twice. Missing observations reduce confidence rather than automatically turning a potentially useful topic into a low score. Telegram settings persist per operator and the weights are stored as configuration for future editing.
@@ -221,16 +209,6 @@ Conflict policy:
 
 Notion is a practical editorial mirror, not a duplicate of every join table. Projects/topics are rendered as labels while their real relations remain in PostgreSQL.
 
-## Networking sources and privacy
-
-The operational discovery path reuses normalized `BrnoEvent` records from `brno-events-agent`. That currently aggregates JIC, Meetup Brno, GoOut Brno, MUNI, VUT, VisitBrno, and CEITEC according to that agent's configured adapters. The source registry also lists MSIC, Velvet Innovation, Impact Hub, CzechInvest, DoToho!, StartupJobs, Smart Network, Meetup Ostrava, Eventbrite, Luma, ASB Portal, TechMeetup Ostrava, GDG, Czechitas, GitHub, and VŠB-TUO as **manual-only** until a supported feed/API is implemented. A registry entry is never presented as an automated integration.
-
-Missing price means `UNKNOWN`, never free. Opening a registration URL does not imply registration. Passing event time does not imply attendance. Contacts are private by default; the bot does not send messages, invitations, email, or CRM updates. Event-derived content requires confirmed attendance and personal debrief notes and excludes contact identities.
-
-Ostrava and Frýdek-Místek are stored as default preferences, but automated coverage initially depends on the Brno Events dataset. Use `/socials_event_add` for unsupported locations/providers. Update persisted preferences with `/socials_networking prefs cities=Brno,Ostrava; radius=80; max=0; count=5; monday=on`. Free events rank first when `max=0`, but paid events are not silently excluded; use `/socials_events_free` for a strict free-only view.
-
-Create a manual reminder with `/socials_contacts followup CONTACT_ID | Co udělat | 2026-10-20` and complete it with `/socials_contacts done FOLLOWUP_ID`. The scheduler only reminds the operator in Telegram; it never contacts the person itself.
-
 ## Environment
 
 Start with [`deploy/presets/socials-bot.env.example`](../../deploy/presets/socials-bot.env.example).
@@ -271,7 +249,7 @@ Start with [`deploy/presets/socials-bot.env.example`](../../deploy/presets/socia
 | `SOCIALS_RSS_FEEDS`                               | For RSS           | Comma-separated public RSS/Atom feed URLs.                    |
 | `SOCIALS_RSS_MAX_ITEMS_PER_FEED`                  | No                | Per-feed entry cap, default `30`.                             |
 
-Cadence, pillars, cities, radius, preferred maximum event price, categories, source switches, and reminders are persisted per operator in `social_settings`. Cities, radius, maximum price, recommendation count, and the Monday reminder are editable through `/socials_networking prefs`; infrastructure secrets remain environment-only.
+Cadence and content pillars are persisted per operator in `social_settings`; infrastructure secrets remain environment-only.
 
 ## Development and deployment
 
@@ -294,17 +272,14 @@ Manual smoke test:
 4. Download `/socials_pack`, generate content manually, and import it through `/socials_drafts`.
 5. Change the item to `SCHEDULED`, then confirm `PUBLISHED` with its real URL.
 6. Add real metrics and inspect `/socials_analytics`.
-7. Open `/socials_networking`, select an event, confirm actual attendance, complete the debrief, and optionally create a linked idea.
-8. Restart the container during a planning question and confirm the next answer resumes the persisted session.
-9. Configure one permitted trend source, run `/socials_trends run`, open a detail, provide feedback, and convert it with `/socials_trend_use`.
-10. Import a small synthetic local CSV through `/socials_trend_import`; confirm the rows are labelled as manually supplied and are not duplicated on retry.
-11. Enable `BLUESKY,HACKERNEWS,MASTODON,RSS`, run `/socials_trends run`, and confirm one unavailable provider does not suppress the other source results.
+7. Restart the container during a planning question and confirm the next answer resumes the persisted session.
+8. Configure one permitted trend source, run `/socials_trends run`, open a detail, provide feedback, and convert it with `/socials_trend_use`.
+9. Import a small synthetic local CSV through `/socials_trend_import`; confirm the rows are labelled as manually supplied and are not duplicated on retry.
+10. Enable `BLUESKY,HACKERNEWS,MASTODON,RSS`, run `/socials_trends run`, and confirm one unavailable provider does not suppress the other source results.
 
 ## Known limitations
 
 - No autonomous publishing or email sending is implemented.
-- Event automation currently inherits the geographic/provider coverage of Brno Events; manual entry is the complete fallback.
-- Source revalidation uses the upstream agent's latest observation. Registration capacity is never asserted.
 - Qwen classification is deliberately lightweight and its failure does not block capture or planning.
 - Notion rich-text properties have provider limits; very large drafts remain authoritative in PostgreSQL even if Notion cannot represent every byte.
 - Analytics are manual and show association, not causal attribution.

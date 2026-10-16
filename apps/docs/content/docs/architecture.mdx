@@ -33,15 +33,16 @@ complete run result.
 
 ## Shared packages
 
-| Package                  | Responsibility                                                                                |
-| ------------------------ | --------------------------------------------------------------------------------------------- |
-| `@watcher/core`          | Watcher contracts, scheduling, retry, safe networking, run primitives, and shared types.      |
-| `@watcher/database`      | Prisma client/schema, migrations, repositories, persistence helpers, and durable idempotency. |
-| `@watcher/llm`           | Ollama provider contract, bounded generation, structured parsing, and validation.             |
-| `@watcher/notion`        | Retrying Notion API client and response validation.                                           |
-| `@watcher/observability` | Run, source, feedback, release, and resource telemetry contracts.                             |
-| `@watcher/sources`       | Reusable source adapters, caching, and normalized provider data.                              |
-| `@watcher/telegram`      | Authorization, common commands, keyboards, rendering, outbox helpers, and message splitting.  |
+| Package                    | Responsibility                                                                                |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| `@watcher/core`            | Watcher contracts, scheduling, retry, safe networking, run primitives, and shared types.      |
+| `@watcher/database`        | Prisma client/schema, migrations, repositories, persistence helpers, and durable idempotency. |
+| `@watcher/llm`             | Ollama provider contract, bounded generation, structured parsing, and validation.             |
+| `@watcher/notion`          | Retrying Notion API client and response validation.                                           |
+| `@watcher/observability`   | Run, source, feedback, release, and resource telemetry contracts.                             |
+| `@watcher/sources`         | Reusable source adapters, caching, and normalized provider data.                              |
+| `@watcher/telegram`        | Authorization, common commands, keyboards, rendering, outbox helpers, and message splitting.  |
+| `@watcher/contact-network` | Shared Google Sheets contacts, business-card OCR, deduplication, and Telegram handlers.       |
 
 ## Data and execution flow
 

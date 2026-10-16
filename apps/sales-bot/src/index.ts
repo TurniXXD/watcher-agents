@@ -29,7 +29,7 @@ import {
   networkBotCommands,
   OllamaBusinessCardParser,
   type NetworkBotDependencies,
-} from './network/index.js';
+} from '@watcher/contact-network';
 
 const logger = createLogger('sales-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);

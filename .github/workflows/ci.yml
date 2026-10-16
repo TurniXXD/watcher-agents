@@ -65,6 +65,7 @@ jobs:
             test -f deploy/presets/brno-events-agent.env.example
             test -f deploy/presets/briefing-bot.env.example
             test -f deploy/presets/socials-bot.env.example
+            test -f deploy/presets/networking-bot.env.example
             test -f deploy/presets/maintenance-agent.env.example
             test -f deploy/presets/transport-bot.env.example
             test -f deploy/presets/sales-bot.env.example
@@ -183,6 +184,7 @@ jobs:
             cp deploy/presets/brno-events-agent.env.example deploy/runtime/brno-events-agent.env
             cp deploy/presets/briefing-bot.env.example deploy/runtime/briefing-bot.env
             cp deploy/presets/socials-bot.env.example deploy/runtime/socials-bot.env
+            cp deploy/presets/networking-bot.env.example deploy/runtime/networking-bot.env
             cp deploy/presets/study-bot.env.example deploy/runtime/study-bot.env
             cp deploy/presets/maintenance-agent.env.example deploy/runtime/maintenance-agent.env
             cp deploy/presets/transport-bot.env.example deploy/runtime/transport-bot.env
@@ -207,7 +209,7 @@ jobs:
                 --env-file deploy/runtime/compose.env \
                 -f docker-compose.production.yml \
                 config --services)"
-            for service in reality-bot osint-bot sales-bot quickly twenty-server twenty-worker; do
+            for service in reality-bot osint-bot sales-bot networking-bot quickly twenty-server twenty-worker; do
               grep -Fxq "$service" <<< "$services"
             done
 
@@ -220,6 +222,25 @@ jobs:
                 config --format json | jq -r '.services["sales-bot"].networks | keys[]')"
             grep -Fxq default <<< "$sales_networks"
             grep -Fxq lateralis <<< "$sales_networks"
+
+            docs_networks="$(IMAGE_REGISTRY=ghcr.io \
+              IMAGE_NAMESPACE=example \
+              IMAGE_TAG=ci \
+              docker compose \
+                --env-file deploy/runtime/compose.env \
+                -f docker-compose.production.yml \
+                config --format json | jq -r '.services.docs.networks | keys[]')"
+            grep -Fxq default <<< "$docs_networks"
+            grep -Fxq lateralis <<< "$docs_networks"
+
+            docs_published_ports="$(IMAGE_REGISTRY=ghcr.io \
+              IMAGE_NAMESPACE=example \
+              IMAGE_TAG=ci \
+              docker compose \
+                --env-file deploy/runtime/compose.env \
+                -f docker-compose.production.yml \
+                config --format json | jq '.services.docs.ports // [] | length')"
+            test "$docs_published_ports" -eq 0
           fi
 
   container-build-verify:

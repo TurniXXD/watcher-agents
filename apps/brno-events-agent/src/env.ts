@@ -22,6 +22,8 @@ const schema = z.object({
   VUT_INTERVAL_MINUTES: interval.default(360),
   JIC_INTERVAL_MINUTES: interval.default(720),
   CEITEC_INTERVAL_MINUTES: interval.default(720),
+  VELVET_INNOVATION_INTERVAL_MINUTES: interval.default(360),
+  SIDEQUESTY_INTERVAL_MINUTES: interval.default(180),
   MEETUP_ENABLED: boolean,
   GOOUT_ENABLED: boolean,
   VISITBRNO_ENABLED: boolean,
@@ -29,6 +31,8 @@ const schema = z.object({
   VUT_ENABLED: boolean,
   JIC_ENABLED: boolean,
   CEITEC_ENABLED: boolean,
+  VELVET_INNOVATION_ENABLED: boolean,
+  SIDEQUESTY_ENABLED: boolean,
   MEETUP_URL: z.url().optional(),
   GOOUT_URL: z.url().optional(),
   VISITBRNO_URL: z.url().optional(),
@@ -36,19 +40,29 @@ const schema = z.object({
   VUT_URL: z.url().optional(),
   JIC_URL: z.url().optional(),
   CEITEC_URL: z.url().optional(),
+  VELVET_INNOVATION_URL: z.url().optional(),
+  SIDEQUESTY_URL: z.url().optional(),
 });
 export const env = schema.parse(process.env);
 export const sourceSettings = Object.fromEntries(
-  ['MEETUP', 'GOOUT', 'VISITBRNO', 'MUNI', 'VUT', 'JIC', 'CEITEC'].map(
-    (name) => [
-      name.toLowerCase(),
-      {
-        interval: env[`${name}_INTERVAL_MINUTES` as keyof typeof env] as number,
-        enabled: env[`${name}_ENABLED` as keyof typeof env] as boolean,
-        ...(env[`${name}_URL` as keyof typeof env]
-          ? { url: env[`${name}_URL` as keyof typeof env] as string }
-          : {}),
-      },
-    ],
-  ),
+  [
+    'MEETUP',
+    'GOOUT',
+    'VISITBRNO',
+    'MUNI',
+    'VUT',
+    'JIC',
+    'CEITEC',
+    'VELVET_INNOVATION',
+    'SIDEQUESTY',
+  ].map((name) => [
+    name.toLowerCase().replaceAll('_', '-'),
+    {
+      interval: env[`${name}_INTERVAL_MINUTES` as keyof typeof env] as number,
+      enabled: env[`${name}_ENABLED` as keyof typeof env] as boolean,
+      ...(env[`${name}_URL` as keyof typeof env]
+        ? { url: env[`${name}_URL` as keyof typeof env] as string }
+        : {}),
+    },
+  ]),
 );

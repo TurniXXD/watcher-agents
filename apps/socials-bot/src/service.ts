@@ -1,4 +1,4 @@
-import { assertPublicHttpUrl, errorMessage } from '@watcher/core';
+import { errorMessage } from '@watcher/core';
 import type { SocialsStore } from '@watcher/database';
 import { assessNovelty } from './novelty.js';
 import type { LightweightIdeaClassifier } from './classifier.js';
@@ -177,51 +177,6 @@ export class SocialsService {
       );
       return { synced: 0, conflicts: 0, failed: 1 };
     }
-  }
-
-  public async discoverEvents(
-    ownerUserId: bigint,
-    chatId: bigint,
-    options?: { freeOnly?: boolean; now?: Date },
-  ) {
-    const settings = await this.options.store.ensureSettings(
-      ownerUserId,
-      chatId,
-    );
-    const now = options?.now ?? new Date();
-    const week = nextPlanningWeek(now, settings.timezone);
-    await this.options.store.importBrnoEvents(ownerUserId, now, week.end);
-    const events = await this.options.store.listNetworkingEvents({
-      ownerUserId,
-      from: now,
-      to: week.end,
-      cities: settings.preferredCities,
-      ...(options?.freeOnly === undefined
-        ? {}
-        : { freeOnly: options.freeOnly }),
-      limit: Math.max(settings.weeklyRecommendationCount * 3, 20),
-    });
-    return events
-      .sort(
-        (left, right) =>
-          Number(right.priceStatus === 'FREE') -
-            Number(left.priceStatus === 'FREE') ||
-          right.relevanceScore - left.relevanceScore ||
-          left.startAt.getTime() - right.startAt.getTime(),
-      )
-      .slice(0, settings.weeklyRecommendationCount);
-  }
-
-  public addManualEvent(input: {
-    ownerUserId: bigint;
-    title: string;
-    startAt: Date;
-    city?: string;
-    sourceUrl: string;
-    priceStatus?: 'FREE' | 'PAID' | 'UNKNOWN';
-  }) {
-    const sourceUrl = assertPublicHttpUrl(input.sourceUrl).toString();
-    return this.options.store.addManualEvent({ ...input, sourceUrl });
   }
 
   public async analytics(ownerUserId: bigint) {

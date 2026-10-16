@@ -50,10 +50,10 @@ The docs application is independent of PostgreSQL, Telegram, Ollama, and all
 provider credentials. Its only optional build-time value is
 `NEXT_PUBLIC_DOCS_URL`, which defaults to `https://docs.vantuch.dev`.
 
-The production Compose service listens internally at `http://docs:3000` and is
-published only on VPS loopback at `http://127.0.0.1:3001` by default. The
-existing Cloudflare Tunnel reaches it through the external `lateralis` Docker
-network.
+The production Compose service listens internally at `http://docs:3000`,
+publishes no host port, and is reached by the existing Cloudflare Tunnel through
+the external `lateralis` Docker network. Local development Compose can still
+publish `http://127.0.0.1:3001`.
 
 ## Quality gates
 

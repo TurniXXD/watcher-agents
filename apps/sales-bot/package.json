@@ -9,12 +9,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@watcher/contact-network": "workspace:*",
     "@watcher/core": "workspace:*",
     "@watcher/database": "workspace:*",
     "@watcher/llm": "workspace:*",
     "@watcher/sources": "workspace:*",
     "@watcher/telegram": "workspace:*",
-    "googleapis": "^166.0.0",
     "grammy": "1.46.0",
     "zod": "4.4.3"
   },

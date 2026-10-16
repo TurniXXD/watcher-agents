@@ -77,6 +77,15 @@ export const eventCandidate = (input: {
   language?: 'cs' | 'en' | 'other' | undefined;
   imageUrl?: string | undefined;
   registrationUrl?: string | undefined;
+  registrationRequired?: boolean | undefined;
+  price?:
+    | {
+        amount?: number | undefined;
+        currency?: 'CZK' | 'EUR' | undefined;
+        free?: boolean | undefined;
+        text?: string | undefined;
+      }
+    | undefined;
   categories: EventCategory[];
   raw?: unknown;
 }): RawEvent | undefined => {

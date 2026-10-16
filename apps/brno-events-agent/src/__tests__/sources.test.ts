@@ -8,7 +8,9 @@ import {
   parseGoOutHtml,
   parseJicHtml,
   parseMuniHtml,
+  parseSideQuestyHtml,
   parseVisitBrnoHtml,
+  parseVelvetInnovationHtml,
   parseVutHtml,
 } from '../sources/site-html.js';
 
@@ -24,10 +26,17 @@ const parse = (
   categories: Parameters<typeof parser>[3] = ['other'],
 ) => parser(html, pageUrl, now, categories);
 const settings = Object.fromEntries(
-  ['meetup', 'goout', 'visitbrno', 'muni', 'vut', 'jic', 'ceitec'].map((id) => [
-    id,
-    { interval: 60, enabled: true },
-  ]),
+  [
+    'meetup',
+    'goout',
+    'visitbrno',
+    'muni',
+    'vut',
+    'jic',
+    'ceitec',
+    'velvet-innovation',
+    'sidequesty',
+  ].map((id) => [id, { interval: 60, enabled: true }]),
 ) as SourceSettings;
 
 describe('Brno event sources', () => {
@@ -40,6 +49,8 @@ describe('Brno event sources', () => {
       'vut',
       'jic',
       'ceitec',
+      'velvet-innovation',
+      'sidequesty',
     ]);
   });
 
@@ -149,6 +160,35 @@ describe('Brno event sources', () => {
       venue: { name: 'JIC Startup Hub, Brno' },
     });
     expect(events[0]?.startAt.getHours()).toBe(9);
+  });
+
+  it('parses Velvet Innovation meetups and explicit free admission', () => {
+    const events = parse(
+      parseVelvetInnovationHtml,
+      `<section class="latest-meetup"><h2 class="latest-meetup-title">Founders meetup</h2><div class="latest-meetup-info"><div class="info-item"><strong>17. 9. 2026 18:00</strong></div><div class="info-item"><strong>zdarma</strong></div><div class="info-item"><strong>Clubco Brno</strong></div></div><p class="latest-meetup-detail">Setkání startupové komunity.</p><a href="/cs/meetupy/founders">Detail</a></section>`,
+      ['networking'],
+    );
+    expect(events[0]).toMatchObject({
+      title: 'Founders meetup',
+      venue: { name: 'Clubco Brno' },
+      price: { free: true, text: 'zdarma' },
+      eventUrl: 'https://events.example.test/cs/meetupy/founders',
+    });
+  });
+
+  it('parses SideQuesty event days and strips the city prefix', () => {
+    const events = parse(
+      parseSideQuestyHtml,
+      `<div class="eventDays" data-date="2026-09-19">Sobota</div><div class="eventThisDay"><a href="/sq/board-games" title="[Brno] - Board Games Night"><span class="nazevSQ">[Brno] - Board Games Night</span></a><div class="casAkce"><span>18:30</span></div><span class="text-muted">Impact Hub Brno</span></div>`,
+      ['social'],
+    );
+    expect(events[0]).toMatchObject({
+      title: 'Board Games Night',
+      venue: { name: 'Impact Hub Brno' },
+      eventUrl: 'https://events.example.test/sq/board-games',
+    });
+    expect(events[0]?.startAt.getHours()).toBe(18);
+    expect(events[0]?.startAt.getMinutes()).toBe(30);
   });
 
   it('validates and normalizes the CEITEC public API', () => {

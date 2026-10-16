@@ -6,7 +6,9 @@ import {
   parseGoOutHtml,
   parseJicHtml,
   parseMuniHtml,
+  parseSideQuestyHtml,
   parseVisitBrnoHtml,
+  parseVelvetInnovationHtml,
   parseVutHtml,
 } from './site-html.js';
 
@@ -47,6 +49,16 @@ export const createSources = (settings: SourceSettings): EventSource[] => {
   const vut = config(settings, 'vut', 'https://www.vut.cz/en/but/events');
   const jic = config(settings, 'jic', 'https://www.jic.cz/cz/akce');
   const ceitec = config(settings, 'ceitec', 'https://www.ceitec.eu/events/');
+  const velvetInnovation = config(
+    settings,
+    'velvet-innovation',
+    'https://www.velvetinnovation.com/cs/meetupy',
+  );
+  const sidequesty = config(
+    settings,
+    'sidequesty',
+    'https://www.sidequesty.com/events/',
+  );
   return [
     new HtmlEventSource(
       'meetup',
@@ -111,6 +123,24 @@ export const createSources = (settings: SourceSettings): EventSource[] => {
       ceitec.interval,
       ceitec.enabled,
       ['science', 'biology', 'biotech'],
+    ),
+    new HtmlEventSource(
+      'velvet-innovation',
+      'Velvet Innovation Meetups',
+      velvetInnovation.url,
+      velvetInnovation.interval,
+      velvetInnovation.enabled,
+      ['networking', 'startup', 'business'],
+      [parseVelvetInnovationHtml],
+    ),
+    new HtmlEventSource(
+      'sidequesty',
+      'SideQuesty',
+      sidequesty.url,
+      sidequesty.interval,
+      sidequesty.enabled,
+      ['social', 'networking', 'outdoors'],
+      [parseSideQuestyHtml],
     ),
   ];
 };

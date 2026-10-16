@@ -21,9 +21,9 @@ at build time with `NEXT_PUBLIC_DOCS_URL` when using another hostname.
 ## Deployment
 
 The shared Watcher image contains the standalone Next.js server and Compose runs
-it as the `docs` service. The default addresses are:
+it as the `docs` service. The addresses are:
 
-- VPS loopback: `http://127.0.0.1:3001`
+- Local development Compose: `http://127.0.0.1:3001`
 - Compose origin: `http://docs:3000`
 - Cloudflare hostname: `https://docs.vantuch.dev`
 
@@ -34,8 +34,8 @@ not stored in this repository.
 
 Enable Cloudflare Access before exposing the hostname. This repository emits
 `noindex` metadata and a deny-all `robots.txt`, but those controls are not
-authentication. Keep `DOCS_BIND_ADDRESS=127.0.0.1` unless direct network access
-is explicitly required.
+authentication. Production intentionally publishes no host port; only local
+development Compose uses `DOCS_BIND_ADDRESS` and `DOCS_HOST_PORT`.
 
 The website must remain private unless publication is explicitly approved. Do
 not put runtime bot secrets into the docs project.

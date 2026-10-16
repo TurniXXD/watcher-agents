@@ -13,7 +13,7 @@ import {
 import {
   registerNetworkHandlers,
   type NetworkBotDependencies,
-} from './network/index.js';
+} from '@watcher/contact-network';
 
 export const salesHelp = `💼 Sales assistant
 

@@ -177,7 +177,6 @@ const bot = createSocialsBot({
 const scheduler = new SocialsScheduler({
   store,
   trendIntelligence,
-  service,
   intervalMs: env.SOCIALS_SCHEDULER_INTERVAL_MS,
   defaultTimezone: env.SOCIALS_TIMEZONE,
   defaultReminderTime: env.SOCIALS_SUNDAY_REMINDER_TIME,

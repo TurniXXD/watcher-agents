@@ -113,6 +113,15 @@ export const renderDailyTrendReport = (input: {
     '',
     'Naměřená fakta jsou počty signálů, dostupné platformní metriky a opakovaná pozorování. Tržní status, relevance a obsahové návrhy jsou transparentní odhady.',
   ];
+  const diagnostics = input.sourceStatuses.filter(({ error }) => error);
+  if (diagnostics.length) {
+    header.push(
+      '',
+      `Diagnostika zdrojů:\n${diagnostics
+        .map(({ source, error }) => `• ${source}: ${error}`)
+        .join('\n')}`,
+    );
+  }
   if (!input.opportunities.length) {
     return [
       ...header,

@@ -1,12 +1,8 @@
 # Sales Bot
 
-Private lead-research, outreach-preparation, and personal-network Telegram service. It discovers Czech businesses through ARES and Geoapify, optionally falls back to Google Places, crawls public company websites, records evidence, scores leads, prepares grounded drafts, and integrates with Quickly and Twenty when configured.
+Private lead-research and outreach-preparation Telegram service. It discovers Czech businesses through ARES and Geoapify, optionally falls back to Google Places, crawls public company websites, records evidence, scores leads, prepares grounded drafts, and integrates with Quickly and Twenty when configured.
 
 Research and drafting never imply authorization to contact a recipient. Quickly enrollment fails closed unless a qualified, approved lead has valid `RECIPIENT_OPT_IN` or `EXISTING_CUSTOMER` evidence, no suppression, an enabled campaign, and available capacity. Public contact data or Telegram approval alone is not consent.
-
-## Personal network
-
-The same bot can manage an existing private Google Sheet named `Contact list` with the exact configured eleven columns. A dedicated Google service account should be shared only with that spreadsheet. Adds, updates, and business-card imports always show a preview and require save confirmation.
 
 ## Commands
 
@@ -14,10 +10,12 @@ Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands in
 
 `/sales_search <business type> | <location> | <limit>` accepts a Czech or English business type. Known aliases are translated deterministically to Geoapify and CZ-NACE (for example, `farmy` becomes `commercial.food_and_drink.farm` plus CZ-NACE `01`); other descriptions are mapped by the configured Ollama model to a validated Geoapify category catalog. Every immediate and periodic result prints the categories actually used. Explicit `geo:<category>` and `nace:<code>` inputs remain supported.
 
-Network commands include `/network_help`, `/network_add`, `/network_search`, `/network_contact`, `/network_update`, `/network_intro`, `/network_followups`, and `/network_context`.
+The backward-compatible contact commands are `/network_help`, `/network_add`, `/network_search`, `/network_contact`, `/network_update`, `/network_intro`, `/network_followups`, and `/network_context`.
+
+Personal contacts and business-card reading are also available in the separate [Networking Bot](../networking-bot/README.md). Sales keeps the same commands for backward compatibility, while networking events and event follow-ups belong only to Networking Bot.
 
 ## Configuration
 
-Start from [sales](../../deploy/presets/sales-bot.env.example), [Quickly](../../deploy/presets/quickly.env.example), and [Twenty](../../deploy/presets/twenty.env.example) presets. Keep populated copies only in private runtime configuration. API/webhook tokens must be distinct. Quickly and Twenty credentials remain optional until those integrations are enabled.
+Start from [sales](../../deploy/presets/sales-bot.env.example), [Quickly](../../deploy/presets/quickly.env.example), and [Twenty](../../deploy/presets/twenty.env.example) presets. Keep populated copies only in private runtime configuration. API/webhook tokens must be distinct. Quickly, Twenty, and the Google Sheets contact group remain optional until those integrations are enabled.
 
 Apply the [Twenty Sales App](../twenty-sales-app/README.md) before enabling custom Twenty fields.

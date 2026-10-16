@@ -440,6 +440,41 @@ services:
     tmpfs:
       - /tmp
 
+  networking-bot:
+    image: ${WATCHER_IMAGE:-watcher:local}
+    command: ['node', 'apps/networking-bot/dist/index.js']
+    env_file:
+      - ${WATCHER_ENV_FILE:-.env.example}
+    environment:
+      TZ: Europe/Prague
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      brno-events-agent:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:'+(process.env.NETWORKING_HEALTH_PORT||4070)+'/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
   docs:
     image: ${WATCHER_IMAGE:-watcher:local}
     build:

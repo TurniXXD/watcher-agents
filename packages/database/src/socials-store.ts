@@ -1085,11 +1085,25 @@ export class SocialsStore {
     });
   }
 
-  public async claimDueJobs(now: Date) {
+  public async claimDueJobs(
+    now: Date,
+    kinds?: readonly string[],
+    kindPrefixes?: readonly string[],
+  ) {
     const candidates = await this.db.socialScheduledJob.findMany({
       where: {
         status: SocialSchedulerStatus.PENDING,
         scheduledFor: { lte: now },
+        ...(kinds?.length || kindPrefixes?.length
+          ? {
+              OR: [
+                ...(kinds?.length ? [{ kind: { in: [...kinds] } }] : []),
+                ...(kindPrefixes ?? []).map((prefix) => ({
+                  kind: { startsWith: prefix },
+                })),
+              ],
+            }
+          : {}),
       },
       orderBy: { scheduledFor: 'asc' },
       take: 20,

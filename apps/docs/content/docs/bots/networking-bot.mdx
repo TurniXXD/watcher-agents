@@ -1,0 +1,63 @@
+---
+title: Networking Bot
+description: Private contacts, business-card OCR, event discovery, attendance, and follow-up reminders.
+---
+
+## Overview
+
+Networking Bot is the dedicated Telegram surface for professional contacts and
+networking events. Sales Bot keeps the shared personal-network commands for
+backward compatibility, while Socials Bot no longer owns event discovery or
+attendance. Existing PostgreSQL event records and the configured Google Sheet
+remain in place.
+
+## Contacts and business cards
+
+The Google Sheet contract has exactly eleven columns, from `Jméno` through
+`Aktivní kontakt`. `/network_add`, `/network_search`, `/network_contact`,
+`/network_update`, `/network_intro`, `/network_followups`, and
+`/network_context` operate on that sheet. A photo is downloaded from Telegram,
+sent to the configured Ollama image model, validated, checked for duplicates,
+and shown as a preview. No row is written before the operator selects Save.
+
+## Events and reminders
+
+`/networking`, `/network_events`, and `/network_events_free` import normalized
+records from Brno Events Agent. `/network_sources` shows the operational
+registry, including Velvet Innovation Meetups and SideQuesty. Attendance is
+explicit; opening a URL never implies registration or attendance. Monday,
+pre-event, post-event, and approved follow-up reminders are durable database
+jobs claimed only by Networking Bot.
+
+Manual event input remains available through `/network_event_add`. Missing
+prices stay unknown. Event contacts and their follow-ups are private and the bot
+never sends a message to those people.
+
+## Configuration
+
+Required variables are `DATABASE_URL`, `NETWORKING_TELEGRAM_TOKEN`, and
+`TELEGRAM_ALLOWED_USER_IDS`. Google Sheets requires the spreadsheet ID, range,
+service-account e-mail, and private key. Ollama text assistance requires both
+`OLLAMA_URL` and `OLLAMA_MODEL`; business-card photos additionally require an
+installed image-capable `NETWORK_OLLAMA_VISION_MODEL`. The internal readiness
+port defaults to `4070`.
+
+Use [`deploy/presets/networking-bot.env.example`](../../../../../deploy/presets/networking-bot.env.example)
+as the safe inventory. Production secrets belong only in the VPS secret source
+and rendered mode-`0600` runtime file.
+
+```bash
+pnpm --filter @watcher/networking-bot typecheck
+pnpm exec vitest run apps/networking-bot/src packages/contact-network/src
+pnpm --filter @watcher/networking-bot build
+```
+
+## Troubleshooting
+
+- If photos say vision is not configured, set an image-capable model and verify
+  that it is installed on the external Ollama host.
+- If a Google Sheet header error appears, keep the exact eleven-column order
+  documented in the app README.
+- If events are empty, inspect the named source health in Brno Events Agent;
+  one failing source does not suppress successful providers.
+- Only explicitly sourced free admission appears in the strict free list.

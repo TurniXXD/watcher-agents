@@ -27,11 +27,11 @@ Compose starts it as the `docs` service with these addresses:
 | Scope               | Address                    |
 | ------------------- | -------------------------- |
 | Container           | `http://docs:3000`         |
-| VPS loopback        | `http://127.0.0.1:3001`    |
+| Local Compose       | `http://127.0.0.1:3001`    |
 | Cloudflare hostname | `https://docs.vantuch.dev` |
 
-`DOCS_BIND_ADDRESS` and `DOCS_HOST_PORT` can change the host publication. Keep
-the address on loopback unless direct network access is explicitly required.
+Production publishes no host port. `DOCS_BIND_ADDRESS` and `DOCS_HOST_PORT`
+control only local-development Compose and should remain on loopback.
 `NEXT_PUBLIC_DOCS_URL=https://docs.vantuch.dev` sets the canonical build-time
 origin and contains no secret.
 

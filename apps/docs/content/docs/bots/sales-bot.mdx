@@ -1,6 +1,6 @@
 ---
 title: Sales Bot
-description: Czech lead research, call preparation, controlled outreach, CRM, and personal-network workflows.
+description: Czech lead research, call preparation, controlled outreach, and CRM workflows.
 ---
 
 ## Overview
@@ -8,14 +8,19 @@ description: Czech lead research, call preparation, controlled outreach, CRM, an
 Sales Bot discovers Czech businesses through ARES and Geoapify, optionally uses
 Google Places fallback, crawls public company websites, stores evidence, scores
 leads, prepares grounded drafts, and integrates with Quickly and Twenty when
-configured. It also manages an existing private Google Sheet for personal
-network contacts with preview-and-confirm writes.
+configured. Personal contacts and business-card reading are also available in
+the separate Networking Bot. Sales keeps the same commands for backward
+compatibility; event discovery and event follow-ups belong only to Networking.
 
 Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands
 include `/sales_status`, `/sales_campaigns`, `/sales_search`,
 `/sales_searches`, `/sales_search_stop`, `/sales_find`, `/sales_calls`,
 `/sales_leads`, `/sales_lead`, `/sales_approve`, `/sales_reject`, and
-`/sales_run`. Network commands start with `/network_`.
+`/sales_run`.
+
+The backward-compatible contact commands continue to use the `/network_`
+prefix and the same preview-and-confirm business-card workflow as Networking
+Bot.
 
 ## Architecture and flow
 
@@ -34,9 +39,9 @@ is not consent.
 Required: `DATABASE_URL`, `SALES_TELEGRAM_TOKEN`,
 `TELEGRAM_ALLOWED_USER_IDS`, distinct `SALES_API_TOKEN` and
 `SALES_WEBHOOK_TOKEN`. Configure scheduler/follow-up timezone and intervals.
-Geoapify, Google Places, Ollama, Quickly, Twenty, and Google Sheets/service
-account groups are optional. Partial Google Sheets credentials or an Ollama URL
-without a model fail validation.
+Geoapify, Google Places, Ollama, Quickly, Twenty, and the Google Sheets contact
+group are optional. Partial Google Sheets credentials or an Ollama URL without a
+model fail validation.
 
 ## Execution and scheduling
 
@@ -55,7 +60,6 @@ search and lead pipeline.
 ARES and Geoapify are primary discovery sources; Google Places is an optional
 fallback. Quickly owns explicitly authorized campaigns. Twenty stores CRM state,
 and the versioned Twenty Sales App adds custom relationships/fields. Google
-Sheets is limited to the configured private contact range.
 
 ## Troubleshooting
 
@@ -63,7 +67,5 @@ Sheets is limited to the configured private contact range.
   search/discovery and analysis, then inspect evidence.
 - Category mapping prints the Geoapify/CZ-NACE categories actually used. Supply
   `geo:` or `nace:` for an explicit override.
-- A business-card timeout should leave the preview unsaved; retry or enter the
-  contact manually.
 - Quickly refusal is expected when consent, suppression, campaign, or capacity
   requirements are not satisfied.

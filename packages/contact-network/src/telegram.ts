@@ -121,7 +121,7 @@ const downloadPhoto = async (
   return new Uint8Array(await response.arrayBuffer());
 };
 
-export const networkHelp = `🤝 Network Bot
+export const networkHelp = `🤝 Networking Bot
 
 Pracuje s existujícím listem Contact list a přesně jedenácti sloupci: Jméno, Datum potkání, Místo potkání, Telefon, Email, Web, sociální síť, Poznámka k potkání, Typ kontaktu, Domluvena další schůzka, Aktivní kontakt.
 

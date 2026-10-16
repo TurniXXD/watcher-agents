@@ -89,12 +89,24 @@ describe('trend source adapters', () => {
   it('isolates API failures and reports exhausted configured quota', async () => {
     const failed = new YouTubeTrendSource({
       apiKey: 'test',
-      fetch: vi.fn(async () => new Response('forbidden', { status: 403 })),
+      fetch: vi.fn(async () =>
+        Response.json(
+          {
+            error: {
+              message: 'Quota exceeded for quota metric Queries.',
+              errors: [{ reason: 'quotaExceeded' }],
+            },
+          },
+          { status: 403 },
+        ),
+      ),
     });
-    await expect(failed.collect(context)).resolves.toMatchObject({
+    const failure = await failed.collect(context);
+    expect(failure).toMatchObject({
       availability: 'ERROR',
       signals: [],
     });
+    expect(failure.error).toContain('quotaExceeded');
     const exhausted = new YouTubeTrendSource({
       apiKey: 'test',
       maxSearchesPerRun: 0,

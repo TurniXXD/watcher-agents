@@ -21,6 +21,7 @@ export const defaultAgentHealthTargets: readonly AgentHealthTarget[] = [
     url: 'http://brno-events-agent:4020/health',
   },
   { agentName: 'briefing-bot', url: 'http://briefing-bot:8080/healthz' },
+  { agentName: 'networking-bot', url: 'http://networking-bot:4070/healthz' },
 ];
 
 type ProbeResult =

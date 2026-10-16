@@ -266,6 +266,7 @@ jobs:
               echo '=== socials bot logs ==='
               IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
                 docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 socials-bot || true
+                docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 networking-bot || true
               echo
               echo '=== maintenance agent logs ==='
               IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \

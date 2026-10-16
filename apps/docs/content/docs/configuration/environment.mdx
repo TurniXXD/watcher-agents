@@ -26,9 +26,8 @@ credential groups must be complete.
   inference where enabled.
 - `LOG_LEVEL` controls structured logging without enabling secret logging.
 - Timezones use IANA names, normally `Europe/Prague`.
-- `DOCS_BIND_ADDRESS` and `DOCS_HOST_PORT` control the loopback-only host
-  publication for the self-hosted documentation service; defaults are
-  `127.0.0.1` and `3001`.
+- `DOCS_BIND_ADDRESS` and `DOCS_HOST_PORT` control only the loopback-bound local
+  development Compose publication; production exposes docs through `lateralis`.
 
 ## Secret handling
 
