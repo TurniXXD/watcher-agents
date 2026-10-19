@@ -128,6 +128,11 @@ jobs:
         run: pnpm format:check
 
       - name: Lint
+        env:
+          # Type-aware ESLint creates TypeScript programs for the whole
+          # monorepo. Its observed peak is just above Node's default ~4 GiB
+          # heap on GitHub-hosted runners.
+          NODE_OPTIONS: --max-old-space-size=6144
         run: pnpm lint
 
       - name: Typecheck

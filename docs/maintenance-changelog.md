@@ -2,6 +2,11 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-19 — CI lint memory and Twenty build metadata
+
+- Gave the type-aware monorepo ESLint step a 6 GiB V8 heap on GitHub-hosted runners after it exceeded Node's default heap following a successful Turbo build.
+- Declared the Twenty Sales App validation-only build as output-free so Turbo no longer warns about a missing `dist` artifact.
+
 ## 2026-10-16 — Dedicated Networking Bot and event sources
 
 - Added a standalone private Networking Bot for event discovery, attendance, debriefs, contacts, business-card OCR, and follow-up reminders; Socials now claims only content and trend jobs.
