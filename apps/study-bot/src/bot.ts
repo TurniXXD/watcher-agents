@@ -10,9 +10,18 @@ export const studyHelp = `📚 Study bot
 Send a text-based PDF and I will create a source-grounded spoken lecture. Scanned PDFs need OCR first.
 
 /start — initialize the bot and show this guide
+/about — purpose, data flow, grounding, and safety boundaries
 /status — latest document job
 /cancel — cancel latest running job
 /help — this help`;
+
+export const studyAbout = `📚 About Study Bot
+
+Study Bot is a private assistant for turning text-based university PDFs into source-grounded spoken lectures, summaries, quizzes, and Anki-compatible flashcards. It stores the uploaded source and generated media in configured S3-compatible storage, extracts page text, and routes bounded evidence through the shared Ollama queue before Piper creates audio.
+
+Generated facts, questions, and cards retain source-page references. Scanned or near-empty PDFs are rejected with an OCR-required message instead of being guessed from. Jobs persist their stages and cancellation takes effect at safe boundaries.
+
+The bot does not browse for replacement facts, invent missing source material, or share documents with unauthorized Telegram users. Upload a PDF to begin; use /help for all commands.`;
 
 const statusLabel: Record<string, string> = {
   RECEIVED: 'received',
@@ -80,6 +89,7 @@ export const createStudyBot = (dependencies: {
   const bot = new Bot(dependencies.token);
   bot.use(authorizationMiddleware(dependencies.allowedIds));
   bot.command(['start', 'help'], async (ctx) => ctx.reply(studyHelp));
+  bot.command('about', async (ctx) => ctx.reply(studyAbout));
   bot.command('status', async (ctx) => {
     const job = await dependencies.store.latestJob(BigInt(ctx.chat.id));
     if (!job) {

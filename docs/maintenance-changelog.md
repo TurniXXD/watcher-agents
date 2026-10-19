@@ -2,6 +2,11 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-19 — About command coverage
+
+- Added a dedicated `/about` response to Networking, Socials, Study, and Transport so every Telegram bot now explains its purpose, data flow, automation, privacy or safety boundaries, and operational limitations.
+- Kept `/about` informational and side-effect free; it does not initialize onboarding, run a watcher, or mutate user state.
+
 ## 2026-10-19 — CI lint memory and Twenty build metadata
 
 - Gave the type-aware monorepo ESLint step a 6 GiB V8 heap on GitHub-hosted runners after it exceeded Node's default heap following a successful Turbo build.

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createNetworkingBot, networkingHelp } from '../bot.js';
+import {
+  createNetworkingBot,
+  networkingAbout,
+  networkingBotCommands,
+  networkingHelp,
+} from '../bot.js';
 
 const update = {
   update_id: 1,
@@ -51,12 +56,30 @@ describe('networking bot help', () => {
       message: {
         ...update.message,
         message_id: 2,
+        text: '/about',
+        entities: [{ offset: 0, length: 6, type: 'bot_command' as const }],
+      },
+    });
+    await bot.handleUpdate({
+      ...update,
+      update_id: 3,
+      message: {
+        ...update.message,
+        message_id: 3,
         from: { ...update.message.from, id: 999 },
       },
     });
 
-    expect(messages).toEqual([networkingHelp, 'Unauthorized.']);
+    expect(messages).toEqual([
+      networkingHelp,
+      networkingAbout,
+      'Unauthorized.',
+    ]);
     expect(networkingHelp).toContain('/network_events');
     expect(networkingHelp).toContain('/network_add');
+    expect(networkingBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'about' }),
+    );
+    expect(networkingAbout).toContain('automaticky nekontaktuje');
   });
 });

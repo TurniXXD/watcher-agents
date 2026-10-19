@@ -20,6 +20,7 @@ Databáze je zdroj pravdy, Telegram je ovládání a Notion redakční prostor. 
 
 /start nebo /socials — hlavní menu
 /help nebo /socials_help — tato nápověda
+/about — účel, datový model, automatizace a omezení bota
 /socials_plan — nedělní plánování
 /socials_ideas — zásobník nápadů
 /socials_add [nápad] — uložit nápad
@@ -44,6 +45,16 @@ Uložení draftu: /socials_drafts a vyber položku. Publikaci potvrď ručně:
 
 Projekt lze přidat:
 /socials_projects add Název | popis | PUBLIC/PRIVATE`;
+
+export const socialsAbout = `📣 O Socials Botu
+
+Socials Bot je soukromý systém pro plánování osobní značky a převod doložených trendů do českých obsahových příležitostí. PostgreSQL je zdroj pravdy, Telegram je ovládání a Notion může sloužit jako volitelný redakční mirror.
+
+Bot ukládá nápady, témata, projekty, týdenní plány, verze draftů a ručně zadané výsledky. Automatické zdroje Trend Intelligence zpracovává nezávisle a odděluje naměřená fakta od odhadů. Lokální Ollama může pomoci s klasifikací a strukturovanými návrhy; jeho výstup se validuje.
+
+Bot nic automaticky nepublikuje, neposílá newslettery a neoznačí obsah jako publikovaný bez ručního potvrzení a skutečné URL. Soukromé a důvěrné projekty nevkládá do exportovaných promptů ani Notion štítků.
+
+Hlavní menu otevře /socials. Kompletní příkazy zobrazí /help.`;
 
 const mainKeyboard = (): InlineKeyboard =>
   new InlineKeyboard()
@@ -441,6 +452,7 @@ export const createSocialsBot = (dependencies: SocialBotDependencies): Bot => {
   bot.command(['help', 'socials_help'], async (ctx) =>
     replyLong(ctx, socialsHelp),
   );
+  bot.command('about', async (ctx) => replyLong(ctx, socialsAbout));
   bot.command('socials_trends', async (ctx) => {
     if (!ctx.from || !ctx.chat) return;
     await dependencies.store.ensureSettings(

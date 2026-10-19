@@ -36,11 +36,23 @@ Samostatně spravuje osobní kontakty, čtení vizitek, doporučení akcí, úč
 /network_update <jméno nebo ID> | <změna> — změnit jedno pole
 /network_intro <jméno nebo ID> — doporučit propojení
 /network_followups — vypsat další domluvené kroky
+/about — účel, datové toky, soukromí a omezení bota
 
 Fotografii vizitky bot přečte pomocí nakonfigurovaného Ollama vision modelu. Před uložením vždy zobrazí návrh, zkontroluje duplicity a vyžádá potvrzení.`;
 
+export const networkingAbout = `🤝 O Networking Botu
+
+Networking Bot je soukromý pracovní prostor pro profesní kontakty a osobní účast na akcích. Doporučuje budoucí události z normalizovaného katalogu Brno Events, eviduje výslovně zvolenou účast a připomíná schválené follow-upy.
+
+Kontakty ukládá do nakonfigurovaného Google Sheetu. Fotografii vizitky může přečíst lokálním Ollama vision modelem, ale před zápisem vždy zobrazí návrh, zkontroluje možné duplicity a čeká na potvrzení operátora.
+
+Bot automaticky nekontaktuje jiné lidi, nepotvrzuje registraci ani účast, nevymýšlí chybějící údaje a nepovažuje neznámou cenu za vstup zdarma. Telegram je soukromé ovládání chráněné allowlistem.
+
+Začni přes /networking. Kompletní příkazy zobrazí /help.`;
+
 export const networkingBotCommands = [
   { command: 'help', description: 'Návod k Networking botu' },
+  { command: 'about', description: 'Účel, data, soukromí a omezení' },
   { command: 'networking', description: 'Doporučené akce a účast' },
   { command: 'network_events', description: 'Nadcházející networkingové akce' },
   { command: 'network_events_free', description: 'Ověřeně bezplatné akce' },
@@ -127,6 +139,7 @@ export const createNetworkingBot = (dependencies: Dependencies): Bot => {
   bot.command(['start', 'help', 'networking_help'], (ctx) =>
     replyLong(ctx, networkingHelp),
   );
+  bot.command('about', (ctx) => replyLong(ctx, networkingAbout));
   bot.command('networking', async (ctx) => {
     if (!ctx.from || !ctx.chat) return;
     const value = argument(ctx);

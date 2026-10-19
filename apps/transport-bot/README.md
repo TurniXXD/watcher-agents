@@ -6,7 +6,7 @@ Manual search and proactive discovery share the same evaluator. Planned-trip rec
 
 ## Commands
 
-Use `/start` to initialize the bot and begin vehicle setup when required. `/help` shows the current guide without changing setup or conversation state. Vehicle, cost, preference, immediate search, planned-trip, and return-load actions are available from the Telegram keyboard.
+Use `/start` to initialize the bot and begin vehicle setup when required. `/help` shows the current guide without changing setup or conversation state. `/about` explains the decision model, provider data, and safety boundaries without changing onboarding. Vehicle, cost, preference, immediate search, planned-trip, and return-load actions are available from the Telegram keyboard.
 
 ## Data and configuration
 

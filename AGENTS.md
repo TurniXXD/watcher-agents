@@ -5,8 +5,7 @@ This file contains project-specific instructions for coding agents working on Wa
 ## Project Scope
 
 - Build a production-quality, self-hosted Watcher MVP for one operator on one Linux server.
-- Keep both Telegram bots in one TypeScript Turborepo: `apps/stocks-bot` and `apps/publications-bot`.
-- Keep the bots as separate long-running processes and Docker Compose services. They share PostgreSQL and reusable workspace packages.
+- Keep all Telegram bots and internal agents in one TypeScript Turborepo. Every runnable app under `apps/` owns its process boundary; Telegram bots remain separate long-running Docker Compose services while sharing PostgreSQL and reusable workspace packages where there are concrete consumers.
 - Telegram is the only user interface. Do not add a web UI.
 - Ollama is an external service. Do not add it to Docker Compose.
 - Prefer the simplest robust design suitable for a single server. Do not add Redis, queues, event buses, Kubernetes, host cron, systemd timers, or extra services.
@@ -23,9 +22,9 @@ This file contains project-specific instructions for coding agents working on Wa
 ## Architecture And Ownership
 
 - Keep top-level app entry points thin: process lifecycle, dependency wiring, bot-specific commands/callbacks, scheduling, and watcher orchestration belong in the owning app.
-- Keep code under `packages/` only when it has concrete consumers in both bots or it is required by a runtime package boundary such as database persistence. Bot-specific core/domain logic and source adapters belong under that bot's `src/` tree and must not declare nested package manifests. Do not promote code to a shared package for a hypothetical future consumer.
+- Keep code under `packages/` only when it has concrete consumers in at least two runnable apps or it is required by a runtime package boundary such as database persistence. Bot-specific core/domain logic and source adapters belong under that bot's `src/` tree and must not declare nested package manifests. Do not promote code to a shared package for a hypothetical future consumer.
 - Expected ownership:
-  - `packages/core`: normalized watcher types, pipeline, deduplication, scheduling primitives, run results, and other behavior used by both bots.
+  - `packages/core`: normalized watcher types, pipeline, deduplication, scheduling primitives, run results, and other behavior used by multiple runnable apps.
   - `apps/stocks-bot/src/core`: stock-only LLM analysis, decision policy, and monitoring behavior that is used only by the stocks bot.
   - `apps/stocks-bot/src/sources`: injectable stock source adapters and normalization.
   - `apps/publications-bot/src/sources`: injectable publication source adapters and normalization.
@@ -36,6 +35,94 @@ This file contains project-specific instructions for coding agents working on Wa
 - Keep external HTTP clients injectable and mockable.
 - Barrel files may contain simple re-exports only. Avoid duplicate exports and deep relative imports when a workspace package export exists.
 - Avoid huge files and god classes. Extract shared behavior when it has a clear second consumer; do not create speculative abstractions.
+
+## Telegram Bot Baseline And New-Bot Checklist
+
+These requirements apply to every grammY-based Telegram bot in `apps/`, both existing and newly introduced. They do not apply to an internal HTTP-only agent that has no Telegram surface. A new Telegram bot is not scaffolded or complete until every applicable item below is implemented. When modifying an older bot, preserve these guarantees and bring the touched surface into compliance rather than copying an obsolete pattern.
+
+### Mandatory informational commands
+
+- Every Telegram bot must implement `/start`, `/help`, and `/about` as authorized commands.
+- `/start` is the stable entry point. It may initialize required per-user settings or start an explicit onboarding flow, but it must explain what happens before requesting data. Repeated `/start` calls must be safe and idempotent.
+- `/help` must be side-effect free. It must show the current command list, important aliases, required argument syntax, and the shortest useful examples. It must not initialize onboarding, trigger a watcher run, claim a scheduled job, or mutate user configuration merely to display help.
+- `/about` must be side-effect free and distinct from `/help`. It must concisely explain:
+  - the bot's purpose and intended operator;
+  - its authoritative data store and important data flows;
+  - external providers, local models, or other bots it relies on;
+  - what is automated and what still requires explicit operator confirmation;
+  - privacy, authorization, and safety boundaries;
+  - important limitations and actions the bot never performs; and
+  - the best next command, normally `/help` or the bot's main command.
+- Keep each informational response within Telegram's message limit. Use the shared message-splitting utility when it can grow beyond one message; do not silently truncate it.
+- Informational copy must describe only implemented behavior. Never include credentials, private identifiers, private data, unsupported guarantees, or marketing claims that are not grounded in the code.
+- Use the bot's established language consistently. An English bot may use English copy and a Czech bot may use Czech copy; command names remain ASCII Telegram commands.
+
+### Command registration and interaction rules
+
+- Every bot must export a typed command registry and register it with Telegram through `setMyCommands` during startup. Include `start`, `help`, `about`, and the primary operator commands; keep names/descriptions within Telegram limits and keep the registry aligned with handlers and help text.
+- Prefer exported, testable definitions such as `<botName>Help`, `<botName>About`, and `<botName>Commands` instead of embedding large informational strings in the entry point. App-specific help/about copy stays in the app; only its safe delivery/splitting mechanics should be shared.
+- Register authorization middleware before commands, callback queries, photos, documents, free text, or any other update handlers. Authorization must cover `/start`, `/help`, and `/about` too; informational commands are not public bypasses.
+- Every callback must use an owning bot-specific prefix, validate its payload, re-check ownership of referenced records, and answer the callback query. A callback from another bot or another user must not mutate state.
+- Keep command handlers thin. Parse and validate Telegram input at the boundary, call an injectable service or repository, and render the result. Do not place direct Prisma queries, unmockable HTTP calls, or shell execution in handlers.
+- A command that starts work must acknowledge it promptly, report bounded failures, and avoid duplicate delivery on retry. Manual and scheduled forms of the same operation must share the same service/pipeline.
+- Do not reuse one Telegram token in multiple running services or start multiple long-polling consumers for the same token.
+
+### Reuse and ownership
+
+- Before adding a helper, search existing apps and workspace packages for the same behavior. Reuse `packages/telegram` for cross-bot authorization, message splitting, common rendering, and other genuine Telegram primitives.
+- Reuse an existing domain package when the exact production behavior has a real second consumer. For example, shared contact parsing and persistence belong in a shared package when both Sales and Networking use them.
+- Extract duplicated production behavior only after a concrete second consumer exists. Keep bot-specific commands, copy, policies, prompts, source adapters, and orchestration inside the owning app.
+- Do not achieve reuse by importing another app's private `src/` files. Move the shared contract and implementation to an appropriately named workspace package, export it through that package, and keep both apps dependent on the package.
+- Do not force superficially similar workflows into one abstraction when their authorization, persistence, confirmation, or failure semantics differ. Prefer a small duplicated adapter over a misleading shared domain model.
+- Barrel files contain re-exports only. Shared packages must expose intentional public entry points; apps should not use deep relative imports into another package.
+
+### Required app structure and runtime contract
+
+- A runnable bot owns a main-folder `package.json`, `README.md`, strict TypeScript configuration, a thin `src/index.ts`, its bot/handler module, nearest `__tests__`, and a dedicated versioned docs page under `apps/docs/content/docs/bots`.
+- `src/index.ts` owns environment parsing, dependency wiring, process lifecycle, command-menu registration, readiness startup, and graceful shutdown. Business rules stay in services, repositories, source adapters, or domain modules.
+- Validate the complete environment with Zod before starting polling. Give optional features explicit configuration groups so partial credentials fail clearly rather than producing a half-configured runtime.
+- Each bot must expose a private readiness endpoint on its own non-conflicting internal port, start polling only after dependencies are ready, and mark itself unready while shutting down.
+- Handle both `SIGTERM` and `SIGINT`: stop scheduling, stop Telegram polling, close HTTP/readiness servers, and disconnect database/provider resources without abandoning in-flight state.
+- Every bot gets its own Compose service, env preset/runtime file, Telegram token variable, healthcheck, restart policy, log limits, `init: true`, `no-new-privileges`, read-only filesystem where practical, and only the network access it actually needs.
+- A newly introduced bot must be wired through the production contract in the same change: Dockerfile manifests/dependencies/artifacts, local and production Compose, `deploy/render-env.sh`, `deploy/deploy.sh`, CI configuration checks, deployment failure logs, rollback compatibility, maintenance health targets, `.env.example`, and `deploy/ENVIRONMENT.md`.
+- Keep Ollama external. A bot using Ollama must use the shared provider/coordinator where applicable, bounded timeouts/retries, structured validated output, and a deterministic or clearly reported failure path.
+
+### Persistence, scheduling, and delivery
+
+- Persist operator-editable settings, schedules, durable sessions, and delivery/idempotency state in PostgreSQL. In-memory state is acceptable only for explicitly ephemeral interactions whose loss on restart is harmless and documented.
+- Prevent overlapping runs per bot/workflow. Scheduled jobs must be claimed only by their owning service, survive restarts, and be completed or failed explicitly.
+- Stable source IDs, external IDs, database constraints, and content/delivery hashes must prevent duplicate processing and duplicate Telegram delivery. Do not rely only on an in-memory set.
+- Do not send empty scheduled digests or filler output. A manual command must still state clearly when no useful result was found.
+- Any action affecting external people or systems—sending outreach, publishing content, confirming attendance, accepting a job, or writing an external record—requires the explicit confirmation described by that bot's contract. Never infer consent from viewing a message or opening a URL.
+
+### Tests required for every bot
+
+- Add a no-network bot test that sends authorized `/help` and `/about` updates through grammY and asserts the exact exported response or response pages.
+- Test that `/help` and `/about` do not initialize onboarding, start a run, query mutable domain state unnecessarily, or write configuration. When `/start` intentionally initializes state, test repeat safety separately.
+- Test that an unauthorized user cannot use informational commands, callbacks, uploads, or other handlers.
+- If the bot exports a command registry, test that `help` and `about` are present and that registered commands have matching handlers/help documentation.
+- Keep every informational message at or below Telegram's limit, or test the shared splitting behavior when it spans multiple messages.
+- Mock Telegram, Ollama, storage, and third-party providers. Unit tests must never call live services.
+- Add focused tests for input validation, callback ownership, duplicate delivery/idempotency, partial provider failure, scheduler overlap prevention, graceful stop behavior where non-trivial, and every bug fixed in the bot.
+
+### Documentation requirements for every bot
+
+- The app README and dedicated MDX page must list `/start`, `/help`, `/about`, the primary commands, configuration groups, integrations/sources, scheduling behavior, safety boundaries, and known limitations.
+- When commands or behavior change, update handler copy, command registry, app README, versioned docs, deployment/env inventory, and tests in the same change. Do not leave BotFather/Telegram menus or examples describing removed commands.
+- Link a new app README from the root README app index and its MDX page from the docs bot index/meta file in the same change.
+- Add a concise maintenance changelog entry for user-visible runtime behavior. Never put secrets or real private data into examples, fixtures, screenshots, or documentation.
+
+### Bot completion gate
+
+Before declaring a new or modified Telegram bot complete, verify all of the following together:
+
+1. Authorized `/start`, side-effect-free `/help`, and side-effect-free `/about` work through grammY.
+2. The help/about copy, command registry, tests, README, and versioned documentation agree.
+3. Shared behavior was reused only through a proper package with a concrete second consumer; no app imports another app's private source.
+4. Input, environment, provider data, callbacks, and LLM output are validated at their boundaries.
+5. Manual and scheduled execution are idempotent, non-overlapping, failure-isolated, and do not emit duplicate or empty scheduled messages.
+6. Readiness, structured logging, graceful shutdown, container hardening, Compose wiring, deployment, rollback, and maintenance monitoring are present.
+7. Relevant filtered checks pass during iteration, followed by every root quality gate in the Done Criteria.
 
 ## Watcher Pipeline
 
@@ -59,7 +146,7 @@ This file contains project-specific instructions for coding agents working on Wa
 
 ## Security And Operations
 
-- Treat both bots as private administration surfaces. Authorize every command and callback against configured Telegram user IDs before doing work.
+- Treat all Telegram bots as private administration surfaces. Authorize every command, callback, upload, photo, and free-text workflow against configured Telegram user IDs before doing work.
 - Never log or commit bot tokens, database passwords, API credentials, or full secret-bearing URLs.
 - Infrastructure secrets remain environment variables and must not be editable through Telegram.
 - Validate user-provided URLs and prevent access to loopback, link-local, private-network, and other unsafe targets unless a source integration explicitly owns a trusted endpoint.

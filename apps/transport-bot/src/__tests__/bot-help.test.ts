@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTransportBot, transportHelp } from '../bot.js';
+import { createTransportBot, transportAbout, transportHelp } from '../bot.js';
 
 const update = {
   update_id: 1,
@@ -45,9 +45,20 @@ describe('transport bot help', () => {
     });
 
     await bot.handleUpdate(update);
+    await bot.handleUpdate({
+      ...update,
+      update_id: 2,
+      message: {
+        ...update.message,
+        message_id: 2,
+        text: '/about',
+        entities: [{ offset: 0, length: 6, type: 'bot_command' as const }],
+      },
+    });
 
-    expect(messages).toEqual([transportHelp]);
+    expect(messages).toEqual([transportHelp, transportAbout]);
     expect(initializeUser).not.toHaveBeenCalled();
     expect(transportHelp).toContain('🔎 Find jobs');
+    expect(transportAbout).toContain('never bids');
   });
 });

@@ -6,7 +6,7 @@ Scanned or near-empty PDFs are rejected with an OCR-required message rather than
 
 ## Commands
 
-Upload a PDF to start. `/start` initializes the bot, `/help` shows the current guide, `/status` reports the latest job, and `/cancel` stops it safely between stages.
+Upload a PDF to start. `/start` initializes the bot, `/help` shows the current guide, `/about` explains grounding, storage, and safety boundaries, `/status` reports the latest job, and `/cancel` stops it safely between stages.
 
 ## Configuration
 

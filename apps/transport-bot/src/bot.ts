@@ -71,6 +71,7 @@ export const transportHelp = `🚚 Transport Opportunity Bot
 
 /start — initialize the bot and start vehicle setup when needed
 /help — show this guide without changing setup progress
+/about — purpose, decision model, data sources, and safety boundaries
 
 Main menu
 🚐 Vehicle — add or replace vehicle dimensions, weight, and restrictions
@@ -81,6 +82,14 @@ Main menu
 🔄 Find return load — reverse the latest planned trip and search again
 
 The bot only recommends loads whose known cargo fits the saved vehicle and whose calculated economics pass your thresholds. It never bids, accepts a job, or contacts a customer.`;
+
+export const transportAbout = `🚚 About Transport Opportunity Bot
+
+Transport Bot is a private decision engine for one van operator. It normalizes requests from the configured feed, requires known cargo dimensions and weight, checks vehicle compatibility, calculates routes, and ranks only opportunities that pass the operator's saved profit, time, empty-distance, detour, and confidence thresholds.
+
+Manual and scheduled discovery use the same evaluator. Planned-trip results charge only incremental distance and time. Routing comes from the configured OSRM-compatible service; fuel and exchange-rate inputs remain identified provider data rather than invented defaults.
+
+The bot never bids, accepts a load, contacts a customer, or treats unknown cargo as compatible. Use /start for setup and /help for the complete keyboard guide.`;
 
 const opportunityKeyboard = (
   id: string,
@@ -149,6 +158,9 @@ export const createTransportBot = (input: {
   });
   bot.command('help', async (ctx) => {
     await ctx.reply(transportHelp, { reply_markup: mainKeyboard });
+  });
+  bot.command('about', async (ctx) => {
+    await ctx.reply(transportAbout, { reply_markup: mainKeyboard });
   });
 
   bot.hears('🚐 Vehicle', async (ctx) => {

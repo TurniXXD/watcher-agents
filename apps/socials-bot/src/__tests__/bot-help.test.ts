@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSocialsBot, socialsHelp } from '../bot.js';
+import { createSocialsBot, socialsAbout, socialsHelp } from '../bot.js';
 
 const update = {
   update_id: 1,
@@ -43,9 +43,20 @@ describe('socials bot help', () => {
     });
 
     await bot.handleUpdate(update);
+    await bot.handleUpdate({
+      ...update,
+      update_id: 2,
+      message: {
+        ...update.message,
+        message_id: 2,
+        text: '/about',
+        entities: [{ offset: 0, length: 6, type: 'bot_command' as const }],
+      },
+    });
 
-    expect(messages.join('\n')).toBe(socialsHelp);
+    expect(messages).toEqual([socialsHelp, socialsAbout]);
     expect(socialsHelp).toContain('/help nebo /socials_help');
     expect(socialsHelp).toContain('/start nebo /socials');
+    expect(socialsAbout).toContain('nic automaticky nepublikuje');
   });
 });

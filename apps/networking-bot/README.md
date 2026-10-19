@@ -15,6 +15,7 @@ Send a business-card photo directly to the bot. The configured Ollama vision mod
 Commands:
 
 - `/start`, `/help`, `/networking_help` — complete guide.
+- `/about` — purpose, data flow, privacy guarantees, and operational limits.
 - `/networking` — attendance state plus recommended events; `prefs cities=Brno; radius=80; max=0; count=5; monday=on` updates preferences.
 - `/network_events`, `/network_events_free`, `/network_event_add`, `/network_sources` — event discovery and source status.
 - `/network_event_contacts` — private contacts and follow-ups tied to confirmed event attendance.

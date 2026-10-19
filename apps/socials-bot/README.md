@@ -51,6 +51,7 @@ Projects marked `PRIVATE` or `CONFIDENTIAL` are excluded from ChatGPT prompts an
 | ------------------------- | -------------------------------------------------------------------------- |
 | `/start`, `/socials`      | Initialize settings and show the main inline menu.                         |
 | `/help`, `/socials_help`  | Show the current complete command guide.                                   |
+| `/about`                  | Explain the data model, automation, privacy, and publishing boundaries.    |
 | `/socials_plan`           | Start or view the persistent six-question planning flow.                   |
 | `/socials_add [text]`     | Capture one idea, relate topics/projects, and show similarity warnings.    |
 | `/socials_ideas`          | Browse the idea backlog.                                                   |
