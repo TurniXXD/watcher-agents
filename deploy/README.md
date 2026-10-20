@@ -15,14 +15,15 @@ GitHub publishes one immutable Watcher image. The VPS runs that image with separ
 
 ## Cloudflare Tunnel origins
 
-The production `sales-bot` and `docs` services join both the private Compose network and the existing external `lateralis` network. A token-managed `cloudflared` container already attached to `lateralis` can route Cloudflare public hostnames to these Docker origins:
+The production `sales-bot`, `networking-bot`, and `docs` services join both the private Compose network and the existing external `lateralis` network. A token-managed `cloudflared` container already attached to `lateralis` can route Cloudflare public hostnames to these Docker origins:
 
 ```text
 Sales API:      http://sales-bot:4050
+Networking OAuth: http://networking-bot:8790
 Documentation:  http://docs:3000
 ```
 
-Create the public-hostname mappings in Cloudflare Zero Trust; token-managed tunnel ingress is not stored in this repository. Keep host ports bound to `127.0.0.1`. Protect `docs.vantuch.dev` with Cloudflare Access because the site contains operational documentation and `noindex` is not authentication. The Sales public hostname exposes a REST API, not a browser UI; continue sending `Authorization: Bearer $SALES_API_TOKEN` to every `/v1/*` endpoint. The Quickly webhook uses the separate `SALES_WEBHOOK_TOKEN`; the Compose deployment should normally keep its origin internal at `http://sales-bot:4050/v1/webhooks/quickly`.
+Create the public-hostname mappings in Cloudflare Zero Trust; token-managed tunnel ingress is not stored in this repository. Keep host ports bound to `127.0.0.1`. Services on `lateralis` must use the `watcher-postgres` alias for the private Watcher database because the generic `postgres` hostname may resolve to another stack. Protect `docs.vantuch.dev` with Cloudflare Access because the site contains operational documentation and `noindex` is not authentication. The Sales public hostname exposes a REST API, not a browser UI; continue sending `Authorization: Bearer $SALES_API_TOKEN` to every `/v1/*` endpoint. The Quickly webhook uses the separate `SALES_WEBHOOK_TOKEN`; the Compose deployment should normally keep its origin internal at `http://sales-bot:4050/v1/webhooks/quickly`.
 
 ## VPS prerequisites
 

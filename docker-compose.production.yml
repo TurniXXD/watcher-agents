@@ -377,6 +377,9 @@ services:
       TZ: Europe/Prague
     ports:
       - '127.0.0.1:8790:8790'
+    networks:
+      - default
+      - lateralis
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     depends_on:

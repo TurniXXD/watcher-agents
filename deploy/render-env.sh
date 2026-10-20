@@ -97,10 +97,11 @@ if [[ "$twenty_bind_address" == "127.0.0.1" || "$twenty_bind_address" == "0.0.0.
   twenty_public_host=localhost
 fi
 
-# Sales also joins the shared lateralis network, where another service may own
-# the generic "postgres" DNS name. Prefer Watcher's unique alias unless an
-# explicit Sales connection URL was supplied.
+# Sales and Networking join the shared lateralis network, where another service
+# may own the generic "postgres" DNS name. Prefer Watcher's unique alias for
+# both services unless Sales has an explicit connection URL.
 sales_database_url="${SALES_DATABASE_URL:-${WATCHER_DATABASE_URL/@postgres:/@watcher-postgres:}}"
+networking_database_url="${WATCHER_DATABASE_URL/@postgres:/@watcher-postgres:}"
 
 write_env "$RUNTIME_DIR/compose.env" \
   COMPOSE_PROJECT_NAME "${COMPOSE_PROJECT_NAME:-watcher}" \
@@ -323,7 +324,7 @@ write_env "$RUNTIME_DIR/socials-bot.env" \
   LOG_LEVEL "${LOG_LEVEL:-info}"
 
 write_env "$RUNTIME_DIR/networking-bot.env" \
-  DATABASE_URL "$WATCHER_DATABASE_URL" \
+  DATABASE_URL "$networking_database_url" \
   NETWORKING_TELEGRAM_TOKEN "$NETWORKING_TELEGRAM_TOKEN" \
   TELEGRAM_ALLOWED_USER_IDS "$TELEGRAM_ALLOWED_USER_IDS" \
   NETWORKING_TIMEZONE "${NETWORKING_TIMEZONE:-Europe/Prague}" \

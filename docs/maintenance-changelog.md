@@ -2,6 +2,11 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-20 — Networking OAuth production routing
+
+- Attached Networking Bot to the production `lateralis` network for the Cloudflare OAuth callback and changed its rendered database URL to the unique `watcher-postgres` alias, preventing another stack's `postgres` service from receiving its credentials.
+- Isolated top-level scheduler polling failures so a temporary database outage is logged and retried instead of terminating the bot process.
+
 ## 2026-10-19 — Personal Jobs Bot
 
 - Added a private scheduled Jobs Bot with persisted source checkpoints, cross-source deduplication, deterministic eligibility scoring, baseline-safe Telegram/e-mail digests, and per-provider delivery audit records.

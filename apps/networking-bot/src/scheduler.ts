@@ -48,9 +48,16 @@ export class NetworkingScheduler {
 
   public tick(now = new Date()): Promise<void> {
     if (this.#active) return this.#active;
-    const active = this.run(now).finally(() => {
-      if (this.#active === active) this.#active = undefined;
-    });
+    const active = this.run(now)
+      .catch((error: unknown) => {
+        this.options.logger?.error(
+          { err: error },
+          'Networking scheduler tick failed',
+        );
+      })
+      .finally(() => {
+        if (this.#active === active) this.#active = undefined;
+      });
     this.#active = active;
     return active;
   }
