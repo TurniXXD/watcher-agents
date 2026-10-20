@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { parseCzechDate } from '../domain/czech-date.js';
 import type { HtmlParser } from './html-source.js';
 import {
@@ -7,7 +8,157 @@ import {
   eventCandidate,
   htmlDocument,
   parseEnglishDateRange,
+  walkObjects,
 } from './utils.js';
+
+const objevBrnoCardSchema = z.object({
+  id: z.string().min(1),
+  dates: z.array(
+    z.object({
+      startDate: z.string(),
+      endDate: z.string().nullish(),
+      venue: z
+        .object({
+          localesByLocale: z.object({ name: z.string().nullish() }).nullish(),
+        })
+        .nullish(),
+    }),
+  ),
+  image: z.object({ url: z.url() }).nullish(),
+  localesByLocale: z.object({
+    name: z.string().min(1),
+    url: z.object({ url: z.string().min(1) }),
+    extendedTileContent: z.unknown().nullish(),
+  }),
+});
+
+const objevBrnoFlightData = (html: string): Record<string, unknown>[] => {
+  const $ = htmlDocument(html);
+  const flight = $('script')
+    .toArray()
+    .flatMap((script) => {
+      const source = $(script).html() ?? '';
+      const match = source.match(/^self\.__next_f\.push\((\[[\s\S]*\])\)$/u);
+      if (!match) return [];
+      try {
+        const chunk = z.array(z.unknown()).parse(JSON.parse(match[1]!));
+        return typeof chunk[1] === 'string' ? [chunk[1]] : [];
+      } catch {
+        return [];
+      }
+    })
+    .join('');
+  return flight.split('\n').flatMap((line) => {
+    const separator = line.indexOf(':');
+    if (separator < 0) return [];
+    try {
+      return walkObjects(JSON.parse(line.slice(separator + 1)));
+    } catch {
+      return [];
+    }
+  });
+};
+
+const richText = (value: unknown): string | undefined =>
+  cleanText(
+    walkObjects(value)
+      .flatMap((entry) => (typeof entry.text === 'string' ? [entry.text] : []))
+      .join(' '),
+  );
+
+export const parseObjevBrnoHtml: HtmlParser = (
+  html,
+  pageUrl,
+  _now,
+  categories,
+) =>
+  objevBrnoFlightData(html).flatMap((entry) => {
+    if (entry.type !== 'event') return [];
+    const card = objevBrnoCardSchema.safeParse(entry.card);
+    if (!card.success) return [];
+    const description = richText(card.data.localesByLocale.extendedTileContent);
+    return card.data.dates.flatMap((date) => {
+      const candidate = eventCandidate({
+        externalId: `${card.data.id}:${date.startDate}`,
+        title: card.data.localesByLocale.name,
+        description,
+        startAt: dateValue(date.startDate),
+        endAt: dateValue(date.endDate),
+        eventUrl: absoluteUrl(card.data.localesByLocale.url.url, pageUrl),
+        venue: date.venue?.localesByLocale?.name
+          ? { name: date.venue.localesByLocale.name }
+          : undefined,
+        organizer: {
+          name: 'Objev Brno',
+          url: new URL('/', pageUrl).toString(),
+        },
+        imageUrl: card.data.image?.url,
+        language: 'cs',
+        price: { free: true, text: 'zdarma' },
+        categories,
+        raw: { parser: 'objev-brno-flight' },
+      });
+      return candidate ? [candidate] : [];
+    });
+  });
+
+export const parseCsobValidationCampHtml: HtmlParser = (
+  html,
+  pageUrl,
+  now,
+  categories,
+) => {
+  const $ = htmlDocument(html);
+  return $('tr')
+    .toArray()
+    .filter((row) => /validation camp/iu.test($(row).text()))
+    .flatMap((row) => {
+      const root = $(row);
+      const registrationUrl = absoluteUrl(
+        root.find('a[href]').first().attr('href'),
+        pageUrl,
+      );
+      const description = cleanText(root.find('td').last().text());
+      return root
+        .find('li')
+        .toArray()
+        .flatMap((item) => {
+          const details = cleanText($(item).text()) ?? '';
+          const range = details.match(
+            /v\s+Brn(?:e|ě|o)\s+ve\s+dnech\s+(\d{1,2})\.\s*[-–—]\s*(\d{1,2})\.\s*(\d{1,2})\./iu,
+          );
+          if (!range) return [];
+          const year = now.getFullYear();
+          const month = Number(range[3]) - 1;
+          const startAt = new Date(year, month, Number(range[1]));
+          const endAt = new Date(
+            year,
+            month,
+            Number(range[2]),
+            23,
+            59,
+            59,
+            999,
+          );
+          const candidate = eventCandidate({
+            externalId: `validation-camp-brno-${year}-${range[3]}-${range[1]}`,
+            title: 'ČSOB Start it @UNI Validation Camp — Brno',
+            description,
+            startAt,
+            endAt,
+            eventUrl: registrationUrl ?? pageUrl,
+            registrationUrl,
+            registrationRequired: true,
+            venue: { name: 'Brno' },
+            organizer: { name: 'Start it @ČSOB' },
+            language: 'cs',
+            categories,
+            raw: { parser: 'csob-validation-camp-html', dateText: details },
+          });
+          return candidate ? [candidate] : [];
+        });
+    });
+};
 
 export const parseGoOutHtml: HtmlParser = (html, pageUrl, _now, categories) => {
   const $ = htmlDocument(html);

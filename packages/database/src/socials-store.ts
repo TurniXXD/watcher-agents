@@ -24,6 +24,34 @@ export const normalizeSocialText = (value: string): string =>
 export const socialSlug = (value: string): string =>
   normalizeSocialText(value).replaceAll(/\s+/gu, '-').slice(0, 80);
 
+export const classifySocialEventFormat = (event: {
+  title: string;
+  description: string | null;
+  venueName: string | null;
+  venueAddress: string | null;
+}): 'IN_PERSON' | 'ONLINE' | 'HYBRID' => {
+  const titleAndVenue = normalizeSocialText(
+    `${event.title} ${event.venueName ?? ''} ${event.venueAddress ?? ''}`,
+  );
+  const description = normalizeSocialText(event.description ?? '');
+  const online =
+    /(?:^| )(?:online|webinar|virtualni|zoom|google meet|microsoft teams|livestream)(?: |$)/u.test(
+      titleAndVenue,
+    ) ||
+    /(?:probehne|kona se|pripojte se|join us|takes place) online|online (?:udalost|akce|event)|(?:pres|via) (?:zoom|google meet|microsoft teams)/u.test(
+      description,
+    );
+  const venue = normalizeSocialText(
+    `${event.venueName ?? ''} ${event.venueAddress ?? ''}`,
+  );
+  const physicalVenue =
+    venue.length > 0 &&
+    !/^(?:online|zoom|google meet|microsoft teams|virtualni prostor)$/u.test(
+      venue,
+    );
+  return online ? (physicalVenue ? 'HYBRID' : 'ONLINE') : 'IN_PERSON';
+};
+
 const defaultCadence = {
   linkedin: [
     { weekday: 1, time: '09:00', format: 'TEXT_POST' },
@@ -739,7 +767,7 @@ export class SocialsStore {
           address: sourceEvent.venueAddress,
           startAt: sourceEvent.startAt,
           endAt: sourceEvent.endAt,
-          format: 'IN_PERSON',
+          format: classifySocialEventFormat(sourceEvent),
           categories: sourceEvent.categories,
           priceAmount: sourceEvent.priceAmount,
           currency: sourceEvent.priceCurrency,
@@ -763,12 +791,16 @@ export class SocialsStore {
           organizer: sourceEvent.organizerName,
           venue: sourceEvent.venueName,
           address: sourceEvent.venueAddress,
+          format: classifySocialEventFormat(sourceEvent),
           startAt: sourceEvent.startAt,
           endAt: sourceEvent.endAt,
           categories: sourceEvent.categories,
           priceAmount: sourceEvent.priceAmount,
           currency: sourceEvent.priceCurrency,
           priceStatus,
+          accessType: sourceEvent.registrationRequired
+            ? 'REGISTRATION_REQUIRED'
+            : 'UNKNOWN',
           registrationUrl: sourceEvent.registrationUrl,
           retrievedAt: sourceEvent.lastSeenAt,
           verifiedAt: sourceEvent.lastSeenAt,
@@ -852,6 +884,7 @@ export class SocialsStore {
     to: Date;
     cities?: readonly string[];
     freeOnly?: boolean;
+    inPersonOnly?: boolean;
     limit?: number;
   }) {
     return this.db.socialNetworkingEvent.findMany({
@@ -861,10 +894,18 @@ export class SocialsStore {
         status: 'SCHEDULED',
         ...(input.cities?.length ? { city: { in: [...input.cities] } } : {}),
         ...(input.freeOnly ? { priceStatus: 'FREE' } : {}),
+        ...(input.inPersonOnly ? { format: { not: 'ONLINE' } } : {}),
       },
       include: { sourceReferences: true, attendances: true },
       orderBy: [{ relevanceScore: 'desc' }, { startAt: 'asc' }],
       take: input.limit ?? 20,
+    });
+  }
+
+  public getNetworkingEvent(ownerUserId: bigint, eventId: string) {
+    return this.db.socialNetworkingEvent.findFirst({
+      where: { id: eventId, ownerUserId },
+      include: { sourceReferences: true },
     });
   }
 

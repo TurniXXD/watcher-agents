@@ -26,8 +26,12 @@ Samostatně spravuje osobní kontakty, čtení vizitek, doporučení akcí, úč
 /networking — doporučené akce a aktuální účasti
 /network_events — akce na následujících osm dní
 /network_events_free — pouze ověřeně bezplatné akce
+/networking_today — dnešní prezenční akce
+/networking_free_food — akce tento týden s doloženým jídlem nebo občerstvením zdarma
+/networking_calendar_connect — bezpečně připojit Google Calendar pro zápis akcí
+/networking_calendar_status — stav propojení s Google Calendarem
 /network_event_add Název | 2026-10-20 18:00 | Brno | https://... | free
-/network_sources — skutečně napojené zdroje včetně Velvet Innovation a SideQuesty
+/network_sources — skutečně napojené zdroje včetně Objev Brno, Impact Hubu, Velvet Innovation, Base48 a ČSOB Validation Campů
 /network_event_contacts — kontakty poznamenané u akcí a jejich follow-upy
 
 /network_add <popis> — připravit kontakt do Google Sheet
@@ -42,7 +46,9 @@ Fotografii vizitky bot přečte pomocí nakonfigurovaného Ollama vision modelu.
 
 export const networkingAbout = `🤝 O Networking Botu
 
-Networking Bot je soukromý pracovní prostor pro profesní kontakty a osobní účast na akcích. Doporučuje budoucí události z normalizovaného katalogu Brno Events, eviduje výslovně zvolenou účast a připomíná schválené follow-upy.
+Networking Bot je soukromý pracovní prostor pro profesní kontakty a osobní účast na akcích. Doporučuje prezenční události z normalizovaného katalogu Brno Events, eviduje výslovně zvolenou účast a připomíná schválené follow-upy. Čistě online akce do výpisů nezařazuje.
+
+Po výslovném propojení může vybranou akci zapsat do primárního Google Calendaru s mangovou barvou. Opakované stisknutí nevytváří duplicitu. Registraci za operátora nikdy neodesílá; u akcí s doloženou povinnou registrací pouze ukazuje registrační odkaz.
 
 Kontakty ukládá do nakonfigurovaného Google Sheetu. Fotografii vizitky může přečíst lokálním Ollama vision modelem, ale před zápisem vždy zobrazí návrh, zkontroluje možné duplicity a čeká na potvrzení operátora.
 
@@ -56,6 +62,19 @@ export const networkingBotCommands = [
   { command: 'networking', description: 'Doporučené akce a účast' },
   { command: 'network_events', description: 'Nadcházející networkingové akce' },
   { command: 'network_events_free', description: 'Ověřeně bezplatné akce' },
+  { command: 'networking_today', description: 'Dnešní prezenční akce' },
+  {
+    command: 'networking_free_food',
+    description: 'Tento týden s občerstvením zdarma',
+  },
+  {
+    command: 'networking_calendar_connect',
+    description: 'Připojit Google Calendar',
+  },
+  {
+    command: 'networking_calendar_status',
+    description: 'Stav Google Calendaru',
+  },
   { command: 'network_event_add', description: 'Přidat ověřitelnou akci' },
   { command: 'network_sources', description: 'Zdroje eventů a jejich stav' },
   {
@@ -72,6 +91,10 @@ type Dependencies = {
   service: NetworkingService;
   timezone: string;
   contacts?: NetworkBotDependencies;
+  calendar?: {
+    authorizationUrl(telegramChatId: bigint): Promise<string>;
+    status(telegramChatId: bigint): Promise<{ connected: boolean }>;
+  };
   reportError(error: unknown): void;
 };
 
@@ -94,19 +117,26 @@ const eventPrice = (status: string): string =>
 const renderEvents = async (
   ctx: Context,
   dependencies: Dependencies,
-  freeOnly = false,
+  options: {
+    freeOnly?: boolean;
+    freeFoodOnly?: boolean;
+    range?: 'NEXT_EIGHT_DAYS' | 'TODAY' | 'THIS_WEEK';
+    emptyMessage?: string;
+  } = {},
 ): Promise<void> => {
   if (!ctx.from || !ctx.chat) return;
+  const { emptyMessage, ...discoveryOptions } = options;
   const events = await dependencies.service.discoverEvents(
     BigInt(ctx.from.id),
     BigInt(ctx.chat.id),
-    { freeOnly },
+    discoveryOptions,
   );
   if (!events.length) {
     await ctx.reply(
-      freeOnly
-        ? 'Na příštích osm dní nejsou žádné ověřeně bezplatné akce.'
-        : 'Na příštích osm dní nejsou žádné odpovídající akce.',
+      emptyMessage ??
+        (options.freeOnly
+          ? 'Na příštích osm dní nejsou žádné ověřeně bezplatné akce.'
+          : 'Na příštích osm dní nejsou žádné odpovídající akce.'),
     );
     return;
   }
@@ -115,15 +145,28 @@ const renderEvents = async (
       .map((source) => source.provider)
       .filter(Boolean)
       .join(', ');
+    const registrationRequired = event.accessType === 'REGISTRATION_REQUIRED';
+    const keyboard = new InlineKeyboard()
+      .text('🥭 Přidat do kalendáře', `networking:calendar:${event.id}`)
+      .row();
+    if (registrationRequired && event.registrationUrl) {
+      keyboard.url('📝 Registrovat se', event.registrationUrl).row();
+    }
+    keyboard
+      .text('⭐ Mám zájem', `networking:att:INTERESTED:${event.id}`)
+      .text('✅ Registrován', `networking:att:REGISTERED:${event.id}`)
+      .row()
+      .text('🚫 Neúčastním se', `networking:att:CANCELLED:${event.id}`);
+    const registration = registrationRequired
+      ? event.registrationUrl
+        ? `\nRegistrace je nutná: ${event.registrationUrl}`
+        : '\nRegistrace je nutná; zdroj neposkytl samostatný registrační odkaz.'
+      : '';
     await ctx.reply(
-      `🤝 ${event.title}\n${formatLocalDateTime(event.startAt, event.timezone)} · ${event.venue ?? event.city ?? 'místo neověřeno'} · ${eventPrice(event.priceStatus)}\nZdroj: ${sourceNames || event.sourceProvider}\n${event.registrationUrl ?? event.canonicalUrl ?? ''}`,
+      `🤝 ${event.title}\n${formatLocalDateTime(event.startAt, event.timezone)} · ${event.venue ?? event.city ?? 'místo neověřeno'} · ${eventPrice(event.priceStatus)}\nZdroj: ${sourceNames || event.sourceProvider}\n${event.canonicalUrl ?? ''}${registration}`,
       {
         link_preview_options: { is_disabled: true },
-        reply_markup: new InlineKeyboard()
-          .text('⭐ Mám zájem', `networking:att:INTERESTED:${event.id}`)
-          .text('✅ Registrován', `networking:att:REGISTERED:${event.id}`)
-          .row()
-          .text('🚫 Neúčastním se', `networking:att:CANCELLED:${event.id}`),
+        reply_markup: keyboard,
       },
     );
   }
@@ -217,8 +260,49 @@ export const createNetworkingBot = (dependencies: Dependencies): Bot => {
   });
   bot.command('network_events', (ctx) => renderEvents(ctx, dependencies));
   bot.command('network_events_free', (ctx) =>
-    renderEvents(ctx, dependencies, true),
+    renderEvents(ctx, dependencies, { freeOnly: true }),
   );
+  bot.command('networking_today', (ctx) =>
+    renderEvents(ctx, dependencies, {
+      range: 'TODAY',
+      emptyMessage: 'Dnes už nejsou žádné odpovídající prezenční akce.',
+    }),
+  );
+  bot.command('networking_free_food', (ctx) =>
+    renderEvents(ctx, dependencies, {
+      range: 'THIS_WEEK',
+      freeFoodOnly: true,
+      emptyMessage:
+        'Do konce tohoto týdne nejsou žádné akce s doloženým jídlem nebo občerstvením zdarma.',
+    }),
+  );
+  bot.command('networking_calendar_connect', async (ctx) => {
+    if (!dependencies.calendar) {
+      await ctx.reply(
+        'Google Calendar zatím není na serveru pro Networking bot nakonfigurován.',
+      );
+      return;
+    }
+    const url = await dependencies.calendar.authorizationUrl(
+      BigInt(ctx.chat.id),
+    );
+    await ctx.reply(
+      'Otevři soukromý odkaz a povol zápis akcí do Google Calendaru:',
+      {
+        reply_markup: new InlineKeyboard().url('Připojit Google Calendar', url),
+      },
+    );
+  });
+  bot.command('networking_calendar_status', async (ctx) => {
+    const connected = dependencies.calendar
+      ? (await dependencies.calendar.status(BigInt(ctx.chat.id))).connected
+      : false;
+    await ctx.reply(
+      connected
+        ? '✅ Google Calendar je připojený pro zápis networkingových akcí.'
+        : 'Google Calendar není připojený. Použij /networking_calendar_connect.',
+    );
+  });
   bot.command('network_sources', (ctx) =>
     replyLong(
       ctx,
@@ -352,6 +436,67 @@ export const createNetworkingBot = (dependencies: Dependencies): Bot => {
           .join('\n') || 'Žádné kontakty z akcí.'
       }\n\nPříkazy: add · followup · done · delete. Bot kontaktům nic neposílá automaticky.`,
     );
+  });
+  bot.callbackQuery(/^networking:calendar:([0-9a-f-]{36})$/u, async (ctx) => {
+    await ctx.answerCallbackQuery({ text: 'Přidávám do kalendáře…' });
+    if (!ctx.chat || !dependencies.calendar) {
+      await ctx.reply(
+        'Google Calendar zatím není nakonfigurován. Správce musí doplnit OAuth nastavení.',
+      );
+      return;
+    }
+    const chatId = BigInt(ctx.chat.id);
+    if (!(await dependencies.calendar.status(chatId)).connected) {
+      const url = await dependencies.calendar.authorizationUrl(chatId);
+      await ctx.reply('Nejdřív připoj Google Calendar:', {
+        reply_markup: new InlineKeyboard().url('Připojit Google Calendar', url),
+      });
+      return;
+    }
+    try {
+      const { event, calendarEvent } =
+        await dependencies.service.addEventToCalendar(
+          BigInt(ctx.from.id),
+          chatId,
+          ctx.match[1]!,
+        );
+      const keyboard = new InlineKeyboard();
+      if (calendarEvent.htmlLink) {
+        keyboard.url('Otevřít v Google Calendaru', calendarEvent.htmlLink);
+      }
+      if (
+        event.accessType === 'REGISTRATION_REQUIRED' &&
+        event.registrationUrl
+      ) {
+        if (calendarEvent.htmlLink) keyboard.row();
+        keyboard.url('📝 Registrovat se', event.registrationUrl);
+      }
+      await ctx.reply(
+        calendarEvent.duplicate
+          ? `ℹ️ ${event.title} už v Google Calendaru je.`
+          : `✅ ${event.title} byl přidán do Google Calendaru s mangovou barvou.`,
+        keyboard.inline_keyboard.length ? { reply_markup: keyboard } : {},
+      );
+    } catch (error) {
+      dependencies.reportError(error);
+      const message = error instanceof Error ? error.message : '';
+      if (/write access is missing/iu.test(message)) {
+        const url = await dependencies.calendar.authorizationUrl(chatId);
+        await ctx.reply(
+          'Připojení nemá oprávnění zapisovat. Obnov ho tímto odkazem:',
+          {
+            reply_markup: new InlineKeyboard().url(
+              'Obnovit oprávnění Calendaru',
+              url,
+            ),
+          },
+        );
+        return;
+      }
+      await ctx.reply(
+        'Akci se nepodařilo přidat do Google Calendaru. Zkus to prosím znovu.',
+      );
+    }
   });
   bot.callbackQuery(
     /^networking:att:(INTERESTED|REGISTERED|CANCELLED):([\w-]+)$/u,

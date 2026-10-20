@@ -25,6 +25,17 @@ export const networkingEnvironmentSchema = z
       .min(1)
       .max(65_535)
       .default(4070),
+    NETWORKING_GOOGLE_CALENDAR_CLIENT_ID: optionalText,
+    NETWORKING_GOOGLE_CALENDAR_CLIENT_SECRET: optionalText,
+    NETWORKING_GOOGLE_CALENDAR_REDIRECT_URI: optionalUrl,
+    CALENDAR_TOKEN_ENCRYPTION_KEY: optionalText,
+    NETWORKING_CALENDAR_OAUTH_LISTEN_HOST: z.string().default('0.0.0.0'),
+    NETWORKING_CALENDAR_OAUTH_LISTEN_PORT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(8790),
     GOOGLE_SHEETS_SPREADSHEET_ID: optionalText,
     GOOGLE_SHEETS_NETWORK_RANGE: z
       .string()
@@ -56,6 +67,24 @@ export const networkingEnvironmentSchema = z
         message:
           'GOOGLE_SHEETS_SPREADSHEET_ID, GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY must be configured together',
         path: ['GOOGLE_SHEETS_SPREADSHEET_ID'],
+      });
+    }
+    const calendarCredentials = [
+      value.NETWORKING_GOOGLE_CALENDAR_CLIENT_ID,
+      value.NETWORKING_GOOGLE_CALENDAR_CLIENT_SECRET,
+      value.NETWORKING_GOOGLE_CALENDAR_REDIRECT_URI,
+      value.CALENDAR_TOKEN_ENCRYPTION_KEY,
+    ];
+    const calendarConfigured = calendarCredentials.filter(Boolean).length;
+    if (
+      calendarConfigured > 0 &&
+      calendarConfigured < calendarCredentials.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Networking Google Calendar client ID, client secret, redirect URI and encryption key must be configured together',
+        path: ['NETWORKING_GOOGLE_CALENDAR_CLIENT_ID'],
       });
     }
     if (Boolean(value.OLLAMA_URL) !== Boolean(value.OLLAMA_MODEL)) {

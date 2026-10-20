@@ -52,6 +52,9 @@ importers:
       '@watcher/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@watcher/google-calendar':
+        specifier: workspace:*
+        version: link:../../packages/google-calendar
       '@watcher/llm':
         specifier: workspace:*
         version: link:../../packages/llm
@@ -155,6 +158,37 @@ importers:
         specifier: 4.3.3
         version: 4.3.3
 
+  apps/jobs-bot:
+    dependencies:
+      '@watcher/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@watcher/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@watcher/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
+      '@watcher/telegram':
+        specifier: workspace:*
+        version: link:../../packages/telegram
+      grammy:
+        specifier: 1.46.0
+        version: 1.46.0
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 4.1.1
+        version: 4.1.1(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1))
+
   apps/maintenance-agent:
     dependencies:
       '@watcher/core':
@@ -225,6 +259,9 @@ importers:
       '@watcher/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@watcher/google-calendar':
+        specifier: workspace:*
+        version: link:../../packages/google-calendar
       '@watcher/llm':
         specifier: workspace:*
         version: link:../../packages/llm
@@ -522,7 +559,7 @@ importers:
     devDependencies:
       twenty-sdk:
         specifier: 2.43.0
-        version: 2.43.0(@types/node@26.4.0)(@types/react@19.2.18)
+        version: 2.43.0(@types/node@26.4.0)(@types/react@19.3.0)
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -578,10 +615,13 @@ importers:
         version: 7.10.0
       '@prisma/client':
         specifier: 7.10.0
-        version: 7.10.0(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(typescript@6.0.3)
+        version: 7.10.0(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(typescript@6.0.3)
       '@watcher/core':
         specifier: workspace:*
         version: link:../core
+      '@watcher/jobs':
+        specifier: workspace:*
+        version: link:../jobs
       '@watcher/observability':
         specifier: workspace:*
         version: link:../observability
@@ -593,7 +633,7 @@ importers:
         version: 8.16.3
       prisma:
         specifier: 7.10.0
-        version: 7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+        version: 7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -604,6 +644,47 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+
+  packages/google-calendar:
+    dependencies:
+      '@watcher/core':
+        specifier: workspace:*
+        version: link:../core
+      '@watcher/database':
+        specifier: workspace:*
+        version: link:../database
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/jobs:
+    dependencies:
+      '@watcher/core':
+        specifier: workspace:*
+        version: link:../core
+      fast-xml-parser:
+        specifier: 5.11.2
+        version: 5.11.2
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1))
 
   packages/llm:
     dependencies:
@@ -3516,12 +3597,6 @@ packages:
     peerDependencies:
       '@types/react': ^19.3.0
 
-  '@types/react@19.2.18':
-    resolution:
-      {
-        integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==,
-      }
-
   '@types/react@19.3.0':
     resolution:
       {
@@ -3727,11 +3802,31 @@ packages:
       '@vitest/browser':
         optional: true
 
+  '@vitest/expect@4.1.1':
+    resolution:
+      {
+        integrity: sha512-xAV0fqBTk44Rn6SjJReEQkHP3RrqbJo6JQ4zZ7/uVOiJZRarBtblzrOfFIZeYUrukp2YD6snZG6IBqhOoHTm+A==,
+      }
+
   '@vitest/expect@4.1.11':
     resolution:
       {
         integrity: sha512-VX2x5vNJXET47KAFzwERI+KRMtTTCSWTfSMKsW7JsUsXV4psq++e3DvZpuTDOpHcxytiDs6p2nhVb2tVDiiUYw==,
       }
+
+  '@vitest/mocker@4.1.1':
+    resolution:
+      {
+        integrity: sha512-h3BOylsfsCLPeceuCPAAJ+BvNwSENgJa4hXoXu4im0bs9Lyp4URc4JYK4pWLZ4pG/UQn7AT92K6IByi6rE6g3A==,
+      }
+    peerDependencies:
+      msw: ^2.4.9
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+    peerDependenciesMeta:
+      msw:
+        optional: true
+      vite:
+        optional: true
 
   '@vitest/mocker@4.1.11':
     resolution:
@@ -3747,10 +3842,22 @@ packages:
       vite:
         optional: true
 
+  '@vitest/pretty-format@4.1.1':
+    resolution:
+      {
+        integrity: sha512-GM+TEQN5WhOygr1lp7skeVjdLPqqWMHsfzXrcHAqZJi/lIVh63H0kaRCY8MDhNWikx19zBUK8ceaLB7X5AH9NQ==,
+      }
+
   '@vitest/pretty-format@4.1.11':
     resolution:
       {
         integrity: sha512-yiZzPbGTS9Sr/JpFl8zHrcIkAofNbFV6k21vIgQN/cY/oxZeXhJv5sc/MBJ5jFKWmWs+oJHw0UXLZjmf931+Vw==,
+      }
+
+  '@vitest/runner@4.1.1':
+    resolution:
+      {
+        integrity: sha512-f7+FPy75vN91QGWsITueq0gedwUZy1fLtHOCMeQpjs8jTekAHeKP80zfDEnhrleviLHzVSDXIWuCIOFn3D3f8A==,
       }
 
   '@vitest/runner@4.1.11':
@@ -3759,16 +3866,34 @@ packages:
         integrity: sha512-LztvUgdwMNJMIkj3hQnnxiC2Xy1zNxq928W/xhjCLaNCzqTZOudjwbQf6v9IntZGPw132i2Lq2rgTRZHD3JHNw==,
       }
 
+  '@vitest/snapshot@4.1.1':
+    resolution:
+      {
+        integrity: sha512-kMVSgcegWV2FibXEx9p9WIKgje58lcTbXgnJixfcg15iK8nzCXhmalL0ZLtTWLW9PH1+1NEDShiFFedB3tEgWg==,
+      }
+
   '@vitest/snapshot@4.1.11':
     resolution:
       {
         integrity: sha512-pN7ikn1ON7h8ee4gIAp4AzyK+zBtJPzVbqOgu5LCEh4VaJVbPQcgYQYJIMGQPXVeJJq1fnfazis7a5pFNPahog==,
       }
 
+  '@vitest/spy@4.1.1':
+    resolution:
+      {
+        integrity: sha512-6Ti/KT5OVaiupdIZEuZN7l3CZcR0cxnxt70Z0//3CtwgObwA6jZhmVBA3yrXSVN3gmwjgd7oDNLlsXz526gpRA==,
+      }
+
   '@vitest/spy@4.1.11':
     resolution:
       {
         integrity: sha512-apNa/prQy2qCeywhnixOHPRCgGNhvg7T4Dapfl1GahLp/R+uhBm5cPyFoNVyqsNd2h1nJxL6BqqdIjiABL60YA==,
+      }
+
+  '@vitest/utils@4.1.1':
+    resolution:
+      {
+        integrity: sha512-cNxAlaB3sHoCdL6pj6yyUXv9Gry1NHNg0kFTXdvSIZXLHsqKH7chiWOkwJ5s5+d/oMwcoG9T0bKU38JZWKusrQ==,
       }
 
   '@vitest/utils@4.1.11':
@@ -7857,14 +7982,6 @@ packages:
         integrity: sha512-gMDyleLWVE+i6Sgtc0QbbY6pEKqYs97NGi6isHQPqYlLemPoO8dxQ3uGi0f4NiP98c+jMW6cG1Kx9dDwfvqARQ==,
       }
 
-  react-dom@19.2.8:
-    resolution:
-      {
-        integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==,
-      }
-    peerDependencies:
-      react: ^19.2.8
-
   react-dom@19.3.0:
     resolution:
       {
@@ -7920,13 +8037,6 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
-
-  react@19.2.8:
-    resolution:
-      {
-        integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==,
-      }
-    engines: { node: '>=0.10.0' }
 
   react@19.3.0:
     resolution:
@@ -8972,6 +9082,44 @@ packages:
       tsx:
         optional: true
       yaml:
+        optional: true
+
+  vitest@4.1.1:
+    resolution:
+      {
+        integrity: sha512-yF+o4POL41rpAzj5KVILUxm1GCjKnELvaqmU9TLLUbMfDzuN0UpUR9uaDs+mCtjPe+uYPksXDRLQGGPvj1cTmA==,
+      }
+    engines: { node: ^20.0.0 || ^22.0.0 || >=24.0.0 }
+    hasBin: true
+    peerDependencies:
+      '@edge-runtime/vm': '*'
+      '@opentelemetry/api': ^1.9.0
+      '@types/node': ^20.0.0 || ^22.0.0 || >=24.0.0
+      '@vitest/browser-playwright': 4.1.1
+      '@vitest/browser-preview': 4.1.1
+      '@vitest/browser-webdriverio': 4.1.1
+      '@vitest/ui': 4.1.1
+      happy-dom: '*'
+      jsdom: '*'
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+    peerDependenciesMeta:
+      '@edge-runtime/vm':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      '@types/node':
+        optional: true
+      '@vitest/browser-playwright':
+        optional: true
+      '@vitest/browser-preview':
+        optional: true
+      '@vitest/browser-webdriverio':
+        optional: true
+      '@vitest/ui':
+        optional: true
+      happy-dom:
+        optional: true
+      jsdom:
         optional: true
 
   vitest@4.1.11:
@@ -10458,11 +10606,11 @@ snapshots:
 
   '@prisma/client-runtime-utils@7.10.0': {}
 
-  '@prisma/client@7.10.0(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(typescript@6.0.3)':
+  '@prisma/client@7.10.0(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(typescript@6.0.3)':
     dependencies:
       '@prisma/client-runtime-utils': 7.10.0
     optionalDependencies:
-      prisma: 7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+      prisma: 7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
       typescript: 6.0.3
 
   '@prisma/config@7.10.0(magicast@0.5.4)':
@@ -10535,10 +10683,10 @@ snapshots:
       env-paths: 3.0.0
       proper-lockfile: 4.1.2
 
-  '@prisma/studio-core@0.33.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@prisma/studio-core@0.33.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@radix-ui/react-toggle': 1.1.10(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@types/react': 19.2.18
+      '@radix-ui/react-toggle': 1.1.10(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@types/react': 19.3.0
       '@visx/curve': 4.0.1-alpha.0
       '@visx/event': 4.0.1-alpha.0
       '@visx/grid': 4.0.1-alpha.0(react@19.3.0)
@@ -10556,59 +10704,59 @@ snapshots:
 
   '@radix-ui/primitive@1.1.3': {}
 
-  '@radix-ui/react-compose-refs@1.1.2(@types/react@19.2.18)(react@19.3.0)':
+  '@radix-ui/react-compose-refs@1.1.2(@types/react@19.3.0)(react@19.3.0)':
     dependencies:
       react: 19.3.0
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
-  '@radix-ui/react-primitive@2.1.3(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@radix-ui/react-primitive@2.1.3(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@radix-ui/react-slot': 1.2.3(@types/react@19.2.18)(react@19.3.0)
+      '@radix-ui/react-slot': 1.2.3(@types/react@19.3.0)(react@19.3.0)
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
       '@types/react-dom': 19.3.0(@types/react@19.3.0)
 
-  '@radix-ui/react-slot@1.2.3(@types/react@19.2.18)(react@19.3.0)':
+  '@radix-ui/react-slot@1.2.3(@types/react@19.3.0)(react@19.3.0)':
     dependencies:
-      '@radix-ui/react-compose-refs': 1.1.2(@types/react@19.2.18)(react@19.3.0)
+      '@radix-ui/react-compose-refs': 1.1.2(@types/react@19.3.0)(react@19.3.0)
       react: 19.3.0
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
-  '@radix-ui/react-toggle@1.1.10(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@radix-ui/react-toggle@1.1.10(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@radix-ui/primitive': 1.1.3
-      '@radix-ui/react-primitive': 2.1.3(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@radix-ui/react-use-controllable-state': 1.2.2(@types/react@19.2.18)(react@19.3.0)
+      '@radix-ui/react-primitive': 2.1.3(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@radix-ui/react-use-controllable-state': 1.2.2(@types/react@19.3.0)(react@19.3.0)
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
       '@types/react-dom': 19.3.0(@types/react@19.3.0)
 
-  '@radix-ui/react-use-controllable-state@1.2.2(@types/react@19.2.18)(react@19.3.0)':
+  '@radix-ui/react-use-controllable-state@1.2.2(@types/react@19.3.0)(react@19.3.0)':
     dependencies:
-      '@radix-ui/react-use-effect-event': 0.0.2(@types/react@19.2.18)(react@19.3.0)
-      '@radix-ui/react-use-layout-effect': 1.1.1(@types/react@19.2.18)(react@19.3.0)
+      '@radix-ui/react-use-effect-event': 0.0.2(@types/react@19.3.0)(react@19.3.0)
+      '@radix-ui/react-use-layout-effect': 1.1.1(@types/react@19.3.0)(react@19.3.0)
       react: 19.3.0
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
-  '@radix-ui/react-use-effect-event@0.0.2(@types/react@19.2.18)(react@19.3.0)':
+  '@radix-ui/react-use-effect-event@0.0.2(@types/react@19.3.0)(react@19.3.0)':
     dependencies:
-      '@radix-ui/react-use-layout-effect': 1.1.1(@types/react@19.2.18)(react@19.3.0)
+      '@radix-ui/react-use-layout-effect': 1.1.1(@types/react@19.3.0)(react@19.3.0)
       react: 19.3.0
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
-  '@radix-ui/react-use-layout-effect@1.1.1(@types/react@19.2.18)(react@19.3.0)':
+  '@radix-ui/react-use-layout-effect@1.1.1(@types/react@19.3.0)(react@19.3.0)':
     dependencies:
       react: 19.3.0
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
   '@rolldown/binding-android-arm-eabi@1.2.6':
     optional: true
@@ -11183,10 +11331,6 @@ snapshots:
     dependencies:
       '@types/react': 19.3.0
 
-  '@types/react@19.2.18':
-    dependencies:
-      csstype: 3.2.3
-
   '@types/react@19.3.0':
     dependencies:
       csstype: 3.2.3
@@ -11306,12 +11450,12 @@ snapshots:
 
   '@visx/event@4.0.1-alpha.0':
     dependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
       '@visx/point': 4.0.1-alpha.0
 
   '@visx/grid@4.0.1-alpha.0(react@19.3.0)':
     dependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
       '@visx/curve': 4.0.1-alpha.0
       '@visx/group': 4.0.1-alpha.0(react@19.3.0)
       '@visx/point': 4.0.1-alpha.0
@@ -11322,7 +11466,7 @@ snapshots:
 
   '@visx/group@4.0.1-alpha.0(react@19.3.0)':
     dependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
       classnames: 2.5.1
       react: 19.3.0
 
@@ -11331,7 +11475,7 @@ snapshots:
   '@visx/responsive@4.0.1-alpha.0(react@19.3.0)':
     dependencies:
       '@types/lodash': 4.17.25
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
       lodash: 4.18.1
       react: 19.3.0
 
@@ -11342,7 +11486,7 @@ snapshots:
   '@visx/shape@4.0.1-alpha.0(react@19.3.0)':
     dependencies:
       '@types/lodash': 4.17.25
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
       '@visx/curve': 4.0.1-alpha.0
       '@visx/group': 4.0.1-alpha.0(react@19.3.0)
       '@visx/scale': 4.0.1-alpha.0
@@ -11391,6 +11535,15 @@ snapshots:
       tinyrainbow: 3.1.1
       vitest: 4.1.11(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1))
 
+  '@vitest/expect@4.1.1':
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+      '@types/chai': 5.2.3
+      '@vitest/spy': 4.1.1
+      '@vitest/utils': 4.1.1
+      chai: 6.2.2
+      tinyrainbow: 3.1.1
+
   '@vitest/expect@4.1.11':
     dependencies:
       '@standard-schema/spec': 1.1.0
@@ -11400,6 +11553,14 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.1
 
+  '@vitest/mocker@4.1.1(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1))':
+    dependencies:
+      '@vitest/spy': 4.1.1
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1)
+
   '@vitest/mocker@4.1.11(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1))':
     dependencies:
       '@vitest/spy': 4.1.11
@@ -11408,13 +11569,29 @@ snapshots:
     optionalDependencies:
       vite: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1)
 
+  '@vitest/pretty-format@4.1.1':
+    dependencies:
+      tinyrainbow: 3.1.1
+
   '@vitest/pretty-format@4.1.11':
     dependencies:
       tinyrainbow: 3.1.1
 
+  '@vitest/runner@4.1.1':
+    dependencies:
+      '@vitest/utils': 4.1.1
+      pathe: 2.0.3
+
   '@vitest/runner@4.1.11':
     dependencies:
       '@vitest/utils': 4.1.11
+      pathe: 2.0.3
+
+  '@vitest/snapshot@4.1.1':
+    dependencies:
+      '@vitest/pretty-format': 4.1.1
+      '@vitest/utils': 4.1.1
+      magic-string: 0.30.21
       pathe: 2.0.3
 
   '@vitest/snapshot@4.1.11':
@@ -11424,7 +11601,15 @@ snapshots:
       magic-string: 0.30.21
       pathe: 2.0.3
 
+  '@vitest/spy@4.1.1': {}
+
   '@vitest/spy@4.1.11': {}
+
+  '@vitest/utils@4.1.1':
+    dependencies:
+      '@vitest/pretty-format': 4.1.1
+      convert-source-map: 2.0.0
+      tinyrainbow: 3.1.1
 
   '@vitest/utils@4.1.11':
     dependencies:
@@ -12908,7 +13093,7 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  ink@6.8.0(@types/react@19.2.18)(react@19.2.8):
+  ink@6.8.0(@types/react@19.3.0)(react@19.3.0):
     dependencies:
       '@alcalzone/ansi-tokenize': 0.2.5
       ansi-escapes: 7.3.0
@@ -12923,8 +13108,8 @@ snapshots:
       indent-string: 5.0.0
       is-in-ci: 2.0.0
       patch-console: 2.0.0
-      react: 19.2.8
-      react-reconciler: 0.33.0(react@19.2.8)
+      react: 19.3.0
+      react-reconciler: 0.33.0(react@19.3.0)
       scheduler: 0.27.0
       signal-exit: 3.0.7
       slice-ansi: 8.0.0
@@ -12937,7 +13122,7 @@ snapshots:
       ws: 8.22.0
       yoga-layout: 3.2.1
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -14065,12 +14250,12 @@ snapshots:
 
   prettier@3.9.6: {}
 
-  prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3):
+  prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3):
     dependencies:
       '@prisma/config': 7.10.0(magicast@0.5.4)
       '@prisma/dev': 0.24.17(typescript@6.0.3)
       '@prisma/engines': 7.10.0
-      '@prisma/studio-core': 0.33.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.2.18)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@prisma/studio-core': 0.33.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       mysql2: 3.15.3
       postgres: 3.4.7
     optionalDependencies:
@@ -14114,19 +14299,14 @@ snapshots:
       defu: 6.1.7
       destr: 2.0.5
 
-  react-dom@19.2.8(react@19.2.8):
-    dependencies:
-      react: 19.2.8
-      scheduler: 0.27.0
-
   react-dom@19.3.0(react@19.3.0):
     dependencies:
       react: 19.3.0
       scheduler: 0.28.0
 
-  react-reconciler@0.33.0(react@19.2.8):
+  react-reconciler@0.33.0(react@19.3.0):
     dependencies:
-      react: 19.2.8
+      react: 19.3.0
       scheduler: 0.27.0
 
   react-remove-scroll-bar@2.3.8(@types/react@19.3.0)(react@19.3.0):
@@ -14155,8 +14335,6 @@ snapshots:
       tslib: 2.8.1
     optionalDependencies:
       '@types/react': 19.3.0
-
-  react@19.2.8: {}
 
   react@19.3.0: {}
 
@@ -14660,7 +14838,7 @@ snapshots:
       - encoding
       - utf-8-validate
 
-  twenty-sdk@2.43.0(@types/node@26.4.0)(@types/react@19.2.18):
+  twenty-sdk@2.43.0(@types/node@26.4.0)(@types/react@19.3.0):
     dependencies:
       '@sniptt/guards': 0.2.0
       axios: 1.20.0
@@ -14670,12 +14848,12 @@ snapshots:
       esbuild: 0.28.2
       graphql: 16.14.2
       graphql-sse: 2.6.2(graphql@16.14.2)
-      ink: 6.8.0(@types/react@19.2.18)(react@19.2.8)
+      ink: 6.8.0(@types/react@19.3.0)(react@19.3.0)
       inquirer: 14.2.2(@types/node@26.4.0)
       jsonc-parser: 3.3.1
       preact: 10.29.8
-      react: 19.2.8
-      react-dom: 19.2.8(react@19.2.8)
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
       semver: 7.6.3
       sharp: 0.35.5(@types/node@26.4.0)
       tinyglobby: 0.2.17
@@ -14838,6 +15016,33 @@ snapshots:
       jiti: 2.7.0
       tsx: 4.23.12
       yaml: 2.9.1
+
+  vitest@4.1.1(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1)):
+    dependencies:
+      '@vitest/expect': 4.1.1
+      '@vitest/mocker': 4.1.1(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1))
+      '@vitest/pretty-format': 4.1.1
+      '@vitest/runner': 4.1.1
+      '@vitest/snapshot': 4.1.1
+      '@vitest/spy': 4.1.1
+      '@vitest/utils': 4.1.1
+      es-module-lexer: 2.3.2
+      expect-type: 1.4.0
+      magic-string: 0.30.21
+      obug: 2.1.4
+      pathe: 2.0.3
+      picomatch: 4.0.7
+      std-env: 4.2.0
+      tinybench: 2.9.0
+      tinyexec: 1.3.1
+      tinyglobby: 0.2.17
+      tinyrainbow: 3.1.1
+      vite: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 26.4.0
+    transitivePeerDependencies:
+      - msw
 
   vitest@4.1.11(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.1)):
     dependencies:

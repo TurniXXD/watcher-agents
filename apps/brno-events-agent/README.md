@@ -2,7 +2,7 @@
 
 Internal event-discovery service for public Brno listings. It fetches independent providers, normalizes events, deduplicates cross-source coverage, evaluates relevance, persists results, and exposes authenticated endpoints used by Briefing.
 
-Providers include Meetup, GoOut, VisitBrno/TIC, MUNI, VUT, JIC, CEITEC, Velvet Innovation Meetups, and SideQuesty. Each provider has its own enable switch, interval, URL, parser, and failure isolation. Manual source runs use the scheduled pipeline.
+Providers include Meetup, GoOut, VisitBrno/TIC, MUNI, VUT, JIC, CEITEC, Velvet Innovation Meetups, SideQuesty, Objev Brno, Impact Hub Brno, the Base48 public calendar, and official ČSOB Start it @UNI Validation Camp listings. HTML, structured page data, and public iCalendar feeds are normalized behind the same contract. Each provider has its own enable switch, interval, URL, parser, and failure isolation. Manual source runs use the scheduled pipeline.
 
 ## API and configuration
 

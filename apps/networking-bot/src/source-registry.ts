@@ -32,6 +32,38 @@ export const networkingEventSources: readonly NetworkingEventSourceDefinition[] 
       notes:
         'Automaticky načítá Brno Events agent a zachovává pouze budoucí akce.',
     },
+    {
+      id: 'objev-brno',
+      name: 'Objev Brno — akce zdarma',
+      url: 'https://www.objevbrno.cz/cs/akce-zdarma',
+      mode: 'AGGREGATED',
+      notes:
+        'Automaticky načítá Brno Events agent; bezplatný vstup je doložen zaměřením katalogu.',
+    },
+    {
+      id: 'impact-hub-brno',
+      name: 'Impact Hub Brno',
+      url: 'https://impacthub.cz/brno',
+      mode: 'AGGREGATED',
+      notes:
+        'Automaticky načítá veřejný kalendář a ponechává pouze akce spojené s Brnem.',
+    },
+    {
+      id: 'base48-calendar',
+      name: 'Base48 public calendar',
+      url: 'https://nextcloud.at.base48.cz/apps/calendar/embed/oM82tg3RJDLDyZbz/dayGridMonth/now',
+      mode: 'AGGREGATED',
+      notes:
+        'Automaticky načítá veřejný Nextcloud kalendář Base48 včetně opakovaných akcí.',
+    },
+    {
+      id: 'csob-validation-camps',
+      name: 'ČSOB Start it @UNI Validation Camps',
+      url: 'https://www.csob.cz/csob/spolecenska-odpovednost/filantropie/grantovy-kalendar',
+      mode: 'AGGREGATED',
+      notes:
+        'Automaticky sleduje oficiální kalendář ČSOB a importuje pouze zveřejněné brněnské termíny.',
+    },
     ...[
       ['meetup-brno', 'Meetup Brno', 'https://www.meetup.com/find/cz--brno/'],
       ['jic', 'JIC', 'https://www.jic.cz/cz/akce'],

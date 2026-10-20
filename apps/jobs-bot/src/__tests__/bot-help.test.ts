@@ -1,0 +1,137 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createJobsBot,
+  jobsAbout,
+  jobsBotCommands,
+  jobsHelp,
+  jobsStart,
+} from '../bot.js';
+
+const update = (text: string, updateId: number, userId = 123) => ({
+  update_id: updateId,
+  message: {
+    message_id: updateId,
+    date: 1_792_368_000,
+    chat: { id: userId, type: 'private' as const, first_name: 'Operator' },
+    from: { id: userId, is_bot: false, first_name: 'Operator' },
+    text,
+    entities: [
+      {
+        offset: 0,
+        length: text.includes(' ') ? text.indexOf(' ') : text.length,
+        type: 'bot_command' as const,
+      },
+    ],
+  },
+});
+
+const createHarness = () => {
+  const store = {
+    getOverview: vi.fn(),
+    listSources: vi.fn(),
+    listJobs: vi.fn(),
+    setSourceEnabled: vi.fn(),
+    updateApplication: vi.fn(),
+    getActiveProfile: vi.fn(),
+    updateProfile: vi.fn(),
+  };
+  const runner = { run: vi.fn() };
+  const onRunComplete = vi.fn();
+  const bot = createJobsBot({
+    token: 'test-token',
+    allowedUserIds: new Set([123]),
+    store,
+    runner,
+    onRunComplete,
+    reportError: () => undefined,
+  } as never);
+  bot.botInfo = {
+    id: 456,
+    is_bot: true,
+    first_name: 'Jobs Bot',
+    username: 'jobs_test_bot',
+    can_join_groups: false,
+    can_read_all_group_messages: false,
+    supports_inline_queries: false,
+    can_connect_to_business: false,
+    has_main_web_app: false,
+    has_topics_enabled: false,
+    allows_users_to_create_topics: false,
+    can_manage_bots: false,
+    supports_join_request_queries: false,
+  };
+  const messages: string[] = [];
+  bot.api.config.use(async (_previous, method, payload) => {
+    if (method !== 'sendMessage') throw new Error(`Unexpected ${method}`);
+    if ('text' in payload && typeof payload.text === 'string') {
+      messages.push(payload.text);
+    }
+    return { ok: true, result: { message_id: messages.length } } as never;
+  });
+  return { bot, messages, onRunComplete, runner, store };
+};
+
+describe('jobs bot informational commands', () => {
+  it('serves exact authorized start, help, and about copy without side effects', async () => {
+    const harness = createHarness();
+
+    await harness.bot.handleUpdate(update('/start', 1));
+    await harness.bot.handleUpdate(update('/help', 2));
+    await harness.bot.handleUpdate(update('/about', 3));
+
+    expect(harness.messages).toEqual([jobsStart, jobsHelp, jobsAbout]);
+    expect(harness.runner.run).not.toHaveBeenCalled();
+    expect(harness.onRunComplete).not.toHaveBeenCalled();
+    for (const method of Object.values(harness.store)) {
+      expect(method).not.toHaveBeenCalled();
+    }
+  });
+
+  it('rejects an unauthorized informational command before domain access', async () => {
+    const harness = createHarness();
+
+    await harness.bot.handleUpdate(update('/about', 4, 999));
+
+    expect(harness.messages).toEqual(['Unauthorized.']);
+    expect(harness.runner.run).not.toHaveBeenCalled();
+    for (const method of Object.values(harness.store)) {
+      expect(method).not.toHaveBeenCalled();
+    }
+  });
+
+  it('keeps the command registry, handlers, help text, and Telegram limits aligned', () => {
+    expect(jobsBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'start' }),
+    );
+    expect(jobsBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'help' }),
+    );
+    expect(jobsBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'about' }),
+    );
+    for (const command of jobsBotCommands) {
+      expect(jobsHelp).toContain(`/${command.command}`);
+      expect(command.command.length).toBeLessThanOrEqual(32);
+      expect(command.description.length).toBeLessThanOrEqual(256);
+    }
+    expect(jobsStart.length).toBeLessThanOrEqual(4_096);
+    expect(jobsHelp.length).toBeLessThanOrEqual(4_096);
+    expect(jobsAbout.length).toBeLessThanOrEqual(4_096);
+  });
+
+  it('validates mutating command syntax before calling the store', async () => {
+    const harness = createHarness();
+
+    await harness.bot.handleUpdate(update('/jobs_source remote-ok maybe', 5));
+    await harness.bot.handleUpdate(update('/jobs_mark job-id UNKNOWN', 6));
+    await harness.bot.handleUpdate(update('/jobs_note job-id', 7));
+
+    expect(harness.messages).toEqual([
+      'Usage: /jobs_source SOURCE_ID on|off',
+      'Usage: /jobs_mark JOB_ID STATUS — see /help for statuses.',
+      'Usage: /jobs_note JOB_ID NOTE',
+    ]);
+    expect(harness.store.setSourceEnabled).not.toHaveBeenCalled();
+    expect(harness.store.updateApplication).not.toHaveBeenCalled();
+  });
+});

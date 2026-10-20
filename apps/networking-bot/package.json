@@ -12,6 +12,7 @@
     "@watcher/contact-network": "workspace:*",
     "@watcher/core": "workspace:*",
     "@watcher/database": "workspace:*",
+    "@watcher/google-calendar": "workspace:*",
     "@watcher/llm": "workspace:*",
     "@watcher/telegram": "workspace:*",
     "grammy": "1.46.0",

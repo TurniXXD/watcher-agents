@@ -1,9 +1,16 @@
 import type { EventSource } from '../domain/types.js';
 import { CeitecEventSource } from './ceitec.js';
 import { HtmlEventSource, PaginatedHtmlEventSource } from './html-source.js';
+import {
+  IcalEventSource,
+  impactHubCalendarFeed,
+  nextcloudPublicCalendarFeed,
+} from './ical.js';
 import { parseMeetupHtml } from './meetup.js';
 import {
+  parseCsobValidationCampHtml,
   parseGoOutHtml,
+  parseObjevBrnoHtml,
   parseJicHtml,
   parseMuniHtml,
   parseSideQuestyHtml,
@@ -58,6 +65,26 @@ export const createSources = (settings: SourceSettings): EventSource[] => {
     settings,
     'sidequesty',
     'https://www.sidequesty.com/events/',
+  );
+  const objevBrno = config(
+    settings,
+    'objev-brno',
+    'https://www.objevbrno.cz/cs/akce-zdarma',
+  );
+  const impactHub = config(
+    settings,
+    'impact-hub-brno',
+    'https://impacthub.cz/brno',
+  );
+  const base48 = config(
+    settings,
+    'base48-calendar',
+    'https://nextcloud.at.base48.cz/apps/calendar/embed/oM82tg3RJDLDyZbz/dayGridMonth/now',
+  );
+  const csobValidationCamps = config(
+    settings,
+    'csob-validation-camps',
+    'https://www.csob.cz/csob/spolecenska-odpovednost/filantropie/grantovy-kalendar',
   );
   return [
     new HtmlEventSource(
@@ -141,6 +168,54 @@ export const createSources = (settings: SourceSettings): EventSource[] => {
       sidequesty.enabled,
       ['social', 'networking', 'outdoors'],
       [parseSideQuestyHtml],
+    ),
+    new HtmlEventSource(
+      'objev-brno',
+      'Objev Brno — akce zdarma',
+      objevBrno.url,
+      objevBrno.interval,
+      objevBrno.enabled,
+      ['culture'],
+      [parseObjevBrnoHtml],
+    ),
+    new IcalEventSource(
+      'impact-hub-brno',
+      'Impact Hub Brno',
+      impactHub.url,
+      impactHub.interval,
+      impactHub.enabled,
+      impactHubCalendarFeed(impactHub.url),
+      {
+        categories: ['networking', 'business'],
+        filter: (event) =>
+          /(?:^|\W)brno(?:\W|$)/iu.test(
+            `${event.venue?.name ?? ''} ${event.venue?.address ?? ''} ${event.description ?? ''}`,
+          ),
+      },
+    ),
+    new IcalEventSource(
+      'base48-calendar',
+      'Base48 public calendar',
+      base48.url,
+      base48.interval,
+      base48.enabled,
+      nextcloudPublicCalendarFeed(base48.url),
+      {
+        categories: ['maker', 'networking'],
+        filter: (event) =>
+          /base ?48|brno/iu.test(
+            `${event.title} ${event.venue?.name ?? ''} ${event.description ?? ''}`,
+          ),
+      },
+    ),
+    new HtmlEventSource(
+      'csob-validation-camps',
+      'ČSOB Start it @UNI Validation Camps',
+      csobValidationCamps.url,
+      csobValidationCamps.interval,
+      csobValidationCamps.enabled,
+      ['startup', 'entrepreneurship', 'networking', 'workshop'],
+      [parseCsobValidationCampHtml],
     ),
   ];
 };

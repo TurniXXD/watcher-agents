@@ -36,8 +36,9 @@ export class CalendarIntegrationStore {
   public async completeAuthorization(
     oauthStateHash: string,
     encryptedRefreshToken: string,
-    now = new Date(),
+    options: { enableBriefingCalendar?: boolean; now?: Date } = {},
   ): Promise<bigint> {
+    const now = options.now ?? new Date();
     return this.db.$transaction(async (transaction) => {
       const pending = await transaction.calendarIntegrationState.findUnique({
         where: { oauthStateHash },
@@ -59,10 +60,12 @@ export class CalendarIntegrationStore {
           oauthStateExpiresAt: null,
         },
       });
-      await transaction.briefingSettings.update({
-        where: { id: pending.settingsId },
-        data: { calendarEnabled: true },
-      });
+      if (options.enableBriefingCalendar !== false) {
+        await transaction.briefingSettings.update({
+          where: { id: pending.settingsId },
+          data: { calendarEnabled: true },
+        });
+      }
       return pending.settings.telegramChatId;
     });
   }

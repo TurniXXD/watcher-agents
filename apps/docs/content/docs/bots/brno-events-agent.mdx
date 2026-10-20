@@ -6,7 +6,9 @@ description: Internal normalized event discovery and authenticated briefing API.
 ## Overview
 
 Brno Events Agent fetches public Brno listings from Meetup, GoOut, VisitBrno/TIC,
-MUNI, VUT, JIC, CEITEC, Velvet Innovation Meetups, and SideQuesty. It normalizes events, deduplicates cross-source
+MUNI, VUT, JIC, CEITEC, Velvet Innovation Meetups, SideQuesty, Objev Brno,
+Impact Hub Brno, the Base48 public Nextcloud calendar, and official ČSOB Start
+it @UNI Validation Camp listings. It normalizes events, deduplicates cross-source
 coverage, evaluates relevance, persists results, and exposes internal endpoints
 used by Briefing and Networking Bot.
 
@@ -20,7 +22,8 @@ cancel successful sources. Manual source runs reuse the scheduled pipeline.
 
 Required: `DATABASE_URL` and a minimum-16-character `BRNO_EVENTS_API_TOKEN`.
 Configure host/port, scheduler polling, and each provider's `*_ENABLED`,
-`*_INTERVAL_MINUTES`, and optional `*_URL`. Timezone is fixed to
+`*_INTERVAL_MINUTES`, and optional `*_URL`. Public iCalendar recurrence is
+expanded into concrete upcoming occurrences. Timezone is fixed to
 `Europe/Prague`.
 
 ## Execution and scheduling

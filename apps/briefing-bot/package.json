@@ -13,6 +13,7 @@
   "dependencies": {
     "@watcher/core": "workspace:*",
     "@watcher/database": "workspace:*",
+    "@watcher/google-calendar": "workspace:*",
     "@watcher/llm": "workspace:*",
     "@watcher/notion": "workspace:*",
     "@watcher/observability": "workspace:*",

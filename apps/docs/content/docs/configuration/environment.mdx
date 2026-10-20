@@ -26,8 +26,17 @@ credential groups must be complete.
   inference where enabled.
 - `LOG_LEVEL` controls structured logging without enabling secret logging.
 - Timezones use IANA names, normally `Europe/Prague`.
+- Networking Calendar writes use the complete
+  `NETWORKING_GOOGLE_CALENDAR_*` OAuth group, the shared encrypted credential
+  key, and the loopback-published callback port `8790`; partial configuration
+  fails startup validation.
 - `DOCS_BIND_ADDRESS` and `DOCS_HOST_PORT` control only the loopback-bound local
   development Compose publication; production exposes docs through `lateralis`.
+- `JOBS_TELEGRAM_TOKEN`, `JOBS_TIMEZONE`, and `JOBS_DETAIL_REFRESH_HOURS`
+  configure collection and alerts. `JOBS_CANDIDATE_PROFILE_JSON` optionally
+  replaces the validated default candidate profile.
+- `JOBS_EMAIL_WEBHOOK_URL`, `JOBS_EMAIL_WEBHOOK_API_KEY`, and
+  `JOBS_EMAIL_RECIPIENT` configure the optional HTTP e-mail delivery gateway.
 
 ## Secret handling
 

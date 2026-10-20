@@ -30,14 +30,17 @@ COPY apps/sales-bot/package.json apps/sales-bot/package.json
 COPY apps/socials-bot/package.json apps/socials-bot/package.json
 COPY apps/osint-bot/package.json apps/osint-bot/package.json
 COPY apps/docs/package.json apps/docs/package.json
+COPY apps/jobs-bot/package.json apps/jobs-bot/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/contact-network/package.json packages/contact-network/package.json
 COPY packages/database/package.json packages/database/package.json
+COPY packages/google-calendar/package.json packages/google-calendar/package.json
 COPY packages/sources/package.json packages/sources/package.json
 COPY packages/llm/package.json packages/llm/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 COPY packages/observability/package.json packages/observability/package.json
 COPY packages/notion/package.json packages/notion/package.json
+COPY packages/jobs/package.json packages/jobs/package.json
 
 FROM manifests AS dependencies
 
@@ -79,6 +82,7 @@ COPY --from=production-dependencies --chown=node:node /app/apps/transport-bot/no
 COPY --from=production-dependencies --chown=node:node /app/apps/sales-bot/node_modules ./apps/sales-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/socials-bot/node_modules ./apps/socials-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/osint-bot/node_modules ./apps/osint-bot/node_modules
+COPY --from=production-dependencies --chown=node:node /app/apps/jobs-bot/node_modules ./apps/jobs-bot/node_modules
 COPY --from=production-dependencies --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/package.json /app/pnpm-workspace.yaml ./
 COPY --from=build --chown=node:node /app/apps/brno-events-agent/package.json ./apps/brno-events-agent/package.json
@@ -109,11 +113,14 @@ COPY --from=build --chown=node:node /app/apps/socials-bot/package.json ./apps/so
 COPY --from=build --chown=node:node /app/apps/socials-bot/dist ./apps/socials-bot/dist
 COPY --from=build --chown=node:node /app/apps/osint-bot/package.json ./apps/osint-bot/package.json
 COPY --from=build --chown=node:node /app/apps/osint-bot/dist ./apps/osint-bot/dist
+COPY --from=build --chown=node:node /app/apps/jobs-bot/package.json ./apps/jobs-bot/package.json
+COPY --from=build --chown=node:node /app/apps/jobs-bot/dist ./apps/jobs-bot/dist
 COPY --from=build --chown=node:node /app/apps/docs/.next/standalone ./docs-runtime
 COPY --from=build --chown=node:node /app/apps/docs/.next/static ./docs-runtime/apps/docs/.next/static
 COPY --from=build --chown=node:node /app/packages/core/dist ./packages/core/dist
 COPY --from=build --chown=node:node /app/packages/contact-network/dist ./packages/contact-network/dist
 COPY --from=build --chown=node:node /app/packages/database/dist ./packages/database/dist
+COPY --from=build --chown=node:node /app/packages/google-calendar/dist ./packages/google-calendar/dist
 COPY --from=build --chown=node:node /app/packages/database/prisma ./packages/database/prisma
 COPY --from=build --chown=node:node /app/packages/database/prisma.config.ts ./packages/database/prisma.config.ts
 COPY --from=build --chown=node:node /app/packages/sources/dist ./packages/sources/dist
@@ -121,6 +128,7 @@ COPY --from=build --chown=node:node /app/packages/llm/dist ./packages/llm/dist
 COPY --from=build --chown=node:node /app/packages/telegram/dist ./packages/telegram/dist
 COPY --from=build --chown=node:node /app/packages/observability/dist ./packages/observability/dist
 COPY --from=build --chown=node:node /app/packages/notion/dist ./packages/notion/dist
+COPY --from=build --chown=node:node /app/packages/jobs/dist ./packages/jobs/dist
 COPY --from=build --chown=node:node /app/docs/maintenance-changelog.md ./docs/maintenance-changelog.md
 
 USER node

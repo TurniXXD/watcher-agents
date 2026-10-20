@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { networkingEventSources } from '../source-registry.js';
 
 describe('networking event source registry', () => {
-  it('reports Velvet Innovation and SideQuesty as aggregated sources', () => {
-    expect(
-      networkingEventSources.find(({ id }) => id === 'velvet-innovation')?.mode,
-    ).toBe('AGGREGATED');
-    expect(
-      networkingEventSources.find(({ id }) => id === 'sidequesty')?.mode,
-    ).toBe('AGGREGATED');
+  it('reports every dedicated networking source as aggregated', () => {
+    for (const id of [
+      'velvet-innovation',
+      'sidequesty',
+      'objev-brno',
+      'impact-hub-brno',
+      'base48-calendar',
+      'csob-validation-camps',
+    ]) {
+      expect(
+        networkingEventSources.find((source) => source.id === id)?.mode,
+      ).toBe('AGGREGATED');
+    }
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MaintenanceStore } from '@watcher/database';
 import {
   AgentStatusService,
+  defaultAgentHealthTargets,
   renderAgentStatus,
   type AgentLiveStatus,
 } from '../agent-status.js';
@@ -36,6 +37,13 @@ const status = (input: Partial<AgentLiveStatus> = {}): AgentLiveStatus => ({
 });
 
 describe('agent status reporting', () => {
+  it('includes the jobs bot readiness endpoint', () => {
+    expect(defaultAgentHealthTargets).toContainEqual({
+      agentName: 'jobs-bot',
+      url: 'http://jobs-bot:4090/healthz',
+    });
+  });
+
   it('reports a ready agent with fresh successful telemetry as running', () => {
     const report = renderAgentStatus(
       [status()],

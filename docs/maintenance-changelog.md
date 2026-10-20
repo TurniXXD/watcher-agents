@@ -2,6 +2,28 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-19 — Personal Jobs Bot
+
+- Added a private scheduled Jobs Bot with persisted source checkpoints, cross-source deduplication, deterministic eligibility scoring, baseline-safe Telegram/e-mail digests, and per-provider delivery audit records.
+- Added authorized Telegram controls for source selection, dry/manual runs, candidate profile updates, saved/application states, and private notes; the bot never applies or contacts employers.
+- Added six verified public API/RSS integrations and explicit disabled records for unsupported portals, together with PostgreSQL migrations, hardened Compose deployment, tests, and versioned documentation.
+- Corrected live Remote Frontend API and RemoteFirstJobs RSS parsing, preserved unchanged detail records, persisted extracted requirements, and added process-safe run claims.
+- Added the supplied full candidate profile with agency attribution, strict remote-region eligibility, immediate profile re-evaluation, job detail/search/application/follow-up commands, and persisted run delivery counts.
+- Added optional Zod-validated OpenAI-compatible/Ollama scoring with deterministic fallback and immutable hard blockers; the default remains fully local deterministic scoring.
+- Added conservative employer-page availability checks and SSRF validation for every HTTP redirect without treating aggregator presence as proof that a vacancy is open.
+
+## 2026-10-19 — In-person Networking Bot discovery
+
+- Added `/networking_today` for the rest of the current Prague day and `/networking_free_food` for source-grounded complimentary food or refreshments through the end of the current calendar week.
+- Networking results now exclude purely online events and classify imported online, hybrid, and in-person records before querying them.
+- Added operational Objev Brno, Impact Hub Brno, Base48 public-calendar, and official ČSOB Validation Camp adapters, including bounded weekly iCalendar recurrence expansion and Brno-only filtering for the ČSOB listing.
+
+## 2026-10-19 — Networking Google Calendar actions
+
+- Added an OAuth-backed add-to-calendar button to every Networking event and idempotent writes with Google Calendar's mango/tangerine event color.
+- Added explicit Calendar connect/status commands and kept refresh tokens encrypted in PostgreSQL through the shared Calendar integration.
+- Registration-required events now show their source-backed registration URL separately and copy it into the Calendar description without ever submitting registration.
+
 ## 2026-10-19 — About command coverage
 
 - Added a dedicated `/about` response to Networking, Socials, Study, and Transport so every Telegram bot now explains its purpose, data flow, automation, privacy or safety boundaries, and operational limitations.

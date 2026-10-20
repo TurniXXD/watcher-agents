@@ -3070,19 +3070,19 @@ enum SocialTrendFeedbackKind {
 }
 
 model SocialProject {
-  id             String              @id @default(uuid())
+  id             String                     @id @default(uuid())
   ownerUserId    BigInt
   name           String
   normalizedName String
   description    String?
   category       String
-  technologies   String[]            @default([])
-  status         SocialProjectStatus @default(ACTIVE)
+  technologies   String[]                   @default([])
+  status         SocialProjectStatus        @default(ACTIVE)
   repositoryUrl  String?
   websiteUrl     String?
-  visibility     SocialVisibility    @default(PRIVATE)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  visibility     SocialVisibility           @default(PRIVATE)
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
   ideas          SocialIdeaProject[]
   contentItems   SocialContentItemProject[]
 
@@ -3092,15 +3092,15 @@ model SocialProject {
 }
 
 model SocialTopic {
-  id           String            @id @default(uuid())
+  id           String                   @id @default(uuid())
   ownerUserId  BigInt
   name         String
   slug         String
   description  String?
   pillar       String
-  status       SocialTopicStatus @default(ACTIVE)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  status       SocialTopicStatus        @default(ACTIVE)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
   ideas        SocialIdeaTopic[]
   contentItems SocialContentItemTopic[]
 
@@ -3110,18 +3110,18 @@ model SocialTopic {
 }
 
 model SocialSource {
-  id                 String                   @id @default(uuid())
+  id                 String                    @id @default(uuid())
   ownerUserId        BigInt
   title              String
   url                String?
   canonicalUrl       String?
   sourceType         String
   publishedAt        DateTime?
-  accessedAt         DateTime                 @default(now())
+  accessedAt         DateTime                  @default(now())
   summary            String?
-  verificationStatus SocialVerificationStatus @default(UNVERIFIED)
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
+  verificationStatus SocialVerificationStatus  @default(UNVERIFIED)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
   ideas              SocialIdeaSource[]
   contentItems       SocialContentItemSource[]
 
@@ -3131,23 +3131,23 @@ model SocialSource {
 }
 
 model SocialContentIdea {
-  id                String                  @id @default(uuid())
-  ownerUserId       BigInt
-  title             String
-  normalizedTitle   String
-  description       String
-  sourceType        String
-  sourceReference   String?
-  status            SocialIdeaStatus        @default(BACKLOG)
-  priority          SocialPriority          @default(MEDIUM)
-  businessObjective SocialBusinessObjective @default(QUALIFIED_LEADS)
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
-  topics            SocialIdeaTopic[]
-  projects          SocialIdeaProject[]
-  sources           SocialIdeaSource[]
-  contentItems      SocialContentItem[]
-  eventLinks        SocialEventContentIdea[]
+  id                 String                   @id @default(uuid())
+  ownerUserId        BigInt
+  title              String
+  normalizedTitle    String
+  description        String
+  sourceType         String
+  sourceReference    String?
+  status             SocialIdeaStatus         @default(BACKLOG)
+  priority           SocialPriority           @default(MEDIUM)
+  businessObjective  SocialBusinessObjective  @default(QUALIFIED_LEADS)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  topics             SocialIdeaTopic[]
+  projects           SocialIdeaProject[]
+  sources            SocialIdeaSource[]
+  contentItems       SocialContentItem[]
+  eventLinks         SocialEventContentIdea[]
   trendOpportunities SocialTrendOpportunity[]
 
   @@unique([ownerUserId, normalizedTitle])
@@ -3156,46 +3156,46 @@ model SocialContentIdea {
 }
 
 model SocialTrendProfile {
-  ownerUserId          BigInt   @id
-  enabled              Boolean  @default(true)
-  sourceRegion         String   @default("US")
-  targetRegion         String   @default("CZ")
-  primaryLanguage      String   @default("cs")
-  secondaryLanguage    String   @default("en")
-  focusTopics          String[] @default(["web development", "AI integrations", "business automation", "custom software", "local AI", "small business digitalization", "technology entrepreneurship", "productivity systems"])
-  audiences            String[] @default(["Czech business owners", "small and medium-sized companies", "entrepreneurs", "technology enthusiasts", "potential clients"])
-  keywords             String[] @default(["AI automation", "local LLM", "AI agents", "business automation", "web development", "small business software", "SaaS", "developer tools"])
-  subreddits           String[] @default(["artificial", "LocalLLaMA", "ChatGPT", "Entrepreneur", "smallbusiness", "SaaS", "webdev", "technology", "startups"])
-  youtubeChannelIds    String[] @default([])
-  enabledSources       SocialTrendSourceKind[] @default([REDDIT, YOUTUBE])
-  schedule             String   @default("0 7 * * *")
-  timezone             String   @default("Europe/Prague")
-  reportSize           Int      @default(5)
-  scoringWeights       Json
-  quotaLimits          Json
-  retentionDays        Int      @default(180)
-  nextRunAt            DateTime?
-  lastRunAt            DateTime?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  ownerUserId       BigInt                  @id
+  enabled           Boolean                 @default(true)
+  sourceRegion      String                  @default("US")
+  targetRegion      String                  @default("CZ")
+  primaryLanguage   String                  @default("cs")
+  secondaryLanguage String                  @default("en")
+  focusTopics       String[]                @default(["web development", "AI integrations", "business automation", "custom software", "local AI", "small business digitalization", "technology entrepreneurship", "productivity systems"])
+  audiences         String[]                @default(["Czech business owners", "small and medium-sized companies", "entrepreneurs", "technology enthusiasts", "potential clients"])
+  keywords          String[]                @default(["AI automation", "local LLM", "AI agents", "business automation", "web development", "small business software", "SaaS", "developer tools"])
+  subreddits        String[]                @default(["artificial", "LocalLLaMA", "ChatGPT", "Entrepreneur", "smallbusiness", "SaaS", "webdev", "technology", "startups"])
+  youtubeChannelIds String[]                @default([])
+  enabledSources    SocialTrendSourceKind[] @default([REDDIT, YOUTUBE])
+  schedule          String                  @default("0 7 * * *")
+  timezone          String                  @default("Europe/Prague")
+  reportSize        Int                     @default(5)
+  scoringWeights    Json
+  quotaLimits       Json
+  retentionDays     Int                     @default(180)
+  nextRunAt         DateTime?
+  lastRunAt         DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
 
   @@map("social_trend_profiles")
 }
 
 model SocialTrendSourceConfig {
-  id                 String                        @id @default(uuid())
-  ownerUserId        BigInt
-  source             SocialTrendSourceKind
-  enabled            Boolean                       @default(false)
-  availability       SocialTrendSourceAvailability @default(DISABLED)
-  config             Json
-  lastAttemptAt      DateTime?
-  lastSuccessfulAt   DateTime?
-  lastError          String?
-  quotaDate          DateTime?                     @db.Date
-  quotaUsed          Int                           @default(0)
-  createdAt          DateTime                      @default(now())
-  updatedAt          DateTime                      @updatedAt
+  id               String                        @id @default(uuid())
+  ownerUserId      BigInt
+  source           SocialTrendSourceKind
+  enabled          Boolean                       @default(false)
+  availability     SocialTrendSourceAvailability @default(DISABLED)
+  config           Json
+  lastAttemptAt    DateTime?
+  lastSuccessfulAt DateTime?
+  lastError        String?
+  quotaDate        DateTime?                     @db.Date
+  quotaUsed        Int                           @default(0)
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
 
   @@unique([ownerUserId, source])
   @@index([ownerUserId, enabled, availability])
@@ -3203,25 +3203,25 @@ model SocialTrendSourceConfig {
 }
 
 model SocialTrendSignal {
-  id          String                @id @default(uuid())
-  ownerUserId BigInt
-  source      SocialTrendSourceKind
-  externalId  String
-  fingerprint String
-  sourceUrl   String
-  title       String
-  description String?
-  author      String?
-  keywords    String[]              @default([])
-  region      SocialTrendRegion
-  publishedAt DateTime?
-  firstSeenAt DateTime              @default(now())
-  lastSeenAt  DateTime              @default(now())
-  collectedAt DateTime              @default(now())
-  metrics     Json
-  metadata    Json
-  clusterId   String?
-  cluster     SocialTrendCluster?   @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  id           String                   @id @default(uuid())
+  ownerUserId  BigInt
+  source       SocialTrendSourceKind
+  externalId   String
+  fingerprint  String
+  sourceUrl    String
+  title        String
+  description  String?
+  author       String?
+  keywords     String[]                 @default([])
+  region       SocialTrendRegion
+  publishedAt  DateTime?
+  firstSeenAt  DateTime                 @default(now())
+  lastSeenAt   DateTime                 @default(now())
+  collectedAt  DateTime                 @default(now())
+  metrics      Json
+  metadata     Json
+  clusterId    String?
+  cluster      SocialTrendCluster?      @relation(fields: [clusterId], references: [id], onDelete: SetNull)
   observations SocialTrendObservation[]
 
   @@unique([ownerUserId, source, externalId])
@@ -3249,20 +3249,20 @@ model SocialTrendObservation {
 }
 
 model SocialTrendCluster {
-  id             String                @id @default(uuid())
-  ownerUserId    BigInt
-  canonicalKey   String
-  title          String
-  description    String?
-  keywords       String[]              @default([])
-  stage          SocialTrendStage      @default(UNKNOWN)
-  firstSeenAt    DateTime              @default(now())
-  lastSeenAt     DateTime              @default(now())
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  signals        SocialTrendSignal[]
-  comparisons    SocialTrendMarketComparison[]
-  opportunities  SocialTrendOpportunity[]
+  id            String                        @id @default(uuid())
+  ownerUserId   BigInt
+  canonicalKey  String
+  title         String
+  description   String?
+  keywords      String[]                      @default([])
+  stage         SocialTrendStage              @default(UNKNOWN)
+  firstSeenAt   DateTime                      @default(now())
+  lastSeenAt    DateTime                      @default(now())
+  createdAt     DateTime                      @default(now())
+  updatedAt     DateTime                      @updatedAt
+  signals       SocialTrendSignal[]
+  comparisons   SocialTrendMarketComparison[]
+  opportunities SocialTrendOpportunity[]
 
   @@unique([ownerUserId, canonicalKey])
   @@index([ownerUserId, stage, lastSeenAt])
@@ -3270,39 +3270,39 @@ model SocialTrendCluster {
 }
 
 model SocialTrendMarketComparison {
-  id             String                  @id @default(uuid())
-  clusterId      String
-  researchedAt   DateTime                @default(now())
-  status         SocialCzechMarketStatus
-  usEvidence     Json
-  czEvidence     Json
-  explanation    String
-  confidence     Float
-  missingData    String[]                @default([])
-  cluster        SocialTrendCluster      @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  id           String                  @id @default(uuid())
+  clusterId    String
+  researchedAt DateTime                @default(now())
+  status       SocialCzechMarketStatus
+  usEvidence   Json
+  czEvidence   Json
+  explanation  String
+  confidence   Float
+  missingData  String[]                @default([])
+  cluster      SocialTrendCluster      @relation(fields: [clusterId], references: [id], onDelete: Cascade)
 
   @@index([clusterId, researchedAt])
   @@map("social_trend_market_comparisons")
 }
 
 model SocialTrendResearchRun {
-  id             String               @id @default(uuid())
-  ownerUserId    BigInt
-  chatId         BigInt
-  idempotencyKey String               @unique
-  trigger        String
+  id               String                   @id @default(uuid())
+  ownerUserId      BigInt
+  chatId           BigInt
+  idempotencyKey   String                   @unique
+  trigger          String
   requestedSources SocialTrendSourceKind[]
-  status         SocialTrendRunStatus @default(RUNNING)
-  startedAt      DateTime             @default(now())
-  finishedAt     DateTime?
-  signalCount    Int                  @default(0)
-  clusterCount   Int                  @default(0)
-  opportunityCount Int               @default(0)
-  sourceFailures Int                  @default(0)
-  error          String?
-  sourceRuns     SocialTrendSourceRun[]
-  opportunities  SocialTrendOpportunity[]
-  report         SocialTrendReport?
+  status           SocialTrendRunStatus     @default(RUNNING)
+  startedAt        DateTime                 @default(now())
+  finishedAt       DateTime?
+  signalCount      Int                      @default(0)
+  clusterCount     Int                      @default(0)
+  opportunityCount Int                      @default(0)
+  sourceFailures   Int                      @default(0)
+  error            String?
+  sourceRuns       SocialTrendSourceRun[]
+  opportunities    SocialTrendOpportunity[]
+  report           SocialTrendReport?
 
   @@index([ownerUserId, startedAt])
   @@index([status, startedAt])
@@ -3310,16 +3310,16 @@ model SocialTrendResearchRun {
 }
 
 model SocialTrendSourceRun {
-  id          String                        @id @default(uuid())
-  runId       String
-  source      SocialTrendSourceKind
-  status      SocialTrendSourceAvailability
-  itemCount   Int                           @default(0)
-  quotaUsed   Int                           @default(0)
-  durationMs  Int
-  error       String?
-  createdAt   DateTime                      @default(now())
-  run         SocialTrendResearchRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  id         String                        @id @default(uuid())
+  runId      String
+  source     SocialTrendSourceKind
+  status     SocialTrendSourceAvailability
+  itemCount  Int                           @default(0)
+  quotaUsed  Int                           @default(0)
+  durationMs Int
+  error      String?
+  createdAt  DateTime                      @default(now())
+  run        SocialTrendResearchRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   @@unique([runId, source])
   @@index([source, createdAt])
@@ -3327,37 +3327,37 @@ model SocialTrendSourceRun {
 }
 
 model SocialTrendOpportunity {
-  id                    String                   @id @default(uuid())
-  ownerUserId           BigInt
-  runId                 String
-  clusterId             String
-  fingerprint           String                   @unique
-  title                 String
-  description           String
-  czechMarketStatus     SocialCzechMarketStatus
-  opportunityScore      Int
-  confidence            Int
-  usMomentumScore       Int
-  czechOpportunityScore Int
-  audienceRelevanceScore Int
-  businessPotentialScore Int
+  id                      String                  @id @default(uuid())
+  ownerUserId             BigInt
+  runId                   String
+  clusterId               String
+  fingerprint             String                  @unique
+  title                   String
+  description             String
+  czechMarketStatus       SocialCzechMarketStatus
+  opportunityScore        Int
+  confidence              Int
+  usMomentumScore         Int
+  czechOpportunityScore   Int
+  audienceRelevanceScore  Int
+  businessPotentialScore  Int
   contentFeasibilityScore Int
-  evidenceQualityScore  Int
-  missingData           String[]                 @default([])
-  explanation           String
-  evidence              Json
-  contentConcept        Json
-  recommendedChannel    SocialChannel
-  recommendedFormat     SocialContentFormat
-  objective             SocialBusinessObjective
-  estimatedEffortMinutes Int
-  contentIdeaId         String?
-  createdAt             DateTime                 @default(now())
-  updatedAt             DateTime                 @updatedAt
-  run                   SocialTrendResearchRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
-  cluster               SocialTrendCluster       @relation(fields: [clusterId], references: [id], onDelete: Cascade)
-  contentIdea           SocialContentIdea?       @relation(fields: [contentIdeaId], references: [id], onDelete: SetNull)
-  feedback              SocialTrendFeedback[]
+  evidenceQualityScore    Int
+  missingData             String[]                @default([])
+  explanation             String
+  evidence                Json
+  contentConcept          Json
+  recommendedChannel      SocialChannel
+  recommendedFormat       SocialContentFormat
+  objective               SocialBusinessObjective
+  estimatedEffortMinutes  Int
+  contentIdeaId           String?
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  run                     SocialTrendResearchRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  cluster                 SocialTrendCluster      @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  contentIdea             SocialContentIdea?      @relation(fields: [contentIdeaId], references: [id], onDelete: SetNull)
+  feedback                SocialTrendFeedback[]
 
   @@index([ownerUserId, opportunityScore, createdAt])
   @@index([clusterId, createdAt])
@@ -3428,14 +3428,14 @@ model SocialIdeaSource {
 }
 
 model SocialTelegramSession {
-  id          String   @id @default(uuid())
+  id          String             @id @default(uuid())
   ownerUserId BigInt
   chatId      BigInt
   sessionType String
   state       String
   payload     Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
   expiresAt   DateTime
   weeklyPlans SocialWeeklyPlan[]
 
@@ -3465,7 +3465,7 @@ model SocialWeeklyPlan {
 }
 
 model SocialContentItem {
-  id                          String                  @id @default(uuid())
+  id                          String                     @id @default(uuid())
   ownerUserId                 BigInt
   ideaId                      String
   weeklyPlanId                String?
@@ -3485,24 +3485,24 @@ model SocialContentItem {
   draft                       String?
   finalContent                String?
   cta                         String?
-  requiredAssets              String[]                @default([])
+  requiredAssets              String[]                   @default([])
   plannedAt                   DateTime?
   scheduledAt                 DateTime?
   publishedAt                 DateTime?
   publishedUrl                String?
-  status                      SocialContentStatus      @default(IDEA)
-  estimatedPreparationMinutes Int                     @default(30)
-  createdAt                   DateTime                @default(now())
-  updatedAt                   DateTime                @updatedAt
-  idea                        SocialContentIdea       @relation(fields: [ideaId], references: [id], onDelete: Restrict)
-  weeklyPlan                  SocialWeeklyPlan?       @relation(fields: [weeklyPlanId], references: [id], onDelete: SetNull)
+  status                      SocialContentStatus        @default(IDEA)
+  estimatedPreparationMinutes Int                        @default(30)
+  createdAt                   DateTime                   @default(now())
+  updatedAt                   DateTime                   @updatedAt
+  idea                        SocialContentIdea          @relation(fields: [ideaId], references: [id], onDelete: Restrict)
+  weeklyPlan                  SocialWeeklyPlan?          @relation(fields: [weeklyPlanId], references: [id], onDelete: SetNull)
   topics                      SocialContentItemTopic[]
   projects                    SocialContentItemProject[]
   sources                     SocialContentItemSource[]
   versions                    SocialContentVersion[]
   metrics                     SocialContentMetric[]
-  relatedFrom                 SocialContentRelation[] @relation("SocialContentFrom")
-  relatedTo                   SocialContentRelation[] @relation("SocialContentTo")
+  relatedFrom                 SocialContentRelation[]    @relation("SocialContentFrom")
+  relatedTo                   SocialContentRelation[]    @relation("SocialContentTo")
   checklistItems              SocialChecklistItem[]
 
   @@index([ownerUserId, status, plannedAt])
@@ -3547,8 +3547,8 @@ model SocialContentItemSource {
 model SocialContentRelation {
   fromContentItemId String
   toContentItemId   String
-  relationType      String @default("REPURPOSED_FROM")
-  createdAt         DateTime @default(now())
+  relationType      String            @default("REPURPOSED_FROM")
+  createdAt         DateTime          @default(now())
   fromContentItem   SocialContentItem @relation("SocialContentFrom", fields: [fromContentItemId], references: [id], onDelete: Cascade)
   toContentItem     SocialContentItem @relation("SocialContentTo", fields: [toContentItemId], references: [id], onDelete: Cascade)
 
@@ -3646,40 +3646,40 @@ model SocialExternalSync {
 }
 
 model SocialSettings {
-  ownerUserId                  BigInt   @id
-  chatId                       BigInt
-  timezone                     String   @default("Europe/Prague")
-  sundayReminderTime           String   @default("09:00")
-  mondayNetworkingReminder     Boolean  @default(true)
-  preferredCities              String[] @default(["Brno", "Ostrava", "Frýdek-Místek"])
-  travelRadiusKm               Int      @default(80)
-  maximumEventPriceCzk         Int      @default(0)
-  weeklyRecommendationCount    Int      @default(5)
-  preferredEventCategories     String[] @default(["startup", "entrepreneurship", "business", "programming", "ai", "networking"])
-  enabledEventSources          String[] @default(["brno-events"])
-  reminderPreferences          Json
-  cadence                      Json
-  pillarDistribution           Json
-  createdAt                    DateTime @default(now())
-  updatedAt                    DateTime @updatedAt
+  ownerUserId               BigInt   @id
+  chatId                    BigInt
+  timezone                  String   @default("Europe/Prague")
+  sundayReminderTime        String   @default("09:00")
+  mondayNetworkingReminder  Boolean  @default(true)
+  preferredCities           String[] @default(["Brno", "Ostrava", "Frýdek-Místek"])
+  travelRadiusKm            Int      @default(80)
+  maximumEventPriceCzk      Int      @default(0)
+  weeklyRecommendationCount Int      @default(5)
+  preferredEventCategories  String[] @default(["startup", "entrepreneurship", "business", "programming", "ai", "networking"])
+  enabledEventSources       String[] @default(["brno-events"])
+  reminderPreferences       Json
+  cadence                   Json
+  pillarDistribution        Json
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
   @@unique([chatId])
   @@map("social_settings")
 }
 
 model SocialScheduledJob {
-  id          String                @id @default(uuid())
-  ownerUserId BigInt
-  chatId      BigInt
-  kind        String
+  id           String                @id @default(uuid())
+  ownerUserId  BigInt
+  chatId       BigInt
+  kind         String
   scheduledFor DateTime
-  status      SocialSchedulerStatus @default(PENDING)
-  claimedAt   DateTime?
-  completedAt DateTime?
-  lastError   String?
-  payload     Json
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
+  status       SocialSchedulerStatus @default(PENDING)
+  claimedAt    DateTime?
+  completedAt  DateTime?
+  lastError    String?
+  payload      Json
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
 
   @@unique([ownerUserId, kind, scheduledFor])
   @@index([status, scheduledFor])
@@ -3687,39 +3687,39 @@ model SocialScheduledJob {
 }
 
 model SocialNetworkingEvent {
-  id                  String                    @id @default(uuid())
-  ownerUserId         BigInt
-  title               String
-  normalizedTitle     String
-  description         String?
-  organizer           String?
-  venue               String?
-  city                String?
-  address             String?
-  startAt             DateTime
-  endAt               DateTime?
-  timezone            String                    @default("Europe/Prague")
-  format              SocialEventFormat         @default(UNKNOWN)
-  categories          String[]                  @default([])
-  audience            String?
-  priceAmount         Decimal?                  @db.Decimal(12, 2)
-  currency            String?
-  priceStatus         SocialPriceStatus         @default(UNKNOWN)
-  accessType          SocialAccessType          @default(UNKNOWN)
-  registrationUrl     String?
-  canonicalUrl        String?
-  sourceProvider      String
-  sourceExternalId    String?
-  retrievedAt         DateTime                  @default(now())
-  verifiedAt          DateTime?
-  verificationStatus  SocialVerificationStatus  @default(UNVERIFIED)
-  status              SocialEventStatus         @default(SCHEDULED)
-  relevanceScore      Int                       @default(0)
-  relevanceReasons    String[]                  @default([])
-  createdAt           DateTime                  @default(now())
-  updatedAt           DateTime                  @updatedAt
-  sourceReferences    SocialNetworkingEventSource[]
-  attendances         SocialEventAttendance[]
+  id                 String                        @id @default(uuid())
+  ownerUserId        BigInt
+  title              String
+  normalizedTitle    String
+  description        String?
+  organizer          String?
+  venue              String?
+  city               String?
+  address            String?
+  startAt            DateTime
+  endAt              DateTime?
+  timezone           String                        @default("Europe/Prague")
+  format             SocialEventFormat             @default(UNKNOWN)
+  categories         String[]                      @default([])
+  audience           String?
+  priceAmount        Decimal?                      @db.Decimal(12, 2)
+  currency           String?
+  priceStatus        SocialPriceStatus             @default(UNKNOWN)
+  accessType         SocialAccessType              @default(UNKNOWN)
+  registrationUrl    String?
+  canonicalUrl       String?
+  sourceProvider     String
+  sourceExternalId   String?
+  retrievedAt        DateTime                      @default(now())
+  verifiedAt         DateTime?
+  verificationStatus SocialVerificationStatus      @default(UNVERIFIED)
+  status             SocialEventStatus             @default(SCHEDULED)
+  relevanceScore     Int                           @default(0)
+  relevanceReasons   String[]                      @default([])
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  sourceReferences   SocialNetworkingEventSource[]
+  attendances        SocialEventAttendance[]
 
   @@unique([ownerUserId, canonicalUrl])
   @@unique([ownerUserId, sourceProvider, sourceExternalId])
@@ -3744,20 +3744,20 @@ model SocialNetworkingEventSource {
 }
 
 model SocialEventAttendance {
-  id           String                 @id @default(uuid())
+  id           String                     @id @default(uuid())
   ownerUserId  BigInt
   eventId      String
   weeklyPlanId String?
-  status       SocialAttendanceStatus @default(SUGGESTED)
+  status       SocialAttendanceStatus     @default(SUGGESTED)
   registeredAt DateTime?
   attendedAt   DateTime?
   notes        String?
   highlights   String?
   lessons      String?
-  privacy      SocialVisibility       @default(PRIVATE)
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
-  event        SocialNetworkingEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  privacy      SocialVisibility           @default(PRIVATE)
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+  event        SocialNetworkingEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
   contacts     SocialAttendanceContact[]
   followUps    SocialNetworkingFollowUp[]
   contentIdeas SocialEventContentIdea[]
@@ -3769,7 +3769,7 @@ model SocialEventAttendance {
 }
 
 model SocialNetworkingContact {
-  id                     String                    @id @default(uuid())
+  id                     String                     @id @default(uuid())
   ownerUserId            BigInt
   displayName            String
   normalizedName         String
@@ -3779,8 +3779,8 @@ model SocialNetworkingContact {
   preferredContactMethod String?
   notes                  String?
   consentOrContext       String?
-  createdAt              DateTime                  @default(now())
-  updatedAt              DateTime                  @updatedAt
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
   attendances            SocialAttendanceContact[]
   followUps              SocialNetworkingFollowUp[]
 
@@ -3790,13 +3790,13 @@ model SocialNetworkingContact {
 }
 
 model SocialAttendanceContact {
-  attendanceId     String
-  contactId        String
+  attendanceId      String
+  contactId         String
   conversationNotes String?
-  followUpIntent   String?
-  createdAt        DateTime                @default(now())
-  attendance       SocialEventAttendance   @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
-  contact          SocialNetworkingContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  followUpIntent    String?
+  createdAt         DateTime                @default(now())
+  attendance        SocialEventAttendance   @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  contact           SocialNetworkingContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@id([attendanceId, contactId])
   @@index([contactId])
@@ -3804,19 +3804,19 @@ model SocialAttendanceContact {
 }
 
 model SocialNetworkingFollowUp {
-  id           String                    @id @default(uuid())
+  id           String                  @id @default(uuid())
   ownerUserId  BigInt
   contactId    String
   attendanceId String?
   title        String
   dueAt        DateTime
-  status       SocialFollowUpStatus      @default(OPEN)
+  status       SocialFollowUpStatus    @default(OPEN)
   completedAt  DateTime?
   notes        String?
-  createdAt    DateTime                  @default(now())
-  updatedAt    DateTime                  @updatedAt
-  contact      SocialNetworkingContact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  attendance   SocialEventAttendance?    @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  contact      SocialNetworkingContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  attendance   SocialEventAttendance?  @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
 
   @@index([ownerUserId, status, dueAt])
   @@map("social_networking_follow_ups")
@@ -3825,12 +3825,403 @@ model SocialNetworkingFollowUp {
 model SocialEventContentIdea {
   eventAttendanceId String
   contentIdeaId     String
-  provenanceNotes  String
+  provenanceNotes   String
   createdAt         DateTime              @default(now())
-  eventAttendance  SocialEventAttendance @relation(fields: [eventAttendanceId], references: [id], onDelete: Cascade)
+  eventAttendance   SocialEventAttendance @relation(fields: [eventAttendanceId], references: [id], onDelete: Cascade)
   contentIdea       SocialContentIdea     @relation(fields: [contentIdeaId], references: [id], onDelete: Cascade)
 
   @@id([eventAttendanceId, contentIdeaId])
   @@index([contentIdeaId])
   @@map("social_event_content_ideas")
+}
+
+enum JobEligibilityState {
+  ELIGIBLE
+  INELIGIBLE
+  UNCERTAIN
+}
+
+enum JobRecommendationLevel {
+  EXCELLENT
+  STRONG
+  POSSIBLE
+  LOW
+}
+
+enum JobAvailabilityStatus {
+  OPEN_CONFIRMED
+  LISTED_UNVERIFIED
+  CLOSED_CONFIRMED
+  UNKNOWN
+}
+
+enum JobApplicationStatus {
+  NEW
+  SAVED
+  DISMISSED
+  INTERESTED
+  APPLIED
+  RECRUITER_CONTACTED
+  INTERVIEW_SCHEDULED
+  TECHNICAL_INTERVIEW
+  OFFER
+  REJECTED
+  WITHDRAWN
+}
+
+enum JobNotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model JobCandidateProfile {
+  id                    String              @id @default(uuid())
+  name                  String
+  professionalTitle     String
+  yearsExperience       Int
+  educationLevel        String
+  languages             Json
+  preferredRoles        String[]            @default([])
+  avoidedRoles          String[]            @default([])
+  preferredLocations    Json
+  profileData           Json
+  scoringWeights        Json
+  excellentThreshold    Int                 @default(85)
+  strongThreshold       Int                 @default(70)
+  possibleThreshold     Int                 @default(55)
+  notificationThreshold Int                 @default(70)
+  version               Int                 @default(1)
+  active                Boolean             @default(true)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  skills                JobCandidateSkill[]
+  evaluations           JobEvaluation[]
+
+  @@index([active, updatedAt])
+  @@map("job_candidate_profiles")
+}
+
+model JobCandidateSkill {
+  id          String              @id @default(uuid())
+  profileId   String
+  name        String
+  normalized  String
+  proficiency String
+  years       Int?
+  verified    Boolean             @default(true)
+  profile     JobCandidateProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, normalized])
+  @@index([normalized])
+  @@map("job_candidate_skills")
+}
+
+model JobSource {
+  id                   String                @id
+  name                 String
+  baseUrl              String
+  collectionStrategy   String
+  enabled              Boolean               @default(false)
+  fetchIntervalMinutes Int                   @default(240)
+  rateLimitPerMinute   Int                   @default(30)
+  healthStatus         SourceHealthStatus    @default(UNAVAILABLE)
+  termsNote            String?
+  disabledReason       String?
+  lastCheckedAt        DateTime?
+  lastSuccessfulAt     DateTime?
+  lastError            String?
+  discoveredCount      Int                   @default(0)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  checkpoints          JobSourceCheckpoint[]
+  rawJobs              JobRawJob[]
+  references           JobSourceReference[]
+  errors               JobSourceError[]
+
+  @@index([enabled, healthStatus])
+  @@map("job_sources")
+}
+
+model JobSourceCheckpoint {
+  id            String    @id @default(uuid())
+  sourceId      String
+  checkpointKey String
+  value         Json
+  etag          String?
+  lastModified  String?
+  checkedAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  source        JobSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, checkpointKey])
+  @@map("job_source_checkpoints")
+}
+
+model JobScrapeRun {
+  id              String           @id @default(uuid())
+  trigger         RunTrigger
+  status          RunStatus        @default(RUNNING)
+  baseline        Boolean          @default(false)
+  dryRun          Boolean          @default(false)
+  startedAt       DateTime         @default(now())
+  completedAt     DateTime?
+  discoveredCount Int              @default(0)
+  newCount        Int              @default(0)
+  evaluatedCount  Int              @default(0)
+  notifiedCount   Int              @default(0)
+  sourceFailures  Int              @default(0)
+  error           String?
+  sourceErrors    JobSourceError[]
+
+  @@index([startedAt])
+  @@map("job_scrape_runs")
+}
+
+model JobRawJob {
+  id                  String    @id @default(uuid())
+  sourceId            String
+  externalId          String
+  jobId               String?
+  listingUrl          String
+  listingHash         String
+  detailHash          String?
+  contentHash         String
+  rawListing          Json
+  rawDetail           Json?
+  etag                String?
+  lastModified        String?
+  firstSeenAt         DateTime  @default(now())
+  lastSeenAt          DateTime  @default(now())
+  lastDetailFetchedAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  source              JobSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  job                 Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceId, externalId])
+  @@index([jobId])
+  @@index([sourceId, lastSeenAt])
+  @@map("job_raw_jobs")
+}
+
+model Job {
+  id                      String                @id @default(uuid())
+  canonicalFingerprint    String                @unique
+  title                   String
+  normalizedTitle         String
+  company                 String
+  normalizedCompany       String
+  description             String
+  shortDescription        String?
+  location                String?
+  country                 String?
+  city                    String?
+  workMode                String
+  remoteRegions           String[]              @default([])
+  salaryMin               Int?
+  salaryMax               Int?
+  salaryCurrency          String?
+  salaryPeriod            String?
+  contractType            String?
+  seniority               String?
+  technologyStack         String[]              @default([])
+  originalUrl             String
+  canonicalApplicationUrl String?
+  publishedAt             DateTime?
+  firstSeenAt             DateTime              @default(now())
+  lastSeenAt              DateTime              @default(now())
+  lastDetailFetchedAt     DateTime?
+  contentHash             String
+  availabilityStatus      JobAvailabilityStatus @default(LISTED_UNVERIFIED)
+  lastAvailabilityCheckAt DateTime?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  rawJobs                 JobRawJob[]
+  sourceReferences        JobSourceReference[]
+  requirements            JobRequirement[]
+  evaluations             JobEvaluation[]
+  notifications           JobNotification[]
+  application             JobApplication?
+
+  @@index([publishedAt])
+  @@index([availabilityStatus, lastSeenAt])
+  @@index([normalizedCompany, normalizedTitle])
+  @@map("jobs")
+}
+
+model JobSourceReference {
+  id                      String    @id @default(uuid())
+  jobId                   String
+  sourceId                String
+  externalId              String
+  sourceUrl               String
+  canonicalApplicationUrl String?
+  firstSeenAt             DateTime  @default(now())
+  lastSeenAt              DateTime  @default(now())
+  job                     Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  source                  JobSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, externalId])
+  @@unique([jobId, sourceUrl])
+  @@index([jobId])
+  @@map("job_source_references")
+}
+
+model JobRequirement {
+  id         String  @id @default(uuid())
+  jobId      String
+  category   String
+  importance String
+  text       String
+  normalized String?
+  evidence   String?
+  job        Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, category, importance])
+  @@map("job_requirements")
+}
+
+model JobEvaluation {
+  id               String                 @id @default(uuid())
+  jobId            String
+  profileId        String
+  profileVersion   Int
+  jobContentHash   String
+  score            Int
+  eligibility      JobEligibilityState
+  recommendation   JobRecommendationLevel
+  matchingSkills   String[]               @default([])
+  missingSkills    String[]               @default([])
+  hardBlockers     String[]               @default([])
+  uncertainties    String[]               @default([])
+  reasoning        String
+  scoreBreakdown   Json
+  aiProvider       String?
+  aiModel          String?
+  promptVersion    String?
+  tokenUsage       Json?
+  estimatedCostUsd Decimal?               @db.Decimal(12, 6)
+  evaluatedAt      DateTime               @default(now())
+  job              Job                    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  profile          JobCandidateProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  versions         JobEvaluationVersion[]
+  notifications    JobNotification[]
+
+  @@unique([jobId, profileId])
+  @@index([profileId, score, eligibility])
+  @@map("job_evaluations")
+}
+
+model JobEvaluationVersion {
+  id             String        @id @default(uuid())
+  evaluationId   String
+  profileVersion Int
+  jobContentHash String
+  result         Json
+  evaluatedAt    DateTime      @default(now())
+  evaluation     JobEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@unique([evaluationId, profileVersion, jobContentHash])
+  @@map("job_evaluation_versions")
+}
+
+model JobNotification {
+  id              String                    @id @default(uuid())
+  jobId           String
+  evaluationId    String
+  notificationKey String                    @unique
+  status          JobNotificationStatus     @default(PENDING)
+  createdAt       DateTime                  @default(now())
+  sentAt          DateTime?
+  lastError       String?
+  job             Job                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  evaluation      JobEvaluation             @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  deliveries      JobNotificationDelivery[]
+
+  @@index([status, createdAt])
+  @@map("job_notifications")
+}
+
+model JobNotificationDelivery {
+  id             String                @id @default(uuid())
+  notificationId String
+  provider       String
+  recipient      String
+  status         JobNotificationStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  deliveredAt    DateTime?
+  lastError      String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  notification   JobNotification       @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, provider, recipient])
+  @@index([status, updatedAt])
+  @@map("job_notification_deliveries")
+}
+
+model JobApplication {
+  id              String               @id @default(uuid())
+  jobId           String               @unique
+  status          JobApplicationStatus @default(NEW)
+  unread          Boolean              @default(true)
+  saved           Boolean              @default(false)
+  followUpAt      DateTime?
+  appliedAt       DateTime?
+  statusChangedAt DateTime             @default(now())
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  job             Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  notes           JobApplicationNote[]
+
+  @@index([status, updatedAt])
+  @@index([unread, saved])
+  @@map("job_applications")
+}
+
+model JobApplicationNote {
+  id            String         @id @default(uuid())
+  applicationId String
+  note          String
+  createdAt     DateTime       @default(now())
+  application   JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, createdAt])
+  @@map("job_application_notes")
+}
+
+model JobSourceError {
+  id         String        @id @default(uuid())
+  sourceId   String
+  runId      String?
+  errorCode  String?
+  message    String
+  retryable  Boolean       @default(false)
+  occurredAt DateTime      @default(now())
+  source     JobSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  run        JobScrapeRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([sourceId, occurredAt])
+  @@index([runId])
+  @@map("job_source_errors")
+}
+
+model JobSchedule {
+  id          String     @id @default(uuid())
+  scheduleKey String     @unique
+  cron        String
+  timezone    String     @default("Europe/Prague")
+  enabled     Boolean    @default(true)
+  nextRunAt   DateTime
+  claimedAt   DateTime?
+  leaseUntil  DateTime?
+  lastRunAt   DateTime?
+  lastStatus  RunStatus?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([enabled, nextRunAt])
+  @@map("job_schedules")
 }

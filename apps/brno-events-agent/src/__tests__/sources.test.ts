@@ -2,12 +2,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CeitecEventSource, parseCeitecResponse } from '../sources/ceitec.js';
 import { JsonLdEventSource, parseJsonLdEvents } from '../sources/json-ld.js';
 import { PaginatedHtmlEventSource } from '../sources/html-source.js';
+import {
+  nextcloudPublicCalendarFeed,
+  parseIcalEvents,
+} from '../sources/ical.js';
 import { parseMeetupHtml } from '../sources/meetup.js';
 import { createSources, type SourceSettings } from '../sources/registry.js';
 import {
+  parseCsobValidationCampHtml,
   parseGoOutHtml,
   parseJicHtml,
   parseMuniHtml,
+  parseObjevBrnoHtml,
   parseSideQuestyHtml,
   parseVisitBrnoHtml,
   parseVelvetInnovationHtml,
@@ -36,6 +42,10 @@ const settings = Object.fromEntries(
     'ceitec',
     'velvet-innovation',
     'sidequesty',
+    'objev-brno',
+    'impact-hub-brno',
+    'base48-calendar',
+    'csob-validation-camps',
   ].map((id) => [id, { interval: 60, enabled: true }]),
 ) as SourceSettings;
 
@@ -51,6 +61,10 @@ describe('Brno event sources', () => {
       'ceitec',
       'velvet-innovation',
       'sidequesty',
+      'objev-brno',
+      'impact-hub-brno',
+      'base48-calendar',
+      'csob-validation-camps',
     ]);
   });
 
@@ -189,6 +203,88 @@ describe('Brno event sources', () => {
     });
     expect(events[0]?.startAt.getHours()).toBe(18);
     expect(events[0]?.startAt.getMinutes()).toBe(30);
+  });
+
+  it('parses event cards embedded in the Objev Brno Next.js flight data', () => {
+    const card = {
+      type: 'event',
+      card: {
+        id: 'event-1',
+        dates: [
+          {
+            startDate: '2026-09-19T16:00:00.000Z',
+            endDate: '2026-09-19T18:00:00.000Z',
+            venue: { localesByLocale: { name: 'KUMST' } },
+          },
+        ],
+        image: null,
+        localesByLocale: {
+          name: 'Otevřený startup meetup',
+          url: { url: '/cs/event/startup-meetup' },
+          extendedTileContent: {
+            data: {
+              children: [{ children: [{ text: 'Seznamovací večer.' }] }],
+            },
+          },
+        },
+      },
+    };
+    const flight = `3e:${JSON.stringify({ all: [card] })}\n`;
+    const html = `<script>self.__next_f.push(${JSON.stringify([1, flight])})</script>`;
+    const events = parse(parseObjevBrnoHtml, html, ['culture']);
+
+    expect(events[0]).toMatchObject({
+      externalId: 'event-1:2026-09-19T16:00:00.000Z',
+      title: 'Otevřený startup meetup',
+      description: 'Seznamovací večer.',
+      venue: { name: 'KUMST' },
+      price: { free: true, text: 'zdarma' },
+    });
+  });
+
+  it('parses public iCalendar events and expands weekly recurrences', () => {
+    const ical = `BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:brno-event\nDTSTART;TZID=Europe/Prague:20260911T180000\nDTEND;TZID=Europe/Prague:20260911T210000\nRRULE:FREQ=WEEKLY;BYDAY=FR\nSUMMARY:Friday community meetup\nLOCATION:Base48 Brno\nDESCRIPTION:Vstup je volný a drobné občerstvení je zajištěno.\nEND:VEVENT\nEND:VCALENDAR`;
+    const events = parseIcalEvents(ical, pageUrl, now, {
+      categories: ['networking'],
+    });
+
+    expect(events[0]).toMatchObject({
+      title: 'Friday community meetup',
+      recurring: true,
+      venue: { name: 'Base48 Brno' },
+      price: { free: true, text: 'vstup zdarma' },
+    });
+    expect(events[0]?.startAt.toISOString()).toBe('2026-09-11T16:00:00.000Z');
+    expect(events.length).toBeGreaterThan(40);
+  });
+
+  it('derives the stable CalDAV export from a public Nextcloud embed URL', () => {
+    expect(
+      nextcloudPublicCalendarFeed(
+        'https://nextcloud.example.test/apps/calendar/embed/public-token/dayGridMonth/now',
+      ),
+    ).toBe(
+      'https://nextcloud.example.test/remote.php/dav/public-calendars/public-token?export',
+    );
+  });
+
+  it('imports only Brno dates from the official ČSOB Validation Camp row', () => {
+    const events = parse(
+      parseCsobValidationCampHtml,
+      `<table><tbody><tr><td><a href="https://startituni.csob.cz/prihlas-se/">ČSOB Start it @UNI</a></td><td>Start it @UNI Validation Camp:<ul><li>v Praze ve dnech 27. - 29. 3.</li><li>v Brně ve dnech 16. - 18. 10.</li></ul></td></tr></tbody></table>`,
+      ['startup'],
+    );
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      externalId: 'validation-camp-brno-2026-10-16',
+      title: 'ČSOB Start it @UNI Validation Camp — Brno',
+      registrationRequired: true,
+      venue: { name: 'Brno' },
+      eventUrl: 'https://startituni.csob.cz/prihlas-se',
+    });
+    expect(events[0]?.startAt.getDate()).toBe(16);
+    expect(events[0]?.endAt?.getDate()).toBe(18);
   });
 
   it('validates and normalizes the CEITEC public API', () => {

@@ -22,6 +22,7 @@ export const defaultAgentHealthTargets: readonly AgentHealthTarget[] = [
   },
   { agentName: 'briefing-bot', url: 'http://briefing-bot:8080/healthz' },
   { agentName: 'networking-bot', url: 'http://networking-bot:4070/healthz' },
+  { agentName: 'jobs-bot', url: 'http://jobs-bot:4090/healthz' },
 ];
 
 type ProbeResult =

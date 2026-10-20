@@ -24,7 +24,7 @@ export const fetchSource = async (
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         headers: {
           accept:
-            'text/html,application/xhtml+xml,application/json,application/rss+xml',
+            'text/html,text/calendar,application/xhtml+xml,application/json,application/rss+xml',
           'user-agent': sourceUserAgent,
         },
       });
@@ -86,6 +86,8 @@ export const eventCandidate = (input: {
         text?: string | undefined;
       }
     | undefined;
+  recurring?: boolean | undefined;
+  cancelled?: boolean | undefined;
   categories: EventCategory[];
   raw?: unknown;
 }): RawEvent | undefined => {

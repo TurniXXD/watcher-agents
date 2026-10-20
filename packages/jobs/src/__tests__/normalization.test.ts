@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest';
+import {
+  canonicalizeUrl,
+  cleanHtml,
+  createJobSourceDefinitions,
+  jobContentHash,
+  jobFingerprint,
+} from '../index.js';
+
+describe('job normalization and identity', () => {
+  it('canonicalizes URLs without tracking parameters or fragments', () => {
+    expect(
+      canonicalizeUrl(
+        'HTTPS://Example.COM/jobs/42/?utm_source=x&ref=feed&role=dev#apply',
+      ),
+    ).toBe('https://example.com/jobs/42?role=dev');
+  });
+
+  it('sanitizes executable markup from descriptions', () => {
+    expect(cleanHtml('<script>alert(1)</script><p>Build &amp; ship</p>')).toBe(
+      'Build & ship',
+    );
+  });
+
+  it('deduplicates the same company, title and location across sources', () => {
+    const first = jobFingerprint({
+      company: 'Example s.r.o.',
+      title: 'Senior React Engineer',
+      location: 'Brno',
+    });
+    const second = jobFingerprint({
+      company: 'EXAMPLE S.R.O.',
+      title: 'Senior React Engineer ',
+      location: 'Brno',
+    });
+    expect(first).toBe(second);
+  });
+
+  it('detects changed descriptions', () => {
+    const common = { title: 'Developer', company: 'Example' };
+    expect(jobContentHash({ ...common, description: 'React' })).not.toBe(
+      jobContentHash({ ...common, description: 'React and Node.js' }),
+    );
+  });
+
+  it('keeps stable source IDs and explicit unsupported sources', () => {
+    const definitions = createJobSourceDefinitions();
+    expect(definitions.filter((source) => source.adapter)).toHaveLength(6);
+    expect(
+      definitions.find((source) => source.id === 'remote-backend-jobs'),
+    ).toMatchObject({ enabledByDefault: true, strategy: 'API' });
+    expect(
+      definitions.find((source) => source.id === 'remote-first-jobs'),
+    ).toMatchObject({ enabledByDefault: true, strategy: 'RSS' });
+    expect(
+      definitions.find((source) => source.id === 'linkedin'),
+    ).toMatchObject({
+      enabledByDefault: false,
+      strategy: 'DISABLED',
+    });
+    expect(new Set(definitions.map((source) => source.id)).size).toBe(
+      definitions.length,
+    );
+  });
+});

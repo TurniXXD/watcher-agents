@@ -1,0 +1,79 @@
+---
+title: Jobs Bot
+description: Personal job discovery, explainable matching, alerts, and application tracking.
+---
+
+`jobs-bot` owns collection, scheduling, matching, notifications, source controls,
+candidate-profile settings, and application tracking through its authorized
+Telegram surface. It runs at 08:00, 12:00, and 19:00 in `Europe/Prague` with
+persisted, daylight-saving-aware schedules.
+
+## Commands
+
+- `/start`, `/help`, and `/about` provide the repeat-safe entry point, command
+  syntax, and operational/privacy boundaries.
+- `/jobs_run [all|SOURCE_ID] [dry]` runs the shared collection pipeline.
+- `/jobs_status`, `/jobs_sources`, and `/jobs_latest` inspect operations and
+  scored jobs.
+- `/jobs_show JOB_ID` and `/jobs_search QUERY` provide detail and search.
+- `/jobs_applications [STATUS]` and `/jobs_followup JOB_ID YYYY-MM-DD|clear`
+  expose the application pipeline and reminders.
+- `/jobs_source SOURCE_ID on|off` controls implemented adapters.
+- `/jobs_mark JOB_ID STATUS` and `/jobs_note JOB_ID NOTE` maintain the private
+  application workflow.
+- `/jobs_profile [COMPLETE_JSON]` reads or replaces the validated profile.
+- `/jobs_reevaluate` re-scores stale stored jobs immediately.
+
+## Collection contract
+
+Listing discovery uses conditional HTTP requests, timeouts, bounded retries,
+`Retry-After`, stable source IDs, and per-source failure isolation. A detail
+endpoint is called only for a new listing, a changed listing hash, or after the
+72-hour refresh interval. Raw observations and canonical jobs are separate;
+company, normalized title, and location form the conservative cross-source
+fingerprint while every source URL is preserved.
+
+When a source supplies a cross-host official application URL, detail refreshes
+perform a bounded public-URL check. Only explicit application controls confirm
+an open job; closure text or HTTP 404/410 confirms closure, and inconclusive or
+failed checks stay unverified/unknown. Redirect targets are revalidated against
+the SSRF policy.
+
+Enabled sources are the separate Remote Frontend and Remote Backend public API
+boards, Himalayas RSS, Startup Jobs engineering RSS, RemoteFirstJobs RSS, and
+Remote OK's public API. DeveloperJobs.ch, CoolJobs.eu, StartupJobs.cz, Práce za
+rohem, and LinkedIn remain explicit disabled registry records because no
+verified permitted public job-seeker feed is configured. The worker never
+automates logged-in pages or bypasses access controls.
+
+## Eligibility and alerts
+
+Mandatory university degrees, unsupported mandatory German/French,
+graduate-only eligibility, incompatible geographic restrictions, and unrelated
+roles are hard blockers. Ambiguous location, authorization, or fluent-English
+requirements are marked `UNCERTAIN`. The deterministic 100-point score reports
+matched skills, gaps, blockers, uncertainties, and its weighted breakdown.
+
+The first import is baseline-only. Later runs reserve one immutable initial
+digest key per canonical job, so neither a second source nor a changed listing
+can silently re-alert it. Telegram is primary; an optional HTTP e-mail gateway
+receives the same digest payload.
+
+The default profile contains the supplied CV facts and records end-client work
+separately from its `via` agency. Optional OpenAI-compatible evaluation works
+with local Ollama, validates structured output with Zod, contributes only a
+bounded portion of the score, and can never remove deterministic hard blockers.
+Failures fall back to deterministic scoring. Evaluation metadata and token usage
+are cached by profile version and content hash.
+
+## Telegram controls and deployment
+
+The private Telegram commands expose manual and dry runs, latest scored jobs,
+source enable/disable controls, application states, private notes, and validated
+candidate-profile JSON editing. The bot never applies or contacts employers;
+those actions remain manual. Production runs only the `jobs-bot` service and
+keeps its readiness endpoint private on port `4090`.
+
+See the main-folder guides for complete variables and commands:
+
+- [`apps/jobs-bot/README.md`](https://github.com/TurniXXD/watcher-agents/tree/main/apps/jobs-bot)

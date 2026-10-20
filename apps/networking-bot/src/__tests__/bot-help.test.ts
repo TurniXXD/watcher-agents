@@ -76,9 +76,21 @@ describe('networking bot help', () => {
       'Unauthorized.',
     ]);
     expect(networkingHelp).toContain('/network_events');
+    expect(networkingHelp).toContain('/networking_today');
+    expect(networkingHelp).toContain('/networking_free_food');
+    expect(networkingHelp).toContain('/networking_calendar_connect');
     expect(networkingHelp).toContain('/network_add');
     expect(networkingBotCommands).toContainEqual(
       expect.objectContaining({ command: 'about' }),
+    );
+    expect(networkingBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'networking_today' }),
+    );
+    expect(networkingBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'networking_free_food' }),
+    );
+    expect(networkingBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'networking_calendar_connect' }),
     );
     expect(networkingAbout).toContain('automaticky nekontaktuje');
   });

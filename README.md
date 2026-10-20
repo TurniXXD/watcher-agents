@@ -17,6 +17,7 @@ Each application owns its setup, commands, configuration, source behavior, and l
 | Sales Bot         | Lead research, call lists, controlled outreach, and CRM integrations | [README](apps/sales-bot/README.md)         |
 | Socials Bot       | Relational content planning, personal brand, and trend intelligence  | [README](apps/socials-bot/README.md)       |
 | Networking Bot    | Contacts, business cards, networking events, and follow-up reminders | [README](apps/networking-bot/README.md)    |
+| Jobs Bot          | Incremental job discovery, matching, and private alerts              | [README](apps/jobs-bot/README.md)          |
 | Study Bot         | PDF lectures, quizzes, summaries, and flashcards                     | [README](apps/study-bot/README.md)         |
 | Transport Bot     | Van-load compatibility and profitability decisions                   | [README](apps/transport-bot/README.md)     |
 | Maintenance Agent | Health, quality, capacity, and release monitoring                    | [README](apps/maintenance-agent/README.md) |
@@ -66,16 +67,18 @@ Run `pnpm db:validate` after Prisma changes and `docker compose config --quiet` 
 
 - `packages/core`: watcher pipeline, contracts, scheduling, networking, and shared types
 - `packages/contact-network`: shared Google Sheets contact and business-card workflow used by Sales and Networking Bot
+- `packages/google-calendar`: shared encrypted Google Calendar OAuth and event API client used by Briefing and Networking Bot
 - `packages/database`: Prisma schema, migrations, repositories, and persisted configuration
 - `packages/llm`: Ollama requests, parsing, validation, and inference coordination
 - `packages/sources`: reusable source adapters, safe HTTP behavior, and caching
 - `packages/telegram`: authorization, keyboards, rendering, and message splitting
 - `packages/observability`: run, source, feedback, and resource telemetry
 - `packages/notion`: shared retrying Notion API client
+- `packages/jobs`: job source contracts, normalization, HTTP policy, and deterministic matching
 
 Independent sources use failure isolation and normalized `WatchItem` records. PostgreSQL constraints provide durable idempotency. Telegram commands and callbacks are private administration surfaces protected by `TELEGRAM_ALLOWED_USER_IDS`.
 
-Production publishes one immutable image per commit and runs each application as its own Compose service. The documentation service is reachable by the existing Cloudflare Tunnel at `http://docs:3000` on the external `lateralis` network and does not publish a host port. PostgreSQL remains private, runtime secrets live only in mode-`0600` files under `deploy/runtime`, and Ollama remains external.
+Production publishes one immutable image per commit and runs each application as its own Compose service. The documentation service is reachable by Cloudflare Tunnel at `http://docs:3000` on the external `lateralis` network and does not publish a production host port. PostgreSQL remains private, runtime secrets live only in mode-`0600` files under `deploy/runtime`, and Ollama remains external.
 
 - [Production deployment](deploy/README.md)
 - [Environment inventory](deploy/ENVIRONMENT.md)

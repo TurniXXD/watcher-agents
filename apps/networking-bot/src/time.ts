@@ -6,7 +6,10 @@ type LocalDateTime = {
   minute: number;
 };
 
-const partsInTimezone = (date: Date, timezone: string): LocalDateTime => {
+export const partsInTimezone = (
+  date: Date,
+  timezone: string,
+): LocalDateTime => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone,
     year: 'numeric',
@@ -24,6 +27,20 @@ const partsInTimezone = (date: Date, timezone: string): LocalDateTime => {
     day: value('day'),
     hour: value('hour'),
     minute: value('minute'),
+  };
+};
+
+const localDate = (
+  parts: Pick<LocalDateTime, 'year' | 'month' | 'day'>,
+  days: number,
+): Pick<LocalDateTime, 'year' | 'month' | 'day'> => {
+  const date = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day + days),
+  );
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
   };
 };
 
@@ -51,6 +68,42 @@ export const dateInTimezone = (
     candidate = new Date(candidate.getTime() + desired - represented);
   }
   return candidate;
+};
+
+export const localDayWindow = (
+  now: Date,
+  timezone: string,
+): { from: Date; to: Date } => {
+  const today = partsInTimezone(now, timezone);
+  const tomorrow = localDate(today, 1);
+  return {
+    from: now,
+    to: new Date(
+      dateInTimezone({ ...tomorrow, hour: 0, minute: 0 }, timezone).getTime() -
+        1,
+    ),
+  };
+};
+
+export const localWeekWindow = (
+  now: Date,
+  timezone: string,
+): { from: Date; to: Date } => {
+  const today = partsInTimezone(now, timezone);
+  const localMidnightUtc = new Date(
+    Date.UTC(today.year, today.month - 1, today.day),
+  );
+  const daysUntilNextMonday = 8 - (localMidnightUtc.getUTCDay() || 7);
+  const nextMonday = localDate(today, daysUntilNextMonday);
+  return {
+    from: now,
+    to: new Date(
+      dateInTimezone(
+        { ...nextMonday, hour: 0, minute: 0 },
+        timezone,
+      ).getTime() - 1,
+    ),
+  };
 };
 
 export const formatLocalDateTime = (

@@ -9,6 +9,7 @@ export * from './briefing-schedule-spec.js';
 export * from './briefing-story-store.js';
 export * from './briefing-watcher-health-store.js';
 export * from './journal-session-store.js';
+export * from './job-store.js';
 export * from './agent-schedule-store.js';
 export * from './agent-telemetry-store.js';
 export * from './legacy-telemetry-importer.js';
@@ -43,6 +44,10 @@ export * from './universe-store.js';
 export * from './validation-store.js';
 export * from './stock-domain/index.js';
 export {
+  JobApplicationStatus,
+  JobEligibilityState,
+  JobNotificationStatus,
+  JobRecommendationLevel,
   MuClubActivityType,
   MuClubSourceStatus,
   MuClubSourceType,

@@ -24,6 +24,10 @@ const schema = z.object({
   CEITEC_INTERVAL_MINUTES: interval.default(720),
   VELVET_INNOVATION_INTERVAL_MINUTES: interval.default(360),
   SIDEQUESTY_INTERVAL_MINUTES: interval.default(180),
+  OBJEV_BRNO_INTERVAL_MINUTES: interval.default(360),
+  IMPACT_HUB_BRNO_INTERVAL_MINUTES: interval.default(180),
+  BASE48_CALENDAR_INTERVAL_MINUTES: interval.default(240),
+  CSOB_VALIDATION_CAMPS_INTERVAL_MINUTES: interval.default(720),
   MEETUP_ENABLED: boolean,
   GOOUT_ENABLED: boolean,
   VISITBRNO_ENABLED: boolean,
@@ -33,6 +37,10 @@ const schema = z.object({
   CEITEC_ENABLED: boolean,
   VELVET_INNOVATION_ENABLED: boolean,
   SIDEQUESTY_ENABLED: boolean,
+  OBJEV_BRNO_ENABLED: boolean,
+  IMPACT_HUB_BRNO_ENABLED: boolean,
+  BASE48_CALENDAR_ENABLED: boolean,
+  CSOB_VALIDATION_CAMPS_ENABLED: boolean,
   MEETUP_URL: z.url().optional(),
   GOOUT_URL: z.url().optional(),
   VISITBRNO_URL: z.url().optional(),
@@ -42,6 +50,10 @@ const schema = z.object({
   CEITEC_URL: z.url().optional(),
   VELVET_INNOVATION_URL: z.url().optional(),
   SIDEQUESTY_URL: z.url().optional(),
+  OBJEV_BRNO_URL: z.url().optional(),
+  IMPACT_HUB_BRNO_URL: z.url().optional(),
+  BASE48_CALENDAR_URL: z.url().optional(),
+  CSOB_VALIDATION_CAMPS_URL: z.url().optional(),
 });
 export const env = schema.parse(process.env);
 export const sourceSettings = Object.fromEntries(
@@ -55,6 +67,10 @@ export const sourceSettings = Object.fromEntries(
     'CEITEC',
     'VELVET_INNOVATION',
     'SIDEQUESTY',
+    'OBJEV_BRNO',
+    'IMPACT_HUB_BRNO',
+    'BASE48_CALENDAR',
+    'CSOB_VALIDATION_CAMPS',
   ].map((name) => [
     name.toLowerCase().replaceAll('_', '-'),
     {

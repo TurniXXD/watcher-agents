@@ -26,11 +26,24 @@ and shown as a preview. No row is written before the operator selects Save.
 ## Events and reminders
 
 `/networking`, `/network_events`, and `/network_events_free` import normalized
-records from Brno Events Agent. `/network_sources` shows the operational
-registry, including Velvet Innovation Meetups and SideQuesty. Attendance is
-explicit; opening a URL never implies registration or attendance. Monday,
+records from Brno Events Agent and exclude purely online events.
+`/networking_today` is bounded to the remainder of the current Prague day;
+`/networking_free_food` covers the remainder of the current calendar week and
+requires source-grounded complimentary food or refreshments. `/network_sources`
+shows the operational registry, including Objev Brno, Impact Hub Brno, Velvet
+Innovation Meetups, SideQuesty, the Base48 public calendar, and official ČSOB
+Start it @UNI Validation Camp listings. Attendance is explicit; opening a URL
+never implies registration or attendance. Monday,
 pre-event, post-event, and approved follow-up reminders are durable database
 jobs claimed only by Networking Bot.
+
+Every event result includes a `🥭 Přidat do kalendáře` callback. After the
+operator explicitly connects Google Calendar through
+`/networking_calendar_connect`, the callback writes an idempotent event to the
+primary calendar with Calendar color ID `6` (mango/tangerine). A source-backed
+registration URL is shown separately and copied into the Calendar description
+only when registration is marked as required. The bot never submits a
+registration.
 
 Manual event input remains available through `/network_event_add`. Missing
 prices stay unknown. Event contacts and their follow-ups are private and the bot
@@ -44,6 +57,17 @@ service-account e-mail, and private key. Ollama text assistance requires both
 `OLLAMA_URL` and `OLLAMA_MODEL`; business-card photos additionally require an
 installed image-capable `NETWORK_OLLAMA_VISION_MODEL`. The internal readiness
 port defaults to `4070`.
+
+Calendar writes require the complete
+`NETWORKING_GOOGLE_CALENDAR_CLIENT_ID`,
+`NETWORKING_GOOGLE_CALENDAR_CLIENT_SECRET`,
+`NETWORKING_GOOGLE_CALENDAR_REDIRECT_URI`, and
+`CALENDAR_TOKEN_ENCRYPTION_KEY` group. The callback listener defaults to port
+`8790` and must be exposed only through the trusted HTTPS callback route.
+Use the same Google OAuth client ID/secret and encryption key as Briefing when
+both services share the per-chat credential, while registering a distinct
+Networking callback URI. Reconnect an older read-only grant once so Google can
+approve the write scope.
 
 Use [`deploy/presets/networking-bot.env.example`](../../../../../deploy/presets/networking-bot.env.example)
 as the safe inventory. Production secrets belong only in the VPS secret source

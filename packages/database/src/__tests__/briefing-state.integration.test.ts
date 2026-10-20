@@ -334,7 +334,7 @@ integration('briefing persistent state', () => {
       calendar.completeAuthorization(
         'valid-state-hash',
         'encrypted-refresh-token',
-        new Date('2026-09-06T06:00:00.000Z'),
+        { now: new Date('2026-09-06T06:00:00.000Z') },
       ),
     ).resolves.toBe(109n);
     expect(await calendar.get(109n)).toMatchObject({
@@ -361,7 +361,7 @@ integration('briefing persistent state', () => {
       calendar.completeAuthorization(
         'expired-state-hash',
         'encrypted-refresh-token',
-        new Date('2026-09-06T06:00:00.000Z'),
+        { now: new Date('2026-09-06T06:00:00.000Z') },
       ),
     ).rejects.toThrow(/invalid or expired/);
   });
