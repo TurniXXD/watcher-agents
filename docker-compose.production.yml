@@ -773,6 +773,11 @@ services:
       - ./deploy/runtime/twenty.env
     ports:
       - '${TWENTY_BIND_ADDRESS:-127.0.0.1}:${TWENTY_HOST_PORT:-3002}:3000'
+    networks:
+      default:
+      lateralis:
+        aliases:
+          - watcher-twenty
     volumes:
       - twenty-local-data:/app/packages/twenty-server/.local-storage
     depends_on:

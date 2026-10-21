@@ -22,6 +22,15 @@ url_safe_password() {
   fi
 }
 
+https_origin() {
+  local name="$1"
+  local value="${!name:-}"
+  if [[ ! "$value" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]]; then
+    echo "$name must be an HTTPS origin without a path, query, fragment, or trailing slash" >&2
+    exit 1
+  fi
+}
+
 write_env() {
   local path="$1"
   shift
@@ -66,6 +75,7 @@ for name in \
   QUICKLY_SECRET_KEY \
   TWENTY_POSTGRES_PASSWORD \
   TWENTY_ENCRYPTION_KEY \
+  TWENTY_PUBLIC_URL \
   MU_CLUBS_API_TOKEN \
   BRNO_EVENTS_API_TOKEN \
   MAINTENANCE_API_TOKEN \
@@ -79,6 +89,7 @@ done
 
 url_safe_password QUICKLY_POSTGRES_PASSWORD
 url_safe_password TWENTY_POSTGRES_PASSWORD
+https_origin TWENTY_PUBLIC_URL
 
 umask 077
 rm -rf "$RUNTIME_DIR"
@@ -92,10 +103,6 @@ fi
 quickly_public_url="${QUICKLY_PUBLIC_URL:-http://${quickly_public_host}:${QUICKLY_HOST_PORT:-8000}}"
 
 twenty_bind_address="${TWENTY_BIND_ADDRESS:-127.0.0.1}"
-twenty_public_host="$twenty_bind_address"
-if [[ "$twenty_bind_address" == "127.0.0.1" || "$twenty_bind_address" == "0.0.0.0" ]]; then
-  twenty_public_host=localhost
-fi
 
 # Sales and Networking join the shared lateralis network, where another service
 # may own the generic "postgres" DNS name. Prefer Watcher's unique alias for
@@ -465,10 +472,12 @@ write_env "$RUNTIME_DIR/twenty.env" \
   POSTGRES_PASSWORD "${TWENTY_POSTGRES_PASSWORD:-}" \
   PG_DATABASE_URL "postgres://twenty:${TWENTY_POSTGRES_PASSWORD:-}@twenty-postgres:5432/twenty" \
   REDIS_URL redis://twenty-redis:6379 \
-  SERVER_URL "${TWENTY_PUBLIC_URL:-http://${twenty_public_host}:${TWENTY_HOST_PORT:-3002}}" \
+  SERVER_URL "$TWENTY_PUBLIC_URL" \
   NODE_PORT 3000 \
   STORAGE_TYPE local \
-  ENCRYPTION_KEY "${TWENTY_ENCRYPTION_KEY:-}"
+  ENCRYPTION_KEY "${TWENTY_ENCRYPTION_KEY:-}" \
+  IS_MULTIWORKSPACE_ENABLED false \
+  IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS true
 
 write_env "$RUNTIME_DIR/mu-clubs-monitor.env" \
   DATABASE_URL "$WATCHER_DATABASE_URL" \

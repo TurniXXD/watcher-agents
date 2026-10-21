@@ -112,6 +112,9 @@ required_env_values=(
   "deploy/runtime/twenty.env:POSTGRES_PASSWORD"
   "deploy/runtime/twenty.env:PG_DATABASE_URL"
   "deploy/runtime/twenty.env:ENCRYPTION_KEY"
+  "deploy/runtime/twenty.env:SERVER_URL"
+  "deploy/runtime/twenty.env:IS_MULTIWORKSPACE_ENABLED"
+  "deploy/runtime/twenty.env:IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS"
 )
 
 legacy_watcher_services=(
@@ -195,6 +198,21 @@ deploy/normalize-database-url-host.sh \
   postgres \
   watcher-postgres
 
+runtime_env_value() {
+  local file="$1"
+  local key="$2"
+  local line
+  local value
+
+  line="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1)"
+  value="${line#*=}"
+  value="${value#\'}"
+  value="${value%\'}"
+  value="${value#\"}"
+  value="${value%\"}"
+  printf '%s' "$value"
+}
+
 missing_env_values=()
 for required_env_value in "${required_env_values[@]}"; do
   file="${required_env_value%%:*}"
@@ -210,6 +228,24 @@ done
 if ((${#missing_env_values[@]} > 0)); then
   echo "Runtime environment files are missing required values:" >&2
   printf '%s\n' "${missing_env_values[@]}" >&2
+  exit 1
+fi
+
+twenty_server_url="$(runtime_env_value deploy/runtime/twenty.env SERVER_URL)"
+if [[ ! "$twenty_server_url" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]]; then
+  echo "deploy/runtime/twenty.env: SERVER_URL must be an HTTPS origin without a path, query, fragment, or trailing slash." >&2
+  exit 1
+fi
+
+twenty_multiworkspace_enabled="$(runtime_env_value deploy/runtime/twenty.env IS_MULTIWORKSPACE_ENABLED)"
+if [[ "$twenty_multiworkspace_enabled" != "false" ]]; then
+  echo "deploy/runtime/twenty.env: IS_MULTIWORKSPACE_ENABLED must be false." >&2
+  exit 1
+fi
+
+twenty_workspace_creation_limited="$(runtime_env_value deploy/runtime/twenty.env IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS)"
+if [[ "$twenty_workspace_creation_limited" != "true" ]]; then
+  echo "deploy/runtime/twenty.env: IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS must be true." >&2
   exit 1
 fi
 

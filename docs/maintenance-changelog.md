@@ -2,6 +2,11 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-21 — Access-protected Twenty CRM origin
+
+- Attached only the Twenty HTTP server to the external `lateralis` network with the stable `watcher-twenty` Cloudflared alias while keeping its PostgreSQL, Redis, and worker services private.
+- Required a canonical HTTPS `TWENTY_PUBLIC_URL`, kept Twenty in single-workspace mode, and restricted workspace creation to server administrators before public routing.
+
 ## 2026-10-21 — Networking database routing repair
 
 - Production deployment now repairs persistent Networking Bot database URLs that still use the ambiguous `postgres` hostname after the bot joins the shared Cloudflare tunnel network. The migration preserves file permissions and never prints the URL or credentials.
