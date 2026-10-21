@@ -2,6 +2,10 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-21 — Networking database routing repair
+
+- Production deployment now repairs persistent Networking Bot database URLs that still use the ambiguous `postgres` hostname after the bot joins the shared Cloudflare tunnel network. The migration preserves file permissions and never prints the URL or credentials.
+
 ## 2026-10-20 — Networking OAuth production routing
 
 - Attached Networking Bot to the production `lateralis` network for the Cloudflare OAuth callback and changed its rendered database URL to the unique `watcher-postgres` alias, preventing another stack's `postgres` service from receiving its credentials.

@@ -69,6 +69,7 @@ jobs:
           test -f docker-compose.production.yml
           test -f docker-compose.nvidia.yml
           test -x deploy/deploy.sh
+          test -x deploy/normalize-database-url-host.sh
           echo "deploy-ready=true" >> "$GITHUB_OUTPUT"
 
   publish-image:
@@ -213,6 +214,9 @@ jobs:
             deploy/deploy.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy.sh.next"
           scp -P "$DEPLOY_PORT" \
+            deploy/normalize-database-url-host.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/normalize-database-url-host.sh.next"
+          scp -P "$DEPLOY_PORT" \
             release-announcement.txt \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy/release/next.txt"
 
@@ -299,7 +303,9 @@ jobs:
             mv docker-compose.production.yml.next docker-compose.production.yml
             mv docker-compose.nvidia.yml.next docker-compose.nvidia.yml
             mv deploy.sh.next deploy/deploy.sh
+            mv normalize-database-url-host.sh.next deploy/normalize-database-url-host.sh
             chmod 700 deploy/deploy.sh
+            chmod 700 deploy/normalize-database-url-host.sh
             test -f '$DEPLOY_ENV_FILE'
             printf '%s' '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin
             IMAGE_REGISTRY=ghcr.io \

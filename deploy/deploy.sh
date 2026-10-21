@@ -18,6 +18,7 @@ required_files=(
   "$COMPOSE_FILE"
   "$NVIDIA_COMPOSE_FILE"
   "$ENV_FILE"
+  deploy/normalize-database-url-host.sh
   deploy/runtime/postgres.env
   deploy/runtime/migrate.env
   deploy/runtime/stocks-bot.env
@@ -185,6 +186,14 @@ chmod 700 deploy/runtime
 while IFS= read -r runtime_file; do
   chmod 600 "$runtime_file"
 done < <(find deploy/runtime -maxdepth 1 -type f -print)
+
+# Networking Bot also joins the shared lateralis network for its public OAuth
+# callback. Another stack on that network may own the generic "postgres" DNS
+# name, so migrate older persistent runtime files before Compose reads them.
+deploy/normalize-database-url-host.sh \
+  deploy/runtime/networking-bot.env \
+  postgres \
+  watcher-postgres
 
 missing_env_values=()
 for required_env_value in "${required_env_values[@]}"; do

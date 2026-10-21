@@ -178,6 +178,26 @@ jobs:
           fi
 
           if [[ "$PRODUCTION_COMPOSE_READY" == "true" ]]; then
+            normalization_fixture="$(mktemp)"
+            printf '%s\n' \
+              "DATABASE_URL='postgresql://watcher:test-password@postgres:5432/watcher'" \
+              "NETWORKING_TELEGRAM_TOKEN='test-token'" > "$normalization_fixture"
+            chmod 600 "$normalization_fixture"
+            deploy/normalize-database-url-host.sh \
+              "$normalization_fixture" \
+              postgres \
+              watcher-postgres
+            grep -Fxq \
+              "DATABASE_URL='postgresql://watcher:test-password@watcher-postgres:5432/watcher'" \
+              "$normalization_fixture"
+            deploy/normalize-database-url-host.sh \
+              "$normalization_fixture" \
+              postgres \
+              watcher-postgres
+            grep -Fxq "NETWORKING_TELEGRAM_TOKEN='test-token'" "$normalization_fixture"
+            test "$(stat -c '%a' "$normalization_fixture")" = 600
+            rm -f "$normalization_fixture"
+
             install -d -m 700 deploy/runtime
             cp deploy/presets/compose.env.example deploy/runtime/compose.env
             cp deploy/presets/postgres.env.example deploy/runtime/postgres.env
