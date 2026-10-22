@@ -11,9 +11,17 @@ writes a spoken lecture, synthesizes OGG/Opus audio with Piper, and returns a
 Telegram voice message. Completion actions can resend audio, summarize, quiz, or
 export an Anki-compatible UTF-8 TSV deck.
 
-Upload a PDF to begin. `/start` initializes the bot, `/help` shows the current
-guide, `/about` explains storage, source grounding, and safety boundaries,
-`/status` reports the latest job, and `/cancel` stops safely between stages.
+## Commands and actions
+
+| Command/action     | What it does                                                    |
+| ------------------ | --------------------------------------------------------------- |
+| Upload a PDF       | Validates and starts a source-grounded study job.               |
+| `/start`           | Initializes the bot and shows the guide.                        |
+| `/help`            | Shows all commands and upload instructions.                     |
+| `/about`           | Explains storage, grounding, processing, and safety boundaries. |
+| `/status`          | Reports the latest document job and error, if any.              |
+| `/cancel`          | Cancels the latest active job at the next safe stage boundary.  |
+| Completion buttons | Resend the lecture, create a summary/quiz, or export Anki TSV.  |
 
 ## Architecture and flow
 
@@ -24,10 +32,22 @@ Telegram. Generated questions and cards retain page citations.
 
 ## Configuration
 
-Configure the database, dedicated Telegram token and allowlist, Ollama, Piper,
-`STUDY_S3_ENDPOINT`, application-specific S3 credentials, document/media buckets,
-PDF/page bounds, and the Czech TTS voice. The complete executable inventory is in
-the Study deployment preset and runtime configuration.
+| Variable                                                                      | Required/default                | Purpose                                         |
+| ----------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------- |
+| `DATABASE_URL`                                                                | Required                        | PostgreSQL document/job state.                  |
+| `STUDY_TELEGRAM_TOKEN`                                                        | Required                        | Dedicated Telegram token.                       |
+| `TELEGRAM_ALLOWED_USER_IDS`                                                   | Required                        | Authorized uploaders.                           |
+| `OLLAMA_URL`, `OLLAMA_MODEL`                                                  | Required                        | Grounded content generation.                    |
+| `OLLAMA_MAX_CONCURRENCY`                                                      | Configured default              | Shared inference queue concurrency.             |
+| `STUDY_OLLAMA_TIMEOUT_MS`, `STUDY_OLLAMA_NUM_CTX`, `STUDY_OLLAMA_NUM_PREDICT` | Bounded defaults                | Study-specific request limits.                  |
+| `STUDY_S3_ENDPOINT`, `STUDY_S3_REGION`                                        | Required                        | S3-compatible storage endpoint and region.      |
+| `STUDY_S3_ACCESS_KEY_ID`, `STUDY_S3_SECRET_ACCESS_KEY`                        | Required                        | Application-specific S3 credentials.            |
+| `STUDY_S3_DOCUMENTS_BUCKET`, `STUDY_S3_MEDIA_BUCKET`                          | Required                        | Source-document and generated-media buckets.    |
+| `STUDY_S3_FORCE_PATH_STYLE`                                                   | Configured default              | Enables path-style S3 addressing when required. |
+| `STUDY_MAX_PDF_SIZE_MB`, `STUDY_MAX_DOCUMENT_PAGES`                           | Bounded defaults                | Upload and document limits.                     |
+| `STUDY_TTS_PROVIDER`, `STUDY_TTS_VOICE`                                       | `piper`, configured Czech voice | Speech provider and voice.                      |
+| `PIPER_DATA_DIR`                                                              | `/data/piper`                   | Piper models and runtime data.                  |
+| `LOG_LEVEL`                                                                   | `info`                          | Structured log level.                           |
 
 ## Execution and scheduling
 

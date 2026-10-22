@@ -10,19 +10,58 @@ persisted, daylight-saving-aware schedules.
 
 ## Commands
 
-- `/start`, `/help`, and `/about` provide the repeat-safe entry point, command
-  syntax, and operational/privacy boundaries.
-- `/jobs_run [all|SOURCE_ID] [dry]` runs the shared collection pipeline.
-- `/jobs_status`, `/jobs_sources`, and `/jobs_latest` inspect operations and
-  scored jobs.
-- `/jobs_show JOB_ID` and `/jobs_search QUERY` provide detail and search.
-- `/jobs_applications [STATUS]` and `/jobs_followup JOB_ID YYYY-MM-DD|clear`
-  expose the application pipeline and reminders.
-- `/jobs_source SOURCE_ID on|off` controls implemented adapters.
-- `/jobs_mark JOB_ID STATUS` and `/jobs_note JOB_ID NOTE` maintain the private
-  application workflow.
-- `/jobs_profile [COMPLETE_JSON]` reads or replaces the validated profile.
-- `/jobs_reevaluate` re-scores stale stored jobs immediately.
+| Command                                   | What it does                                                      |
+| ----------------------------------------- | ----------------------------------------------------------------- |
+| `/start`                                  | Opens the bot without changing settings or starting collection.   |
+| `/help`                                   | Shows commands, syntax, statuses, and examples.                   |
+| `/about`                                  | Explains matching, data ownership, automation, and limits.        |
+| `/jobs_run [all\|SOURCE_ID] [dry]`        | Runs enabled/all or one source; `dry` prevents writes and alerts. |
+| `/jobs_status`                            | Shows scheduler and source health.                                |
+| `/jobs_sources`                           | Lists implemented sources and disabled reasons.                   |
+| `/jobs_latest`                            | Lists recent scored vacancies and IDs.                            |
+| `/jobs_show JOB_ID`                       | Shows source evidence, evaluation, and application notes.         |
+| `/jobs_search QUERY`                      | Searches stored title/company text.                               |
+| `/jobs_applications [STATUS]`             | Lists the private application pipeline.                           |
+| `/jobs_source SOURCE_ID on\|off`          | Enables or disables a supported source.                           |
+| `/jobs_mark JOB_ID STATUS`                | Sets the application status.                                      |
+| `/jobs_note JOB_ID NOTE`                  | Adds a private note.                                              |
+| `/jobs_followup JOB_ID YYYY-MM-DD\|clear` | Sets or clears a follow-up date.                                  |
+| `/jobs_profile [COMPLETE_JSON]`           | Shows or replaces the validated candidate profile.                |
+| `/jobs_reevaluate`                        | Re-scores stored jobs after profile changes.                      |
+
+## Configuration
+
+| Variable                                         | Required/default          | Purpose                                                              |
+| ------------------------------------------------ | ------------------------- | -------------------------------------------------------------------- |
+| `DATABASE_URL`                                   | Required                  | PostgreSQL source, job, evaluation, delivery, and application state. |
+| `JOBS_TELEGRAM_TOKEN`                            | Required                  | Dedicated Telegram token.                                            |
+| `TELEGRAM_ALLOWED_USER_IDS`                      | Required                  | Authorized private operators.                                        |
+| `JOBS_TIMEZONE`                                  | `Europe/Prague`           | Persisted schedule timezone.                                         |
+| `JOBS_HEALTH_PORT`                               | `4090`                    | Private readiness port.                                              |
+| `JOBS_SCHEDULER_INTERVAL_MS`                     | `30000`                   | Due-schedule polling interval.                                       |
+| `JOBS_DETAIL_REFRESH_HOURS`                      | `72`                      | Detail-page revalidation interval.                                   |
+| `JOBS_CANDIDATE_NAME`                            | Built-in operator default | Name used by the default profile.                                    |
+| `JOBS_CANDIDATE_PROFILE_JSON`                    | Optional                  | Complete validated profile override.                                 |
+| `JOBS_AI_ENABLED`                                | `false`                   | Enables bounded AI nuance scoring.                                   |
+| `JOBS_AI_BASE_URL`, `JOBS_AI_MODEL`              | Local defaults            | OpenAI-compatible/Ollama endpoint and model.                         |
+| `JOBS_AI_API_KEY`                                | Optional                  | Provider credential when required.                                   |
+| `JOBS_AI_TIMEOUT_MS`                             | `45000`                   | AI request timeout.                                                  |
+| `JOBS_EMAIL_WEBHOOK_URL`, `JOBS_EMAIL_RECIPIENT` | Optional pair             | Operator-owned e-mail delivery gateway and recipient.                |
+| `JOBS_EMAIL_WEBHOOK_API_KEY`                     | Optional                  | Gateway credential; requires the URL pair.                           |
+| `LOG_LEVEL`                                      | `info`                    | Structured log level.                                                |
+
+## Sources and integrations
+
+| Source/service                                                          | Role                                                                                     |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Remote Frontend / Remote Backend public APIs                            | Separate permitted job boards.                                                           |
+| Himalayas, Startup Jobs engineering, RemoteFirstJobs RSS                | Public RSS discovery.                                                                    |
+| Remote OK public API                                                    | Public JSON discovery.                                                                   |
+| DeveloperJobs.ch, CoolJobs.eu, StartupJobs.cz, Práce za rohem, LinkedIn | Explicitly disabled until a verified permitted feed exists.                              |
+| PostgreSQL                                                              | Authoritative jobs, observations, checkpoints, profile, schedule, and application state. |
+| Telegram                                                                | Primary private UI and alert delivery.                                                   |
+| Optional e-mail webhook                                                 | Sends the same digest to an operator-owned gateway.                                      |
+| Optional Ollama/OpenAI-compatible endpoint                              | Adds bounded nuance; cannot remove deterministic blockers.                               |
 
 ## Collection contract
 

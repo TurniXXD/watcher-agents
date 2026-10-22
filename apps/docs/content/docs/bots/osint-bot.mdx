@@ -11,10 +11,27 @@ identifiers. Name matches remain candidates. Public-register birth dates and
 residential addresses are discarded; LLM inference is labelled and never stored
 as a sourced fact.
 
-`/start` and `/help` show the complete evidence and safety guide. Commands
-include `/investigate`, `/investigations`, `/investigation`, `/evidence`,
-`/entity`, `/relations`, `/timeline`, `/expand`, `/report`, `/watch`, `/unwatch`,
-`/status`, `/sources`, `/pause`, `/resume`, and `/stop`.
+## Commands
+
+| Command                         | What it does                                                    |
+| ------------------------------- | --------------------------------------------------------------- |
+| `/start`, `/help`               | Shows the complete evidence and safety guide.                   |
+| `/about`, `/osint_about`        | Explains purpose, data model, sources, and limits.              |
+| `/investigate QUERY`            | Creates an investigation and runs matching collectors.          |
+| `/investigations`               | Lists the operator's investigations and IDs.                    |
+| `/investigation [ID]`           | Selects an investigation and displays its report.               |
+| `/report [ID]`                  | Shows facts, entities, source failures, and labelled inference. |
+| `/status`                       | Shows active investigation and watch state.                     |
+| `/evidence [ID]`                | Lists evidence or opens one evidence record with provenance.    |
+| `/entity ID`                    | Shows an entity and evidence-backed observations.               |
+| `/relations [ID]`               | Shows evidence-backed investigation/entity relations.           |
+| `/timeline [ID]`                | Builds a timeline from dated public records.                    |
+| `/expand SELECTOR_OR_ENTITY_ID` | Adds a selector/entity and runs matching collectors.            |
+| `/search ICO_OR_DOMAIN`         | Shortcut for expanding the active investigation.                |
+| `/sources`                      | Lists implemented collectors, inputs, and limitations.          |
+| `/watch [ID]` / `/unwatch [ID]` | Enables or disables change monitoring.                          |
+| `/pause [ID]` / `/resume [ID]`  | Pauses future work or resumes and recollects.                   |
+| `/stop [ID]`                    | Stops future runs for the investigation.                        |
 
 ## Architecture and flow
 
@@ -26,10 +43,16 @@ collection.
 
 ## Configuration
 
-Required: `DATABASE_URL`, `OSINT_TELEGRAM_TOKEN`, and
-`TELEGRAM_ALLOWED_USER_IDS`. `OSINT_MAX_COLLECTORS`,
-`OSINT_WATCH_POLL_MINUTES`, `OSINT_HEALTH_PORT`, and `LOG_LEVEL` have defaults.
-`OLLAMA_URL` and `OLLAMA_MODEL` are optional and should be configured together.
+| Variable                     | Required/default | Purpose                                                       |
+| ---------------------------- | ---------------- | ------------------------------------------------------------- |
+| `DATABASE_URL`               | Required         | PostgreSQL evidence, entity, relation, and watch state.       |
+| `OSINT_TELEGRAM_TOKEN`       | Required         | Dedicated Telegram token.                                     |
+| `TELEGRAM_ALLOWED_USER_IDS`  | Required         | Authorized private operators.                                 |
+| `OSINT_MAX_COLLECTORS`       | `12`             | Maximum collector concurrency.                                |
+| `OSINT_WATCH_POLL_MINUTES`   | `5`              | Due-watch polling interval.                                   |
+| `OSINT_HEALTH_PORT`          | `4060`           | Private readiness port.                                       |
+| `OLLAMA_URL`, `OLLAMA_MODEL` | Optional pair    | Labelled, validated synthesis after deterministic collection. |
+| `LOG_LEVEL`                  | `info`           | Structured log level.                                         |
 
 ## Execution and scheduling
 

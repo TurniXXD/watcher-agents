@@ -14,6 +14,32 @@ remain in place.
 Use `/about` for the bot's purpose, contact/event data flow, privacy guarantees,
 and operational limits. `/help` remains the complete command reference.
 
+## Commands
+
+| Command                                                            | What it does                                                    |
+| ------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `/start`, `/help`, `/networking_help`                              | Opens the complete Networking guide.                            |
+| `/about`                                                           | Explains purpose, data flow, privacy, and limits.               |
+| `/networking`                                                      | Shows recommended events and current attendance.                |
+| `/network_events`                                                  | Shows in-person events for the next eight days.                 |
+| `/network_events_free`                                             | Shows events explicitly sourced as free.                        |
+| `/networking_today`                                                | Shows the remainder of today's in-person events.                |
+| `/networking_free_food`                                            | Shows this week's events with sourced free refreshments.        |
+| `/networking_calendar_connect`                                     | Starts write-scoped Google Calendar OAuth.                      |
+| `/networking_calendar_status`                                      | Shows Calendar connection status.                               |
+| `/network_event_add TITLE \| DATE \| PLACE \| URL \| PRICE`        | Adds a manually sourced event.                                  |
+| `/network_sources`                                                 | Shows implemented event sources and health.                     |
+| `/network_event_contacts`                                          | Lists event contacts and approved follow-ups.                   |
+| `/network_help`                                                    | Shows the shared personal-contact guide.                        |
+| `/network_add DESCRIPTION`                                         | Prepares a new contact for confirmation.                        |
+| `/network_context PLACE \| NOTE \| TYPE \| NEXT_MEETING \| ACTIVE` | Adds context to the pending contact draft.                      |
+| `/network_search QUERY`                                            | Searches the personal contact sheet.                            |
+| `/network_contact NAME_OR_ID`                                      | Shows one contact.                                              |
+| `/network_update NAME_OR_ID \| CHANGE`                             | Updates one field.                                              |
+| `/network_intro NAME_OR_ID`                                        | Suggests a possible introduction.                               |
+| `/network_followups`                                               | Lists agreed next actions.                                      |
+| Business-card photo                                                | Extracts a draft, checks duplicates, and waits for Save/Cancel. |
+
 ## Contacts and business cards
 
 The Google Sheet contract has exactly eleven columns, from `Jméno` through
@@ -51,12 +77,22 @@ never sends a message to those people.
 
 ## Configuration
 
-Required variables are `DATABASE_URL`, `NETWORKING_TELEGRAM_TOKEN`, and
-`TELEGRAM_ALLOWED_USER_IDS`. Google Sheets requires the spreadsheet ID, range,
-service-account e-mail, and private key. Ollama text assistance requires both
-`OLLAMA_URL` and `OLLAMA_MODEL`; business-card photos additionally require an
-installed image-capable `NETWORK_OLLAMA_VISION_MODEL`. The internal readiness
-port defaults to `4070`.
+| Variable                                                                                                                                                       | Required/default          | Purpose                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------------- |
+| `DATABASE_URL`                                                                                                                                                 | Required                  | PostgreSQL event, attendance, reminder, and OAuth state. |
+| `NETWORKING_TELEGRAM_TOKEN`                                                                                                                                    | Required                  | Dedicated Telegram token.                                |
+| `TELEGRAM_ALLOWED_USER_IDS`                                                                                                                                    | Required                  | Authorized private operators.                            |
+| `NETWORKING_TIMEZONE`                                                                                                                                          | `Europe/Prague`           | Event/reminder timezone.                                 |
+| `NETWORKING_SCHEDULER_INTERVAL_MS`                                                                                                                             | `30000`                   | Durable reminder polling.                                |
+| `NETWORKING_HEALTH_PORT`                                                                                                                                       | `4070`                    | Private readiness port.                                  |
+| `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`                                                           | Optional complete group   | Personal-contact Google Sheet.                           |
+| `GOOGLE_SHEETS_NETWORK_RANGE`                                                                                                                                  | `'Contact list'!A:K`      | Exact contact range.                                     |
+| `OLLAMA_URL`, `OLLAMA_MODEL`                                                                                                                                   | Optional pair             | Contact parsing/search assistance.                       |
+| `NETWORK_OLLAMA_VISION_MODEL`                                                                                                                                  | Optional; requires Ollama | Business-card image model.                               |
+| `OLLAMA_TIMEOUT_MS`                                                                                                                                            | `120000`                  | Bounded model timeout.                                   |
+| `NETWORKING_GOOGLE_CALENDAR_CLIENT_ID`, `NETWORKING_GOOGLE_CALENDAR_CLIENT_SECRET`, `NETWORKING_GOOGLE_CALENDAR_REDIRECT_URI`, `CALENDAR_TOKEN_ENCRYPTION_KEY` | Optional complete group   | Calendar write OAuth and encrypted tokens.               |
+| `NETWORKING_CALENDAR_OAUTH_LISTEN_HOST`, `NETWORKING_CALENDAR_OAUTH_LISTEN_PORT`                                                                               | `0.0.0.0`, `8790`         | Private callback listener.                               |
+| `LOG_LEVEL`                                                                                                                                                    | `info`                    | Structured log level.                                    |
 
 Calendar writes require the complete
 `NETWORKING_GOOGLE_CALENDAR_CLIENT_ID`,
@@ -73,9 +109,23 @@ both services share the per-chat credential, while registering a distinct
 Networking callback URI. Reconnect an older read-only grant once so Google can
 approve the write scope.
 
-Use [`deploy/presets/networking-bot.env.example`](../../../../../deploy/presets/networking-bot.env.example)
+Use [`deploy/presets/networking-bot.env.example`](https://github.com/TurniXXD/watcher-agents/blob/main/deploy/presets/networking-bot.env.example)
 as the safe inventory. Production secrets belong only in the VPS secret source
 and rendered mode-`0600` runtime file.
+
+## Sources and integrations
+
+| Source/service                                                       | Role                                                            |
+| -------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Brno Events Agent                                                    | Supplies normalized event records and source health.            |
+| Meetup, GoOut, VisitBrno/TIC, MUNI, VUT, JIC, CEITEC                 | Event sources owned by Brno Events Agent.                       |
+| Velvet Innovation, SideQuesty, Objev Brno, Impact Hub Brno           | Additional Brno event sources.                                  |
+| Base48 public Nextcloud calendar, ČSOB Start it @UNI Validation Camp | Calendar/official listing sources.                              |
+| Google Sheets                                                        | Authoritative personal-contact table when configured.           |
+| Google Calendar                                                      | Optional explicit, idempotent event writes; never registration. |
+| Ollama vision/text                                                   | Optional business-card extraction and contact assistance.       |
+| Sales Bot                                                            | Reuses the shared contact commands for backward compatibility.  |
+| Telegram/PostgreSQL                                                  | Private operator UI and durable event/reminder state.           |
 
 ```bash
 pnpm --filter @watcher/networking-bot typecheck

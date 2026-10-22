@@ -26,6 +26,77 @@ import {
 const json = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
+const upsertJobSourceReference = async (
+  transaction: Prisma.TransactionClient,
+  input: {
+    jobId: string;
+    sourceId: string;
+    externalId: string;
+    sourceUrl: string;
+    canonicalApplicationUrl: string | null;
+    lastSeenAt: Date;
+  },
+) => {
+  const existingIdentity = await transaction.jobSourceReference.findUnique({
+    where: {
+      sourceId_externalId: {
+        sourceId: input.sourceId,
+        externalId: input.externalId,
+      },
+    },
+  });
+  if (existingIdentity) {
+    const existingUrl = await transaction.jobSourceReference.findUnique({
+      where: {
+        jobId_sourceUrl: {
+          jobId: input.jobId,
+          sourceUrl: input.sourceUrl,
+        },
+      },
+    });
+    if (existingUrl && existingUrl.id !== existingIdentity.id) {
+      await transaction.jobSourceReference.delete({
+        where: { id: existingIdentity.id },
+      });
+      return transaction.jobSourceReference.update({
+        where: { id: existingUrl.id },
+        data: {
+          canonicalApplicationUrl: input.canonicalApplicationUrl,
+          lastSeenAt: input.lastSeenAt,
+        },
+      });
+    }
+    return transaction.jobSourceReference.update({
+      where: { id: existingIdentity.id },
+      data: {
+        jobId: input.jobId,
+        sourceUrl: input.sourceUrl,
+        canonicalApplicationUrl: input.canonicalApplicationUrl,
+        lastSeenAt: input.lastSeenAt,
+      },
+    });
+  }
+  return transaction.jobSourceReference.upsert({
+    where: {
+      jobId_sourceUrl: {
+        jobId: input.jobId,
+        sourceUrl: input.sourceUrl,
+      },
+    },
+    create: {
+      jobId: input.jobId,
+      sourceId: input.sourceId,
+      externalId: input.externalId,
+      sourceUrl: input.sourceUrl,
+      canonicalApplicationUrl: input.canonicalApplicationUrl,
+    },
+    update: {
+      canonicalApplicationUrl: input.canonicalApplicationUrl,
+      lastSeenAt: input.lastSeenAt,
+    },
+  });
+};
+
 const profileFromRow = (profile: {
   name: string;
   professionalTitle: string;
@@ -443,26 +514,13 @@ export class JobStore {
             lastSeenAt: now,
           },
         });
-        await transaction.jobSourceReference.upsert({
-          where: {
-            sourceId_externalId: {
-              sourceId: listing.sourceId,
-              externalId: listing.externalId,
-            },
-          },
-          create: {
-            jobId: canonical.id,
-            sourceId: listing.sourceId,
-            externalId: listing.externalId,
-            sourceUrl: listing.originalUrl,
-            canonicalApplicationUrl: listing.canonicalApplicationUrl ?? null,
-          },
-          update: {
-            jobId: canonical.id,
-            sourceUrl: listing.originalUrl,
-            canonicalApplicationUrl: listing.canonicalApplicationUrl ?? null,
-            lastSeenAt: now,
-          },
+        await upsertJobSourceReference(transaction, {
+          jobId: canonical.id,
+          sourceId: listing.sourceId,
+          externalId: listing.externalId,
+          sourceUrl: listing.originalUrl,
+          canonicalApplicationUrl: listing.canonicalApplicationUrl ?? null,
+          lastSeenAt: now,
         });
         return {
           job: canonical,
@@ -557,26 +615,13 @@ export class JobStore {
           ...(detailFetched ? { lastDetailFetchedAt: now } : {}),
         },
       });
-      await transaction.jobSourceReference.upsert({
-        where: {
-          sourceId_externalId: {
-            sourceId: job.sourceId,
-            externalId: job.externalId,
-          },
-        },
-        create: {
-          jobId: canonical.id,
-          sourceId: job.sourceId,
-          externalId: job.externalId,
-          sourceUrl: job.originalUrl,
-          canonicalApplicationUrl: job.canonicalApplicationUrl ?? null,
-        },
-        update: {
-          jobId: canonical.id,
-          sourceUrl: job.originalUrl,
-          canonicalApplicationUrl: job.canonicalApplicationUrl ?? null,
-          lastSeenAt: now,
-        },
+      await upsertJobSourceReference(transaction, {
+        jobId: canonical.id,
+        sourceId: job.sourceId,
+        externalId: job.externalId,
+        sourceUrl: job.originalUrl,
+        canonicalApplicationUrl: job.canonicalApplicationUrl ?? null,
+        lastSeenAt: now,
       });
       await transaction.jobApplication.upsert({
         where: { jobId: canonical.id },

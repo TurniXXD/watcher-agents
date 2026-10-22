@@ -74,12 +74,35 @@ describe.skipIf(!database || !store)('JobStore idempotency', () => {
 
     let jobId: string | undefined;
     try {
-      const first = await store!.upsertJob(makeJob(sourceIds[0]!, 'one'));
+      const firstJob = makeJob(sourceIds[0]!, 'one');
+      const first = await store!.upsertJob(firstJob);
       const duplicate = await store!.upsertJob(makeJob(sourceIds[1]!, 'two'));
+      const repeatedUrl = await store!.upsertJob({
+        ...makeJob(sourceIds[0]!, 'three'),
+        originalUrl: firstJob.originalUrl,
+        canonicalApplicationUrl: firstJob.canonicalApplicationUrl,
+      });
       jobId = first.job.id;
       expect(duplicate.job.id).toBe(first.job.id);
+      expect(repeatedUrl.job.id).toBe(first.job.id);
       expect(first.isNew).toBe(true);
       expect(duplicate.isNew).toBe(false);
+      expect(repeatedUrl.isNew).toBe(false);
+      await expect(
+        database!.jobSourceReference.count({
+          where: { jobId, sourceUrl: firstJob.originalUrl },
+        }),
+      ).resolves.toBe(1);
+      await expect(
+        database!.jobRawJob.findUnique({
+          where: {
+            sourceId_externalId: {
+              sourceId: sourceIds[0]!,
+              externalId: 'three',
+            },
+          },
+        }),
+      ).resolves.toMatchObject({ jobId });
 
       const active = await store!.ensureProfile(profile);
       const evaluation = await store!.saveEvaluation({

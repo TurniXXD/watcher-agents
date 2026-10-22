@@ -8,8 +8,9 @@
     "dev": "next dev",
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
-    "lint": "eslint . --config ../../eslint.config.mjs",
-    "check:links": "node scripts/check-links.mjs"
+    "lint": "eslint . --config ../../eslint.config.mjs && pnpm check:links && pnpm check:reference",
+    "check:links": "node scripts/check-links.mjs",
+    "check:reference": "node scripts/check-bot-reference.mjs"
   },
   "dependencies": {
     "cn": "0.4.0",

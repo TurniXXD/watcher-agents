@@ -10,8 +10,21 @@ alerts only when persisted yield, discount, and cashflow gates pass. It models
 purchase price, equity, mortgage terms, vacancy, maintenance, insurance, yields,
 annuity payments, and stress cashflows.
 
-Commands: `/start`, `/help`, `/about`, `/status`, `/run`, `/pause`, `/resume`,
-`/schedule`, `/locations`, `/location_add`, `/location_remove`, and `/model`.
+## Commands
+
+| Command                                        | What it does                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------- |
+| `/start`                                       | Initializes settings and shows the guide.                     |
+| `/help`                                        | Shows all commands.                                           |
+| `/about`                                       | Explains the model, data domains, and investment limitations. |
+| `/status`                                      | Shows state, locations, schedule, and last run.               |
+| `/run`                                         | Fetches listings and sends a market report now.               |
+| `/pause` / `/resume`                           | Disables or enables reports and alerts.                       |
+| `/schedule CRON TIMEZONE`                      | Replaces the monthly report schedule.                         |
+| `/locations`                                   | Lists monitored locations.                                    |
+| `/location_add CITY` / `/location_remove CITY` | Adds or removes a location.                                   |
+| `/model`                                       | Shows the mortgage and operating-cost model.                  |
+| `/model PRICE EQUITY_% YEARS VACANCY_%`        | Updates the principal assumptions.                            |
 
 ## Architecture and flow
 
@@ -22,11 +35,18 @@ are dropped instead of repaired with guesses.
 
 ## Configuration
 
-Required: `DATABASE_URL`, `REALITY_TELEGRAM_TOKEN`, and
-`TELEGRAM_ALLOWED_USER_IDS`. `REALITY_DIGIREALITY_KEY` is optional. Locations,
-monthly report cron, monitor interval, health port, timezone, and log level have
-defaults; `REALITY_DEFAULT_LOCATIONS` begins with Brno, Ostrava, and
-Frýdek-Místek unless overridden.
+| Variable                           | Required/default             | Purpose                                             |
+| ---------------------------------- | ---------------------------- | --------------------------------------------------- |
+| `DATABASE_URL`                     | Required                     | PostgreSQL connection and durable settings/history. |
+| `REALITY_TELEGRAM_TOKEN`           | Required                     | Dedicated Telegram token.                           |
+| `TELEGRAM_ALLOWED_USER_IDS`        | Required                     | Authorized private operators.                       |
+| `REALITY_DIGIREALITY_KEY`          | Optional                     | Optional DigiReality access key.                    |
+| `REALITY_DEFAULT_LOCATIONS`        | `Brno,Ostrava,Frýdek-Místek` | Initial location list.                              |
+| `REALITY_REPORT_SCHEDULE`          | `0 8 1 * *`                  | Default monthly report cron.                        |
+| `REALITY_MONITOR_INTERVAL_MINUTES` | `30`                         | Listing polling interval.                           |
+| `REALITY_HEALTH_PORT`              | `4050`                       | Private readiness port.                             |
+| `DEFAULT_TIMEZONE`                 | `Europe/Prague`              | Schedule timezone.                                  |
+| `LOG_LEVEL`                        | `info`                       | Structured log level.                               |
 
 ## Execution and scheduling
 

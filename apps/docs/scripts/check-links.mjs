@@ -30,6 +30,13 @@ for (const file of files) {
     const href = original?.split('#')[0]?.split('?')[0];
     if (!href || /^(?:https?:|mailto:|#)/u.test(href)) continue;
 
+    if (/\.mdx?$/u.test(href)) {
+      failures.push(
+        `${path.relative(root, file)} -> ${original} (link to the deployed route, not the source file)`,
+      );
+      continue;
+    }
+
     let target;
     if (href.startsWith('/docs')) {
       const route = href.slice('/docs'.length).replace(/^\//u, '');
@@ -38,9 +45,7 @@ for (const file of files) {
       target = path.resolve(path.dirname(file), href);
     }
 
-    const candidates = path.extname(target)
-      ? [target]
-      : [`${target}.mdx`, path.join(target, 'index.mdx')];
+    const candidates = [`${target}.mdx`, path.join(target, 'index.mdx')];
     if (!candidates.some((candidate) => known.has(path.normalize(candidate)))) {
       failures.push(`${path.relative(root, file)} -> ${original}`);
     }

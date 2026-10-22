@@ -10,11 +10,40 @@ observations, catalysts, earnings, thesis changes, alerts, portfolio context,
 discovery, replay, and paper workflows. The watchlist starts empty and provider
 evidence never becomes automatic investment advice.
 
-Use `/start` or `/help` for the authoritative complete command list. Commands
-include `/stocks`, `/add_stock`, `/remove_stock`, `/run`, `/sources`,
-`/schedule`, `/thesis`, `/valuation`, `/earnings`, `/catalysts`, `/dashboard`,
-`/opportunities`, `/alerts`, `/health`, `/discovery`, `/reconcile`, `/backtest`,
-`/calibration`, and `/replay` plus paper/portfolio commands.
+## Commands
+
+| Command                                                                               | What it does                                                                       |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `/start`, `/help`                                                                     | Initializes the bot and shows every command.                                       |
+| `/about`                                                                              | Shows the Czech operating/strategy guide and safety boundaries.                    |
+| `/status`, `/health`                                                                  | Shows watcher state or detailed run/source/LLM health.                             |
+| `/stocks`, `/stocks_tickers`                                                          | Lists watched stocks or enabled ticker symbols only.                               |
+| `/add_stock SYMBOL` (`/addstock`), `/remove_stock SYMBOL` (`/removestock`)            | Adds or removes a watchlist company.                                               |
+| `/stock_on SYMBOL` (`/stockon`), `/stock_off SYMBOL` (`/stockoff`)                    | Enables or disables monitoring without deletion.                                   |
+| `/reset_stocks CONFIRM`, `/resetstocks CONFIRM`                                       | Clears the watchlist while retaining research history.                             |
+| `/set_tier SYMBOL TIER [DATE] [REASON]`, `/settier …`                                 | Sets `CORE`, `WATCH`, `DISCOVERY`, or `INVESTIGATE`.                               |
+| `/set_mode SYMBOL MODE`, `/setmode …`                                                 | Sets monitoring resolution/event mode.                                             |
+| `/set_priority SYMBOL 0-100`, `/setpriority …`                                        | Sets monitoring priority.                                                          |
+| `/run`                                                                                | Runs the entire watchlist pipeline now.                                            |
+| `/sources`, `/list_sources`, `/listsources`                                           | Configures global sources or lists providers/links.                                |
+| `/schedule`, `/schedule_list`, `/schedule_add CRON`, `/schedule_remove NUMBER`        | Replaces, inspects, adds, or removes persisted schedules.                          |
+| `/pause`, `/resume`                                                                   | Pauses or resumes scheduled runs.                                                  |
+| `/thesis SYMBOL`, `/decision SYMBOL`                                                  | Refreshes and displays the persistent thesis or latest decision card.              |
+| `/dashboard`, `/opportunities`, `/alerts`                                             | Shows watchlist state, elevated asymmetry, or recent alerts.                       |
+| `/news SYMBOL RANGE [--json]`                                                         | Shows saved news; JSON includes full stored details.                               |
+| `/catalysts [SYMBOL]`, `/earnings SYMBOL`                                             | Shows active catalysts or expectation-versus-actual earnings context.              |
+| `/peers SYMBOL`, `/valuation SYMBOL`, `/cashflow SYMBOL`, `/reaction SYMBOL`          | Shows peer map, valuation, SEC cash flows, or evidence-linked post-event reaction. |
+| `/advanced [SYMBOL]`                                                                  | Shows options, institutional, short-interest, FDA, and trial data.                 |
+| `/discovery`, `/run_discovery`, `/rundiscovery`                                       | Shows scanner state/candidates or runs the scanner now.                            |
+| `/allocation [--amount-czk N] [--days N]`                                             | Ranks research and optionally calculates an illustrative allocation.               |
+| `/paper_open SYMBOL --amount-czk N [--days N]`, `/paper_close NUMBER`                 | Opens/closes a no-execution paper position.                                        |
+| `/paper_portfolio`, `/portfolio_risk`, `/risk_profile [PROFILE] [LIMITS]`             | Reports paper positions, concentration, and warning limits.                        |
+| `/alpaca`                                                                             | Reads the configured Alpaca Paper account; never trades.                           |
+| `/trading212`, `/trading212_report`                                                   | Reads Trading 212 positions/account or allocation/P&L.                             |
+| `/trading212_setup`, `/trading212_schedule [on\|off\|status]`                         | Shows setup identity or controls timed read-only reports.                          |
+| `/reconcile`                                                                          | Runs daily reconciliation immediately.                                             |
+| `/replay SYMBOL DATE`, `/event_replay SYMBOL [FROM] [TO]`, `/eventreplay …`           | Reconstructs historical state or event/thesis transitions.                         |
+| `/validate`, `/backtest`, `/calibration`, `/signal_performance`, `/signalperformance` | Evaluates stored predictions, returns, calibration, and signal outcomes.           |
 
 ## Architecture and flow
 
@@ -26,16 +55,22 @@ alerts, baselines, portfolio state, and validation outcomes.
 
 ## Configuration
 
-Required: `DATABASE_URL`, `STOCKS_TELEGRAM_TOKEN`,
-`TELEGRAM_ALLOWED_USER_IDS`, `OLLAMA_URL`, `OLLAMA_MODEL`, and an identifiable
-`SEC_USER_AGENT`. `STOCKS_MONITOR_SCHEDULE`, source backoff/concurrency, alert
-windows, anomaly thresholds, discovery gates, and validation sizes have bounded
-defaults.
-
-Optional credential groups activate Alpha Vantage, Quiver, Alpaca Paper, or
-Trading 212. Set both credentials for Alpaca or Trading 212. Core thesis coverage
-does not require paid options data: with `ALPHA_VANTAGE_OPTIONS_ENABLED=false`,
-options positioning is not counted as a material gap.
+| Variable group                    | Variables and purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Required                          | `DATABASE_URL`, `STOCKS_TELEGRAM_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, `OLLAMA_URL`, `OLLAMA_MODEL`, identifiable `SEC_USER_AGENT`.                                                                                                                                                                                                                                                                                                                                                 |
+| Ollama                            | `OLLAMA_KEEP_ALIVE`, `OLLAMA_MAX_ITEMS_PER_RUN`, `OLLAMA_NUM_CTX`, `OLLAMA_NUM_PREDICT`, `OLLAMA_FULL_ANALYSIS_NUM_PREDICT`, `OLLAMA_RETRIES`, `OLLAMA_THINK`, `OLLAMA_TIMEOUT_MS`.                                                                                                                                                                                                                                                                                                |
+| Briefing deduplication            | `BRIEFING_EMBEDDING_MODEL`, `BRIEFING_EMBEDDING_MIN_SIMILARITY`, `BRIEFING_EMBEDDING_WINDOW_HOURS`.                                                                                                                                                                                                                                                                                                                                                                                |
+| Scheduler/source control          | `DEFAULT_TIMEZONE`, `STOCKS_MONITOR_SCHEDULE`, `SOURCE_BACKOFF_BASE_SECONDS`, `SOURCE_BACKOFF_MAX_MINUTES`, `SOURCE_MAX_CONCURRENCY`.                                                                                                                                                                                                                                                                                                                                              |
+| Alert timing                      | `ALERT_ATTENTION_THRESHOLD`, `STOCK_ALERT_BATCH_WINDOW_MINUTES`, `STOCK_NOTIFICATION_START_HOUR`, `STOCK_NOTIFICATION_END_HOUR`, `STOCK_EXTREME_IMMEDIATE`, `STOCK_EVENT_COOLDOWN_MINUTES`, `STOCK_TICKER_ANALYSIS_COOLDOWN_MINUTES`.                                                                                                                                                                                                                                              |
+| Market anomaly gates              | `PRICE_ANOMALY_THRESHOLD_PERCENT`, `GAP_ANOMALY_THRESHOLD_PERCENT`, `RELATIVE_VOLUME_ANOMALY_THRESHOLD`, `VOLATILITY_EXPANSION_THRESHOLD`, `MARKET_BASELINE_MIN_SNAPSHOTS`.                                                                                                                                                                                                                                                                                                        |
+| Options/institutional/short gates | `OPTIONS_VOLUME_OI_ANOMALY_THRESHOLD`, `OPTIONS_VOLUME_BASELINE_MULTIPLIER`, `OPTIONS_BASELINE_MIN_SNAPSHOTS`, `INSTITUTIONAL_CHANGE_THRESHOLD_PERCENT`, `SHORT_INTEREST_CHANGE_THRESHOLD_PERCENT`, `SHORT_INTEREST_DAYS_TO_COVER_THRESHOLD`.                                                                                                                                                                                                                                      |
+| Discovery                         | `DISCOVERY_MARKET_DATA_ENTITLEMENT`, `DISCOVERY_WEEKLY_SCHEDULE`, `DISCOVERY_MOVE_THRESHOLD_PERCENT`, `DISCOVERY_MIN_PRICE`, `DISCOVERY_MIN_VOLUME`, `DISCOVERY_MIN_DOLLAR_VOLUME`, `DISCOVERY_MAX_CANDIDATES`, `DISCOVERY_OVERSOLD_RSI_THRESHOLD`, `DISCOVERY_MAX_FORWARD_PE`, `DISCOVERY_SUPPORTED_EXCHANGES`, `DISCOVERY_EXCLUDE_OTC`, `DISCOVERY_INVESTIGATION_MINUTES`, `DISCOVERY_HIGH_RESOLUTION_INTERVAL_MINUTES`, `DISCOVERY_EVENT_MODE_MINUTES`, `DISCOVERY_WATCH_DAYS`. |
+| Reconciliation/validation         | `RECONCILIATION_INTERVAL_MINUTES`, `VALIDATION_MIN_SAMPLE_SIZE`.                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Alpha Vantage                     | `ALPHA_VANTAGE_API_KEY`, `ALPHA_VANTAGE_OPTIONS_ENABLED`; optional.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Quiver                            | `QUIVER_API_TOKEN`; optional.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Alpaca Paper                      | `ALPACA_PAPER_API_KEY`, `ALPACA_PAPER_API_SECRET`; optional pair, read-only.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Trading 212                       | `TRADING212_API_KEY`, `TRADING212_API_SECRET` (optional pair), `TRADING212_ENVIRONMENT`, `TRADING212_TELEGRAM_USER_ID`.                                                                                                                                                                                                                                                                                                                                                            |
+| Logging                           | `LOG_LEVEL`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Execution and scheduling
 
@@ -51,9 +86,20 @@ same source and analysis pipeline.
 
 ## Integrations
 
-Sources include SEC EDGAR, issuer feeds, TradingView, FINVIZ, Zacks, Earnings
-Whispers, Nasdaq, FINRA, ClinicalTrials.gov, and openFDA. Alpha Vantage and Quiver
-are optional. Alpaca Paper and Trading 212 are explicitly credential-gated.
+| Source/service                             | Role                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------- |
+| SEC EDGAR and SEC company facts            | Filings, issuer identity, and reported cash flows.                            |
+| Issuer RSS/IR feeds                        | First-party company news and events.                                          |
+| TradingView and FINVIZ                     | Market/news observations and discovery inputs.                                |
+| Zacks and Earnings Whispers                | Earnings expectations/context.                                                |
+| Nasdaq                                     | Prices, market cap, earnings, and related market data.                        |
+| FINRA                                      | Short-interest observations.                                                  |
+| ClinicalTrials.gov and openFDA             | Trial and regulatory/enforcement events.                                      |
+| Federal Register                           | US agency/regulatory documents.                                               |
+| Alpha Vantage                              | Optional market/options data and discovery entitlement.                       |
+| Quiver                                     | Optional institutional/alternative observations.                              |
+| Alpaca Paper and Trading 212               | Optional credential-gated read-only portfolio views.                          |
+| Ollama, PostgreSQL, Telegram, Briefing Bot | Analysis, durable evidence/state, private UI, and briefing-event consumption. |
 
 ## Troubleshooting
 

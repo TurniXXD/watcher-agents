@@ -17,9 +17,17 @@ and exposed in health/run results instead of converted into empty data.
 
 ## Configuration
 
-Required: `DATABASE_URL` and a minimum-16-character `MU_CLUBS_API_TOKEN`.
-Configure host/port, monitor interval, scheduler polling, Instagram cache TTL,
-minimum request interval, maximum posts per fetch, and log level.
+| Variable                            | Required/default    | Purpose                                                        |
+| ----------------------------------- | ------------------- | -------------------------------------------------------------- |
+| `DATABASE_URL`                      | Required            | PostgreSQL sources, observations, health, and briefing events. |
+| `MU_CLUBS_API_TOKEN`                | Required, 16+ chars | Authenticates every non-health API route.                      |
+| `MU_CLUBS_HOST`, `MU_CLUBS_PORT`    | `127.0.0.1`, `4010` | Private HTTP binding.                                          |
+| `MU_CLUBS_MONITOR_INTERVAL_MINUTES` | `60`                | Default source cadence.                                        |
+| `MU_CLUBS_SCHEDULER_INTERVAL_MS`    | `30000`             | Due-source polling.                                            |
+| `INSTAGRAM_CACHE_TTL_MINUTES`       | `30`                | Shared observation cache duration.                             |
+| `INSTAGRAM_MIN_REQUEST_INTERVAL_MS` | `5000`              | Minimum spacing between Instagram requests.                    |
+| `INSTAGRAM_MAX_POSTS_PER_FETCH`     | `20`                | Maximum bounded posts per fetch.                               |
+| `LOG_LEVEL`                         | `info`              | Structured log level.                                          |
 
 ## Execution and scheduling
 
@@ -33,9 +41,10 @@ Monitoring defaults to hourly; scheduler due checks default to every 30 seconds.
 
 ## Integrations
 
-The monitor reads public club sites and bounded Instagram observations. `GET
-/healthz` is unauthenticated; other API endpoints require the MU Clubs bearer
-token. Briefing consumes the normalized event output.
+The monitor reads the configured public Masaryk University club websites and
+bounded public Instagram observations. `GET /healthz` is unauthenticated; other
+API endpoints require the MU Clubs bearer token. Briefing Bot consumes the
+normalized event output through its authenticated local integration.
 
 ## Troubleshooting
 

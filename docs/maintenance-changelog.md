@@ -2,6 +2,16 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-22 — Jobs duplicate source-reference repair
+
+- Made Jobs Bot merge repeated source URLs into one canonical reference while retaining every raw source record, preventing duplicate feed entries from failing a source run on the database uniqueness constraint.
+
+## 2026-10-22 — Complete bot documentation reference
+
+- Repaired application and integration navigation so documentation cards link to deployed routes instead of source `.mdx` filenames.
+- Expanded bot pages with complete command, environment-variable, source, and service-integration references grounded in the implementation.
+- Added documentation checks that reject source-file links and detect undocumented bot commands, environment variables, or missing integration sections.
+
 ## 2026-10-22 — Vantuch tunnel and documentation hostname
 
 - Moved production HTTP services and their CI network checks from `lateralis` to the external `vantuch` Docker network.

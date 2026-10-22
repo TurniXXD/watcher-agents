@@ -10,11 +10,19 @@ proven to fit, routes viable candidates, and ranks only opportunities satisfying
 persisted profit, profit/hour, empty-distance, detour, and confidence thresholds.
 It never bids, accepts jobs, or contacts customers.
 
-Use `/start` to initialize the bot and begin vehicle setup when required.
-`/help` shows the complete keyboard guide and `/about` explains the decision
-model, provider data, and safety boundaries without changing onboarding or the
-current conversation. Vehicle, costs, preferences, immediate search,
-planned-trip, and return-load actions are selected from the Telegram keyboard.
+## Commands and keyboard actions
+
+| Command/action           | What it does                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| `/start`                 | Initializes the bot and begins vehicle setup when needed.                             |
+| `/help`                  | Shows the complete guide without changing setup progress.                             |
+| `/about`                 | Explains the decision model, sources, and safety boundaries.                          |
+| `🚐 Vehicle`             | Adds or replaces dimensions, capacity, consumption, and restrictions.                 |
+| `📊 Cost settings`       | Configures wear, maintenance, tyres, oil, insurance, labour, and optional fuel price. |
+| `⚙️ Preferences`         | Configures profit, distance, detour, and confidence gates.                            |
+| `🔎 Find jobs`           | Evaluates the current request feed immediately.                                       |
+| `🛣️ I'm planning a trip` | Finds compatible incremental loads for a route.                                       |
+| `🔄 Find return load`    | Reverses the last planned trip and evaluates return loads.                            |
 
 ## Architecture and flow
 
@@ -26,10 +34,19 @@ rate.
 
 ## Configuration
 
-Required: `DATABASE_URL`, `TRANSPORT_TELEGRAM_TOKEN`,
-`TELEGRAM_ALLOWED_USER_IDS`, and `TRANSPORT_REQUEST_FEED_URL`. The feed can use
-an optional bearer token. Configure a production `TRANSPORT_OSRM_URL`, discovery
-interval, optional fuel/CNB URLs, health port, and log level.
+| Variable                               | Required/default              | Purpose                                                                      |
+| -------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------- |
+| `DATABASE_URL`                         | Required                      | PostgreSQL vehicle, preferences, and delivery state.                         |
+| `TRANSPORT_TELEGRAM_TOKEN`             | Required                      | Dedicated Telegram token.                                                    |
+| `TELEGRAM_ALLOWED_USER_IDS`            | Required                      | Authorized private operators.                                                |
+| `TRANSPORT_REQUEST_FEED_URL`           | Required                      | Operator-owned load-request JSON feed.                                       |
+| `TRANSPORT_REQUEST_FEED_TOKEN`         | Optional                      | Bearer token for the request feed.                                           |
+| `TRANSPORT_OSRM_URL`                   | Configured default            | OSRM-compatible routing endpoint; production should not use the public demo. |
+| `TRANSPORT_FUEL_BULLETIN_URL`          | Optional/default provider URL | European Commission fuel bulletin.                                           |
+| `TRANSPORT_CNB_RATE_URL`               | Optional/default provider URL | CNB daily exchange-rate feed.                                                |
+| `TRANSPORT_DISCOVERY_INTERVAL_MINUTES` | `15`                          | Proactive discovery interval.                                                |
+| `TRANSPORT_HEALTH_PORT`                | Configured default            | Private readiness port.                                                      |
+| `LOG_LEVEL`                            | `info`                        | Structured log level.                                                        |
 
 ## Execution and scheduling
 

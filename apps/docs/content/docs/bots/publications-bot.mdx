@@ -9,9 +9,23 @@ Publications Bot monitors an operator-managed query list through PubMed, bioRxiv
 ClinicalTrials.gov, and openFDA. The list starts empty. Topics preserve their
 display text and a normalized value prevents duplicates.
 
-Commands: `/start`, `/help`, `/queries`, `/add_query`, `/add_queries`,
-`/remove_query`, `/sources`, `/run`, `/schedule`, `/pause`, `/resume`, `/status`,
-and `/about`. `/help` contains the complete source and schedule syntax.
+## Commands
+
+| Command                                     | What it does                                                          |
+| ------------------------------------------- | --------------------------------------------------------------------- |
+| `/start`                                    | Initializes the private bot and shows the command guide.              |
+| `/help`                                     | Shows the complete command list and syntax.                           |
+| `/about`                                    | Explains the bot, data flow, sources, and limitations.                |
+| `/queries`                                  | Lists monitored publication topics.                                   |
+| `/add_query TOPIC`, `/addquery TOPIC`       | Adds one topic using the global source settings.                      |
+| `/add_queries`, `/addqueries`               | Imports topics from an attached CSV with a `query` or `topic` column. |
+| `/remove_query TOPIC`, `/removequery TOPIC` | Removes one monitored topic.                                          |
+| `/sources`                                  | Configures global sources with Telegram buttons.                      |
+| `/list_sources`, `/listsources`             | Lists providers and their links.                                      |
+| `/run`                                      | Runs all enabled sources immediately.                                 |
+| `/schedule [CRON] [TIMEZONE]`               | Shows or replaces the persisted schedule.                             |
+| `/pause` / `/resume`                        | Pauses or resumes scheduled runs without deleting configuration.      |
+| `/status`                                   | Shows watcher, schedule, and last-run status.                         |
 
 ## Architecture and flow
 
@@ -22,11 +36,20 @@ sources. Scheduled empty runs stay silent; manual empty runs report the result.
 
 ## Configuration
 
-Required: `DATABASE_URL`, `PUBLICATIONS_TELEGRAM_TOKEN`,
-`TELEGRAM_ALLOWED_USER_IDS`, `OLLAMA_URL`, and `OLLAMA_MODEL`. Optional bounded
-controls include `OLLAMA_*`, `SOURCE_BACKOFF_BASE_SECONDS`,
-`SOURCE_BACKOFF_MAX_MINUTES`, `SOURCE_MAX_CONCURRENCY`, `DEFAULT_TIMEZONE`, and
-`LOG_LEVEL`.
+| Variable                                                    | Required/default       | Purpose                                           |
+| ----------------------------------------------------------- | ---------------------- | ------------------------------------------------- |
+| `DATABASE_URL`                                              | Required               | PostgreSQL connection.                            |
+| `PUBLICATIONS_TELEGRAM_TOKEN`                               | Required               | Dedicated Telegram bot token.                     |
+| `TELEGRAM_ALLOWED_USER_IDS`                                 | Required               | Authorized private operators.                     |
+| `OLLAMA_URL`, `OLLAMA_MODEL`                                | Required               | Structured relevance analysis provider and model. |
+| `OLLAMA_KEEP_ALIVE`                                         | `5m`                   | Model residency hint.                             |
+| `OLLAMA_MAX_ITEMS_PER_RUN`                                  | `0`                    | Optional per-run analysis cap; zero is unlimited. |
+| `OLLAMA_NUM_CTX`, `OLLAMA_NUM_PREDICT`                      | `4096`, `768`          | Context and output-token bounds.                  |
+| `OLLAMA_RETRIES`, `OLLAMA_THINK`, `OLLAMA_TIMEOUT_MS`       | `1`, `false`, `120000` | Bounded retry, thinking, and timeout controls.    |
+| `SOURCE_BACKOFF_BASE_SECONDS`, `SOURCE_BACKOFF_MAX_MINUTES` | `60`, `360`            | Provider failure backoff.                         |
+| `SOURCE_MAX_CONCURRENCY`                                    | `8`                    | Maximum concurrent source calls.                  |
+| `DEFAULT_TIMEZONE`                                          | `Europe/Prague`        | Initial schedule timezone.                        |
+| `LOG_LEVEL`                                                 | `info`                 | Structured log level.                             |
 
 ## Execution and scheduling
 

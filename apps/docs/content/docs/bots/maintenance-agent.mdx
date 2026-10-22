@@ -10,8 +10,19 @@ host/Ollama capacity. Host inspection is read-only through `/proc` and `/sys`; i
 does not require the Docker socket or privileged mode. It sends cooldown-aware
 alerts and recovery messages.
 
-Commands: `/start`, `/status`, `/summary`, `/recommendations`, `/run`, `/debug`,
-`/updates`, `/about`, and `/help`.
+## Commands
+
+| Command                    | What it does                                              |
+| -------------------------- | --------------------------------------------------------- |
+| `/start`                   | Shows the overview and command list.                      |
+| `/help`                    | Shows every command and the no-auto-remediation boundary. |
+| `/about`                   | Explains telemetry, findings, approvals, and safety.      |
+| `/status`                  | Shows live service state, stale runs, and recent errors.  |
+| `/summary`                 | Lists current open findings.                              |
+| `/recommendations`         | Shows top evidence-backed proposals.                      |
+| `/run`                     | Runs a maintenance evaluation immediately.                |
+| `/debug [on\|off\|status]` | Controls detailed completed-run reports.                  |
+| `/updates`                 | Shows recent project changelog entries.                   |
 
 ## Architecture and flow
 
@@ -28,11 +39,17 @@ resolves it before reopening only findings backed by current evidence.
 
 ## Configuration
 
-Required: `DATABASE_URL`, `MAINTENANCE_API_TOKEN`,
-`MAINTENANCE_TELEGRAM_TOKEN`, and `TELEGRAM_ALLOWED_USER_IDS`. Configure health,
-daily/weekly analysis, jitter, stale/error windows, CPU/memory/GPU thresholds,
-release/changelog paths, resource monitoring, and external `OLLAMA_URL`. Self
-review defaults off.
+| Variable group    | Variables and purpose                                                                                                                                                                                                                                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Required          | `DATABASE_URL`, `MAINTENANCE_API_TOKEN`, `MAINTENANCE_TELEGRAM_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`.                                                                                                                                                                                                                     |
+| Runtime HTTP      | `MAINTENANCE_ENABLED`, `MAINTENANCE_HOST`, `MAINTENANCE_PORT`.                                                                                                                                                                                                                                                          |
+| Scheduler         | `MAINTENANCE_SCHEDULER_INTERVAL_MS`, `MAINTENANCE_HEALTH_INTERVAL_MINUTES`, `MAINTENANCE_ANALYSIS_INTERVAL_MINUTES`, `MAINTENANCE_WEEKLY_ANALYSIS_ENABLED`, `MAINTENANCE_WEEKLY_INTERVAL_MINUTES`, `MAINTENANCE_JITTER_MAX_SECONDS`.                                                                                    |
+| Review/release    | `MAINTENANCE_SELF_REVIEW_ENABLED`, `MAINTENANCE_CHANGELOG_PATH`, `MAINTENANCE_RELEASE_PATH`.                                                                                                                                                                                                                            |
+| Resource sampling | `MAINTENANCE_RESOURCE_MONITOR_ENABLED`, `MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS`, `MAINTENANCE_CPU_WARNING_PERCENT`, `MAINTENANCE_MEMORY_WARNING_PERCENT`, `MAINTENANCE_GPU_WARNING_PERCENT`, `MAINTENANCE_CAPACITY_SUSTAINED_SAMPLES`, `MAINTENANCE_CAPACITY_ALERT_COOLDOWN_MINUTES`, `MAINTENANCE_NVIDIA_SMI_PATH`. |
+| Service status    | `MAINTENANCE_AGENT_STATUS_STALE_MINUTES`, `MAINTENANCE_AGENT_STATUS_ERROR_LOOKBACK_MINUTES`.                                                                                                                                                                                                                            |
+| Ollama endpoint   | `OLLAMA_URL`, `OLLAMA_REQUEST_TIMEOUT_SECONDS`.                                                                                                                                                                                                                                                                         |
+| Ollama capacity   | `OLLAMA_CPU_ALERT_PERCENT`, `OLLAMA_HIGH_USAGE_DURATION_SECONDS`, `OLLAMA_CPU_GPU_IMBALANCE_ENABLED`, `OLLAMA_CPU_GPU_IMBALANCE_DURATION_SECONDS`, `OLLAMA_CPU_GPU_SHARE_MARGIN_PERCENT`, `OLLAMA_GPU_LOW_UTIL_PERCENT`, `OLLAMA_QUEUE_ALERT_SIZE`, `OLLAMA_QUEUE_WAIT_ALERT_SECONDS`, `OLLAMA_ALERT_COOLDOWN_SECONDS`. |
+| Logging           | `LOG_LEVEL`.                                                                                                                                                                                                                                                                                                            |
 
 ## Execution and scheduling
 
@@ -47,9 +64,15 @@ hours, daily analysis to 24 hours, and weekly analysis to seven days.
 
 ## Integrations
 
-The agent reads shared PostgreSQL telemetry, host metrics, NVIDIA data when
-available, Ollama status, release/changelog files, an authenticated internal HTTP
-surface, and Telegram.
+| Source/service                             | Role                                                                       |
+| ------------------------------------------ | -------------------------------------------------------------------------- |
+| Watcher PostgreSQL                         | Run results, source health, delivery state, findings, and recommendations. |
+| `/proc`, `/sys`, host cgroups              | Read-only CPU, memory, process, and capacity observations.                 |
+| NVIDIA CLI/DRM sysfs                       | Optional GPU utilization and capacity data.                                |
+| Ollama API/runtime metrics                 | Queue, request, CPU/GPU balance, and availability checks.                  |
+| Release and maintenance changelog files    | `/updates` and deployment-version context.                                 |
+| Every runnable Watcher bot/agent           | Readiness and freshness status; no cross-service mutation.                 |
+| Authenticated maintenance API and Telegram | Approval records and private operator reporting.                           |
 
 ## Troubleshooting
 

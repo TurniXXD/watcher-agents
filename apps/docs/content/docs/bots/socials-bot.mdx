@@ -12,10 +12,33 @@ does not publish to social networks, a website, or a newsletter.
 
 Use `/start` or `/socials` for the main menu, `/about` for the purpose, data
 model, automation, and publishing boundaries, and `/help` or `/socials_help` for
-the complete command guide. Core commands include `/socials_plan`, `/socials_add`, `/socials_ideas`,
-`/socials_week`, `/socials_pack`, `/socials_drafts`, `/socials_status`,
-`/socials_analytics` and the
-`/socials_trend*` Trend Intelligence commands.
+the complete command guide.
+
+## Commands
+
+| Command                                                         | What it does                                                         |
+| --------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `/start`, `/socials`                                            | Opens the main menu.                                                 |
+| `/help`, `/socials_help`                                        | Shows every command and example.                                     |
+| `/about`                                                        | Explains the data model, automation, privacy, and publishing limits. |
+| `/socials_plan`                                                 | Starts the Sunday planning interview.                                |
+| `/socials_ideas`                                                | Lists the idea backlog.                                              |
+| `/socials_add [IDEA]`                                           | Saves an idea.                                                       |
+| `/socials_projects [add NAME \| DESCRIPTION \| PUBLIC/PRIVATE]` | Lists or creates projects.                                           |
+| `/socials_topics`                                               | Lists editorial topics.                                              |
+| `/socials_week`                                                 | Shows the calendar and production checklist.                         |
+| `/socials_pack`                                                 | Builds the Sunday Content Pack for manual ChatGPT writing.           |
+| `/socials_drafts`                                               | Lists and opens draft versions.                                      |
+| `/socials_status [ID STATUS URL]`                               | Shows production state or explicitly marks a real publication URL.   |
+| `/socials_history`                                              | Shows published history.                                             |
+| `/socials_analytics`                                            | Shows manually recorded outcomes.                                    |
+| `/socials_trends`                                               | Shows Trend Intelligence status/latest report.                       |
+| `/socials_trends run [SOURCES]`                                 | Runs selected sources now.                                           |
+| `/socials_trend ID`                                             | Shows evidence, scoring, and Czech concepts.                         |
+| `/socials_trend_use ID`                                         | Adds an opportunity to the idea backlog.                             |
+| `/socials_trend_feedback ID VALUE`                              | Records transparent ranking feedback.                                |
+| `/socials_trend_import`                                         | Imports authorized CSV/JSON observations for manual-only platforms.  |
+| `/socials_trend_settings`                                       | Shows sources, keywords, and daily schedule.                         |
 
 ## Architecture and flow
 
@@ -33,13 +56,21 @@ Feedback applies only a small transparent future-ranking correction.
 
 ## Configuration
 
-Required: `DATABASE_URL`, `SOCIALS_TELEGRAM_TOKEN`, and
-`TELEGRAM_ALLOWED_USER_IDS`. Ollama defaults exist and can be disabled with
-`SOCIALS_OLLAMA_ENABLED=false`. Notion requires `NOTION_API_KEY` paired with
-`NOTION_SOCIALS_DATA_SOURCE_ID`. Transcription, trend schedule/report size,
-YouTube API key, the complete Reddit OAuth group, and all free-source settings
-are optional. Enable sources with `SOCIALS_TREND_SOURCES`; RSS additionally needs
-at least one URL in `SOCIALS_RSS_FEEDS`.
+| Variable group      | Variables and purpose                                                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Required            | `DATABASE_URL`, `SOCIALS_TELEGRAM_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`.                                                                       |
+| Runtime             | `SOCIALS_TIMEZONE`, `SOCIALS_HEALTH_PORT`, `SOCIALS_SCHEDULER_INTERVAL_MS`, `SOCIALS_SUNDAY_REMINDER_TIME`.                                  |
+| Ollama              | `SOCIALS_OLLAMA_ENABLED`, `OLLAMA_URL`, `OLLAMA_MODEL`, `SOCIALS_OLLAMA_TIMEOUT_MS`.                                                         |
+| Notion mirror       | `NOTION_API_KEY`, `NOTION_SOCIALS_DATA_SOURCE_ID` (paired), `NOTION_API_VERSION`.                                                            |
+| Voice transcription | `SOCIALS_TRANSCRIPTION_URL`, `SOCIALS_TRANSCRIPTION_MODEL`, `SOCIALS_TRANSCRIPTION_API_KEY`.                                                 |
+| Trend runner        | `SOCIALS_TRENDS_ENABLED`, `SOCIALS_TRENDS_SCHEDULE`, `SOCIALS_TRENDS_REPORT_SIZE`, `SOCIALS_TREND_SOURCES`, `SOCIALS_TREND_HTTP_TIMEOUT_MS`. |
+| YouTube             | `SOCIALS_YOUTUBE_API_KEY`, `SOCIALS_YOUTUBE_MAX_SEARCHES_PER_RUN`.                                                                           |
+| Reddit              | `SOCIALS_REDDIT_CLIENT_ID`, `SOCIALS_REDDIT_CLIENT_SECRET`, `SOCIALS_REDDIT_USER_AGENT`; complete OAuth group.                               |
+| Bluesky             | `SOCIALS_BLUESKY_API_URL`, `SOCIALS_BLUESKY_KEYWORDS`, `SOCIALS_BLUESKY_LOOKBACK_HOURS`, `SOCIALS_BLUESKY_MAX_POSTS`.                        |
+| Hacker News         | `SOCIALS_HACKERNEWS_API_URL`, `SOCIALS_HACKERNEWS_CATEGORIES`, `SOCIALS_HACKERNEWS_MAX_STORIES`.                                             |
+| Mastodon            | `SOCIALS_MASTODON_INSTANCES`, `SOCIALS_MASTODON_TREND_TYPES`, `SOCIALS_MASTODON_MAX_ITEMS`.                                                  |
+| RSS/Atom            | `SOCIALS_RSS_FEEDS`, `SOCIALS_RSS_MAX_ITEMS_PER_FEED`.                                                                                       |
+| Logging             | `LOG_LEVEL`.                                                                                                                                 |
 
 ```bash
 SOCIALS_TREND_SOURCES=YOUTUBE,BLUESKY,HACKERNEWS,MASTODON,RSS

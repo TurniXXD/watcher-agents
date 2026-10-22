@@ -10,10 +10,25 @@ entries, applies structured significance/relevance analysis, filters disabled
 categories, and publishes durable `news` events for Briefing. Topics start empty
 and steer relevance without being presented as sourced facts.
 
-Commands: `/start`, `/help`, `/topics`, `/feeds`, `/feed_add`, `/feed_remove`,
-`/categories`, `/run`, `/schedule`, `/pause`, `/resume`, `/status`, and
-`/about`. `/help` contains the complete feed, topic, category, and scheduling
-syntax.
+## Commands
+
+| Command                                                                    | What it does                                           |
+| -------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `/start`                                                                   | Initializes the bot and shows the command guide.       |
+| `/help`                                                                    | Shows every command and profile name.                  |
+| `/about`                                                                   | Explains the bot, data flow, sources, and limitations. |
+| `/feeds`                                                                   | Lists built-in and custom feeds with IDs.              |
+| `/feed_add PROFILE URL [NAME]`                                             | Adds a validated custom RSS/Atom feed.                 |
+| `/feed_remove ID`                                                          | Deletes a custom feed.                                 |
+| `/feed_enable ID` / `/feed_disable ID`                                     | Enables or disables a feed without deleting it.        |
+| `/topics`                                                                  | Lists relevance topics for both profiles.              |
+| `/topic_add PROFILE TOPIC` / `/topic_remove PROFILE TOPIC`                 | Adds or removes a ranking topic.                       |
+| `/categories`                                                              | Lists enabled and disabled categories.                 |
+| `/category_enable PROFILE CATEGORY` / `/category_disable PROFILE CATEGORY` | Controls delivery for one category.                    |
+| `/run [PROFILE]`                                                           | Runs both profiles or only `czech`/`global`.           |
+| `/schedule [CRON] [TIMEZONE]`                                              | Shows or replaces the persisted schedule.              |
+| `/pause` / `/resume`                                                       | Pauses or resumes scheduled runs.                      |
+| `/status`                                                                  | Shows watcher and profile counts.                      |
 
 ## Architecture and flow
 
@@ -24,9 +39,20 @@ persisted for downstream Briefing consumption.
 
 ## Configuration
 
-Required: `DATABASE_URL`, `NEWS_TELEGRAM_TOKEN`,
-`TELEGRAM_ALLOWED_USER_IDS`, `OLLAMA_URL`, and `OLLAMA_MODEL`. Configure optional
-LLM bounds, source backoff/concurrency, `DEFAULT_TIMEZONE`, and `LOG_LEVEL`.
+| Variable                                                    | Required/default       | Purpose                                   |
+| ----------------------------------------------------------- | ---------------------- | ----------------------------------------- |
+| `DATABASE_URL`                                              | Required               | PostgreSQL connection.                    |
+| `NEWS_TELEGRAM_TOKEN`                                       | Required               | Dedicated Telegram token.                 |
+| `TELEGRAM_ALLOWED_USER_IDS`                                 | Required               | Authorized private operators.             |
+| `OLLAMA_URL`, `OLLAMA_MODEL`                                | Required               | Structured relevance analysis.            |
+| `OLLAMA_KEEP_ALIVE`                                         | `5m`                   | Model residency hint.                     |
+| `OLLAMA_MAX_ITEMS_PER_RUN`                                  | `0`                    | Optional analysis cap; zero is unlimited. |
+| `OLLAMA_NUM_CTX`, `OLLAMA_NUM_PREDICT`                      | `4096`, `768`          | Context and output-token bounds.          |
+| `OLLAMA_RETRIES`, `OLLAMA_THINK`, `OLLAMA_TIMEOUT_MS`       | `1`, `false`, `120000` | Retry, thinking, and timeout controls.    |
+| `SOURCE_BACKOFF_BASE_SECONDS`, `SOURCE_BACKOFF_MAX_MINUTES` | `60`, `360`            | Feed failure backoff.                     |
+| `SOURCE_MAX_CONCURRENCY`                                    | `8`                    | Maximum concurrent feed calls.            |
+| `DEFAULT_TIMEZONE`                                          | `Europe/Prague`        | Initial schedule timezone.                |
+| `LOG_LEVEL`                                                 | `info`                 | Structured log level.                     |
 
 ## Execution and scheduling
 
@@ -42,9 +68,11 @@ retired Czech and GDELT-only entries remain disabled.
 
 ## Integrations
 
-RSS/Atom feeds are primary. PostgreSQL stores feed configuration, normalized
-items, schedules, and events. Ollama adds validated relevance analysis; Telegram
-is the private operator UI; Briefing consumes durable news events.
+RSS/Atom feeds are primary. The enabled Global catalog covers major public news,
+science, technology, health, European, and space feeds; custom operator feeds use
+the same SSRF-safe adapter. PostgreSQL stores configuration, normalized items,
+schedules, and events. Ollama adds validated relevance analysis; Telegram is the
+private operator UI; Briefing Bot consumes durable `news` events.
 
 ## Troubleshooting
 

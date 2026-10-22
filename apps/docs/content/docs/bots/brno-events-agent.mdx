@@ -20,11 +20,25 @@ cancel successful sources. Manual source runs reuse the scheduled pipeline.
 
 ## Configuration
 
-Required: `DATABASE_URL` and a minimum-16-character `BRNO_EVENTS_API_TOKEN`.
-Configure host/port, scheduler polling, and each provider's `*_ENABLED`,
-`*_INTERVAL_MINUTES`, and optional `*_URL`. Public iCalendar recurrence is
-expanded into concrete upcoming occurrences. Timezone is fixed to
-`Europe/Prague`.
+| Variable group        | Variables and purpose                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Required              | `DATABASE_URL`, minimum-16-character `BRNO_EVENTS_API_TOKEN`.                                                       |
+| HTTP/scheduler        | `BRNO_EVENTS_HOST`, `BRNO_EVENTS_PORT`, `BRNO_EVENTS_SCHEDULER_INTERVAL_MS`, fixed `TZ=Europe/Prague`, `LOG_LEVEL`. |
+| Meetup                | `MEETUP_ENABLED`, `MEETUP_INTERVAL_MINUTES`, optional `MEETUP_URL`.                                                 |
+| GoOut                 | `GOOUT_ENABLED`, `GOOUT_INTERVAL_MINUTES`, optional `GOOUT_URL`.                                                    |
+| VisitBrno/TIC         | `VISITBRNO_ENABLED`, `VISITBRNO_INTERVAL_MINUTES`, optional `VISITBRNO_URL`.                                        |
+| MUNI                  | `MUNI_ENABLED`, `MUNI_INTERVAL_MINUTES`, optional `MUNI_URL`.                                                       |
+| VUT                   | `VUT_ENABLED`, `VUT_INTERVAL_MINUTES`, optional `VUT_URL`.                                                          |
+| JIC                   | `JIC_ENABLED`, `JIC_INTERVAL_MINUTES`, optional `JIC_URL`.                                                          |
+| CEITEC                | `CEITEC_ENABLED`, `CEITEC_INTERVAL_MINUTES`, optional `CEITEC_URL`.                                                 |
+| Velvet Innovation     | `VELVET_INNOVATION_ENABLED`, `VELVET_INNOVATION_INTERVAL_MINUTES`, optional `VELVET_INNOVATION_URL`.                |
+| SideQuesty            | `SIDEQUESTY_ENABLED`, `SIDEQUESTY_INTERVAL_MINUTES`, optional `SIDEQUESTY_URL`.                                     |
+| Objev Brno            | `OBJEV_BRNO_ENABLED`, `OBJEV_BRNO_INTERVAL_MINUTES`, optional `OBJEV_BRNO_URL`.                                     |
+| Impact Hub Brno       | `IMPACT_HUB_BRNO_ENABLED`, `IMPACT_HUB_BRNO_INTERVAL_MINUTES`, optional `IMPACT_HUB_BRNO_URL`.                      |
+| Base48 calendar       | `BASE48_CALENDAR_ENABLED`, `BASE48_CALENDAR_INTERVAL_MINUTES`, optional `BASE48_CALENDAR_URL`.                      |
+| ČSOB Validation Camps | `CSOB_VALIDATION_CAMPS_ENABLED`, `CSOB_VALIDATION_CAMPS_INTERVAL_MINUTES`, optional `CSOB_VALIDATION_CAMPS_URL`.    |
+
+Public iCalendar recurrence is expanded into concrete upcoming occurrences.
 
 ## Execution and scheduling
 
@@ -40,8 +54,12 @@ polls due state every 30 seconds by default.
 ## Integrations
 
 `GET /health` is unauthenticated. Event, briefing, and manual-run routes require
-`Authorization: Bearer $BRNO_EVENTS_API_TOKEN`. Briefing consumes selected events;
-Networking Bot reuses normalized records for recommendations and attendance.
+`Authorization: Bearer $BRNO_EVENTS_API_TOKEN`. Briefing Bot consumes selected
+events; Networking Bot reuses normalized records and source health for
+recommendations, Calendar writes, and attendance. Sources are Meetup, GoOut,
+VisitBrno/TIC, MUNI, VUT, JIC, CEITEC, Velvet Innovation, SideQuesty, Objev
+Brno, Impact Hub Brno, Base48's public Nextcloud calendar, and official ČSOB
+Start it @UNI Validation Camp listings.
 
 ## Troubleshooting
 
