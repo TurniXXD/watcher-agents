@@ -6,7 +6,9 @@ Research and drafting never imply authorization to contact a recipient. Quickly 
 
 ## Commands
 
-Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands include `/sales_status`, `/sales_campaigns`, `/sales_search`, `/sales_searches`, `/sales_search_stop`, `/sales_find`, `/sales_calls`, `/sales_leads`, `/sales_lead`, `/sales_approve`, `/sales_reject`, and `/sales_run`.
+Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands include `/sales_status`, `/sales_campaigns`, `/sales_prospects`, `/sales_search`, `/sales_searches`, `/sales_search_stop`, `/sales_find`, `/sales_calls`, `/sales_leads`, `/sales_lead`, `/sales_approve`, `/sales_reject`, and `/sales_run`.
+
+`/sales_prospects <business type> | <location> | [limit]` is the campaign-free CRM workflow. The limit defaults to 10 and is bounded to 1–20. It searches ARES and Geoapify with the optional Google Places fallback, keeps candidates that have a website, audits their public website for an email and explicit `tel:` link, and creates or updates a Twenty Company plus a linked contact Note. PostgreSQL prevents repeat creation by provider identity, normalized domain, and IČO; a previously completed prospect is skipped. This command never enrolls a lead in Quickly and never sends outreach.
 
 `/sales_search <business type> | <location> | <limit>` accepts a Czech or English business type. Known aliases are translated deterministically to Geoapify and CZ-NACE (for example, `farmy` becomes `commercial.food_and_drink.farm` plus CZ-NACE `01`); other descriptions are mapped by the configured Ollama model to a validated Geoapify category catalog. Every immediate and periodic result prints the categories actually used. Explicit `geo:<category>` and `nace:<code>` inputs remain supported.
 
@@ -16,6 +18,6 @@ Personal contacts and business-card reading are also available in the separate [
 
 ## Configuration
 
-Start from [sales](../../deploy/presets/sales-bot.env.example), [Quickly](../../deploy/presets/quickly.env.example), and [Twenty](../../deploy/presets/twenty.env.example) presets. Keep populated copies only in private runtime configuration. API/webhook tokens must be distinct. Quickly, Twenty, and the Google Sheets contact group remain optional until those integrations are enabled.
+Start from [sales](../../deploy/presets/sales-bot.env.example), [Quickly](../../deploy/presets/quickly.env.example), and [Twenty](../../deploy/presets/twenty.env.example) presets. Keep populated copies only in private runtime configuration. API/webhook tokens must be distinct. Twenty is required only for `/sales_prospects`; Quickly and the Google Sheets contact group remain optional until those integrations are enabled.
 
 Apply the [Twenty Sales App](../twenty-sales-app/README.md) before enabling custom Twenty fields.

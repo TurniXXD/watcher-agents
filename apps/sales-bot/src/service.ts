@@ -107,6 +107,7 @@ const mergeDiscoveryResults = (
 
 export class SalesService {
   private running = false;
+  private prospectSyncRunning = false;
   public constructor(
     private readonly store: SalesStore,
     private readonly logger: WatcherLogger,
@@ -125,6 +126,204 @@ export class SalesService {
 
   public get googlePlacesConfigured(): boolean {
     return Boolean(this.places);
+  }
+
+  public get twentyConfigured(): boolean {
+    return Boolean(this.twenty);
+  }
+
+  public async syncProspects(input: {
+    query: string;
+    locality: string;
+    limit: number;
+  }): Promise<Awaited<ReturnType<SalesService['syncProspectsInternal']>>> {
+    if (this.prospectSyncRunning)
+      throw new Error('Prospect synchronization is already running');
+    this.prospectSyncRunning = true;
+    try {
+      return await this.syncProspectsInternal(input);
+    } finally {
+      this.prospectSyncRunning = false;
+    }
+  }
+
+  private async syncProspectsInternal(input: {
+    query: string;
+    locality: string;
+    limit: number;
+  }): Promise<{
+    found: number;
+    withWebsite: number;
+    created: number;
+    alreadyPresent: number;
+    synced: number;
+    failures: Array<{ companyName: string; error: string }>;
+    category: BusinessCategoryTranslation;
+  }> {
+    if (!this.twenty) throw new Error('Twenty CRM is not configured');
+    const { companies, category } = await this.searchBusinessesDetailed(input);
+    const withWebsite = companies.filter(
+      (company): company is BusinessSearchResult & { websiteUrl: string } =>
+        company.websiteUrl !== undefined,
+    );
+    const result = {
+      found: companies.length,
+      withWebsite: withWebsite.length,
+      created: 0,
+      alreadyPresent: 0,
+      synced: 0,
+      failures: [] as Array<{ companyName: string; error: string }>,
+      category,
+    };
+
+    for (const company of withWebsite) {
+      let initialDomain: string;
+      try {
+        initialDomain = new URL(company.websiteUrl).hostname
+          .replace(/^www\./u, '')
+          .toLowerCase();
+      } catch {
+        result.failures.push({
+          companyName: company.name,
+          error: 'Neplatná URL webu',
+        });
+        continue;
+      }
+      const existing = await this.store.findProspect({
+        source: company.provider,
+        sourceExternalId: company.id,
+        domain: initialDomain,
+        ...(company.registrationId
+          ? { registrationId: company.registrationId }
+          : {}),
+      });
+      if (
+        existing?.syncedAt &&
+        existing.twentyCompanyId &&
+        existing.twentyContactNoteId
+      ) {
+        result.alreadyPresent += 1;
+        continue;
+      }
+
+      let websiteUrl = company.websiteUrl;
+      let email = company.email;
+      let phone = company.phone;
+      let emailSourceUrl: string | undefined;
+      let phoneSourceUrl: string | undefined;
+      try {
+        const audit = await auditWebsite(company.websiteUrl);
+        websiteUrl = audit.sourceUrl;
+        email = audit.foundEmail ?? email;
+        phone = audit.foundPhone ?? phone;
+        emailSourceUrl = audit.emailSourceUrl;
+        phoneSourceUrl = audit.phoneSourceUrl;
+      } catch (error) {
+        this.logger.warn(
+          {
+            companyName: company.name,
+            websiteUrl: company.websiteUrl,
+            ...safeErrorDetails(error),
+          },
+          'Prospect website audit failed; directory contacts retained',
+        );
+      }
+
+      const domain = new URL(websiteUrl).hostname
+        .replace(/^www\./u, '')
+        .toLowerCase();
+      const validEmail =
+        email && emailSchema.safeParse(email).success
+          ? email.toLowerCase()
+          : undefined;
+      const contactSourceUrl =
+        emailSourceUrl ?? phoneSourceUrl ?? company.sourceUrl;
+      const saved = await this.store.upsertProspect({
+        query: input.query,
+        locality: input.locality,
+        companyName: company.name,
+        websiteUrl,
+        domain,
+        ...(company.address ? { location: company.address } : {}),
+        ...(company.registrationId
+          ? { registrationId: company.registrationId }
+          : {}),
+        ...(validEmail ? { email: validEmail } : {}),
+        ...(phone ? { phone } : {}),
+        contactSourceUrl,
+        source: company.provider,
+        sourceExternalId: company.id,
+        sourceUrl: company.sourceUrl,
+      });
+      if (saved.created) result.created += 1;
+      if (!saved.needsSync) {
+        result.alreadyPresent += 1;
+        continue;
+      }
+
+      try {
+        const companyRecord = await this.twenty.upsertCompany({
+          name: saved.prospect.companyName,
+          websiteUrl: saved.prospect.websiteUrl,
+          domain: saved.prospect.domain,
+          ...(saved.prospect.registrationId
+            ? { registrationId: saved.prospect.registrationId }
+            : {}),
+          externalId: `sales-prospect:${saved.prospect.id}`,
+          ...(saved.prospect.location
+            ? { location: saved.prospect.location }
+            : {}),
+          industry: saved.prospect.query,
+          source: saved.prospect.source,
+          sourceUrl: saved.prospect.sourceUrl,
+          lastResearchedAt: new Date(),
+        });
+        const clean = (value: string): string =>
+          value.replaceAll(/\s+/gu, ' ').trim();
+        const note = await this.twenty.recordInteraction({
+          externalId: saved.prospect.id,
+          companyId: companyRecord.id,
+          title: 'Prospect contact',
+          body: [
+            `Category: ${clean(saved.prospect.query)}`,
+            `Locality: ${clean(saved.prospect.locality)}`,
+            `Website: ${saved.prospect.websiteUrl}`,
+            `Email: ${saved.prospect.email ?? 'not found'}`,
+            `Phone: ${saved.prospect.phone ?? 'not found'}`,
+            `Contact source: ${saved.prospect.contactSourceUrl ?? saved.prospect.sourceUrl}`,
+            `Discovery source: ${saved.prospect.sourceUrl}`,
+            saved.prospect.registrationId
+              ? `Registration ID: ${clean(saved.prospect.registrationId)}`
+              : undefined,
+          ]
+            .filter((line): line is string => Boolean(line))
+            .join('\n\n'),
+        });
+        await this.store.markProspectSynced(saved.prospect.id, {
+          companyId: companyRecord.id,
+          contactNoteId: note.id,
+        });
+        result.synced += 1;
+      } catch (error) {
+        const details = safeErrorDetails(error);
+        const errorMessage =
+          details.errorMessage ?? 'Unknown Twenty sync error';
+        await this.store.markProspectSyncFailed(
+          saved.prospect.id,
+          errorMessage,
+        );
+        result.failures.push({
+          companyName: company.name,
+          error: errorMessage,
+        });
+        this.logger.warn(
+          { prospectId: saved.prospect.id, ...details },
+          'Prospect Twenty sync failed',
+        );
+      }
+    }
+
+    return result;
   }
 
   public async searchBusinesses(input: {

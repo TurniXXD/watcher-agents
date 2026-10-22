@@ -2,6 +2,11 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-22 — Campaign-free Sales CRM prospects
+
+- Added `/sales_prospects <category> | <location> | [limit]` to discover ten companies by default without creating a campaign, enrich public website contacts, and idempotently add Company records with linked contact/source notes to Twenty.
+- Persisted prospect identities, contact evidence, and Twenty IDs in PostgreSQL with domain, IČO, and provider constraints so repeat searches skip completed imports and failed Twenty writes remain visible for retry.
+
 ## 2026-10-21 — Access-protected Twenty CRM origin
 
 - Attached only the Twenty HTTP server to the external `lateralis` network with the stable `watcher-twenty` Cloudflared alias while keeping its PostgreSQL, Redis, and worker services private.

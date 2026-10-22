@@ -159,5 +159,60 @@ describe.skipIf(!database || !store)(
         });
       }
     });
+
+    it('deduplicates campaign-free prospects by domain and keeps their Twenty sync identity', async () => {
+      const suffix = randomUUID();
+      const first = await store!.upsertProspect({
+        query: 'autoservis',
+        locality: 'Brno',
+        companyName: 'Autoservis Test',
+        websiteUrl: `https://${suffix}.example/`,
+        domain: `${suffix}.example`,
+        registrationId: suffix.replaceAll('-', '').slice(0, 8),
+        email: `info@${suffix}.example`,
+        phone: '+420 777 111 222',
+        contactSourceUrl: `https://${suffix}.example/kontakt`,
+        source: 'GEOAPIFY',
+        sourceExternalId: `geo-${suffix}`,
+        sourceUrl: `https://www.openstreetmap.org/node/${suffix}`,
+      });
+      try {
+        expect(first.created).toBe(true);
+        expect(first.needsSync).toBe(true);
+        await store!.markProspectSynced(first.prospect.id, {
+          companyId: `company-${suffix}`,
+          contactNoteId: `note-${suffix}`,
+        });
+
+        const repeated = await store!.upsertProspect({
+          query: 'servis aut',
+          locality: 'Brno',
+          companyName: 'Autoservis Test',
+          websiteUrl: `https://${suffix}.example/`,
+          domain: `${suffix}.example`,
+          registrationId: suffix.replaceAll('-', '').slice(0, 8),
+          email: `info@${suffix}.example`,
+          phone: '+420 777 111 222',
+          contactSourceUrl: `https://${suffix}.example/kontakt`,
+          source: 'GOOGLE_PLACES',
+          sourceExternalId: `google-${suffix}`,
+          sourceUrl: `https://maps.google.com/?cid=${suffix}`,
+        });
+
+        expect(repeated.created).toBe(false);
+        expect(repeated.prospect.id).toBe(first.prospect.id);
+        expect(repeated.prospect.twentyCompanyId).toBe(`company-${suffix}`);
+        expect(repeated.prospect.twentyContactNoteId).toBe(`note-${suffix}`);
+        await expect(
+          database!.salesProspect.count({
+            where: { domain: `${suffix}.example` },
+          }),
+        ).resolves.toBe(1);
+      } finally {
+        await database!.salesProspect.deleteMany({
+          where: { domain: `${suffix}.example` },
+        });
+      }
+    });
   },
 );

@@ -2550,6 +2550,35 @@ model SalesSearchSeenResult {
   @@map("sales_search_seen_results")
 }
 
+model SalesProspect {
+  id                  String    @id @default(uuid())
+  query               String
+  locality            String
+  companyName         String
+  websiteUrl          String
+  domain              String    @unique
+  location            String?
+  registrationId      String?   @unique
+  email               String?
+  phone               String?
+  contactSourceUrl    String?
+  source              String
+  sourceExternalId    String
+  sourceUrl           String
+  twentyCompanyId     String?
+  twentyContactNoteId String?
+  firstSeenAt         DateTime  @default(now())
+  lastSeenAt          DateTime  @default(now())
+  syncedAt            DateTime?
+  lastError           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([source, sourceExternalId])
+  @@index([syncedAt])
+  @@map("sales_prospects")
+}
+
 model SalesLead {
   id                                   String               @id @default(uuid())
   campaignId                           String

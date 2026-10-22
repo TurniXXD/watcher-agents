@@ -117,6 +117,7 @@ describe('sales bot help', () => {
     for (const command of [
       '/sales_status',
       '/sales_campaigns',
+      '/sales_prospects <service>',
       '/sales_search <service>',
       '/sales_searches',
       '/sales_search_stop <id|all>',
@@ -144,6 +145,9 @@ describe('sales bot help', () => {
     expect(salesAbout).toContain('GOOGLE_PLACES_API_KEY');
     expect(salesAbout).toContain('GEOAPIFY_API_KEY');
     expect(salesAbout).toContain('Firmy.cz');
+    expect(salesBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'sales_prospects' }),
+    );
     expect(salesBotCommands).toContainEqual(
       expect.objectContaining({ command: 'sales_search' }),
     );
@@ -190,6 +194,64 @@ describe('sales bot help', () => {
     });
     expect(parseSalesSearch('autoservis | Brno | 0')).toBeUndefined();
     expect(parseSalesSearch('autoservis | Brno | 21')).toBeUndefined();
+  });
+
+  it('imports campaign-free prospects into Twenty with a default limit of ten', async () => {
+    const syncProspects = vi.fn().mockResolvedValue({
+      found: 10,
+      withWebsite: 8,
+      created: 7,
+      alreadyPresent: 1,
+      synced: 7,
+      failures: [],
+      category: {
+        geoapifyCategory: 'service.vehicle.repair.car',
+        naceCode: '95310',
+        source: 'rule',
+      },
+    });
+    const bot = createSalesBot(
+      'test-token',
+      new Set([123]),
+      {} as SalesStore,
+      { syncProspects } as unknown as SalesService,
+    );
+    bot.botInfo = {
+      id: 456,
+      is_bot: true,
+      first_name: 'Sales Bot',
+      username: 'sales_test_bot',
+      can_join_groups: false,
+      can_read_all_group_messages: false,
+      supports_inline_queries: false,
+      can_connect_to_business: false,
+      has_main_web_app: false,
+      has_topics_enabled: false,
+      allows_users_to_create_topics: false,
+      can_manage_bots: false,
+      supports_join_request_queries: false,
+    };
+    const messages: string[] = [];
+    bot.api.config.use(async (_previous, method, payload) => {
+      if (method !== 'sendMessage') throw new Error(`Unexpected ${method}`);
+      if (!('text' in payload) || typeof payload.text !== 'string')
+        throw new Error('Expected sendMessage text');
+      messages.push(payload.text);
+      return { ok: true, result: { message_id: 1 } } as never;
+    });
+
+    await bot.handleUpdate(update('/sales_prospects autoservis | Brno', 450));
+
+    expect(syncProspects).toHaveBeenCalledWith({
+      query: 'autoservis',
+      locality: 'Brno',
+      limit: 10,
+    });
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toContain('ukládám nové prospekty do Twenty');
+    expect(messages[1]).toContain('10 nalezeno');
+    expect(messages[1]).toContain('7 synchronizováno do Twenty');
+    expect(messages[1]).toContain('1 již dříve přidáno');
   });
 
   it('prints a narrow contact table and persists the periodic search', async () => {

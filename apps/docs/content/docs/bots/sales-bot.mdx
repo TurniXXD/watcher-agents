@@ -13,10 +13,10 @@ the separate Networking Bot. Sales keeps the same commands for backward
 compatibility; event discovery and event follow-ups belong only to Networking.
 
 Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands
-include `/sales_status`, `/sales_campaigns`, `/sales_search`,
-`/sales_searches`, `/sales_search_stop`, `/sales_find`, `/sales_calls`,
-`/sales_leads`, `/sales_lead`, `/sales_approve`, `/sales_reject`, and
-`/sales_run`.
+include `/sales_status`, `/sales_campaigns`, `/sales_prospects`,
+`/sales_search`, `/sales_searches`, `/sales_search_stop`, `/sales_find`,
+`/sales_calls`, `/sales_leads`, `/sales_lead`, `/sales_approve`,
+`/sales_reject`, and `/sales_run`.
 
 The backward-compatible contact commands continue to use the `/network_`
 prefix and the same preview-and-confirm business-card workflow as Networking
@@ -29,6 +29,14 @@ CZ-NACE categories, queries providers, enriches public sites, records evidence,
 and scores leads. Periodic search stores its cursor and emits only new contacts.
 Lead research and call lists do not send email.
 
+`/sales_prospects <business type> | <location> | [limit]` performs a separate
+campaign-free CRM import. It defaults to 10 results, accepts 1–20, audits public
+websites for an email and explicit `tel:` link, and upserts a Twenty Company plus
+a linked Note containing the contact values and source URLs. PostgreSQL records
+provider identity, domain, IČO, contact evidence, and Twenty IDs so subsequent
+runs skip a completed prospect. The command does not create a campaign, draft,
+approval, or Quickly enrollment.
+
 Quickly enrollment fails closed unless a qualified approved lead has explicit
 `RECIPIENT_OPT_IN` or `EXISTING_CUSTOMER` evidence, no suppression, an enabled
 campaign, and available capacity. Public contact data or Telegram approval alone
@@ -40,7 +48,8 @@ Required: `DATABASE_URL`, `SALES_TELEGRAM_TOKEN`,
 `TELEGRAM_ALLOWED_USER_IDS`, distinct `SALES_API_TOKEN` and
 `SALES_WEBHOOK_TOKEN`. Configure scheduler/follow-up timezone and intervals.
 Geoapify, Google Places, Ollama, Quickly, Twenty, and the Google Sheets contact
-group are optional. Partial Google Sheets credentials or an Ollama URL without a
+group are optional globally, but `/sales_prospects` fails clearly unless Twenty
+is configured. Partial Google Sheets credentials or an Ollama URL without a
 model fail validation.
 
 ## Execution and scheduling
@@ -53,18 +62,22 @@ pnpm exec vitest run apps/sales-bot/src/__tests__
 
 Periodic work defaults to 30-minute intervals; follow-up reporting defaults to
 20:00 in `Europe/Prague`. Manual and scheduled discovery use the same persisted
-search and lead pipeline.
+search and lead pipeline. The campaign-free prospect import is one-shot and must
+be invoked explicitly.
 
 ## Integrations
 
 ARES and Geoapify are primary discovery sources; Google Places is an optional
-fallback. Quickly owns explicitly authorized campaigns. Twenty stores CRM state,
-and the versioned Twenty Sales App adds custom relationships/fields. Google
+fallback. Quickly owns explicitly authorized campaigns. Twenty stores CRM state
+and the campaign-free prospect Company/contact Note; the versioned Twenty Sales
+App adds custom relationships/fields. Google
 
 ## Troubleshooting
 
 - An empty call list means no analyzed lead currently has a public phone; run
   search/discovery and analysis, then inspect evidence.
+- `/sales_prospects` imports only candidates with a website. A result without an
+  official website is counted as found but is not written to Twenty.
 - Category mapping prints the Geoapify/CZ-NACE categories actually used. Supply
   `geo:` or `nace:` for an explicit override.
 - Quickly refusal is expected when consent, suppression, campaign, or capacity

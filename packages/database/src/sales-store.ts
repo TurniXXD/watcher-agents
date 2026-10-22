@@ -14,6 +14,22 @@ export type SalesLeadInput = {
   sourceData?: unknown;
 };
 
+export type SalesProspectInput = {
+  query: string;
+  locality: string;
+  companyName: string;
+  websiteUrl: string;
+  domain: string;
+  location?: string;
+  registrationId?: string;
+  email?: string;
+  phone?: string;
+  contactSourceUrl?: string;
+  source: string;
+  sourceExternalId: string;
+  sourceUrl: string;
+};
+
 const normalizeSearchPart = (value: string): string =>
   value.trim().toLocaleLowerCase('cs-CZ').replace(/\s+/gu, ' ');
 
@@ -25,6 +41,10 @@ export class SalesStore {
 
   public listCampaigns() {
     return this.db.salesCampaign.findMany({ orderBy: { createdAt: 'asc' } });
+  }
+
+  public countProspects() {
+    return this.db.salesProspect.count();
   }
 
   public getCampaign(id: string) {
@@ -188,6 +208,141 @@ export class SalesStore {
         data: { lastRunAt: now, lastError: null },
       }),
     ]);
+  }
+
+  public async upsertProspect(input: SalesProspectInput) {
+    const domain = input.domain.toLowerCase();
+    const normalizedEmail = input.email?.toLowerCase();
+    const where = {
+      OR: [
+        { source: input.source, sourceExternalId: input.sourceExternalId },
+        { domain },
+        ...(input.registrationId
+          ? [{ registrationId: input.registrationId }]
+          : []),
+      ],
+    };
+    const existing = await this.db.salesProspect.findFirst({ where });
+    const updateData = {
+      query: input.query,
+      locality: input.locality,
+      companyName: input.companyName,
+      websiteUrl: input.websiteUrl,
+      domain,
+      ...(input.location ? { location: input.location } : {}),
+      ...(input.registrationId ? { registrationId: input.registrationId } : {}),
+      ...(normalizedEmail ? { email: normalizedEmail } : {}),
+      ...(input.phone ? { phone: input.phone } : {}),
+      ...(input.contactSourceUrl
+        ? { contactSourceUrl: input.contactSourceUrl }
+        : {}),
+      sourceUrl: input.sourceUrl,
+      lastSeenAt: new Date(),
+      lastError: null,
+    };
+    if (existing) {
+      const effectiveLocation = input.location ?? existing.location;
+      const effectiveRegistrationId =
+        input.registrationId ?? existing.registrationId;
+      const effectiveEmail = normalizedEmail ?? existing.email;
+      const effectivePhone = input.phone ?? existing.phone;
+      const effectiveContactSourceUrl =
+        input.contactSourceUrl ?? existing.contactSourceUrl;
+      const needsSync =
+        !existing.twentyCompanyId ||
+        !existing.twentyContactNoteId ||
+        existing.query !== input.query ||
+        existing.locality !== input.locality ||
+        existing.companyName !== input.companyName ||
+        existing.websiteUrl !== input.websiteUrl ||
+        existing.domain !== domain ||
+        existing.location !== effectiveLocation ||
+        existing.registrationId !== effectiveRegistrationId ||
+        existing.email !== effectiveEmail ||
+        existing.phone !== effectivePhone ||
+        existing.contactSourceUrl !== effectiveContactSourceUrl ||
+        existing.sourceUrl !== input.sourceUrl;
+      return {
+        prospect: await this.db.salesProspect.update({
+          where: { id: existing.id },
+          data: updateData,
+        }),
+        created: false,
+        needsSync,
+      };
+    }
+
+    try {
+      return {
+        prospect: await this.db.salesProspect.create({
+          data: {
+            ...updateData,
+            source: input.source,
+            sourceExternalId: input.sourceExternalId,
+          },
+        }),
+        created: true,
+        needsSync: true,
+      };
+    } catch (error) {
+      if (
+        typeof error !== 'object' ||
+        error === null ||
+        !('code' in error) ||
+        error.code !== 'P2002'
+      )
+        throw error;
+      const raced = await this.db.salesProspect.findFirstOrThrow({ where });
+      return {
+        prospect: await this.db.salesProspect.update({
+          where: { id: raced.id },
+          data: updateData,
+        }),
+        created: false,
+        needsSync: !raced.twentyCompanyId || !raced.twentyContactNoteId,
+      };
+    }
+  }
+
+  public findProspect(input: {
+    source: string;
+    sourceExternalId: string;
+    domain?: string;
+    registrationId?: string;
+  }) {
+    return this.db.salesProspect.findFirst({
+      where: {
+        OR: [
+          { source: input.source, sourceExternalId: input.sourceExternalId },
+          ...(input.domain ? [{ domain: input.domain.toLowerCase() }] : []),
+          ...(input.registrationId
+            ? [{ registrationId: input.registrationId }]
+            : []),
+        ],
+      },
+    });
+  }
+
+  public markProspectSynced(
+    id: string,
+    input: { companyId: string; contactNoteId: string },
+  ) {
+    return this.db.salesProspect.update({
+      where: { id },
+      data: {
+        twentyCompanyId: input.companyId,
+        twentyContactNoteId: input.contactNoteId,
+        syncedAt: new Date(),
+        lastError: null,
+      },
+    });
+  }
+
+  public markProspectSyncFailed(id: string, error: string) {
+    return this.db.salesProspect.update({
+      where: { id },
+      data: { lastError: normalizeSearchError(error).slice(0, 500) },
+    });
   }
 
   public async failSearchSubscription(
