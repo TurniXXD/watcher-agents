@@ -3,6 +3,7 @@ name: ${COMPOSE_PROJECT_NAME:-watcher}
 services:
   postgres:
     image: pgvector/pgvector:0.8.6-pg16-bookworm
+    mem_limit: 2g
     env_file:
       - ./deploy/runtime/postgres.env
     networks:
@@ -30,6 +31,7 @@ services:
 
   migrate:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 1g
     command:
       [
         './packages/database/node_modules/.bin/prisma',
@@ -57,6 +59,7 @@ services:
 
   stocks-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/stocks-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/stocks-bot.env
@@ -95,6 +98,7 @@ services:
 
   publications-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/publications-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/publications-bot.env
@@ -133,6 +137,7 @@ services:
 
   news-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/news-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/news-bot.env
@@ -171,6 +176,7 @@ services:
 
   reality-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/reality-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/reality-bot.env
@@ -207,6 +213,7 @@ services:
 
   brno-events-agent:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/brno-events-agent/dist/index.js']
     env_file:
       - ./deploy/runtime/brno-events-agent.env
@@ -247,6 +254,7 @@ services:
 
   mu-clubs-monitor:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/mu-clubs-monitor/dist/index.js']
     env_file:
       - ./deploy/runtime/mu-clubs-monitor.env
@@ -286,6 +294,7 @@ services:
 
   briefing-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 1536m
     command: ['node', 'apps/briefing-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/briefing-bot.env
@@ -328,6 +337,7 @@ services:
 
   socials-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/socials-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/socials-bot.env
@@ -369,6 +379,7 @@ services:
 
   networking-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/networking-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/networking-bot.env
@@ -415,6 +426,7 @@ services:
 
   maintenance-agent:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/maintenance-agent/dist/index.js']
     env_file:
       - ./deploy/runtime/maintenance-agent.env
@@ -461,6 +473,7 @@ services:
 
   study-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 2g
     command: ['node', 'apps/study-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/study-bot.env
@@ -504,6 +517,7 @@ services:
 
   transport-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/transport-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/transport-bot.env
@@ -543,6 +557,7 @@ services:
 
   osint-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/osint-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/osint-bot.env
@@ -582,6 +597,7 @@ services:
 
   sales-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/sales-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/sales-bot.env
@@ -626,6 +642,7 @@ services:
 
   docs:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', '/app/docs-runtime/apps/docs/server.js']
     environment:
       HOSTNAME: 0.0.0.0
@@ -663,6 +680,7 @@ services:
 
   jobs-bot:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/watcher:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 768m
     command: ['node', 'apps/jobs-bot/dist/index.js']
     env_file:
       - ./deploy/runtime/jobs-bot.env
@@ -700,6 +718,7 @@ services:
 
   quickly-postgres:
     image: postgres:15-alpine
+    mem_limit: 768m
     env_file:
       - ./deploy/runtime/quickly.env
     volumes:
@@ -712,9 +731,15 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
 
   quickly:
     image: azowail/quickly:v2.4.0
+    mem_limit: 1g
     env_file:
       - ./deploy/runtime/quickly.env
     environment:
@@ -739,9 +764,15 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
 
   twenty-postgres:
     image: postgres:16-alpine
+    mem_limit: 1g
     env_file:
       - ./deploy/runtime/twenty.env
     volumes:
@@ -754,9 +785,15 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
 
   twenty-redis:
     image: redis:7.4-alpine
+    mem_limit: 512m
     command: ['redis-server', '--maxmemory-policy', 'noeviction']
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
@@ -766,9 +803,15 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
 
   twenty-server:
     image: twentycrm/twenty:v2.43.0
+    mem_limit: 2g
     env_file:
       - ./deploy/runtime/twenty.env
     ports:
@@ -794,9 +837,15 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
 
   twenty-worker:
     image: twentycrm/twenty:v2.43.0
+    mem_limit: 2g
     command: ['yarn', 'worker:prod']
     env_file:
       - ./deploy/runtime/twenty.env
@@ -811,6 +860,11 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
 
 volumes:
   watcher-postgres:

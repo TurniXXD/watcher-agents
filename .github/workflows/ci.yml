@@ -289,6 +289,49 @@ jobs:
               'IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS=true' \
               deploy/runtime/twenty.env
 
+            services_without_log_limits="$(IMAGE_REGISTRY=ghcr.io \
+              IMAGE_NAMESPACE=example \
+              IMAGE_TAG=ci \
+              docker compose \
+                --env-file deploy/runtime/compose.env \
+                -f docker-compose.production.yml \
+                config --format json | jq -r '
+                  .services
+                  | to_entries[]
+                  | select(
+                      .value.logging.driver != "json-file"
+                      or .value.logging.options["max-file"] != "3"
+                      or .value.logging.options["max-size"] != "10m"
+                    )
+                  | .key
+                ')"
+            if [[ -n "$services_without_log_limits" ]]; then
+              echo "Production services missing bounded log rotation:" >&2
+              echo "$services_without_log_limits" >&2
+              exit 1
+            fi
+
+            services_with_invalid_memory_limits="$(IMAGE_REGISTRY=ghcr.io \
+              IMAGE_NAMESPACE=example \
+              IMAGE_TAG=ci \
+              docker compose \
+                --env-file deploy/runtime/compose.env \
+                -f docker-compose.production.yml \
+                config --format json | jq -r '
+                  .services
+                  | to_entries[]
+                  | select(
+                      (.value.mem_limit // 0) <= 0
+                      or .value.mem_limit > 2147483648
+                    )
+                  | .key
+                ')"
+            if [[ -n "$services_with_invalid_memory_limits" ]]; then
+              echo "Production services missing a memory limit or exceeding 2 GiB:" >&2
+              echo "$services_with_invalid_memory_limits" >&2
+              exit 1
+            fi
+
             docs_networks="$(IMAGE_REGISTRY=ghcr.io \
               IMAGE_NAMESPACE=example \
               IMAGE_TAG=ci \

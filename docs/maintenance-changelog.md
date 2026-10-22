@@ -6,6 +6,8 @@ Each code update that changes runtime behavior must add a concise entry here. Th
 
 - Attached only the Twenty HTTP server to the external `lateralis` network with the stable `watcher-twenty` Cloudflared alias while keeping its PostgreSQL, Redis, and worker services private.
 - Required a canonical HTTPS `TWENTY_PUBLIC_URL`, kept Twenty in single-workspace mode, and restricted workspace creation to server administrators before public routing.
+- Added bounded Docker log rotation to all Quickly and Twenty services and a CI assertion covering every production service.
+- Added enforced 512 MiB–2 GiB memory ceilings to every production service, with larger allocations reserved for PostgreSQL, Study Bot, Briefing Bot, and Twenty's server and worker.
 
 ## 2026-10-21 — Networking database routing repair
 

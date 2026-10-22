@@ -19,6 +19,13 @@ SHA. Deployment is serialized and follows this order:
 Runtime secrets remain on the server in mode-`0600` files under
 `deploy/runtime`. Ollama remains external to Compose.
 
+Every production service has a Docker memory ceiling. Ordinary bots, the docs
+service, and Quickly PostgreSQL are limited to 768 MiB; migrations and Quickly
+to 1 GiB; Briefing Bot to 1.5 GiB; Watcher PostgreSQL, Study Bot, Twenty Server,
+and Twenty Worker to 2 GiB; and Twenty Redis to 512 MiB. These limits cap an
+individual container rather than reserving memory. A container that exceeds its
+ceiling can be OOM-killed and then follows its configured restart policy.
+
 ## Self-hosted documentation
 
 The immutable Watcher image contains a standalone Next.js server. Production
