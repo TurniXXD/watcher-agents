@@ -248,7 +248,7 @@ jobs:
                 -f docker-compose.production.yml \
                 config --format json | jq -r '.services["sales-bot"].networks | keys[]')"
             grep -Fxq default <<< "$sales_networks"
-            grep -Fxq lateralis <<< "$sales_networks"
+            grep -Fxq vantuch <<< "$sales_networks"
 
             twenty_networks="$(IMAGE_REGISTRY=ghcr.io \
               IMAGE_NAMESPACE=example \
@@ -258,15 +258,15 @@ jobs:
                 -f docker-compose.production.yml \
                 config --format json | jq -r '.services["twenty-server"].networks | keys[]')"
             grep -Fxq default <<< "$twenty_networks"
-            grep -Fxq lateralis <<< "$twenty_networks"
-            twenty_lateralis_aliases="$(IMAGE_REGISTRY=ghcr.io \
+            grep -Fxq vantuch <<< "$twenty_networks"
+            twenty_vantuch_aliases="$(IMAGE_REGISTRY=ghcr.io \
               IMAGE_NAMESPACE=example \
               IMAGE_TAG=ci \
               docker compose \
                 --env-file deploy/runtime/compose.env \
                 -f docker-compose.production.yml \
-                config --format json | jq -r '.services["twenty-server"].networks.lateralis.aliases[]')"
-            grep -Fxq watcher-twenty <<< "$twenty_lateralis_aliases"
+                config --format json | jq -r '.services["twenty-server"].networks.vantuch.aliases[]')"
+            grep -Fxq watcher-twenty <<< "$twenty_vantuch_aliases"
 
             for private_twenty_service in twenty-postgres twenty-redis twenty-worker; do
               private_networks="$(IMAGE_REGISTRY=ghcr.io \
@@ -277,8 +277,8 @@ jobs:
                   -f docker-compose.production.yml \
                   config --format json | jq -r --arg service "$private_twenty_service" '.services[$service].networks | keys[]')"
               grep -Fxq default <<< "$private_networks"
-              if grep -Fxq lateralis <<< "$private_networks"; then
-                echo "$private_twenty_service must remain off the lateralis network" >&2
+              if grep -Fxq vantuch <<< "$private_networks"; then
+                echo "$private_twenty_service must remain off the vantuch network" >&2
                 exit 1
               fi
             done
@@ -341,7 +341,7 @@ jobs:
                 -f docker-compose.production.yml \
                 config --format json | jq -r '.services.docs.networks | keys[]')"
             grep -Fxq default <<< "$docs_networks"
-            grep -Fxq lateralis <<< "$docs_networks"
+            grep -Fxq vantuch <<< "$docs_networks"
 
             docs_published_ports="$(IMAGE_REGISTRY=ghcr.io \
               IMAGE_NAMESPACE=example \

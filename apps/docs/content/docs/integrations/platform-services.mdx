@@ -39,8 +39,9 @@ permissions limited to the bot's document and media prefixes.
 
 ## Cloudflare Tunnel
 
-The production documentation container joins the external `lateralis` Docker
-network. The existing token-managed `cloudflared` container routes the private
-hostname to `http://docs:3000`; tunnel credentials and ingress configuration stay
-outside this repository. Cloudflare Access is required because `noindex` and
-`robots.txt` do not provide authorization.
+The production documentation container joins the external `vantuch` Docker
+network. The token-managed `cloudflared` connector for `vantuch server` routes
+`bots.vantuch.dev` to `http://docs:3000`; tunnel credentials and ingress
+configuration stay outside this repository. The operator has approved public
+documentation on this hostname. Cloudflare Access remains required for private
+applications such as Twenty; `noindex` and `robots.txt` do not provide authorization.

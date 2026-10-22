@@ -64,7 +64,7 @@ Calendar writes require the complete
 `NETWORKING_GOOGLE_CALENDAR_REDIRECT_URI`, and
 `CALENDAR_TOKEN_ENCRYPTION_KEY` group. The callback listener defaults to port
 `8790` and must be exposed only through the trusted HTTPS callback route.
-The production container joins the external `lateralis` network so Cloudflared
+The production container joins the external `vantuch` network so Cloudflared
 can use `http://networking-bot:8790`. Its database URL must use the private
 `watcher-postgres` alias instead of the ambiguous `postgres` hostname, which
 may belong to another stack on that shared network.

@@ -4,7 +4,7 @@ import { RootProvider } from 'fumadocs-ui/provider/next';
 import './global.css';
 
 const siteUrl = new URL(
-  process.env.NEXT_PUBLIC_DOCS_URL ?? 'https://docs.vantuch.dev',
+  process.env.NEXT_PUBLIC_DOCS_URL ?? 'https://bots.vantuch.dev',
 );
 
 export const metadata: Metadata = {

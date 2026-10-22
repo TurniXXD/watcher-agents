@@ -78,7 +78,7 @@ Run `pnpm db:validate` after Prisma changes and `docker compose config --quiet` 
 
 Independent sources use failure isolation and normalized `WatchItem` records. PostgreSQL constraints provide durable idempotency. Telegram commands and callbacks are private administration surfaces protected by `TELEGRAM_ALLOWED_USER_IDS`.
 
-Production publishes one immutable image per commit and runs each application as its own Compose service. Cloudflared reaches approved HTTP origins, including documentation and the Access-protected Twenty CRM, through the external `lateralis` network; databases and caches remain private. Runtime secrets live only in mode-`0600` files under `deploy/runtime`, and Ollama remains external.
+Production publishes one immutable image per commit and runs each application as its own Compose service. Cloudflared reaches approved HTTP origins, including documentation at [bots.vantuch.dev](https://bots.vantuch.dev) and the Access-protected Twenty CRM, through the external `vantuch` network and the `vantuch server` tunnel; databases and caches remain private. Runtime secrets live only in mode-`0600` files under `deploy/runtime`, and Ollama remains external. See [tunnel setup](deploy/README.md#cloudflare-tunnel-origins) before publishing the documentation.
 
 - [Production deployment](deploy/README.md)
 - [Environment inventory](deploy/ENVIRONMENT.md)

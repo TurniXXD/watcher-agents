@@ -1,6 +1,6 @@
 ---
 title: Deployment
-description: Production application rollout and private self-hosted documentation deployment.
+description: Production application rollout and public self-hosted documentation deployment.
 ---
 
 ## Watcher runtime
@@ -35,24 +35,27 @@ Compose starts it as the `docs` service with these addresses:
 | ------------------- | -------------------------- |
 | Container           | `http://docs:3000`         |
 | Local Compose       | `http://127.0.0.1:3001`    |
-| Cloudflare hostname | `https://docs.vantuch.dev` |
+| Cloudflare hostname | `https://bots.vantuch.dev` |
 
 Production publishes no host port. `DOCS_BIND_ADDRESS` and `DOCS_HOST_PORT`
 control only local-development Compose and should remain on loopback.
-`NEXT_PUBLIC_DOCS_URL=https://docs.vantuch.dev` sets the canonical build-time
+`NEXT_PUBLIC_DOCS_URL=https://bots.vantuch.dev` sets the canonical build-time
 origin and contains no secret.
 
-The service joins the external `lateralis` network. Configure the existing
+The service joins the external `vantuch` network. Configure the existing
 token-managed `cloudflared` container in Cloudflare Zero Trust with a public
-hostname mapping from `docs.vantuch.dev` to `http://docs:3000`. The repository
+hostname mapping from `bots.vantuch.dev` to `http://docs:3000`. The repository
 does not store the tunnel token or generate the public-hostname mapping.
 
-<Callout type="warn" title="Access protection is mandatory">
-  Enable Cloudflare Access for `docs.vantuch.dev` before exposing the hostname.
-  The generated `noindex` metadata and deny-all `robots.txt` do not prevent an
-  unauthorized visitor from reading the deployment.
+<Callout type="warn" title="Public documentation">
+  The operator has approved public reading at `bots.vantuch.dev` through the
+  `vantuch server` tunnel. Do not require an Access login on this hostname when
+  publishing it publicly. Keep credentials and private operator data out of the
+  content. The generated `noindex` metadata and deny-all `robots.txt` do not
+  restrict who can read it. Keep Access protection on private applications.
 </Callout>
 
 The normal VPS release starts and health-checks the docs container alongside the
-other Watcher services. Creating the Cloudflare Access application and hostname
-mapping remains a manual infrastructure step.
+other Watcher services. Creating the external `vantuch` network, attaching the
+tunnel connector, and adding the hostname mapping remain manual infrastructure
+steps documented in `deploy/README.md`.

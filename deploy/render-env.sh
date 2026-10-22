@@ -104,7 +104,7 @@ quickly_public_url="${QUICKLY_PUBLIC_URL:-http://${quickly_public_host}:${QUICKL
 
 twenty_bind_address="${TWENTY_BIND_ADDRESS:-127.0.0.1}"
 
-# Sales and Networking join the shared lateralis network, where another service
+# Sales and Networking join the shared vantuch network, where another service
 # may own the generic "postgres" DNS name. Prefer Watcher's unique alias for
 # both services unless Sales has an explicit connection URL.
 sales_database_url="${SALES_DATABASE_URL:-${WATCHER_DATABASE_URL/@postgres:/@watcher-postgres:}}"

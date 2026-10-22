@@ -190,7 +190,7 @@ while IFS= read -r runtime_file; do
   chmod 600 "$runtime_file"
 done < <(find deploy/runtime -maxdepth 1 -type f -print)
 
-# Networking Bot also joins the shared lateralis network for its public OAuth
+# Networking Bot also joins the shared vantuch network for its public OAuth
 # callback. Another stack on that network may own the generic "postgres" DNS
 # name, so migrate older persistent runtime files before Compose reads them.
 deploy/normalize-database-url-host.sh \

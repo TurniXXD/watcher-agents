@@ -15,7 +15,7 @@ pnpm --filter @watcher/docs typecheck
 pnpm --filter @watcher/docs check:links
 ```
 
-The canonical production URL defaults to `https://docs.vantuch.dev`. Override it
+The canonical production URL defaults to `https://bots.vantuch.dev`. Override it
 at build time with `NEXT_PUBLIC_DOCS_URL` when using another hostname.
 
 ## Deployment
@@ -25,17 +25,20 @@ it as the `docs` service. The addresses are:
 
 - Local development Compose: `http://127.0.0.1:3001`
 - Compose origin: `http://docs:3000`
-- Cloudflare hostname: `https://docs.vantuch.dev`
+- Cloudflare hostname: `https://bots.vantuch.dev`
 
-The production service joins the external `lateralis` network used by the
+The production service joins the external `vantuch` network used by the
 existing token-managed `cloudflared` container. In Cloudflare Zero Trust, map
-`docs.vantuch.dev` to `http://docs:3000`. The tunnel configuration and token are
+`bots.vantuch.dev` to `http://docs:3000`. The tunnel configuration and token are
 not stored in this repository.
 
-Enable Cloudflare Access before exposing the hostname. This repository emits
+The operator has approved public documentation at this hostname. For public
+reading, do not require a Cloudflare Access login on `bots.vantuch.dev`; keep
+Access protection on other private applications such as Twenty. This repository emits
 `noindex` metadata and a deny-all `robots.txt`, but those controls are not
 authentication. Production intentionally publishes no host port; only local
 development Compose uses `DOCS_BIND_ADDRESS` and `DOCS_HOST_PORT`.
 
-The website must remain private unless publication is explicitly approved. Do
-not put runtime bot secrets into the docs project.
+See the [VPS tunnel setup](../../deploy/README.md#cloudflare-tunnel-origins)
+for the `vantuch server` connector, Docker network migration, and DNS steps.
+Do not put runtime bot secrets or private operator data into the docs project.

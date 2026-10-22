@@ -15,7 +15,7 @@ GitHub publishes one immutable Watcher image. The VPS runs that image with separ
 
 ## Cloudflare Tunnel origins
 
-The production `sales-bot`, `networking-bot`, `docs`, and `twenty-server` services join both the private Compose network and the existing external `lateralis` network. A token-managed `cloudflared` container already attached to `lateralis` can route Cloudflare public hostnames to these Docker origins:
+The production `sales-bot`, `networking-bot`, `docs`, and `twenty-server` services join both the private Compose network and the existing external `vantuch` network. A token-managed `cloudflared` container already attached to `vantuch` can route Cloudflare public hostnames to these Docker origins:
 
 ```text
 Sales API:      http://sales-bot:4050
@@ -24,7 +24,63 @@ Documentation:  http://docs:3000
 Twenty CRM:     http://watcher-twenty:3000
 ```
 
-Create the public-hostname mappings in Cloudflare Zero Trust; token-managed tunnel ingress is not stored in this repository. Configure Twenty's public hostname with origin `http://watcher-twenty:3000`, set `TWENTY_PUBLIC_URL` to the matching HTTPS origin, and protect it with Cloudflare Access before enabling the route. `watcher-twenty` is a stable alias on `lateralis`; the private Compose service remains `twenty-server`. Twenty remains in single-workspace mode and refuses additional workspace creation by non-server-admins. Keep host ports bound to `127.0.0.1`; Twenty's PostgreSQL, Redis, and worker services stay off `lateralis`. All production containers, including Quickly and Twenty, use bounded `json-file` rotation so repetitive integration failures cannot grow Docker logs without limit. Every production service also has an enforced memory ceiling: 512 MiB for Twenty Redis; 768 MiB for ordinary bots, docs, and Quickly PostgreSQL; 1 GiB for migrations, Quickly, and Twenty PostgreSQL; 1.5 GiB for Briefing Bot; and 2 GiB for Watcher PostgreSQL, Study Bot, Twenty Server, and Twenty Worker. An over-limit container may be OOM-killed and restarted according to its restart policy. These cgroup limits do not cap the host-level Docker daemon itself, so daemon RSS and Docker disk usage must still be monitored separately. Services on `lateralis` must use the `watcher-postgres` alias for the private Watcher database because the generic `postgres` hostname may resolve to another stack. Deployment automatically migrates an older Networking Bot runtime URL from `postgres` to that alias without logging its credentials. Protect `docs.vantuch.dev` with Cloudflare Access because the site contains operational documentation and `noindex` is not authentication. The Sales public hostname exposes a REST API, not a browser UI; continue sending `Authorization: Bearer $SALES_API_TOKEN` to every `/v1/*` endpoint. The Quickly webhook uses the separate `SALES_WEBHOOK_TOKEN`; the Compose deployment should normally keep its origin internal at `http://sales-bot:4050/v1/webhooks/quickly`.
+Create the public-hostname mappings in Cloudflare Zero Trust; token-managed tunnel ingress is not stored in this repository. Configure Twenty's public hostname with origin `http://watcher-twenty:3000`, set `TWENTY_PUBLIC_URL` to the matching HTTPS origin, and protect it with Cloudflare Access before enabling the route. `watcher-twenty` is a stable alias on `vantuch`; the private Compose service remains `twenty-server`. Twenty remains in single-workspace mode and refuses additional workspace creation by non-server-admins. Keep host ports bound to `127.0.0.1`; Twenty's PostgreSQL, Redis, and worker services stay off `vantuch`. All production containers, including Quickly and Twenty, use bounded `json-file` rotation so repetitive integration failures cannot grow Docker logs without limit. Every production service also has an enforced memory ceiling: 512 MiB for Twenty Redis; 768 MiB for ordinary bots, docs, and Quickly PostgreSQL; 1 GiB for migrations, Quickly, and Twenty PostgreSQL; 1.5 GiB for Briefing Bot; and 2 GiB for Watcher PostgreSQL, Study Bot, Twenty Server, and Twenty Worker. An over-limit container may be OOM-killed and restarted according to its restart policy. These cgroup limits do not cap the host-level Docker daemon itself, so daemon RSS and Docker disk usage must still be monitored separately. Services on `vantuch` must use the `watcher-postgres` alias for the private Watcher database because the generic `postgres` hostname may resolve to another stack. Deployment automatically migrates an older Networking Bot runtime URL from `postgres` to that alias without logging its credentials. Public reading at `bots.vantuch.dev` is approved by the operator; keep private data out of published content and retain Access protection on private applications. The Sales public hostname exposes a REST API, not a browser UI; continue sending `Authorization: Bearer $SALES_API_TOKEN` to every `/v1/*` endpoint. The Quickly webhook uses the separate `SALES_WEBHOOK_TOKEN`; the Compose deployment should normally keep its origin internal at `http://sales-bot:4050/v1/webhooks/quickly`.
+
+### Migrate the Docker network and publish bots.vantuch.dev
+
+The Cloudflare tunnel name `vantuch server` and Docker network name `vantuch`
+are separate settings. Creating a tunnel does not create or attach a Docker network.
+
+1. On the VPS, create the external network once if it does not exist:
+   `docker network inspect vantuch >/dev/null 2>&1 || docker network create vantuch`.
+2. In the separate Compose project that owns the new tunnel's `cloudflared`
+   connector, declare `networks: { vantuch: { external: true, name: vantuch } }`
+   at the top level and add `networks: [vantuch]` to its service. Use the token
+   from the **vantuch server** tunnel, stored outside Git in that project's
+   secret/environment configuration. Recreate that connector using its owning
+   Compose project. For an already running connector, the temporary equivalent
+   is `docker network connect vantuch <cloudflared-container>`; persist the
+   network in Compose so recreation retains it. Replace the placeholder with
+   the actual Docker container name, which need not equal the tunnel name.
+3. Set `NEXT_PUBLIC_DOCS_URL=https://bots.vantuch.dev` in any existing build-time
+   override, or remove the old override to use the new default. Rebuild and deploy
+   the shared Watcher image through the normal release workflow. Redeploy the
+   full production stack so every affected service joins `vantuch`; a restart
+   alone does not apply changed network membership. Keep the normal database
+   backup and migration ordering in `deploy/deploy.sh`.
+4. In Cloudflare Zero Trust, open **Networks → Connectors → Cloudflare Tunnels**,
+   choose **vantuch server**, then **Published application routes → Add a
+   published application route** (older dashboards call this Public Hostnames).
+   Set subdomain `bots`, domain `vantuch.dev`, leave the path empty, select
+   service type **HTTP**, and set URL **docs:3000**. This means
+   `https://bots.vantuch.dev` forwards to `http://docs:3000`; `localhost` would
+   address the connector container instead. Leave origin TLS verification at
+   its default; the Docker origin uses HTTP.
+5. Save the route and verify the proxied `bots` DNS record points to this
+   tunnel's `<tunnel-UUID>.cfargotunnel.com`. Resolve an existing conflicting
+   `bots` DNS record or old tunnel route before adding the new route. The
+   dashboard normally creates the DNS record automatically.
+6. Public reading of these docs is approved by the operator. Do not add a
+   restrictive Cloudflare Access application for `bots.vantuch.dev`; check
+   whether an existing wildcard Access application also covers it. Keep Twenty
+   and other private applications protected. Review published content for
+   private data; `noindex` and `robots.txt` are not access controls.
+7. Confirm the new connector is healthy, the docs service is healthy, and
+   `curl --fail https://bots.vantuch.dev/api/health` succeeds. Open
+   `https://bots.vantuch.dev/docs` in a browser without a signed-in session.
+   A 502 usually means the connector cannot reach `docs:3000`; check both
+   containers' membership with `docker network inspect vantuch` and their logs.
+
+Move the existing Sales, Networking OAuth, and Twenty hostname routes to
+`vantuch server` as needed, keeping the origins listed above. Preserve their
+public URLs, callback paths, and authorization policies; changing only the
+tunnel/network does not require changing provider callback registrations.
+Study Bot also joins the shared network for its existing integrations. Update
+any separately managed integration containers that need to reach it. Keep the
+old tunnel/network until all dependent routes and containers have migrated;
+other Docker stacks may still use them.
+
+Official reference: [Create a tunnel and published application route](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/).
 
 ## VPS prerequisites
 

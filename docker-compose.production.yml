@@ -390,7 +390,7 @@ services:
       - '127.0.0.1:8790:8790'
     networks:
       - default
-      - lateralis
+      - vantuch
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     depends_on:
@@ -485,7 +485,7 @@ services:
       - ./deploy/piper-voices:/data/piper:ro
     networks:
       - default
-      - lateralis
+      - vantuch
     depends_on:
       postgres:
         condition: service_healthy
@@ -610,7 +610,7 @@ services:
       - '127.0.0.1:4050:4050'
     networks:
       - default
-      - lateralis
+      - vantuch
     depends_on:
       postgres:
         condition: service_healthy
@@ -650,7 +650,7 @@ services:
       PORT: 3000
     networks:
       - default
-      - lateralis
+      - vantuch
     healthcheck:
       test:
         [
@@ -818,7 +818,7 @@ services:
       - '${TWENTY_BIND_ADDRESS:-127.0.0.1}:${TWENTY_HOST_PORT:-3002}:3000'
     networks:
       default:
-      lateralis:
+      vantuch:
         aliases:
           - watcher-twenty
     volumes:
@@ -873,6 +873,6 @@ volumes:
   twenty-local-data:
 
 networks:
-  lateralis:
+  vantuch:
     external: true
-    name: lateralis
+    name: vantuch
