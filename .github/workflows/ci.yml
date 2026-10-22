@@ -320,9 +320,10 @@ jobs:
                 config --format json | jq -r '
                   .services
                   | to_entries[]
+                  | (.value.mem_limit // 0 | tonumber) as $memory_limit
                   | select(
-                      (.value.mem_limit // 0) <= 0
-                      or .value.mem_limit > 2147483648
+                      $memory_limit <= 0
+                      or $memory_limit > 2147483648
                     )
                   | .key
                 ')"
