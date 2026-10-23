@@ -52,8 +52,10 @@ Piper and the idempotent delivery service. Scheduled, manual, and test runs shar
 this path. Optional context failures degrade the run without cancelling the
 remaining briefing.
 
-The journal stores resumable question state immediately. Voice input is
-transcribed in memory and shown as an editable preview before confirmation.
+The journal stores resumable question state immediately. An active reflection
+continues across midnight under its original journal date and takes precedence
+over a newly initialized daily reminder. Voice input is transcribed in memory
+and shown as an editable preview before confirmation.
 Morning journal context is read from the previous Prague calendar day and is
 never logged or persisted by the briefing path.
 

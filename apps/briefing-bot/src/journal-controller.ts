@@ -152,10 +152,7 @@ export class JournalController {
   }
 
   public async commandStatus(context: Context): Promise<void> {
-    const session = await this.options.store.getLatest(
-      BigInt(context.chat!.id),
-      BigInt(context.from!.id),
-    );
+    const session = await this.activeOrLatest(context);
     if (!session) {
       await context.reply(
         'Zatím nemáš žádnou dnešní reflexi. Začni pomocí /journal.',
@@ -171,10 +168,7 @@ export class JournalController {
   }
 
   public async commandCancel(context: Context): Promise<void> {
-    const session = await this.options.store.getLatest(
-      BigInt(context.chat!.id),
-      BigInt(context.from!.id),
-    );
+    const session = await this.activeOrLatest(context);
     if (!session || !unfinished(session)) {
       await context.reply('Není tu rozpracovaná reflexe ke zrušení.');
       return;
@@ -188,7 +182,7 @@ export class JournalController {
   public async handleText(context: Context): Promise<boolean> {
     const text = context.message?.text?.trim();
     if (!text || text.startsWith('/')) return false;
-    const session = await this.options.store.getLatest(
+    const session = await this.options.store.getActiveInteraction(
       BigInt(context.chat!.id),
       BigInt(context.from!.id),
     );
@@ -206,7 +200,7 @@ export class JournalController {
   public async handleVoice(context: Context): Promise<boolean> {
     const voice = context.message?.voice;
     if (!voice) return false;
-    const session = await this.options.store.getLatest(
+    const session = await this.options.store.getActiveInteraction(
       BigInt(context.chat!.id),
       BigInt(context.from!.id),
     );
@@ -432,6 +426,11 @@ export class JournalController {
   private async current(context: Context): Promise<JournalSessionRecord> {
     const chatId = BigInt(context.chat!.id);
     const userId = BigInt(context.from!.id);
+    const active = await this.options.store.getActiveInteraction(
+      chatId,
+      userId,
+    );
+    if (active) return active;
     const latest = await this.options.store.getLatest(chatId, userId);
     if (unfinished(latest)) return latest!;
     const now = this.now();
@@ -440,6 +439,17 @@ export class JournalController {
       userId,
       todayDateInTimezone(now, this.options.timezone),
       now,
+    );
+  }
+
+  private async activeOrLatest(
+    context: Context,
+  ): Promise<JournalSessionRecord | undefined> {
+    const chatId = BigInt(context.chat!.id);
+    const userId = BigInt(context.from!.id);
+    return (
+      (await this.options.store.getActiveInteraction(chatId, userId)) ??
+      this.options.store.getLatest(chatId, userId)
     );
   }
 

@@ -166,7 +166,7 @@ describe('journal conversation state', () => {
       },
     );
     const store = {
-      getLatest: vi.fn(async () => current),
+      getActiveInteraction: vi.fn(async () => current),
       saveProgress,
     } as unknown as JournalSessionStore;
     const replies: string[] = [];
@@ -195,6 +195,60 @@ describe('journal conversation state', () => {
     expect(current.status).toBe('AWAITING_CONFIRMATION');
     expect(current.answers.priority).toBe('Odpověď 6');
     expect(replies.at(-1)).toContain('📓 Denní reflexe');
+  });
+
+  it('continues the active reflection after midnight despite a newer daily session', async () => {
+    const active = {
+      ...session(),
+      journalDate: '2026-10-22',
+      mode: 'TEXT' as const,
+      status: 'IN_PROGRESS' as const,
+      currentQuestion: 2,
+    };
+    const nextDay = {
+      ...session(),
+      id: 'a31da473-b70f-4837-9aa6-ad08753d9f15',
+      journalDate: '2026-10-23',
+    };
+    const saveProgress = vi.fn(async () => ({
+      ...active,
+      currentQuestion: 3,
+      answers: { ...active.answers, challenges: 'Vyřešil jsem incident.' },
+    }));
+    const getActiveInteraction = vi.fn(async () => active);
+    const getLatest = vi.fn(async () => nextDay);
+    const store = {
+      getActiveInteraction,
+      getLatest,
+      saveProgress,
+    } as unknown as JournalSessionStore;
+    const reply = vi.fn();
+    const context = {
+      chat: { id: 123 },
+      from: { id: 123 },
+      message: { text: 'Vyřešil jsem incident.' },
+      reply,
+    } as unknown as Context;
+    const controller = new JournalController({
+      store,
+      timezone: 'Europe/Prague',
+      token: 'token',
+      drafts: {} as JournalDraftGenerator,
+      now: () => new Date('2026-10-22T22:05:00.000Z'),
+    });
+
+    await expect(controller.handleText(context)).resolves.toBe(true);
+
+    expect(getActiveInteraction).toHaveBeenCalledWith(123n, 123n);
+    expect(getLatest).not.toHaveBeenCalled();
+    expect(saveProgress).toHaveBeenCalledWith(
+      active.id,
+      { ...active.answers, challenges: 'Vyřešil jsem incident.' },
+      3,
+      'IN_PROGRESS',
+      { currentQuestion: 2, status: 'IN_PROGRESS' },
+    );
+    expect(reply.mock.calls.at(-1)?.[0]).toContain('Otázka 4/6');
   });
 
   it('does not confirm a journal from a stale pre-preview callback', async () => {

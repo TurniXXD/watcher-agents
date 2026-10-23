@@ -46,4 +46,26 @@ integration('JournalSessionStore with PostgreSQL', () => {
     expect(first.id).not.toBe(second.id);
     expect(await store.getById(first.id, 900n, 902n)).toBeUndefined();
   });
+
+  it('finds an active previous-day interaction after the next daily session exists', async () => {
+    const chatId = 950n;
+    const previous = await store.ensure(
+      chatId,
+      chatId,
+      '2026-10-22',
+      new Date('2026-10-22T19:00:00.000Z'),
+    );
+    await store.start(previous.id, 'TEXT');
+    const next = await store.ensure(
+      chatId,
+      chatId,
+      '2026-10-23',
+      new Date('2026-10-23T19:00:00.000Z'),
+    );
+
+    expect((await store.getLatest(chatId, chatId))?.id).toBe(next.id);
+    expect((await store.getActiveInteraction(chatId, chatId))?.id).toBe(
+      previous.id,
+    );
+  });
 });

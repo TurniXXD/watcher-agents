@@ -2,6 +2,10 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-23 — Reflection continuity across midnight
+
+- Kept an active Briefing Bot reflection bound to its original journal session after midnight, even when the scheduler has already initialized the next day's reminder, so the next question is delivered normally.
+
 ## 2026-10-22 — Jobs duplicate source-reference repair
 
 - Made Jobs Bot merge repeated source URLs into one canonical reference while retaining every raw source record, preventing duplicate feed entries from failing a source run on the database uniqueness constraint.

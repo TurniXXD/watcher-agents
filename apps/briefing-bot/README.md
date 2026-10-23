@@ -20,7 +20,7 @@ Use [the briefing preset](../../deploy/presets/briefing-bot.env.example) and sha
 
 ## Notion Daily Journal
 
-At 21:00 Prague time the bot offers text reflection, one-message voice reflection, a 30-minute postponement, or skipping the day. The six-question text flow saves every answer immediately and resumes after restarts. The voice flow keeps no audio, transcribes in memory, asks Ollama to structure only facts present in the transcript, and always shows an editable preview before confirmation. Confirmed entries are retried locally when Notion is unavailable. Existing manual Notion text is never silently overwritten; a conflict requires manual resolution.
+At 21:00 Prague time the bot offers text reflection, one-message voice reflection, a 30-minute postponement, or skipping the day. The six-question text flow saves every answer immediately and resumes after restarts or across midnight under its original journal date. A newly initialized daily reminder never displaces an active reflection. The voice flow keeps no audio, transcribes in memory, asks Ollama to structure only facts present in the transcript, and always shows an editable preview before confirmation. Confirmed entries are retried locally when Notion is unavailable. Existing manual Notion text is never silently overwritten; a conflict requires manual resolution.
 
 See [the complete evening-journal workflow and operations guide](../../docs/evening-journal.md).
 

@@ -172,6 +172,22 @@ export class JournalSessionStore {
     return row ? toRecord(row) : undefined;
   }
 
+  public async getActiveInteraction(
+    telegramChatId: bigint,
+    telegramUserId: bigint,
+  ): Promise<JournalSessionRecord | undefined> {
+    const row = await this.db.journalSession.findFirst({
+      where: {
+        telegramUserId,
+        status: { in: ['IN_PROGRESS', 'AWAITING_CONFIRMATION'] },
+        settings: { telegramChatId },
+      },
+      orderBy: { updatedAt: 'desc' },
+      include: includeSettings,
+    });
+    return row ? toRecord(row) : undefined;
+  }
+
   public async initializeDaily(
     now: Date,
     reminderTime: string,
