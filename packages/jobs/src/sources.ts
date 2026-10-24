@@ -1,5 +1,9 @@
 import { XMLParser } from 'fast-xml-parser';
 import { z } from 'zod';
+import {
+  createConfiguredAtsDefinitions,
+  type AtsSourceConfiguration,
+} from './ats-sources.js';
 import { fetchJobSource, responseCheckpoint } from './http.js';
 import {
   canonicalizeUrl,
@@ -184,7 +188,7 @@ const scalars = (value: unknown): string[] =>
     .filter((item): item is string => Boolean(item?.trim()))
     .map((item) => item.trim());
 
-const rssAdapter = (input: {
+export const createRssJobSourceAdapter = (input: {
   id: string;
   name: string;
   url: string;
@@ -367,31 +371,129 @@ const remoteOkAdapter = (): JobSourceAdapter => ({
   },
 });
 
-export const createJobSourceDefinitions = (): JobSourceDefinition[] => {
+const workingNomadsItemSchema = z.object({
+  url: z.url(),
+  title: z.string().trim().min(1),
+  description: z.string().optional().default(''),
+  company_name: z.string().trim().min(1),
+  category_name: z.string().optional(),
+  tags: z.string().optional().default(''),
+  location: z.string().optional(),
+  pub_date: z.string().optional(),
+});
+
+export const parseWorkingNomadsJob = (value: unknown): NormalizedJob => {
+  const item = workingNomadsItemSchema.parse(value);
+  const description = cleanHtml(item.description);
+  const originalUrl = canonicalizeUrl(item.url);
+  const externalId = new URL(originalUrl).pathname
+    .split('/')
+    .filter(Boolean)
+    .at(-1);
+  return normalizedJobSchema.parse({
+    externalId: externalId ?? originalUrl,
+    sourceId: 'working-nomads',
+    title: item.title,
+    company: item.company_name,
+    description,
+    shortDescription: description.slice(0, 500),
+    ...(item.location ? { location: item.location } : {}),
+    workMode: 'REMOTE',
+    remoteRegions: item.location ? [item.location] : [],
+    ...(item.category_name ? { contractType: item.category_name } : {}),
+    technologyStack: extractTechnologyStack(
+      `${item.tags.replaceAll(',', ' ')} ${item.title} ${description}`,
+    ),
+    originalUrl,
+    canonicalApplicationUrl: originalUrl,
+    ...(optionalDate(item.pub_date)
+      ? { publishedAt: optionalDate(item.pub_date) }
+      : {}),
+    raw: item,
+  });
+};
+
+const workingNomadsAdapter = (): JobSourceAdapter => ({
+  id: 'working-nomads',
+  name: 'Working Nomads',
+  baseUrl: 'https://www.workingnomads.com',
+  strategy: 'API',
+  attribution: 'Remote jobs by Working Nomads',
+  fetchIntervalMinutes: 240,
+  rateLimitPerMinute: 30,
+  discover: async ({ checkpoint, signal }) => {
+    const response = await fetchJobSource(
+      'https://www.workingnomads.com/api/exposed_jobs/',
+      {
+        accept: 'application/json',
+        ...(checkpoint ? { checkpoint } : {}),
+        ...(signal ? { signal } : {}),
+      },
+    );
+    if (response.status === 304)
+      return {
+        jobs: [],
+        notModified: true,
+        ...(checkpoint ? { checkpoint } : {}),
+      };
+    const values = z.array(z.unknown()).parse(await response.json());
+    const jobs = values.flatMap((value): NormalizedJob[] => {
+      const parsed = workingNomadsItemSchema.safeParse(value);
+      return parsed.success ? [parseWorkingNomadsJob(parsed.data)] : [];
+    });
+    return { jobs, checkpoint: responseCheckpoint(response) };
+  },
+});
+
+export const createJobSourceDefinitions = (
+  atsConfiguration: AtsSourceConfiguration = {},
+): JobSourceDefinition[] => {
   const enabled = [
     remoteFrontendAdapter('frontend'),
     remoteFrontendAdapter('backend'),
-    rssAdapter({
+    createRssJobSourceAdapter({
       id: 'himalayas',
       name: 'Himalayas',
       url: 'https://himalayas.app/jobs/rss',
       baseUrl: 'https://himalayas.app',
       attribution: 'Remote jobs by Himalayas',
     }),
-    rssAdapter({
+    createRssJobSourceAdapter({
       id: 'startup-jobs',
       name: 'Startup Jobs',
       url: 'https://startup.jobs/feeds/jobs?role=engineering',
       baseUrl: 'https://startup.jobs',
       attribution: 'Jobs by Startup Jobs',
     }),
-    rssAdapter({
+    createRssJobSourceAdapter({
       id: 'remote-first-jobs',
       name: 'RemoteFirstJobs',
       url: 'https://remotefirstjobs.com/rss/jobs/software-development.rss',
       baseUrl: 'https://remotefirstjobs.com',
       attribution: 'Remote jobs by RemoteFirstJobs',
     }),
+    createRssJobSourceAdapter({
+      id: 'we-work-remotely',
+      name: 'We Work Remotely',
+      url: 'https://weworkremotely.com/categories/remote-programming-jobs.rss',
+      baseUrl: 'https://weworkremotely.com',
+      attribution: 'Remote jobs by We Work Remotely',
+    }),
+    createRssJobSourceAdapter({
+      id: 'remotive',
+      name: 'Remotive',
+      url: 'https://remotive.com/feed',
+      baseUrl: 'https://remotive.com',
+      attribution: 'Remote jobs by Remotive',
+    }),
+    createRssJobSourceAdapter({
+      id: 'swissdevjobs',
+      name: 'SwissDevJobs',
+      url: 'https://swissdevjobs.ch/rss',
+      baseUrl: 'https://swissdevjobs.ch',
+      attribution: 'Swiss developer jobs by SwissDevJobs',
+    }),
+    workingNomadsAdapter(),
     remoteOkAdapter(),
   ];
   const definitions: JobSourceDefinition[] = enabled.map((adapter) => ({
@@ -423,37 +525,19 @@ export const createJobSourceDefinitions = (): JobSourceDefinition[] => {
     ['jenprace-cz', 'JenPrace.cz', 'https://www.jenprace.cz'],
     ['jobs-ch', 'Jobs.ch', 'https://www.jobs.ch'],
     ['jobscout24-ch', 'JobScout24.ch', 'https://www.jobscout24.ch'],
-    ['swissdevjobs', 'SwissDevJobs', 'https://swissdevjobs.ch'],
     [
       'english-speaking-jobs-ch',
       'English Speaking Jobs Switzerland',
       'https://englishspeakingjobs.ch',
     ],
     ['ictcareer-ch', 'ICTcareer.ch', 'https://www.ictcareer.ch'],
-    ['we-work-remotely', 'We Work Remotely', 'https://weworkremotely.com'],
-    ['remotive', 'Remotive', 'https://remotive.com'],
     ['wellfound', 'Wellfound', 'https://wellfound.com/jobs'],
-    ['working-nomads', 'Working Nomads', 'https://www.workingnomads.com/jobs'],
     ['flexjobs', 'FlexJobs', 'https://www.flexjobs.com'],
     ['eures', 'EURES', 'https://eures.europa.eu'],
-    ['greenhouse', 'Greenhouse curated boards', 'https://www.greenhouse.com'],
-    ['lever', 'Lever curated boards', 'https://www.lever.co'],
-    ['ashby', 'Ashby curated boards', 'https://www.ashbyhq.com'],
-    [
-      'smartrecruiters',
-      'SmartRecruiters curated companies',
-      'https://www.smartrecruiters.com',
-    ],
-    ['workable', 'Workable curated companies', 'https://www.workable.com'],
-    ['recruitee', 'Recruitee curated companies', 'https://recruitee.com'],
-    [
-      'teamtailor',
-      'Teamtailor curated companies',
-      'https://www.teamtailor.com',
-    ],
   ] as const;
   return [
     ...definitions,
+    ...createConfiguredAtsDefinitions(atsConfiguration),
     ...unsupported.map(([id, name, baseUrl]) => ({
       id,
       name,

@@ -63,13 +63,20 @@ Quickly enrollment fails closed unless a qualified approved lead has explicit
 campaign, and available capacity. Public contact data or Telegram approval alone
 is not consent.
 
+The Twenty Sales App also forwards a new `Person` to Sales Bot when Twenty marks
+its creator as `EMAIL`, or when an external contact-form integration explicitly
+sets `leadSource=CONTACT_FORM` (or a documented contact-form alias). Sales Bot
+queues an idempotent Telegram notification for every authorized operator.
+Manual records and ordinary Sales imports through ARES, Geoapify, Google Places,
+or `/sales_prospects` do not produce this notification.
+
 ## Configuration
 
 | Variable                                                                                             | Required/default              | Purpose                                                               |
 | ---------------------------------------------------------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------- |
 | `DATABASE_URL`                                                                                       | Required                      | PostgreSQL campaigns, evidence, searches, decisions, and idempotency. |
 | `SALES_TELEGRAM_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`                                                  | Required                      | Dedicated private Telegram surface.                                   |
-| `SALES_API_TOKEN`, `SALES_WEBHOOK_TOKEN`                                                             | Required, distinct, 32+ chars | REST API and Quickly webhook authentication.                          |
+| `SALES_API_TOKEN`, `SALES_WEBHOOK_TOKEN`                                                             | Required, distinct, 32+ chars | REST API plus Quickly/Twenty webhook authentication.                  |
 | `SALES_PORT`                                                                                         | `4050`                        | Private HTTP/readiness port.                                          |
 | `SALES_INTERVAL_MINUTES`                                                                             | `30`                          | Periodic discovery interval.                                          |
 | `SALES_FOLLOWUP_TIME`, `SALES_TIMEZONE`                                                              | `20:00`, `Europe/Prague`      | Manual call-list reporting schedule.                                  |
@@ -96,7 +103,9 @@ pnpm exec vitest run apps/sales-bot/src/__tests__
 Periodic work defaults to 30-minute intervals; follow-up reporting defaults to
 20:00 in `Europe/Prague`. Manual and scheduled discovery use the same persisted
 search and lead pipeline. The campaign-free prospect import is one-shot and must
-be invoked explicitly.
+be invoked explicitly. Twenty inbound-lead alerts are event driven rather than
+scheduled; their PostgreSQL outbox retries bounded Telegram failures across
+restarts.
 
 ## Integrations
 
@@ -106,7 +115,7 @@ be invoked explicitly.
 | Geoapify/OpenStreetMap               | Primary place discovery and available public contact metadata.                  |
 | Google Places                        | Optional fallback when primary sources lack enough contacts.                    |
 | Public company websites              | Contact-page, explicit e-mail, and `tel:` evidence with source URLs.            |
-| Twenty CRM                           | Idempotent Company/Note CRM state; extended by Twenty Sales App when enabled.   |
+| Twenty CRM                           | Idempotent Company/Note state plus filtered Person-created inbound alerts.      |
 | Quickly                              | Explicitly authorized campaign sequences after every eligibility gate passes.   |
 | Ollama                               | Optional category mapping and schema-validated draft generation.                |
 | Google Sheets/contact-network        | Backward-compatible personal-contact workflow shared with Networking Bot.       |
@@ -122,3 +131,6 @@ be invoked explicitly.
   `geo:` or `nace:` for an explicit override.
 - Quickly refusal is expected when consent, suppression, campaign, or capacity
   requirements are not satisfied.
+- If an inbound Person produces no alert, verify the app logic function is
+  applied, its secret token matches `SALES_WEBHOOK_TOKEN`, and the record is
+  either created by the `EMAIL` actor or explicitly tagged as a contact form.

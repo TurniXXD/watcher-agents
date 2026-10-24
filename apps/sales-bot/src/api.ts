@@ -9,6 +9,11 @@ import type { WatcherLogger } from '@watcher/core';
 import type { SalesStore } from '@watcher/database';
 import { z } from 'zod';
 import { normalizeEntityType } from './classification/index.js';
+import {
+  acceptCrmInboundLead,
+  crmInboundLeadSchema,
+  type CrmInboundLead,
+} from './crm-inbound-lead.js';
 import type { SalesService } from './service.js';
 
 const campaignSchema = z.object({
@@ -94,6 +99,9 @@ export class SalesApi {
     private readonly webhookToken: string,
     private readonly logger: WatcherLogger,
     private readonly notify: (message: string) => Promise<void>,
+    private readonly enqueueInboundLead: (
+      payload: CrmInboundLead,
+    ) => Promise<void>,
   ) {}
 
   public async start(port: number): Promise<void> {
@@ -130,12 +138,28 @@ export class SalesApi {
       send(response, 200, { status: 'ok' });
       return;
     }
-    const isWebhook = path === '/v1/webhooks/quickly';
+    const isQuicklyWebhook = path === '/v1/webhooks/quickly';
+    const isInboundLeadWebhook = path === '/v1/webhooks/twenty/inbound-lead';
+    const isWebhook = isQuicklyWebhook || isInboundLeadWebhook;
     if (!authorized(request, isWebhook ? this.webhookToken : this.apiToken)) {
       send(response, 401, { error: 'unauthorized' });
       return;
     }
-    if (isWebhook && method === 'POST') {
+    if (isInboundLeadWebhook && method === 'POST') {
+      const payload = crmInboundLeadSchema.parse(await readBody(request));
+      const result = await acceptCrmInboundLead(
+        payload,
+        this.store,
+        this.enqueueInboundLead,
+      );
+      send(
+        response,
+        result === 'accepted' ? 202 : 200,
+        result === 'accepted' ? { accepted: true } : { duplicate: true },
+      );
+      return;
+    }
+    if (isQuicklyWebhook && method === 'POST') {
       const payload = webhookSchema.parse(await readBody(request));
       const id = createHash('sha256')
         .update(JSON.stringify(payload))

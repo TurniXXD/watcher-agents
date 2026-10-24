@@ -9,6 +9,10 @@ import { OllamaProvider } from '@watcher/llm';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { SalesApi } from './api.js';
 import { createSalesBot, salesBotCommands } from './bot.js';
+import {
+  enqueueCrmInboundLead,
+  salesInboundLeadKind,
+} from './crm-inbound-lead.js';
 import { GooglePlacesDiscoveryClient } from './discovery.js';
 import { GeoapifyDiscoveryClient } from './geoapify.js';
 import { ColdEmailGenerator } from './cold-email-generator.js';
@@ -136,6 +140,7 @@ const api = new SalesApi(
       }
     }
   },
+  (payload) => enqueueCrmInboundLead(payload, allowed, outbox),
 );
 
 await api.start(env.SALES_PORT);
@@ -164,17 +169,27 @@ const followupScheduler = new PersistentScheduler(
   logger,
 );
 const outboxScheduler = new PersistentScheduler(
-  (now) => outbox.claimDue(now, 10, undefined, [salesFollowupKind]),
+  (now) =>
+    outbox.claimDue(now, 10, undefined, [
+      salesFollowupKind,
+      salesInboundLeadKind,
+    ]),
   async (due) => {
     const message = due as Awaited<ReturnType<typeof outbox.claimDue>>[number];
+    const isFollowup = message.kind === salesFollowupKind;
+    const isInboundLead = message.kind === salesInboundLeadKind;
     if (
-      message.kind !== salesFollowupKind ||
+      (!isFollowup && !isInboundLead) ||
       !allowed.has(Number(message.chatId)) ||
-      message.deduplicationKey.split(':')[1] !==
-        localDate(new Date(), env.SALES_TIMEZONE) ||
-      !followupSlotAt(new Date(), env.SALES_TIMEZONE, '00:00')
+      (isFollowup &&
+        (message.deduplicationKey.split(':')[1] !==
+          localDate(new Date(), env.SALES_TIMEZONE) ||
+          !followupSlotAt(new Date(), env.SALES_TIMEZONE, '00:00')))
     ) {
-      await outbox.markFailed(message, 'Sales report is stale or not allowed');
+      await outbox.markFailed(
+        message,
+        'Sales notification is stale, unsupported, or not allowed',
+      );
       return;
     }
     try {
@@ -195,7 +210,7 @@ const outboxScheduler = new PersistentScheduler(
       await outbox.markFailed(message, errorMessage(error), retryAt);
       logger.warn(
         { err: error, outboxMessageId: message.id, retryAt },
-        'Sales report Telegram delivery failed',
+        'Sales Telegram outbox delivery failed',
       );
     }
   },

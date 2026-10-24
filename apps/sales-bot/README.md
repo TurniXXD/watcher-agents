@@ -21,3 +21,25 @@ Personal contacts and business-card reading are also available in the separate [
 Start from [sales](../../deploy/presets/sales-bot.env.example), [Quickly](../../deploy/presets/quickly.env.example), and [Twenty](../../deploy/presets/twenty.env.example) presets. Keep populated copies only in private runtime configuration. API/webhook tokens must be distinct. Twenty is required only for `/sales_prospects`; Quickly and the Google Sheets contact group remain optional until those integrations are enabled.
 
 Apply the [Twenty Sales App](../twenty-sales-app/README.md) before enabling custom Twenty fields.
+
+## New inbound CRM lead notifications
+
+The applied Twenty Sales App listens for `person.created` and calls the private
+Sales Bot webhook. Sales Bot sends a durable Telegram notification to every
+authorized operator only when the new Person has one of these verified origins:
+
+- Twenty actor source `EMAIL` (a Person created from synchronized incoming mail);
+- explicit Person `leadSource=CONTACT_FORM` or a documented contact-form alias.
+
+Manual Person creation is ignored. API-created Sales imports such as ARES,
+Geoapify, Google Places, and `/sales_prospects` are also ignored unless an
+external contact-form integration explicitly tags the Person as a contact-form
+lead. The webhook event and per-chat outbox rows are idempotent, survive a bot
+restart, and retry bounded Telegram delivery without sending duplicate alerts.
+
+After applying the Twenty app, set its secret
+`SALES_INBOUND_WEBHOOK_TOKEN` to exactly the Sales Bot
+`SALES_WEBHOOK_TOKEN`. The non-secret `SALES_INBOUND_WEBHOOK_URL` defaults to
+`http://sales-bot:4050/v1/webhooks/twenty/inbound-lead`, which is reachable from
+the production Twenty worker on the private Compose network. Override it only
+when Twenty and Sales Bot do not share that network.

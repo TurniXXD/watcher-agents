@@ -16,6 +16,9 @@ const profile: CandidateProfile = {
   languages: { Czech: 'native', English: 'B2' },
   preferredRoles: ['Full-Stack Developer'],
   avoidedRoles: ['Recruiter'],
+  requiredTechnologies: [],
+  excludedTechnologies: [],
+  adjacentRoles: [],
   preferredLocations: {
     countries: ['Czechia'],
     regions: ['Europe'],

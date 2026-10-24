@@ -48,6 +48,13 @@ persisted, daylight-saving-aware schedules.
 | `JOBS_AI_TIMEOUT_MS`                             | `45000`                   | AI request timeout.                                                  |
 | `JOBS_EMAIL_WEBHOOK_URL`, `JOBS_EMAIL_RECIPIENT` | Optional pair             | Operator-owned e-mail delivery gateway and recipient.                |
 | `JOBS_EMAIL_WEBHOOK_API_KEY`                     | Optional                  | Gateway credential; requires the URL pair.                           |
+| `JOBS_GREENHOUSE_BOARDS`                         | Optional CSV              | Public Greenhouse board tokens to collect through its Jobs API.      |
+| `JOBS_LEVER_SITES`                               | Optional CSV              | Public Lever site names to collect through Postings API.             |
+| `JOBS_ASHBY_BOARDS`                              | Optional CSV              | Public Ashby job-board names to collect.                             |
+| `JOBS_SMARTRECRUITERS_COMPANIES`                 | Optional CSV              | Public SmartRecruiters company identifiers to collect.               |
+| `JOBS_WORKABLE_ACCOUNTS`                         | Optional CSV              | Public Workable account subdomains to collect.                       |
+| `JOBS_RECRUITEE_COMPANIES`                       | Optional CSV              | Public Recruitee company subdomains to collect.                      |
+| `JOBS_TEAMTAILOR_DOMAINS`                        | Optional CSV              | Public Teamtailor career-site domains whose RSS feed is enabled.     |
 | `LOG_LEVEL`                                      | `info`                    | Structured log level.                                                |
 
 ## Sources and integrations
@@ -57,6 +64,8 @@ persisted, daylight-saving-aware schedules.
 | Remote Frontend / Remote Backend public APIs                            | Separate permitted job boards.                                                           |
 | Himalayas, Startup Jobs engineering, RemoteFirstJobs RSS                | Public RSS discovery.                                                                    |
 | Remote OK public API                                                    | Public JSON discovery.                                                                   |
+| Greenhouse, Lever, Ashby, SmartRecruiters                               | Official public ATS endpoints for explicitly configured company/board identifiers.       |
+| Workable, Recruitee, Teamtailor                                         | Public company career endpoints/RSS for explicitly configured accounts or domains.       |
 | DeveloperJobs.ch, CoolJobs.eu, StartupJobs.cz, Práce za rohem, LinkedIn | Explicitly disabled until a verified permitted feed exists.                              |
 | PostgreSQL                                                              | Authoritative jobs, observations, checkpoints, profile, schedule, and application state. |
 | Telegram                                                                | Primary private UI and alert delivery.                                                   |
@@ -78,11 +87,14 @@ an open job; closure text or HTTP 404/410 confirms closure, and inconclusive or
 failed checks stay unverified/unknown. Redirect targets are revalidated against
 the SSRF policy.
 
-Enabled sources are the separate Remote Frontend and Remote Backend public API
-boards, Himalayas RSS, Startup Jobs engineering RSS, RemoteFirstJobs RSS, and
-Remote OK's public API. DeveloperJobs.ch, CoolJobs.eu, StartupJobs.cz, Práce za
-rohem, and LinkedIn remain explicit disabled registry records because no
-verified permitted public job-seeker feed is configured. The worker never
+Enabled global sources are the separate Remote Frontend and Remote Backend
+public API boards, Himalayas RSS, Startup Jobs engineering RSS,
+RemoteFirstJobs RSS, and Remote OK's public API. Configured tenant identifiers
+also enable Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, and
+Teamtailor adapters; an empty list keeps that ATS source unavailable rather than
+guessing company identifiers. DeveloperJobs.ch, CoolJobs.eu, StartupJobs.cz,
+Práce za rohem, and LinkedIn remain explicit disabled registry records because
+no verified permitted public job-seeker feed is configured. The worker never
 automates logged-in pages or bypasses access controls.
 
 ## Eligibility and alerts
@@ -92,6 +104,14 @@ graduate-only eligibility, incompatible geographic restrictions, and unrelated
 roles are hard blockers. Ambiguous location, authorization, or fluent-English
 requirements are marked `UNCERTAIN`. The deterministic 100-point score reports
 matched skills, gaps, blockers, uncertainties, and its weighted breakdown.
+
+The default profile requires evidence of Next.js, React.js, Node.js, or
+TypeScript for engineering vacancies and rejects roles centered on PHP, Java,
+C++, Go, .NET, or Svelte. Explicit adjacent paths remain eligible without a
+target-stack keyword: Forward Deployed Engineer, Forward Deployed Project
+Manager, Technical Project/Program Manager, Implementation Engineer, and
+Solutions Engineer. Digests and `/jobs_latest` are ordered from highest to
+lowest match score.
 
 The first import is baseline-only. Later runs reserve one immutable initial
 digest key per canonical job, so neither a second source nor a changed listing

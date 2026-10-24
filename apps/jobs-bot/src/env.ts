@@ -7,6 +7,18 @@ const optionalText = z.preprocess(
   z.string().optional(),
 );
 
+const commaSeparatedIdentifiers = z
+  .string()
+  .default('')
+  .transform((value) => [
+    ...new Set(
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ]);
+
 const defaultProfile = {
   name: 'Jakub Vantuch',
   professionalTitle: 'Full-Stack Developer',
@@ -36,6 +48,12 @@ const defaultProfile = {
     'SaaS Engineer',
     'AI Application Engineer',
     'Automation Engineer',
+    'Forward Deployed Engineer',
+    'Forward Deployed Project Manager',
+    'Technical Project Manager',
+    'Technical Program Manager',
+    'Implementation Engineer',
+    'Solutions Engineer',
   ],
   avoidedRoles: [
     'IT Support',
@@ -47,6 +65,16 @@ const defaultProfile = {
     'Sales Representative',
     'iOS Developer',
     'Android Developer',
+  ],
+  requiredTechnologies: ['Next.js', 'React.js', 'Node.js', 'TypeScript'],
+  excludedTechnologies: ['PHP', 'Java', 'C++', 'Go', '.NET', 'Svelte'],
+  adjacentRoles: [
+    'Forward Deployed Engineer',
+    'Forward Deployed Project Manager',
+    'Technical Project Manager',
+    'Technical Program Manager',
+    'Implementation Engineer',
+    'Solutions Engineer',
   ],
   preferredLocations: {
     countries: ['Czechia', 'Czech Republic', 'Switzerland', 'Iceland'],
@@ -196,6 +224,13 @@ const schema = z
       .min(5_000)
       .default(30_000),
     JOBS_DETAIL_REFRESH_HOURS: z.coerce.number().int().min(1).default(72),
+    JOBS_GREENHOUSE_BOARDS: commaSeparatedIdentifiers,
+    JOBS_LEVER_SITES: commaSeparatedIdentifiers,
+    JOBS_ASHBY_BOARDS: commaSeparatedIdentifiers,
+    JOBS_SMARTRECRUITERS_COMPANIES: commaSeparatedIdentifiers,
+    JOBS_WORKABLE_ACCOUNTS: commaSeparatedIdentifiers,
+    JOBS_RECRUITEE_COMPANIES: commaSeparatedIdentifiers,
+    JOBS_TEAMTAILOR_DOMAINS: commaSeparatedIdentifiers,
     JOBS_CANDIDATE_NAME: z.string().trim().min(1).default('Jakub Vantuch'),
     JOBS_CANDIDATE_PROFILE_JSON: optionalText,
     JOBS_AI_ENABLED: z

@@ -154,7 +154,24 @@ export class JobStore {
       include: { skills: true },
       orderBy: { updatedAt: 'desc' },
     });
-    if (existing) return { row: existing, profile: profileFromRow(existing) };
+    if (existing) {
+      const existingData =
+        existing.profileData &&
+        typeof existing.profileData === 'object' &&
+        !Array.isArray(existing.profileData)
+          ? existing.profileData
+          : {};
+      const needsPreferenceMigration =
+        !('requiredTechnologies' in existingData) ||
+        !('excludedTechnologies' in existingData) ||
+        !('adjacentRoles' in existingData);
+      if (!needsPreferenceMigration)
+        return { row: existing, profile: profileFromRow(existing) };
+
+      const migrated = profileFromRow(existing);
+      const row = await this.updateProfile(existing.id, migrated);
+      return { row, profile: profileFromRow(row) };
+    }
     const row = await this.db.jobCandidateProfile.create({
       data: {
         name: profile.name,
@@ -171,6 +188,9 @@ export class JobStore {
           ...(profile.github ? { github: profile.github } : {}),
           ...(profile.linkedin ? { linkedin: profile.linkedin } : {}),
           experience: profile.experience,
+          requiredTechnologies: profile.requiredTechnologies,
+          excludedTechnologies: profile.excludedTechnologies,
+          adjacentRoles: profile.adjacentRoles,
         }),
         scoringWeights: json(profile.weights),
         excellentThreshold: profile.thresholds.excellent,
@@ -223,6 +243,9 @@ export class JobStore {
             ...(profile.github ? { github: profile.github } : {}),
             ...(profile.linkedin ? { linkedin: profile.linkedin } : {}),
             experience: profile.experience,
+            requiredTechnologies: profile.requiredTechnologies,
+            excludedTechnologies: profile.excludedTechnologies,
+            adjacentRoles: profile.adjacentRoles,
           }),
           scoringWeights: json(profile.weights),
           excellentThreshold: profile.thresholds.excellent,
@@ -245,6 +268,15 @@ export class JobStore {
   }
 
   public async syncSources(definitions: JobSourceDefinition[]) {
+    const existingSources = await this.db.jobSource.findMany({
+      where: { id: { in: definitions.map((source) => source.id) } },
+      select: { id: true, collectionStrategy: true },
+    });
+    const previouslyUnsupported = new Set(
+      existingSources
+        .filter((source) => source.collectionStrategy === 'DISABLED')
+        .map((source) => source.id),
+    );
     await this.db.$transaction(
       definitions.map((source) =>
         this.db.jobSource.upsert({
@@ -271,6 +303,12 @@ export class JobStore {
             disabledReason: source.disabledReason ?? null,
             fetchIntervalMinutes: source.fetchIntervalMinutes ?? 240,
             rateLimitPerMinute: source.rateLimitPerMinute ?? 30,
+            ...(source.enabledByDefault && previouslyUnsupported.has(source.id)
+              ? {
+                  enabled: true,
+                  healthStatus: SourceHealthStatus.DEGRADED,
+                }
+              : {}),
           },
         }),
       ),

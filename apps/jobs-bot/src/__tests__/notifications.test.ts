@@ -1,12 +1,43 @@
 import { Bot } from 'grammy';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { deliverJobDigest } from '../notifications.js';
+import { deliverJobDigest, renderJobDigest } from '../notifications.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe('job notification delivery', () => {
+  it('orders digest jobs by descending match score', () => {
+    const digest = renderJobDigest([
+      {
+        notificationId: 'notification-low',
+        jobId: 'job-low',
+        title: 'Lower match',
+        company: 'Example',
+        score: 72,
+        eligibility: 'ELIGIBLE',
+        reasoning: 'Relevant.',
+        url: 'https://example.com/low',
+        source: 'Example source',
+      },
+      {
+        notificationId: 'notification-high',
+        jobId: 'job-high',
+        title: 'Higher match',
+        company: 'Example',
+        score: 94,
+        eligibility: 'ELIGIBLE',
+        reasoning: 'Very relevant.',
+        url: 'https://example.com/high',
+        source: 'Example source',
+      },
+    ]);
+
+    expect(digest.indexOf('Higher match')).toBeLessThan(
+      digest.indexOf('Lower match'),
+    );
+  });
+
   it('records every provider attempt and succeeds on partial provider failure', async () => {
     const bot = new Bot('test-token');
     bot.botInfo = {

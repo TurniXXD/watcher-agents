@@ -273,6 +273,14 @@ Ollama endpoint, while `JOBS_AI_MODEL`, optional `JOBS_AI_API_KEY`, and
 `JOBS_EMAIL_RECIPIENT` configure an HTTP mail gateway. Never commit populated
 profile JSON or credentials.
 
+Optional comma-separated `JOBS_GREENHOUSE_BOARDS`, `JOBS_LEVER_SITES`,
+`JOBS_ASHBY_BOARDS`, `JOBS_SMARTRECRUITERS_COMPANIES`,
+`JOBS_WORKABLE_ACCOUNTS`, `JOBS_RECRUITEE_COMPANIES`, and
+`JOBS_TEAMTAILOR_DOMAINS` enable the corresponding official public ATS
+endpoints for those explicit tenants. Empty lists keep an adapter unavailable;
+the bot never guesses tenants, scrapes logged-in pages, or treats an
+unconfigured company platform as a global job feed.
+
 ## Required Networking Bot
 
 Create a distinct BotFather token in `NETWORKING_TELEGRAM_TOKEN`. The renderer writes `deploy/runtime/networking-bot.env`, and production starts the bot on its internal readiness port `4070`. For Google Sheets contacts, share only the selected spreadsheet with `GOOGLE_SERVICE_ACCOUNT_EMAIL` and configure all three credential values together. Calendar event writes require the complete Networking Google OAuth group and the same `CALENDAR_TOKEN_ENCRYPTION_KEY` used to encrypt the per-chat refresh token; the callback uses loopback port `8790`. `NETWORK_OLLAMA_VISION_MODEL` must name an image-capable model already installed on the external Ollama host. See `deploy/presets/networking-bot.env.example` and `apps/networking-bot/README.md`.
@@ -284,6 +292,17 @@ Create a distinct BotFather token in `NETWORKING_TELEGRAM_TOKEN`. The renderer w
 ARES discovery is always available without a key. Set `GEOAPIFY_API_KEY` in the mode-`0600` `deploy/runtime/sales-bot.env` for primary POI and public-contact enrichment; the free Geoapify account still requires attribution, which the Telegram result includes. `GOOGLE_PLACES_API_KEY` is optional: enable Places API (New), attach billing, and restrict the key to that API only if Google fallback is wanted. Never send either key through Telegram. `/sales_search` accepts at most 20 merged results, immediately sends them as the configured 11-column TSV table, and stores the search schedule plus result identities in PostgreSQL so later runs send only new contacts. Use `/sales_searches` and `/sales_search_stop <id|all>` to manage saved searches. `/sales_find` imports only candidates with a website into the selected campaign. ARES registered seats may differ from operating locations, and Geoapify/OpenStreetMap fields may be incomplete; the bot subsequently audits an imported candidate's own website.
 
 `QUICKLY_BASE_URL=http://quickly:8000` and `TWENTY_BASE_URL=http://twenty-server:3000` are the default internal Compose addresses. `QUICKLY_API_KEY` and `TWENTY_API_KEY` remain empty until created in their respective UIs; they enable the corresponding sales-bot clients. Empty required secret fields in the presets are placeholders and block deployment. Keep the populated `deploy/runtime/sales-bot.env` at mode `0600` on the VPS.
+
+After applying `apps/twenty-sales-app`, set its installed application secret
+`SALES_INBOUND_WEBHOOK_TOKEN` to the exact value stored as
+`SALES_WEBHOOK_TOKEN` in `deploy/runtime/sales-bot.env`. Its non-secret
+`SALES_INBOUND_WEBHOOK_URL` defaults to
+`http://sales-bot:4050/v1/webhooks/twenty/inbound-lead`; `twenty-worker` and
+`sales-bot` share the private default Compose network. The app sends only People
+created from Twenty e-mail sync or explicitly tagged contact-form integrations.
+Sales Bot stores event identity and Telegram delivery in PostgreSQL, so retries
+are idempotent. Do not put either token in Compose labels, logs, screenshots, or
+committed files.
 
 The sales bot reuses the shared optional `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_KEEP_ALIVE`, `OLLAMA_NUM_CTX`, `OLLAMA_RETRIES`, `OLLAMA_THINK`, and `OLLAMA_TIMEOUT_MS` settings for structured cold-email drafts. `OLLAMA_URL` and `OLLAMA_MODEL` must either both be set or both be empty. With neither configured, the existing deterministic campaign template remains the draft fallback. Apply `apps/twenty-sales-app` to the workspace before setting `TWENTY_APP_FIELDS_ENABLED=true`; leaving it `false` restricts synchronization to native Twenty fields and Notes.
 

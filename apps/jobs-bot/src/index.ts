@@ -1,6 +1,9 @@
 import { ReadinessServer, createLogger } from '@watcher/core';
 import { JobStore, createDatabaseClient } from '@watcher/database';
-import { OpenAiCompatibleJobEvaluator } from '@watcher/jobs';
+import {
+  OpenAiCompatibleJobEvaluator,
+  createJobSourceDefinitions,
+} from '@watcher/jobs';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { createJobsBot, jobsBotCommands } from './bot.js';
 import { env } from './env.js';
@@ -26,7 +29,15 @@ const runner = new JobDiscoveryRunner(
   env.CANDIDATE_PROFILE,
   env.JOBS_DETAIL_REFRESH_HOURS,
   logger,
-  undefined,
+  createJobSourceDefinitions({
+    greenhouseBoards: env.JOBS_GREENHOUSE_BOARDS,
+    leverSites: env.JOBS_LEVER_SITES,
+    ashbyBoards: env.JOBS_ASHBY_BOARDS,
+    smartRecruitersCompanies: env.JOBS_SMARTRECRUITERS_COMPANIES,
+    workableAccounts: env.JOBS_WORKABLE_ACCOUNTS,
+    recruiteeCompanies: env.JOBS_RECRUITEE_COMPANIES,
+    teamtailorDomains: env.JOBS_TEAMTAILOR_DOMAINS,
+  }),
   aiEvaluator,
 );
 await runner.initialize();

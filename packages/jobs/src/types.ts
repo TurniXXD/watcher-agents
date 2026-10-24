@@ -20,6 +20,22 @@ export const candidateProfileSchema = z
     languages: z.record(z.string(), z.string()),
     preferredRoles: z.array(z.string()).min(1),
     avoidedRoles: z.array(z.string()).default([]),
+    requiredTechnologies: z
+      .array(z.string())
+      .default(['Next.js', 'React.js', 'Node.js', 'TypeScript']),
+    excludedTechnologies: z
+      .array(z.string())
+      .default(['PHP', 'Java', 'C++', 'Go', '.NET', 'Svelte']),
+    adjacentRoles: z
+      .array(z.string())
+      .default([
+        'Forward Deployed Engineer',
+        'Forward Deployed Project Manager',
+        'Technical Project Manager',
+        'Technical Program Manager',
+        'Implementation Engineer',
+        'Solutions Engineer',
+      ]),
     preferredLocations: z.object({
       countries: z.array(z.string()).default(['Czechia']),
       regions: z.array(z.string()).default(['Europe', 'EU', 'Worldwide']),

@@ -33,6 +33,28 @@ const titleMatches = (title: string, roles: string[]): boolean => {
   });
 };
 
+const titlePhraseMatches = (title: string, roles: string[]): boolean => {
+  const normalized = normalizeText(title);
+  return roles.some((role) => normalized.includes(normalizeText(role)));
+};
+
+const technologyPattern = (technology: string): RegExp => {
+  const normalized = normalizeText(technology);
+  const patterns: Record<string, string> = {
+    'c++': String.raw`c\+\+`,
+    '.net': String.raw`(?:\.net|dotnet|c#)`,
+    go: String.raw`(?:go|golang)`,
+    java: String.raw`java(?!script)`,
+    'next.js': String.raw`next(?:\.js|js)?`,
+    'node.js': String.raw`node(?:\.js|js)?`,
+    'react.js': String.raw`react(?:\.js|js)?`,
+  };
+  const source =
+    patterns[normalized] ??
+    normalized.replace(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
+  return new RegExp(String.raw`(?<![a-z0-9])(?:${source})(?![a-z0-9])`, 'iu');
+};
+
 const recommendationFor = (
   score: number,
   profile: CandidateProfile,
@@ -97,10 +119,21 @@ export const evaluateJob = (
   profile: CandidateProfile,
 ): JobEvaluationResult => {
   const body = `${job.title}\n${job.description}`;
+  const technologyEvidence = `${body}\n${job.technologyStack.join('\n')}`;
   const normalizedBody = normalizeText(body);
   const hardBlockers: string[] = [];
   const uncertainties: string[] = [];
   const geography = locationCompatibility(job, profile);
+  const adjacentRole = titlePhraseMatches(job.title, profile.adjacentRoles);
+  const matchedRequiredTechnologies = profile.requiredTechnologies.filter(
+    (technology) => technologyPattern(technology).test(technologyEvidence),
+  );
+  const excludedTitleTechnologies = profile.excludedTechnologies.filter(
+    (technology) => technologyPattern(technology).test(job.title),
+  );
+  const mandatoryExcludedTechnologies = profile.excludedTechnologies.filter(
+    (technology) => mandatory(body, technologyPattern(technology)),
+  );
 
   if (mandatory(body, /\b(?:bachelor|master|phd|university degree|degree)\b/iu))
     hardBlockers.push('Mandatory degree requirement');
@@ -124,8 +157,22 @@ export const evaluateJob = (
     titleMatches(job.title, profile.avoidedRoles)
   )
     hardBlockers.push('Explicitly avoided role');
-  if (!titleMatches(job.title, profile.preferredRoles))
+  if (!titleMatches(job.title, profile.preferredRoles) && !adjacentRole)
     hardBlockers.push('Unrelated role');
+  if (excludedTitleTechnologies.length > 0)
+    hardBlockers.push(
+      `Excluded technology role: ${excludedTitleTechnologies.join(', ')}`,
+    );
+  else if (mandatoryExcludedTechnologies.length > 0)
+    hardBlockers.push(
+      `Mandatory excluded technology: ${mandatoryExcludedTechnologies.join(', ')}`,
+    );
+  if (
+    profile.requiredTechnologies.length > 0 &&
+    matchedRequiredTechnologies.length === 0 &&
+    !adjacentRole
+  )
+    hardBlockers.push('Missing required target technology');
 
   if (
     mandatory(body, /\benglish\b/iu) &&
@@ -161,7 +208,11 @@ export const evaluateJob = (
   const experienceRatio = requiredYears
     ? Math.min(1, profile.yearsExperience / Math.max(1, requiredYears))
     : 0.8;
-  const roleRatio = titleMatches(job.title, profile.preferredRoles) ? 1 : 0;
+  const roleRatio = titleMatches(job.title, profile.preferredRoles)
+    ? 1
+    : adjacentRole
+      ? 0.9
+      : 0;
   const technologyRatio = wantedJobSkills.length
     ? proportion(matchedWantedSkills.length, wantedJobSkills.length)
     : Math.min(1, matchingSkills.length / Math.min(5, skillNames.length));

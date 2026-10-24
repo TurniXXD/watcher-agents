@@ -17,6 +17,12 @@ const profile = candidateProfileSchema.parse({
     'Node.js Developer',
   ],
   avoidedRoles: ['Helpdesk', 'Recruiter'],
+  requiredTechnologies: ['Next.js', 'React.js', 'Node.js', 'TypeScript'],
+  excludedTechnologies: ['PHP', 'Java', 'C++', 'Go', '.NET', 'Svelte'],
+  adjacentRoles: [
+    'Forward Deployed Engineer',
+    'Forward Deployed Project Manager',
+  ],
   preferredLocations: {
     countries: ['Czechia', 'Switzerland'],
     regions: ['Europe', 'EU', 'Worldwide'],
@@ -143,5 +149,59 @@ describe('deterministic job evaluation', () => {
       expect.arrayContaining(['React', 'TypeScript', 'Node.js', 'PostgreSQL']),
     );
     expect(result.missingSkills).toContain('Kubernetes');
+  });
+
+  it.each([
+    ['Senior PHP Engineer', 'Build APIs in PHP.'],
+    ['Java API Engineer', 'Java and Spring are required.'],
+    ['C++ Engineer', 'Develop high-performance C++ services.'],
+    ['Go Backend Engineer', 'Golang is required.'],
+    ['Senior .NET Developer', 'Build services with C# and .NET.'],
+    ['Svelte Developer', 'Develop the frontend in Svelte.'],
+  ])('rejects excluded technology role %s', (title, description) => {
+    const result = evaluateJob(job(description, { title }), profile);
+    expect(result.eligibility).toBe('INELIGIBLE');
+    expect(result.hardBlockers).toContainEqual(
+      expect.stringMatching(/^Excluded technology role:/u),
+    );
+  });
+
+  it('rejects a generic backend role without a target technology', () => {
+    const result = evaluateJob(
+      job('Build distributed backend services.', {
+        title: 'Senior Backend Engineer',
+        technologyStack: ['Kubernetes'],
+      }),
+      profile,
+    );
+    expect(result.hardBlockers).toContain('Missing required target technology');
+  });
+
+  it('accepts target technology supplied by structured stack metadata', () => {
+    const result = evaluateJob(
+      job('Build and maintain the product.', {
+        title: 'Senior Backend Engineer',
+        technologyStack: ['Node.js'],
+      }),
+      profile,
+    );
+    expect(result.hardBlockers).not.toContain(
+      'Missing required target technology',
+    );
+  });
+
+  it('allows an adjacent forward-deployed role without a target technology', () => {
+    const result = evaluateJob(
+      job('Lead customer deployments and coordinate technical delivery.', {
+        title: 'Forward Deployed Project Manager',
+        technologyStack: [],
+      }),
+      profile,
+    );
+    expect(result.hardBlockers).not.toContain(
+      'Missing required target technology',
+    );
+    expect(result.hardBlockers).not.toContain('Unrelated role');
+    expect(result.eligibility).toBe('ELIGIBLE');
   });
 });

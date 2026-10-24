@@ -170,7 +170,14 @@ export const createJobsBot = (input: {
     );
   });
   bot.command('jobs_latest', async (context) => {
-    const jobs = await input.store.listJobs({ minimumScore: 55, take: 10 });
+    const jobs = (await input.store.listJobs({ minimumScore: 55, take: 100 }))
+      .filter((job) => job.evaluations[0]?.eligibility !== 'INELIGIBLE')
+      .toSorted(
+        (left, right) =>
+          (right.evaluations[0]?.score ?? 0) -
+          (left.evaluations[0]?.score ?? 0),
+      )
+      .slice(0, 10);
     if (jobs.length === 0) {
       await context.reply('No evaluated matching jobs yet. Run /jobs_run.');
       return;

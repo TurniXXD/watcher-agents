@@ -2,6 +2,22 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-24 — Jobs Bot target-stack filtering
+
+- Jobs Bot now requires Next.js, React.js, Node.js, or TypeScript evidence for engineering matches and rejects roles centered on PHP, Java, C++, Go, .NET, or Svelte.
+- Forward-deployed, technical project/program management, implementation, and solutions engineering roles remain eligible as explicit adjacent paths.
+- Telegram digests and `/jobs_latest` now list qualifying roles from highest to lowest match score.
+
+## 2026-10-24 — Sales CRM inbound lead alerts
+
+- Added restart-safe Sales Bot Telegram notifications for new Twenty People created from synchronized incoming e-mail or an explicitly tagged contact form.
+- Excluded manual records and ordinary Sales Bot/API imports, and made webhook ingestion plus per-operator delivery idempotent across Twenty retries.
+
+## 2026-10-24 — Configurable public ATS job sources
+
+- Added public, tenant-configured adapters for Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, and Teamtailor without enabling HTML or logged-in scraping.
+- Kept the 08:00, 12:00, and 19:00 Prague discovery schedule and isolated each provider failure while preserving source identities and URLs.
+
 ## 2026-10-23 — Reflection continuity across midnight
 
 - Kept an active Briefing Bot reflection bound to its original journal session after midnight, even when the scheduler has already initialized the next day's reminder, so the next question is delivered normally.

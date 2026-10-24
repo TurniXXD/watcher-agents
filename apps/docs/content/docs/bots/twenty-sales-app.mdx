@@ -7,20 +7,28 @@ description: Versioned Watcher CRM fields, relationships, and referral metadata 
 
 The Twenty Sales App extends native Company, Person, and Opportunity objects with
 Watcher sales metadata and adds Relationship and Referral objects with
-bidirectional relations. It contains no scraping, sending, or payment automation.
-It targets Twenty 2.43 or newer.
+bidirectional relations. Its database-event logic function forwards verified
+new inbound People to the private Sales Bot. It contains no scraping, outreach
+sending, or payment automation. It targets Twenty 2.43 or newer.
 
 ## Architecture
 
-This package is declarative Twenty metadata, not a server process. The official
-Twenty CLI plans and applies the versioned app to a self-hosted workspace. Sales
-Bot uses the resulting fields only when `TWENTY_APP_FIELDS_ENABLED=true`.
+This package is a versioned Twenty extension, not a long-running Watcher
+process. The official Twenty CLI plans and applies its metadata and
+`person.created` logic function to a self-hosted workspace. Sales Bot uses the
+resulting custom fields only when `TWENTY_APP_FIELDS_ENABLED=true`; the logic
+function independently calls its authenticated private webhook.
 
 ## Configuration
 
 Authenticate a named CLI remote against the browser-facing Twenty URL. Never
-commit an API key. `WEB_DEVELOPMENT_REFERRAL_PERCENTAGE` defaults to 10 and is
-metadata only; it does not create a payable commission or infer paid revenue.
+commit an API key.
+
+| Application variable                  | Required/default                                        | Purpose                                                                         |
+| ------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `SALES_INBOUND_WEBHOOK_URL`           | `http://sales-bot:4050/v1/webhooks/twenty/inbound-lead` | Private Sales Bot destination reachable by the Twenty worker.                   |
+| `SALES_INBOUND_WEBHOOK_TOKEN`         | Required secret                                         | Must exactly match Sales Bot `SALES_WEBHOOK_TOKEN`.                             |
+| `WEB_DEVELOPMENT_REFERRAL_PERCENTAGE` | `10`                                                    | Metadata only; it neither creates a payable commission nor infers paid revenue. |
 
 ## Execution
 
@@ -32,7 +40,8 @@ pnpm --filter @watcher/twenty-sales-app twenty apply \
   --no-delete apps/twenty-sales-app
 ```
 
-There is no scheduler or long-running process. Preview the plan before applying.
+There is no scheduler or separate long-running process. Twenty invokes the
+logic function on `person.created`. Preview the plan before applying.
 `--no-delete` prevents unrelated workspace metadata from being removed.
 
 ## Integrations
@@ -41,6 +50,12 @@ After a successful apply, create a least-privilege Twenty API key for Sales Bot,
 set `TWENTY_API_KEY`, and then enable custom fields. The main Sales integration
 also needs `TWENTY_BASE_URL`.
 
+The notification accepts two sources only: the Twenty creator actor `EMAIL`, or
+an explicit `leadSource` value `CONTACT_FORM`, `INBOUND_CONTACT_FORM`,
+`WEBSITE_CONTACT_FORM`, `WEB_CONTACT_FORM`, or `WEB_FORM`. Manual creation and
+unmarked API imports are ignored. Stable workspace/record event identity and the
+Sales Bot PostgreSQL outbox make delivery idempotent and restart-safe.
+
 ## Troubleshooting
 
 - If Sales writes fail after enabling fields, verify the app was applied to the
@@ -48,3 +63,6 @@ also needs `TWENTY_BASE_URL`.
 - A plan showing unrelated deletions must not be applied; retain `--no-delete`.
 - Remote authentication must use the browser-facing URL, not an internal Compose
   hostname unavailable to the CLI host.
+- If the webhook returns `401`, update the installed app secret to the current
+  `SALES_WEBHOOK_TOKEN`. If it cannot connect, verify Twenty worker and Sales Bot
+  share the default Compose network or override the webhook URL appropriately.

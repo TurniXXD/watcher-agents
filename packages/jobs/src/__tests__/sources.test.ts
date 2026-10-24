@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseRemoteFrontendJob, parseRemoteOkJob } from '../sources.js';
+import {
+  parseRemoteFrontendJob,
+  parseRemoteOkJob,
+  parseWorkingNomadsJob,
+} from '../sources.js';
 
 describe('verified job source schemas', () => {
   it('accepts the documented Remote Frontend Jobs comma-delimited API fields', () => {
@@ -39,5 +43,30 @@ describe('verified job source schemas', () => {
 
     expect(job.workMode).toBe('REMOTE');
     expect(job.remoteRegions).toEqual([]);
+  });
+
+  it('normalizes the public Working Nomads payload with a stable listing id', () => {
+    const job = parseWorkingNomadsJob({
+      url: 'https://www.workingnomads.com/job/go/12345/?utm_source=feed',
+      title: 'Full-Stack Engineer',
+      company_name: 'Example',
+      description: '<p>Build with React, TypeScript and Node.js.</p>',
+      category_name: 'Development',
+      tags: 'react,typescript,node.js',
+      location: 'Europe',
+      pub_date: '2026-10-22T08:30:00+02:00',
+    });
+
+    expect(job).toMatchObject({
+      externalId: '12345',
+      sourceId: 'working-nomads',
+      company: 'Example',
+      workMode: 'REMOTE',
+      remoteRegions: ['Europe'],
+      originalUrl: 'https://www.workingnomads.com/job/go/12345',
+    });
+    expect(job.technologyStack).toEqual(
+      expect.arrayContaining(['React', 'TypeScript', 'Node.js']),
+    );
   });
 });

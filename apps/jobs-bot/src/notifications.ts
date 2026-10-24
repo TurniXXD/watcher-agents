@@ -10,24 +10,26 @@ export const renderJobDigest = (jobs: AlertJob[]): string =>
   [
     `🚀 ${jobs.length} new matching job${jobs.length === 1 ? '' : 's'}`,
     '',
-    ...jobs.flatMap((job, index) => [
-      `${index + 1}. ${job.title}`,
-      `Company: ${job.company}`,
-      `Location: ${job.location ?? 'Not specified'}`,
-      `Match: ${job.score}/100 · ${job.eligibility.toLowerCase()}`,
-      ...(job.salary ? [`Salary: ${job.salary}`] : []),
-      `Why: ${job.reasoning}`,
-      ...(job.hardBlockers?.length
-        ? [`Blockers: ${job.hardBlockers.join('; ')}`]
-        : []),
-      ...(job.uncertainties?.length
-        ? [`Needs review: ${job.uncertainties.join('; ')}`]
-        : []),
-      `Source: ${job.source}`,
-      `Published: ${job.publishedAt?.toISOString() ?? 'Unknown'}`,
-      `Apply: ${job.url}`,
-      '',
-    ]),
+    ...jobs
+      .toSorted((left, right) => right.score - left.score)
+      .flatMap((job, index) => [
+        `${index + 1}. ${job.title}`,
+        `Company: ${job.company}`,
+        `Location: ${job.location ?? 'Not specified'}`,
+        `Match: ${job.score}/100 · ${job.eligibility.toLowerCase()}`,
+        ...(job.salary ? [`Salary: ${job.salary}`] : []),
+        `Why: ${job.reasoning}`,
+        ...(job.hardBlockers?.length
+          ? [`Blockers: ${job.hardBlockers.join('; ')}`]
+          : []),
+        ...(job.uncertainties?.length
+          ? [`Needs review: ${job.uncertainties.join('; ')}`]
+          : []),
+        `Source: ${job.source}`,
+        `Published: ${job.publishedAt?.toISOString() ?? 'Unknown'}`,
+        `Apply: ${job.url}`,
+        '',
+      ]),
   ].join('\n');
 
 export const deliverJobDigest = async (input: {
