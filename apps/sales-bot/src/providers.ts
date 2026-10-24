@@ -49,6 +49,17 @@ export type SiteAudit = {
   emailSourceUrl?: string;
   foundPhone?: string;
   phoneSourceUrl?: string;
+  contactPageUrl?: string;
+  canonicalUrl?: string;
+  headingCount?: number;
+  imageCount?: number;
+  imagesMissingAlt?: number;
+  formsMissingLabels?: number;
+  hasRobotsDirective?: boolean;
+  hasStructuredData?: boolean;
+  usesHttps?: boolean;
+  hasMixedContent?: boolean;
+  detectedTechnologies?: string[];
 };
 
 export const extractPublicPhone = (html: string): string | undefined => {
@@ -110,6 +121,25 @@ export const auditWebsite = async (websiteUrl: string): Promise<SiteAudit> => {
         ),
     ),
   ];
+  const canonicalUrl = homepage.html.match(
+    /<link[^>]+rel=["'][^"']*canonical[^"']*["'][^>]+href=["']([^"']+)["']/iu,
+  )?.[1];
+  const images = [...homepage.html.matchAll(/<img\b[^>]*>/giu)].map(
+    ([tag]) => tag,
+  );
+  const formsMissingLabels = [
+    ...homepage.html.matchAll(/<(?:input|textarea|select)\b[^>]*>/giu),
+  ].filter(
+    ([tag]) => !/aria-label|aria-labelledby|\bid=["'][^"']+["']/iu.test(tag),
+  ).length;
+  const technologyPatterns: Array<[string, RegExp]> = [
+    ['WordPress', /wp-content|wp-includes/iu],
+    ['WooCommerce', /woocommerce/iu],
+    ['Shopify', /cdn\.shopify\.com|shopify-section/iu],
+    ['Next.js', /__NEXT_DATA__|\/_next\//u],
+    ['React', /data-reactroot|react(?:\.production)?\.min\.js/iu],
+    ['Google Analytics', /googletagmanager\.com|google-analytics\.com/iu],
+  ];
   return {
     sourceUrl: homepage.url,
     title: decodeHtmlText(
@@ -123,6 +153,21 @@ export const auditWebsite = async (websiteUrl: string): Promise<SiteAudit> => {
     hasPrivacyPage: privacy,
     hasMobileViewport: /<meta[^>]+name=["']viewport["']/iu.test(homepage.html),
     hasDescription: /<meta[^>]+name=["']description["']/iu.test(homepage.html),
+    ...(contact ? { contactPageUrl: contact.url } : {}),
+    ...(canonicalUrl
+      ? { canonicalUrl: new URL(canonicalUrl, homepage.url).toString() }
+      : {}),
+    headingCount: [...homepage.html.matchAll(/<h[1-6]\b/giu)].length,
+    imageCount: images.length,
+    imagesMissingAlt: images.filter((tag) => !/\balt\s*=/iu.test(tag)).length,
+    formsMissingLabels,
+    hasRobotsDirective: /<meta[^>]+name=["']robots["']/iu.test(homepage.html),
+    hasStructuredData: /application\/ld\+json/iu.test(homepage.html),
+    usesHttps: new URL(homepage.url).protocol === 'https:',
+    hasMixedContent: /(?:src|href)=["']http:\/\//iu.test(homepage.html),
+    detectedTechnologies: technologyPatterns
+      .filter(([, pattern]) => pattern.test(homepage.html))
+      .map(([name]) => name),
     ...(foundEmail ? { foundEmail, emailSourceUrl } : {}),
     ...(foundPhone ? { foundPhone, phoneSourceUrl: emailSourceUrl } : {}),
   };

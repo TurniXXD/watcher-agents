@@ -207,3 +207,9 @@ Each code update that changes runtime behavior must add a concise entry here. Th
 - Combined live readiness with latest-run freshness and recent normalized run/source errors.
 - Added configurable stale and error lookback windows and redacted sensitive error details from Telegram output.
 - Corrected host RAM measurement through `/proc/meminfo`, exposed read-only host process and DRM views, and added the top CPU/RAM/GPU processes to capacity alerts.
+
+# 2026-10-24 — Sales Bot working-day intelligence
+
+- Added `/lead`, cached lead analysis/refresh, daily queue inspection and statistics commands.
+- Added restart-safe five-lead Sales Intelligence reports at 09:00 Europe/Prague on Monday through Friday only; weekends create no batch and send no report.
+- Added sourced website/contact/technical research, opportunity recommendations, outreach drafts, 14-day caching, CRM deduplication, and persistent suggestion history without marking suggestions as contacted.

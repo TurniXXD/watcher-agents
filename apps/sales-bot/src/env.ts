@@ -29,6 +29,11 @@ export const env = z
       .string()
       .regex(/^([01]\d|2[0-3]):[0-5]\d$/u)
       .default('20:00'),
+    SALES_INTELLIGENCE_TIME: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/u)
+      .default('09:00'),
+    SALES_CRM_PUBLIC_URL: optionalUrl,
     SALES_TIMEZONE: z
       .string()
       .refine((value) => {

@@ -2639,12 +2639,55 @@ model SalesLead {
   campaign                             SalesCampaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   decisions                            SalesLeadDecision[]
   webhookEvents                        SalesWebhookEvent[]
+  research                             SalesLeadResearch?
+  dailySuggestions                     SalesDailySuggestion[]
 
   @@unique([campaignId, source, sourceExternalId])
   @@unique([campaignId, domain])
   @@unique([campaignId, email])
   @@index([stage, nextAttemptAt])
   @@map("sales_leads")
+}
+
+model SalesLeadResearch {
+  leadId          String    @id
+  status          String
+  version         Int       @default(1)
+  profile         Json
+  contacts        Json
+  technicalAudit  Json
+  opportunities   Json
+  outreach        Json
+  sourceUrls      String[]  @default([])
+  researchedAt    DateTime
+  expiresAt       DateTime
+  lastError       String?
+  retryCount      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lead             SalesLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+  @@map("sales_lead_research")
+}
+
+model SalesDailySuggestion {
+  id            String    @id @default(uuid())
+  leadId        String
+  scheduledDate DateTime  @db.Date
+  status        String    @default("pending")
+  suggestedAt   DateTime  @default(now())
+  deliveredAt   DateTime?
+  contactedAt   DateTime?
+  skippedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lead          SalesLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, scheduledDate])
+  @@index([scheduledDate, status])
+  @@index([leadId, suggestedAt])
+  @@map("sales_daily_suggestions")
 }
 
 model SalesLeadDecision {

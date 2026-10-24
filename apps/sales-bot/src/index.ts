@@ -28,6 +28,12 @@ import { QuicklyClient } from './providers.js';
 import { runPeriodicSalesSearch } from './periodic-search.js';
 import { SalesService } from './service.js';
 import {
+  intelligenceSlotAt,
+  renderLeadIntelligence,
+  SalesIntelligenceService,
+  salesIntelligenceKind,
+} from './sales-intelligence.js';
+import {
   GoogleSheetsNetworkRepository,
   NetworkAiService,
   networkBotCommands,
@@ -89,6 +95,11 @@ const service = new SalesService(
   ollamaProvider,
 );
 const allowed = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
+const intelligence = new SalesIntelligenceService(
+  store,
+  coldEmailGenerator,
+  env.SALES_CRM_PUBLIC_URL ?? env.TWENTY_BASE_URL,
+);
 const network: NetworkBotDependencies | undefined =
   env.GOOGLE_SHEETS_SPREADSHEET_ID &&
   env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
@@ -121,6 +132,8 @@ const bot = createSalesBot(
   service,
   network,
   env.SALES_INTERVAL_MINUTES,
+  intelligence,
+  env.SALES_TIMEZONE,
 );
 const api = new SalesApi(
   store,
@@ -173,13 +186,15 @@ const outboxScheduler = new PersistentScheduler(
     outbox.claimDue(now, 10, undefined, [
       salesFollowupKind,
       salesInboundLeadKind,
+      salesIntelligenceKind,
     ]),
   async (due) => {
     const message = due as Awaited<ReturnType<typeof outbox.claimDue>>[number];
     const isFollowup = message.kind === salesFollowupKind;
     const isInboundLead = message.kind === salesInboundLeadKind;
+    const isIntelligence = message.kind === salesIntelligenceKind;
     if (
-      (!isFollowup && !isInboundLead) ||
+      (!isFollowup && !isInboundLead && !isIntelligence) ||
       !allowed.has(Number(message.chatId)) ||
       (isFollowup &&
         (message.deduplicationKey.split(':')[1] !==
@@ -199,6 +214,14 @@ const outboxScheduler = new PersistentScheduler(
         { link_preview_options: { is_disabled: true } },
       );
       await outbox.markDelivered(message, String(sent.message_id));
+      if (isIntelligence) {
+        const suggestionId = message.deduplicationKey
+          .split(':')
+          .find((part) => part.startsWith('lead='))
+          ?.slice(5);
+        if (suggestionId)
+          await store.markDailySuggestionDelivered(suggestionId);
+      }
     } catch (error) {
       const retryAt =
         message.attemptCount >= 6
@@ -215,6 +238,57 @@ const outboxScheduler = new PersistentScheduler(
     }
   },
   30_000,
+  logger,
+);
+const intelligenceScheduler = new PersistentScheduler(
+  (now) => {
+    const slot = intelligenceSlotAt(
+      now,
+      env.SALES_TIMEZONE,
+      env.SALES_INTELLIGENCE_TIME,
+    );
+    return Promise.resolve(slot ? [{ id: slot }] : []);
+  },
+  async (due) => {
+    const date = new Date(`${due.id}T00:00:00.000Z`);
+    const assignments = await store.reserveDailySuggestions(date, 5);
+    for (const assignment of assignments) {
+      try {
+        await intelligence.research(assignment.leadId, false);
+      } catch (error) {
+        logger.warn(
+          { err: error, leadId: assignment.leadId },
+          'Daily sales research failed',
+        );
+      }
+    }
+    const ready = await store.listDailySuggestions(date);
+    const stats = await store.salesIntelligenceStats(date);
+    const summary = `🎯 DAILY SALES INTELLIGENCE\n📅 ${due.id}\n📊 Leads analyzed: ${ready.length}\n📋 Total uncontacted leads: ${stats.uncontacted}\n🔄 Previously suggested: ${stats.previouslySuggested}\n🆕 Never suggested: ${stats.neverSuggested}\n\nToday's leads:\n${ready.map((item, index) => `${index + 1}. ${item.lead.companyName}`).join('\n')}\n\nDetailed reports follow.`;
+    await outbox.enqueueMany(
+      [...allowed].flatMap((userId) => [
+        {
+          kind: salesIntelligenceKind,
+          deduplicationKey: `${userId}:${due.id}:summary`,
+          chatId: BigInt(userId),
+          body: summary,
+        },
+        ...ready.flatMap((item, index) =>
+          renderLeadIntelligence(
+            item.lead,
+            `${index + 1}/${ready.length}`,
+            intelligence.crmUrl(item.lead),
+          ).map((body, part) => ({
+            kind: salesIntelligenceKind,
+            deduplicationKey: `${userId}:${due.id}:lead=${item.id}:part=${part}`,
+            chatId: BigInt(userId),
+            body,
+          })),
+        ),
+      ]),
+    );
+  },
+  60_000,
   logger,
 );
 const salesSearchScheduler = new PersistentScheduler(
@@ -240,6 +314,7 @@ const salesSearchScheduler = new PersistentScheduler(
 followupScheduler.start();
 outboxScheduler.start();
 salesSearchScheduler.start();
+intelligenceScheduler.start();
 const interval = setInterval(() => {
   void service
     .run()
@@ -253,6 +328,7 @@ const shutdown = async (signal: string) => {
   await followupScheduler.stop();
   await outboxScheduler.stop();
   await salesSearchScheduler.stop();
+  await intelligenceScheduler.stop();
   await bot.stop();
   await api.stop();
   await database.$disconnect();

@@ -62,6 +62,22 @@ export class SalesStore {
     return this.db.salesCampaign.create({ data: input });
   }
 
+  public ensureIntelligenceCampaign() {
+    return this.db.salesCampaign.upsert({
+      where: { name: 'Sales intelligence' },
+      create: {
+        name: 'Sales intelligence',
+        offer:
+          'vývoj a modernizace webových aplikací, automatizace a integrace',
+        subjectTemplate: 'Krátký technický podnět pro {{company}}',
+        bodyTemplate:
+          'Dobrý den, {{observation}} Pomáhám firmám s {{offer}}. Dával by krátký nezávazný rozhovor smysl?',
+        enabled: false,
+      },
+      update: {},
+    });
+  }
+
   public updateCampaign(
     id: string,
     data: {
@@ -400,6 +416,254 @@ export class SalesStore {
     return this.db.salesLead.findUnique({
       where: { id },
       include: { campaign: true },
+    });
+  }
+
+  public getLeadWithResearch(id: string) {
+    return this.db.salesLead.findUnique({
+      where: { id },
+      include: { campaign: true, research: true },
+    });
+  }
+
+  public findLeadByDomain(domain: string) {
+    return this.db.salesLead.findFirst({
+      where: { domain: domain.toLowerCase() },
+      include: { campaign: true, research: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  public async enrichLeadFromResearch(
+    id: string,
+    input: {
+      companyName?: string;
+      websiteUrl: string;
+      domain: string;
+      email?: string;
+      phone?: string;
+      contactSourceUrl?: string;
+      phoneSourceUrl?: string;
+      audit: unknown;
+      analysis: unknown;
+      draftSubject: string;
+      draftBody: string;
+    },
+  ) {
+    const existing = await this.db.salesLead.findUniqueOrThrow({
+      where: { id },
+    });
+    const email = existing.email ?? input.email;
+    const phone = existing.phone ?? input.phone;
+    const contactSourceUrl =
+      existing.contactSourceUrl ?? input.contactSourceUrl;
+    const phoneSourceUrl = existing.phoneSourceUrl ?? input.phoneSourceUrl;
+    return this.db.salesLead.update({
+      where: { id },
+      data: {
+        companyName:
+          existing.companyName === existing.domain && input.companyName
+            ? input.companyName
+            : existing.companyName || input.companyName || input.domain,
+        websiteUrl: existing.websiteUrl ?? input.websiteUrl,
+        domain: existing.domain ?? input.domain,
+        ...(email ? { email } : {}),
+        ...(phone ? { phone } : {}),
+        ...(contactSourceUrl ? { contactSourceUrl } : {}),
+        ...(phoneSourceUrl ? { phoneSourceUrl } : {}),
+        emailSyntaxValid: existing.email
+          ? existing.emailSyntaxValid
+          : Boolean(input.email),
+        audit: JSON.parse(JSON.stringify(input.audit)) as Prisma.InputJsonValue,
+        analysis: JSON.parse(
+          JSON.stringify(input.analysis),
+        ) as Prisma.InputJsonValue,
+        draftSubject: input.draftSubject,
+        draftBody: input.draftBody,
+        draftCreatedAt: new Date(),
+        stage: existing.stage === 'DISCOVERED' ? 'ANALYZED' : existing.stage,
+        lastError: null,
+      },
+      include: { campaign: true, research: true },
+    });
+  }
+
+  public saveResearch(
+    leadId: string,
+    input: {
+      profile: unknown;
+      contacts: unknown;
+      technicalAudit: unknown;
+      opportunities: unknown;
+      outreach: unknown;
+      sourceUrls: string[];
+      researchedAt: Date;
+      expiresAt: Date;
+    },
+  ) {
+    const json = (value: unknown) =>
+      JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+    return this.db.salesLeadResearch.upsert({
+      where: { leadId },
+      create: {
+        leadId,
+        status: 'complete',
+        profile: json(input.profile),
+        contacts: json(input.contacts),
+        technicalAudit: json(input.technicalAudit),
+        opportunities: json(input.opportunities),
+        outreach: json(input.outreach),
+        sourceUrls: input.sourceUrls,
+        researchedAt: input.researchedAt,
+        expiresAt: input.expiresAt,
+      },
+      update: {
+        status: 'complete',
+        version: { increment: 1 },
+        profile: json(input.profile),
+        contacts: json(input.contacts),
+        technicalAudit: json(input.technicalAudit),
+        opportunities: json(input.opportunities),
+        outreach: json(input.outreach),
+        sourceUrls: input.sourceUrls,
+        researchedAt: input.researchedAt,
+        expiresAt: input.expiresAt,
+        lastError: null,
+      },
+    });
+  }
+
+  public async reserveDailySuggestions(date: Date, take = 5) {
+    return this.db.$transaction(async (tx) => {
+      const existing = await tx.salesDailySuggestion.findMany({
+        where: { scheduledDate: date },
+        include: { lead: { include: { campaign: true, research: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (existing.length > 0) return existing;
+      const suppressed = await tx.salesSuppression.findMany({
+        select: { key: true },
+      });
+      const blocked = new Set(suppressed.map(({ key }) => key));
+      const candidates = await tx.salesLead.findMany({
+        where: {
+          rejectedAt: null,
+          quicklyEnrolledAt: null,
+          stage: { in: ['DISCOVERED', 'ANALYZED', 'QUALIFIED'] },
+        },
+        include: {
+          campaign: true,
+          research: true,
+          dailySuggestions: {
+            orderBy: { suggestedAt: 'desc' },
+            take: 1,
+          },
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      });
+      const eligible = candidates.filter(
+        (lead) =>
+          !(lead.email && blocked.has(`email:${lead.email.toLowerCase()}`)) &&
+          !(lead.domain && blocked.has(`domain:${lead.domain.toLowerCase()}`)),
+      );
+      const selected = eligible
+        .toSorted((a, b) => {
+          const aLast = a.dailySuggestions[0]?.suggestedAt;
+          const bLast = b.dailySuggestions[0]?.suggestedAt;
+          if (!aLast && bLast) return -1;
+          if (aLast && !bLast) return 1;
+          if (aLast && bLast) return aLast.getTime() - bLast.getTime();
+          return (
+            a.createdAt.getTime() - b.createdAt.getTime() ||
+            a.id.localeCompare(b.id)
+          );
+        })
+        .slice(0, take);
+      if (selected.length > 0)
+        await tx.salesDailySuggestion.createMany({
+          data: selected.map((lead) => ({
+            leadId: lead.id,
+            scheduledDate: date,
+          })),
+          skipDuplicates: true,
+        });
+      return tx.salesDailySuggestion.findMany({
+        where: { scheduledDate: date },
+        include: { lead: { include: { campaign: true, research: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+    });
+  }
+
+  public listDailySuggestions(date: Date) {
+    return this.db.salesDailySuggestion.findMany({
+      where: { scheduledDate: date },
+      include: { lead: { include: { campaign: true, research: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  public previewDailySuggestions(take = 5) {
+    return this.db.salesLead.findMany({
+      where: {
+        rejectedAt: null,
+        quicklyEnrolledAt: null,
+        stage: { in: ['DISCOVERED', 'ANALYZED', 'QUALIFIED'] },
+      },
+      include: { campaign: true, research: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take,
+    });
+  }
+
+  public async salesIntelligenceStats(date: Date) {
+    const [total, contacted, uncontacted, suggestedIds, today] =
+      await Promise.all([
+        this.db.salesLead.count(),
+        this.db.salesLead.count({
+          where: {
+            stage: {
+              in: [
+                'CONTACTED',
+                'REPLIED',
+                'INTERESTED',
+                'NOT_INTERESTED',
+                'BOUNCED',
+                'UNSUBSCRIBED',
+                'SYNCED_TO_QUICKLY',
+              ],
+            },
+          },
+        }),
+        this.db.salesLead.count({
+          where: {
+            stage: { in: ['DISCOVERED', 'ANALYZED', 'QUALIFIED'] },
+            rejectedAt: null,
+          },
+        }),
+        this.db.salesDailySuggestion.findMany({
+          distinct: ['leadId'],
+          select: { leadId: true },
+        }),
+        this.db.salesDailySuggestion.findMany({
+          where: { scheduledDate: date },
+        }),
+      ]);
+    return {
+      total,
+      contacted,
+      uncontacted,
+      previouslySuggested: suggestedIds.length,
+      neverSuggested: Math.max(0, total - suggestedIds.length),
+      awaitingOutreach: uncontacted,
+      today,
+    };
+  }
+
+  public markDailySuggestionDelivered(id: string, at = new Date()) {
+    return this.db.salesDailySuggestion.updateMany({
+      where: { id, status: 'pending' },
+      data: { status: 'delivered', deliveredAt: at },
     });
   }
 

@@ -64,7 +64,8 @@ describe('sales bot help', () => {
 
       await bot.handleUpdate(update(command, command.length));
 
-      expect(messages).toEqual([salesHelp]);
+      expect(messages.join('\n\n')).toBe(salesHelp);
+      expect(messages.every((message) => message.length <= 3900)).toBe(true);
     },
   );
 

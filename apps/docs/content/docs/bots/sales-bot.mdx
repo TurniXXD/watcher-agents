@@ -16,7 +16,12 @@ Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands
 include `/sales_status`, `/sales_campaigns`, `/sales_prospects`,
 `/sales_search`, `/sales_searches`, `/sales_search_stop`, `/sales_find`,
 `/sales_calls`, `/sales_leads`, `/sales_lead`, `/sales_approve`,
-`/sales_reject`, and `/sales_run`.
+`/sales_reject`, and `/sales_run`. Sales intelligence adds `/lead URL`,
+`/lead_analysis ID`, `/lead_refresh ID`, `/leads_today`, `/leads_next`, and
+`/leads_stats`. It caches sourced research for 14 days. On working days at 09:00
+Europe/Prague the bot reserves up to five eligible uncontacted leads and queues
+a summary plus detailed reports. A suggestion never marks a lead contacted and
+never sends outreach; Saturday and Sunday produce no batch.
 
 The backward-compatible contact commands continue to use the `/network_`
 prefix and the same preview-and-confirm business-card workflow as Networking
@@ -80,6 +85,7 @@ or `/sales_prospects` do not produce this notification.
 | `SALES_PORT`                                                                                         | `4050`                        | Private HTTP/readiness port.                                          |
 | `SALES_INTERVAL_MINUTES`                                                                             | `30`                          | Periodic discovery interval.                                          |
 | `SALES_FOLLOWUP_TIME`, `SALES_TIMEZONE`                                                              | `20:00`, `Europe/Prague`      | Manual call-list reporting schedule.                                  |
+| `SALES_INTELLIGENCE_TIME`, `SALES_CRM_PUBLIC_URL`                                                    | `09:00`, optional             | Working-day five-lead reports and optional clickable CRM base URL.    |
 | `GEOAPIFY_API_KEY`                                                                                   | Optional                      | Primary place/business discovery beyond ARES.                         |
 | `GOOGLE_PLACES_API_KEY`                                                                              | Optional                      | Fallback discovery only.                                              |
 | `OLLAMA_URL`, `OLLAMA_MODEL`                                                                         | Optional pair                 | Category mapping and validated draft generation.                      |

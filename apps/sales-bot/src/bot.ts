@@ -6,6 +6,10 @@ import {
 } from '@watcher/telegram';
 import type { SalesService } from './service.js';
 import {
+  renderLeadIntelligence,
+  type SalesIntelligenceService,
+} from './sales-intelligence.js';
+import {
   renderSalesSearchTableMessages,
   salesSearchCategorySummary,
   salesSearchResultKey,
@@ -46,6 +50,12 @@ Commands
 /sales_approve <id> — record manual approval; the lead is enrolled only if every remaining eligibility check passes
 /sales_reject <id> — reject the lead so it is not enrolled
 /sales_run — immediately run discovery, analysis, scoring, and configured CRM/email synchronization
+/lead <url> — safely analyze a public website and create or enrich the deduplicated CRM lead
+/lead_analysis <lead-id> — show the cached detailed intelligence report
+/lead_refresh <lead-id> — force a fresh website research run
+/leads_today — show today's reserved reports without creating another batch
+/leads_next — preview the next five eligible leads without reserving them
+/leads_stats — show contacted, uncontacted, suggested, and delivery counts
 
 Lead stages and integrations
 QUALIFIED means the automated checks passed; it is not approval to contact. SYNCED_TO_QUICKLY means the lead was enrolled in Quickly. Quickly and Twenty synchronization stays inactive until their API keys are configured. A partial run can still keep valid results when one provider fails.
@@ -140,6 +150,12 @@ export const salesBotCommands = [
     description: 'Zamítnout lead: /sales_reject <id>',
   },
   { command: 'sales_run', description: 'Spustit Sales pipeline nyní' },
+  { command: 'lead', description: 'Přidat nebo obohatit lead z URL' },
+  { command: 'lead_analysis', description: 'Zobrazit analýzu leadu' },
+  { command: 'lead_refresh', description: 'Obnovit analýzu leadu' },
+  { command: 'leads_today', description: 'Dnešní Sales intelligence' },
+  { command: 'leads_next', description: 'Náhled dalších 5 leadů' },
+  { command: 'leads_stats', description: 'Statistiky Sales intelligence' },
 ] as const;
 
 const send = async (ctx: Context, message: string) => {
@@ -208,6 +224,8 @@ export const createSalesBot = (
   service: SalesService,
   network?: NetworkBotDependencies,
   searchIntervalMinutes = 30,
+  intelligence?: SalesIntelligenceService,
+  timezone = 'Europe/Prague',
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedUserIds));
@@ -413,7 +431,7 @@ export const createSalesBot = (
     );
   });
   bot.command('sales_lead', async (ctx) => {
-    const id = ctx.match.trim();
+    const id = typeof ctx.match === 'string' ? ctx.match.trim() : '';
     const check = await service.eligibility(id);
     if (!check) {
       await ctx.reply('Lead not found.');
@@ -425,6 +443,94 @@ export const createSalesBot = (
         0,
         3900,
       ),
+    );
+  });
+  bot.command('lead', async (ctx) => {
+    if (!intelligence)
+      return void (await ctx.reply('Sales intelligence není nakonfigurovaná.'));
+    try {
+      const lead = await intelligence.link(ctx.match);
+      await send(
+        ctx,
+        `Lead ${lead.companyName} byl vytvořen nebo obohacen bez změny historie a stavu.\n${lead.email ? `E-mail: ${lead.email}\n` : ''}${lead.phone ? `Telefon: ${lead.phone}\n` : ''}Detail: /lead_analysis ${lead.id}`,
+      );
+    } catch (error) {
+      await ctx.reply(
+        `Lead se nepodařilo zpracovat: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  });
+  const showAnalysis = async (ctx: Context, refresh: boolean) => {
+    if (!intelligence)
+      return void (await ctx.reply('Sales intelligence není nakonfigurovaná.'));
+    const id = typeof ctx.match === 'string' ? ctx.match.trim() : '';
+    if (!id)
+      return void (await ctx.reply(
+        `Použití: /lead_${refresh ? 'refresh' : 'analysis'} <lead-id>`,
+      ));
+    try {
+      const lead = await intelligence.research(id, refresh);
+      for (const part of renderLeadIntelligence(
+        lead,
+        undefined,
+        intelligence.crmUrl(lead),
+      ))
+        await ctx.reply(part, {
+          link_preview_options: { is_disabled: true },
+        });
+    } catch (error) {
+      await ctx.reply(
+        `Analýza selhala: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+  bot.command('lead_analysis', (ctx) => showAnalysis(ctx, false));
+  bot.command('lead_refresh', (ctx) => showAnalysis(ctx, true));
+  const localDay = () => {
+    const day = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    return new Date(`${day}T00:00:00.000Z`);
+  };
+  bot.command('leads_today', async (ctx) => {
+    const assignments = await store.listDailySuggestions(localDay());
+    if (!assignments.length)
+      return void (await ctx.reply(
+        'Pro dnešek zatím nejsou přiřazené žádné leady.',
+      ));
+    for (const [index, assignment] of assignments.entries()) {
+      const lead = assignment.lead;
+      if (!lead.research) {
+        await ctx.reply(
+          `${index + 1}. ${lead.companyName} — analýza zatím není dostupná.`,
+        );
+        continue;
+      }
+      for (const part of renderLeadIntelligence(
+        lead,
+        `${index + 1}/${assignments.length}`,
+        intelligence?.crmUrl(lead),
+      ))
+        await ctx.reply(part, {
+          link_preview_options: { is_disabled: true },
+        });
+    }
+  });
+  bot.command('leads_next', async (ctx) => {
+    const leads = await store.previewDailySuggestions(5);
+    await ctx.reply(
+      leads.length
+        ? `Náhled bez rezervace:\n${leads.map((lead, index) => `${index + 1}. ${lead.companyName} · ${lead.stage} · vytvořen ${lead.createdAt.toISOString().slice(0, 10)}`).join('\n')}`
+        : 'Žádný způsobilý lead.',
+    );
+  });
+  bot.command('leads_stats', async (ctx) => {
+    const stats = await store.salesIntelligenceStats(localDay());
+    await ctx.reply(
+      `CRM leady: ${stats.total}\nKontaktované: ${stats.contacted}\nNekontaktované: ${stats.uncontacted}\nNikdy nenavržené: ${stats.neverSuggested}\nDříve navržené: ${stats.previouslySuggested}\nČekající na outreach: ${stats.awaitingOutreach}\nDnešní dávka: ${stats.today.length} (${stats.today.filter((item) => item.status === 'delivered').length} doručeno)`,
     );
   });
   bot.command('sales_approve', async (ctx) => {
