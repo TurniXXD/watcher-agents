@@ -73,14 +73,17 @@ describe('deterministic job evaluation', () => {
     expect(result.hardBlockers).not.toContain('Mandatory degree requirement');
   });
 
-  it.each(['German B1 is mandatory.', 'You must have fluent French.'])(
-    'rejects unsupported mandatory language: %s',
-    (requirement) => {
-      expect(evaluateJob(job(requirement), profile).hardBlockers).toContain(
-        'Mandatory unsupported language',
-      );
-    },
-  );
+  it.each([
+    'German B1 is mandatory.',
+    'You must have fluent French.',
+    'Professional Spanish is required.',
+    'Polish proficiency is mandatory.',
+    'Thai proficiency is mandatory.',
+  ])('rejects unsupported mandatory language: %s', (requirement) => {
+    expect(evaluateJob(job(requirement), profile).hardBlockers).toContain(
+      'Mandatory unsupported language',
+    );
+  });
 
   it('does not reject optional German', () => {
     expect(
@@ -89,6 +92,45 @@ describe('deterministic job evaluation', () => {
         profile,
       ).hardBlockers,
     ).not.toContain('Mandatory unsupported language');
+  });
+
+  it('does not reject a role requiring only English', () => {
+    const result = evaluateJob(job('English B2 is required.'), profile);
+    expect(result.hardBlockers).not.toContain('Mandatory unsupported language');
+  });
+
+  it.each(['Staff Software Engineer', 'Software Engineer, Staff'])(
+    'rejects staff software engineering title: %s',
+    (title) => {
+      const result = evaluateJob(
+        job('Build React and TypeScript products.', { title }),
+        profile,
+      );
+      expect(result.hardBlockers).toContain('Staff-level engineering role');
+    },
+  );
+
+  it.each([
+    'At least 6 years of professional experience is required.',
+    'You bring 7+ years of software development experience.',
+    'Minimum 8–10 years of engineering experience.',
+  ])('rejects experience requirements above the profile: %s', (requirement) => {
+    const result = evaluateJob(job(requirement), profile);
+    expect(result.hardBlockers).toContainEqual(
+      expect.stringMatching(/^Requires [6-8] years of experience/u),
+    );
+  });
+
+  it('allows five required years and ignores higher preferred experience', () => {
+    const result = evaluateJob(
+      job(
+        'Five is not machine-readable. 5+ years of development experience required. 8 years preferred.',
+      ),
+      profile,
+    );
+    expect(result.hardBlockers).not.toContainEqual(
+      expect.stringMatching(/^Requires \d+ years of experience/u),
+    );
   });
 
   it('flags fluent English for review rather than rejecting it', () => {
@@ -122,6 +164,53 @@ describe('deterministic job evaluation', () => {
       profile,
     );
     expect(result.hardBlockers).toContain('Incompatible geography');
+  });
+
+  it.each([
+    'This remote role is India only.',
+    'This remote role is Portugal only.',
+    'Applicants must be based in Japan.',
+    'Applicants must be based in South Korea.',
+    'Candidates located in the United States only.',
+  ])('rejects a country-only restriction: %s', (description) => {
+    const result = evaluateJob(
+      job(description, {
+        location: undefined,
+        workMode: 'REMOTE',
+        remoteRegions: [],
+      }),
+      profile,
+    );
+    expect(result.hardBlockers).toContain('Incompatible geography');
+  });
+
+  it('rejects any explicit structured remote region outside configured eligibility', () => {
+    const result = evaluateJob(
+      job('Work remotely with the product team.', {
+        location: 'Portugal',
+        workMode: 'REMOTE',
+        remoteRegions: ['Portugal'],
+      }),
+      profile,
+    );
+    expect(result.hardBlockers).toContain('Incompatible geography');
+  });
+
+  it('accepts a foreign onsite role when it is not country-restricted', () => {
+    const result = evaluateJob(
+      job('The working language is English B2.', {
+        location: 'Berlin, Germany',
+        country: 'Germany',
+        city: 'Berlin',
+        workMode: 'ONSITE',
+        remoteRegions: [],
+      }),
+      profile,
+    );
+    expect(result.hardBlockers).not.toContain('Incompatible geography');
+    expect(result.uncertainties).not.toContain(
+      'Location eligibility is not explicit',
+    );
   });
 
   it('keeps remote eligibility uncertain when no permitted region is stated', () => {

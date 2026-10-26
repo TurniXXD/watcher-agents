@@ -89,4 +89,28 @@ describe('sales intelligence', () => {
     expect(report).toContain('Performance: bez PageSpeed měření');
     expect(report).toContain('https://example.com');
   });
+
+  it('does not leak default object stringification from persisted JSON', () => {
+    const lead = {
+      id: 'lead-2',
+      companyName: 'Malformed JSON example',
+      websiteUrl: null,
+      stage: 'ANALYZED',
+      twentyCompanyId: null,
+      research: {
+        profile: { description: { unexpected: true } },
+        contacts: [],
+        technicalAudit: { usesHttps: { unexpected: true } },
+        opportunities: [],
+        outreach: {},
+        sourceUrls: [],
+        researchedAt: new Date('2026-10-24T07:00:00Z'),
+      },
+    } as unknown as Parameters<typeof renderLeadIntelligence>[0];
+
+    const report = renderLeadIntelligence(lead).join('\n');
+    expect(report).not.toContain('[object Object]');
+    expect(report).toContain('Popis: nedostupný');
+    expect(report).toContain('HTTPS: nedostupné');
+  });
 });

@@ -45,7 +45,7 @@ describe('job normalization and identity', () => {
 
   it('keeps stable source IDs and explicit unsupported sources', () => {
     const definitions = createJobSourceDefinitions();
-    expect(definitions.filter((source) => source.adapter)).toHaveLength(10);
+    expect(definitions.filter((source) => source.adapter)).toHaveLength(11);
     expect(
       definitions.find((source) => source.id === 'remote-backend-jobs'),
     ).toMatchObject({ enabledByDefault: true, strategy: 'API' });
@@ -55,6 +55,9 @@ describe('job normalization and identity', () => {
     expect(
       definitions.find((source) => source.id === 'working-nomads'),
     ).toMatchObject({ enabledByDefault: true, strategy: 'API' });
+    expect(
+      definitions.find((source) => source.id === 'startupjobs-cz'),
+    ).toMatchObject({ enabledByDefault: true, strategy: 'SITEMAP' });
     expect(
       definitions.find((source) => source.id === 'linkedin'),
     ).toMatchObject({

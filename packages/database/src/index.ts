@@ -46,6 +46,7 @@ export * from './stock-domain/index.js';
 export {
   JobApplicationStatus,
   JobEligibilityState,
+  JobNotionSyncStatus,
   JobNotificationStatus,
   JobRecommendationLevel,
   MuClubActivityType,

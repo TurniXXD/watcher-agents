@@ -48,6 +48,9 @@ persisted, daylight-saving-aware schedules.
 | `JOBS_AI_TIMEOUT_MS`                             | `45000`                   | AI request timeout.                                                  |
 | `JOBS_EMAIL_WEBHOOK_URL`, `JOBS_EMAIL_RECIPIENT` | Optional pair             | Operator-owned e-mail delivery gateway and recipient.                |
 | `JOBS_EMAIL_WEBHOOK_API_KEY`                     | Optional                  | Gateway credential; requires the URL pair.                           |
+| `NOTION_API_KEY`                                 | Optional paired           | Internal integration secret for the Notion vacancy mirror.           |
+| `JOBS_NOTION_DATA_SOURCE_ID`                     | Optional paired           | `Job Opportunities` data-source ID.                                  |
+| `NOTION_API_VERSION`                             | `2026-03-11`              | Notion REST version header.                                          |
 | `JOBS_GREENHOUSE_BOARDS`                         | Optional CSV              | Public Greenhouse board tokens to collect through its Jobs API.      |
 | `JOBS_LEVER_SITES`                               | Optional CSV              | Public Lever site names to collect through Postings API.             |
 | `JOBS_ASHBY_BOARDS`                              | Optional CSV              | Public Ashby job-board names to collect.                             |
@@ -59,18 +62,20 @@ persisted, daylight-saving-aware schedules.
 
 ## Sources and integrations
 
-| Source/service                                                          | Role                                                                                     |
-| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Remote Frontend / Remote Backend public APIs                            | Separate permitted job boards.                                                           |
-| Himalayas, Startup Jobs engineering, RemoteFirstJobs RSS                | Public RSS discovery.                                                                    |
-| Remote OK public API                                                    | Public JSON discovery.                                                                   |
-| Greenhouse, Lever, Ashby, SmartRecruiters                               | Official public ATS endpoints for explicitly configured company/board identifiers.       |
-| Workable, Recruitee, Teamtailor                                         | Public company career endpoints/RSS for explicitly configured accounts or domains.       |
-| DeveloperJobs.ch, CoolJobs.eu, StartupJobs.cz, Práce za rohem, LinkedIn | Explicitly disabled until a verified permitted feed exists.                              |
-| PostgreSQL                                                              | Authoritative jobs, observations, checkpoints, profile, schedule, and application state. |
-| Telegram                                                                | Primary private UI and alert delivery.                                                   |
-| Optional e-mail webhook                                                 | Sends the same digest to an operator-owned gateway.                                      |
-| Optional Ollama/OpenAI-compatible endpoint                              | Adds bounded nuance; cannot remove deterministic blockers.                               |
+| Source/service                                           | Role                                                                                     |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Remote Frontend / Remote Backend public APIs             | Separate permitted job boards.                                                           |
+| Himalayas, Startup Jobs engineering, RemoteFirstJobs RSS | Public RSS discovery.                                                                    |
+| StartupJobs.cz                                           | Official active-offers sitemap plus rate-limited `schema.org/JobPosting` detail data.    |
+| Remote OK public API                                     | Public JSON discovery.                                                                   |
+| Greenhouse, Lever, Ashby, SmartRecruiters                | Official public ATS endpoints for explicitly configured company/board identifiers.       |
+| Workable, Recruitee, Teamtailor                          | Public company career endpoints/RSS for explicitly configured accounts or domains.       |
+| DeveloperJobs.ch, CoolJobs.eu, Práce za rohem, LinkedIn  | Explicitly disabled until a verified permitted feed exists.                              |
+| PostgreSQL                                               | Authoritative jobs, observations, checkpoints, profile, schedule, and application state. |
+| Telegram                                                 | Primary private UI and alert delivery.                                                   |
+| Optional e-mail webhook                                  | Sends the same digest to an operator-owned gateway.                                      |
+| Optional Notion `Job Opportunities` database             | Idempotent mirror of all evaluated vacancies and rejection evidence.                     |
+| Optional Ollama/OpenAI-compatible endpoint               | Adds bounded nuance; cannot remove deterministic blockers.                               |
 
 ## Collection contract
 
@@ -89,19 +94,25 @@ the SSRF policy.
 
 Enabled global sources are the separate Remote Frontend and Remote Backend
 public API boards, Himalayas RSS, Startup Jobs engineering RSS,
-RemoteFirstJobs RSS, and Remote OK's public API. Configured tenant identifiers
+RemoteFirstJobs RSS, Remote OK's public API, and StartupJobs.cz's official
+active-offers sitemap with standardized `schema.org/JobPosting` detail data.
+StartupJobs.cz detail requests are limited to 30 per minute and run only for
+new, changed, or 72-hour-stale listings. Configured tenant identifiers
 also enable Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, and
 Teamtailor adapters; an empty list keeps that ATS source unavailable rather than
-guessing company identifiers. DeveloperJobs.ch, CoolJobs.eu, StartupJobs.cz,
-Práce za rohem, and LinkedIn remain explicit disabled registry records because
+guessing company identifiers. DeveloperJobs.ch, CoolJobs.eu, Práce za rohem,
+and LinkedIn remain explicit disabled registry records because
 no verified permitted public job-seeker feed is configured. The worker never
 automates logged-in pages or bypasses access controls.
 
 ## Eligibility and alerts
 
-Mandatory university degrees, unsupported mandatory German/French,
-graduate-only eligibility, incompatible geographic restrictions, and unrelated
-roles are hard blockers. Ambiguous location, authorization, or fluent-English
+Mandatory university degrees, every mandatory language other than English,
+Staff engineering titles, experience requirements above the five-year profile,
+graduate-only eligibility, incompatible country-only restrictions, and
+unrelated roles are hard blockers. Foreign onsite and hybrid roles remain
+eligible when they do not require residence in an incompatible country and
+English is sufficient. Ambiguous location, authorization, or fluent-English
 requirements are marked `UNCERTAIN`. The deterministic 100-point score reports
 matched skills, gaps, blockers, uncertainties, and its weighted breakdown.
 
@@ -117,6 +128,13 @@ The first import is baseline-only. Later runs reserve one immutable initial
 digest key per canonical job, so neither a second source nor a changed listing
 can silently re-alert it. Telegram is primary; an optional HTTP e-mail gateway
 receives the same digest payload.
+
+When `NOTION_API_KEY` and `JOBS_NOTION_DATA_SOURCE_ID` are configured together,
+every evaluated vacancy is mirrored to Notion, including ineligible rows and
+their blocker evidence. Existing evaluated jobs are backfilled on startup.
+Persisted local sync claims and `Watcher Job ID` lookup make retries idempotent;
+Notion failures are retained for retry and never cancel a source run. PostgreSQL
+remains authoritative and Notion edits are not imported back.
 
 The default profile contains the supplied CV facts and records end-client work
 separately from its `via` agency. Optional OpenAI-compatible evaluation works

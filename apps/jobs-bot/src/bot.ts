@@ -66,7 +66,7 @@ export const jobsAbout = [
   'ℹ️ About Personal Job Discovery',
   '',
   'This private bot is for one authorized operator. PostgreSQL is the authoritative store for candidate settings, source checkpoints, jobs, evaluations, schedules, delivery state, and application notes.',
-  'It automatically reads only configured public APIs/RSS feeds, normalizes and deduplicates listings, applies deterministic eligibility/scoring rules, and sends new qualifying matches through Telegram or an optional operator-owned e-mail webhook. Optional local/OpenAI-compatible AI nuance scoring is validated and cannot remove deterministic blockers.',
+  'It automatically reads only configured public APIs/RSS feeds, normalizes and deduplicates listings, applies deterministic eligibility/scoring rules, mirrors evaluated vacancies to Notion when configured, and sends new qualifying matches through Telegram or an optional operator-owned e-mail webhook. Optional local/OpenAI-compatible AI nuance scoring is validated and cannot remove deterministic blockers.',
   'You must explicitly decide whether to save, dismiss, apply, contact anyone, or change an application status. The bot never submits applications, contacts employers, bypasses access controls, or claims that an aggregator listing is still open.',
   'All Telegram updates require an allowed user ID. Secrets remain server-side. Scores can be uncertain and must be checked against the original listing; unsupported sources stay disabled.',
   'Use /help next, or /jobs_run all dry for a no-write source preview.',

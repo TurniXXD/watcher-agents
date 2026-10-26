@@ -68,10 +68,103 @@ const recommendationFor = (
 const proportion = (matched: number, total: number): number =>
   total === 0 ? 1 : matched / total;
 
-const explicitlyIncompatibleRemoteRegion = (value: string): boolean =>
-  /\b(?:united states|u\.?s\.?a?|canada|north america|latin america|latam|south america|australia|new zealand|india|asia only)\b/iu.test(
-    value,
-  );
+const twoLetterDisplayNames = (type: 'language' | 'region'): string[] => {
+  const displayNames = new Intl.DisplayNames(['en'], { type });
+  const names = new Set<string>();
+  for (let first = 65; first <= 90; first += 1) {
+    for (let second = 65; second <= 90; second += 1) {
+      const code = String.fromCharCode(first, second);
+      const name = displayNames.of(code);
+      if (name && name !== code && !name.startsWith('Unknown '))
+        names.add(normalizeText(name));
+    }
+  }
+  return [...names];
+};
+
+const escapePattern = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
+
+const unsupportedLanguagePattern = new RegExp(
+  String.raw`\b(?:${[
+    ...twoLetterDisplayNames('language').filter(
+      (language) => language !== 'english',
+    ),
+    'deutsch',
+    'français',
+    'español',
+    'čeština',
+    'slovenčina',
+    'polski',
+    'italiano',
+    'nederlands',
+    'português',
+    'mandarin',
+  ]
+    .map(escapePattern)
+    .join('|')})\b`,
+  'iu',
+);
+
+const countryNames = (() => {
+  const names = new Set(twoLetterDisplayNames('region'));
+  ['USA', 'US', 'UK', 'UAE'].forEach((name) => names.add(normalizeText(name)));
+  return [...names];
+})();
+
+const explicitlyRestrictedGeography = (
+  text: string,
+  allowedPlaces: readonly string[],
+): boolean =>
+  text.split(/[.!?\n]+/u).some((sentence) => {
+    const normalized = normalizeText(sentence);
+    const hasResidenceRestriction =
+      /\b(?:must (?:be )?(?:based|located|resident|reside|live)|required to (?:be based|reside|live)|candidates? (?:must )?(?:be )?(?:based|located|resident) in|applicants? (?:must )?(?:be )?(?:based|located|resident) in|remote (?:from|in|within))\b/iu.test(
+        normalized,
+      );
+    const hasCountryOnlyRestriction =
+      normalized.includes(' only') &&
+      countryNames.some((country) => normalized.includes(`${country} only`));
+    if (!hasResidenceRestriction && !hasCountryOnlyRestriction) return false;
+    if (
+      /\b(?:worldwide|anywhere|global|europe|european union|eu)\b/iu.test(
+        normalized,
+      ) ||
+      allowedPlaces.some(
+        (place) => normalized.includes(place) || place.includes(normalized),
+      )
+    )
+      return false;
+    return true;
+  });
+
+const requiredExperienceYears = (text: string): number | undefined => {
+  const requirements = text
+    .split(/[.!?\n]+/u)
+    .filter(
+      (sentence) =>
+        !/preferred|advantage|nice to have|bonus|up to|equivalent experience/iu.test(
+          sentence,
+        ),
+    )
+    .flatMap((sentence) => {
+      const years = [
+        ...sentence.matchAll(
+          /\b(\d{1,2})(?:\s*(?:-|–|to)\s*\d{1,2})?\+?\s*(?:years?|yrs?)(?:\s+of)?\b/giu,
+        ),
+      ];
+      if (years.length === 0) return [];
+      const requirementContext =
+        /experience|professional|commercial|software development|engineering|building|developing|minimum|at least|required|must|need|looking for|you have|you bring/iu.test(
+          sentence,
+        );
+      if (!requirementContext) return [];
+      return years
+        .map((match) => Number(match[1]))
+        .filter((value) => Number.isFinite(value));
+    });
+  return requirements.length > 0 ? Math.max(...requirements) : undefined;
+};
 
 const locationCompatibility = (
   job: NormalizedJob,
@@ -98,7 +191,7 @@ const locationCompatibility = (
       regionValues.length > 0 ? regionValues : [location].filter(Boolean);
     if (evidence.some(allowed))
       return { compatible: true, explicitBlocker: false, uncertain: false };
-    if (evidence.some(explicitlyIncompatibleRemoteRegion))
+    if (regionValues.length > 0 && evidence.some((value) => !allowed(value)))
       return { compatible: false, explicitBlocker: true, uncertain: false };
     return { compatible: false, explicitBlocker: false, uncertain: true };
   }
@@ -109,9 +202,7 @@ const locationCompatibility = (
     return { compatible: false, explicitBlocker: true, uncertain: false };
   if (!location)
     return { compatible: false, explicitBlocker: false, uncertain: true };
-  if (allowed(location))
-    return { compatible: true, explicitBlocker: false, uncertain: false };
-  return { compatible: false, explicitBlocker: false, uncertain: true };
+  return { compatible: true, explicitBlocker: false, uncertain: false };
 };
 
 export const evaluateJob = (
@@ -124,6 +215,12 @@ export const evaluateJob = (
   const hardBlockers: string[] = [];
   const uncertainties: string[] = [];
   const geography = locationCompatibility(job, profile);
+  const allowedPlaces = [
+    ...profile.preferredLocations.countries,
+    ...profile.preferredLocations.regions,
+    ...profile.preferredLocations.cities,
+  ].map(normalizeText);
+  const requiredYears = requiredExperienceYears(body);
   const adjacentRole = titlePhraseMatches(job.title, profile.adjacentRoles);
   const matchedRequiredTechnologies = profile.requiredTechnologies.filter(
     (technology) => technologyPattern(technology).test(technologyEvidence),
@@ -137,15 +234,24 @@ export const evaluateJob = (
 
   if (mandatory(body, /\b(?:bachelor|master|phd|university degree|degree)\b/iu))
     hardBlockers.push('Mandatory degree requirement');
-  if (mandatory(body, /\b(?:german|deutsch|french|fran[cç]ais)\b/iu))
+  if (mandatory(body, unsupportedLanguagePattern))
     hardBlockers.push('Mandatory unsupported language');
+  if (
+    /\bstaff\b/iu.test(job.title) &&
+    /\b(?:engineer|developer)\b/iu.test(job.title)
+  )
+    hardBlockers.push('Staff-level engineering role');
+  if (requiredYears && requiredYears > profile.yearsExperience)
+    hardBlockers.push(
+      `Requires ${requiredYears} years of experience; profile has ${profile.yearsExperience}`,
+    );
   if (
     /\b(?:graduate programme|graduate program|new grad(?:uate)?|internship|intern)\b/iu.test(
       body,
     )
   )
     hardBlockers.push('Graduate-only or internship role');
-  if (/\b(?:us only|united states only|canada only|latam only)\b/iu.test(body))
+  if (explicitlyRestrictedGeography(body, allowedPlaces))
     hardBlockers.push('Incompatible geography');
   if (
     geography.explicitBlocker &&
@@ -203,8 +309,6 @@ export const evaluateJob = (
     ),
   );
 
-  const yearsMatch = body.match(/(\d{1,2})\+?\s*(?:years?|yrs?)/iu);
-  const requiredYears = yearsMatch ? Number(yearsMatch[1]) : undefined;
   const experienceRatio = requiredYears
     ? Math.min(1, profile.yearsExperience / Math.max(1, requiredYears))
     : 0.8;

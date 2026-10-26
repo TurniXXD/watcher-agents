@@ -13,6 +13,7 @@ import {
   type JobSourceDefinition,
   type NormalizedJob,
 } from '@watcher/jobs';
+import type { JobNotionRecord, JobsNotionSync } from './notion.js';
 
 type Logger = {
   info: (object: object, message: string) => void;
@@ -66,7 +67,20 @@ export class JobDiscoveryRunner {
     private readonly logger: Logger,
     private readonly definitions: JobSourceDefinition[] = createJobSourceDefinitions(),
     private readonly aiEvaluator?: JobAiEvaluator,
+    private readonly notionSync?: JobsNotionSync,
   ) {}
+
+  private async synchronizeNotion(input: JobNotionRecord): Promise<void> {
+    if (!this.notionSync) return;
+    try {
+      await this.notionSync.synchronize(input);
+    } catch (error) {
+      this.logger.warn(
+        { err: error, jobId: input.jobId },
+        'Notion job synchronization failed; PostgreSQL remains authoritative',
+      );
+    }
+  }
 
   private async evaluate(
     job: NormalizedJob,
@@ -93,6 +107,13 @@ export class JobDiscoveryRunner {
   public async initialize(): Promise<void> {
     await this.store.syncSources(this.definitions);
     await this.store.ensureProfile(this.profile);
+    if (this.notionSync) {
+      const synchronized = await this.notionSync.synchronizeStored();
+      this.logger.info(
+        synchronized,
+        'Existing jobs Notion synchronization completed',
+      );
+    }
   }
 
   public async reevaluateExisting(limit = 1_000): Promise<{
@@ -153,6 +174,13 @@ export class JobDiscoveryRunner {
           jobContentHash: row.contentHash,
           result,
           ...(evaluatedJob.ai ? { ai: evaluatedJob.ai } : {}),
+        });
+        await this.synchronizeNotion({
+          jobId: row.id,
+          job,
+          evaluation: result,
+          sourceName: source?.source.name ?? source?.sourceId ?? 'Persisted',
+          firstSeenAt: row.firstSeenAt,
         });
         evaluated += 1;
       }
@@ -322,6 +350,13 @@ export class JobDiscoveryRunner {
               jobContentHash: stored.contentHash,
               result,
               ...(evaluatedJob.ai ? { ai: evaluatedJob.ai } : {}),
+            });
+            await this.synchronizeNotion({
+              jobId: stored.job.id,
+              job,
+              evaluation: result,
+              sourceName: definition.name,
+              firstSeenAt: stored.job.firstSeenAt,
             });
             sourceEvaluated += 1;
             if (

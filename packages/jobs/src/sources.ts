@@ -16,6 +16,7 @@ import {
   type JobSourceDefinition,
   type NormalizedJob,
 } from './types.js';
+import { createStartupJobsCzAdapter } from './startupjobs-source.js';
 
 const optionalDate = (value: unknown): Date | undefined => {
   if (typeof value !== 'string') return undefined;
@@ -493,6 +494,7 @@ export const createJobSourceDefinitions = (
       baseUrl: 'https://swissdevjobs.ch',
       attribution: 'Swiss developer jobs by SwissDevJobs',
     }),
+    createStartupJobsCzAdapter(),
     workingNomadsAdapter(),
     remoteOkAdapter(),
   ];
@@ -510,7 +512,6 @@ export const createJobSourceDefinitions = (
   const unsupported = [
     ['developerjobs-ch', 'DeveloperJobs.ch', 'https://www.developerjobs.ch'],
     ['cooljobs-eu', 'CoolJobs.eu', 'https://www.cooljobs.eu'],
-    ['startupjobs-cz', 'StartupJobs.cz', 'https://www.startupjobs.cz'],
     ['prace-za-rohem', 'Práce za rohem', 'https://www.pracezarohem.cz'],
     ['linkedin', 'LinkedIn', 'https://www.linkedin.com/jobs'],
     ['jobs-cz', 'Jobs.cz', 'https://www.jobs.cz'],

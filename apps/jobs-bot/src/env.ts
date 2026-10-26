@@ -244,6 +244,9 @@ const schema = z
     JOBS_EMAIL_WEBHOOK_URL: optionalText.pipe(z.url().optional()),
     JOBS_EMAIL_WEBHOOK_API_KEY: optionalText,
     JOBS_EMAIL_RECIPIENT: optionalText.pipe(z.email().optional()),
+    NOTION_API_KEY: optionalText,
+    JOBS_NOTION_DATA_SOURCE_ID: optionalText,
+    NOTION_API_VERSION: z.string().trim().min(1).default('2026-03-11'),
     LOG_LEVEL: z.string().default('info'),
   })
   .superRefine((value, context) => {
@@ -264,6 +267,17 @@ const schema = z
         path: ['JOBS_EMAIL_WEBHOOK_API_KEY'],
         message:
           'JOBS_EMAIL_WEBHOOK_API_KEY requires JOBS_EMAIL_WEBHOOK_URL and JOBS_EMAIL_RECIPIENT',
+      });
+    }
+    if (
+      Boolean(value.NOTION_API_KEY) !==
+      Boolean(value.JOBS_NOTION_DATA_SOURCE_ID)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['JOBS_NOTION_DATA_SOURCE_ID'],
+        message:
+          'NOTION_API_KEY and JOBS_NOTION_DATA_SOURCE_ID must be configured together',
       });
     }
   });

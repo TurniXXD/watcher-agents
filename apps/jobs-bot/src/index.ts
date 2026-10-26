@@ -4,15 +4,27 @@ import {
   OpenAiCompatibleJobEvaluator,
   createJobSourceDefinitions,
 } from '@watcher/jobs';
+import { NotionClient } from '@watcher/notion';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { createJobsBot, jobsBotCommands } from './bot.js';
 import { env } from './env.js';
 import { deliverJobDigest } from './notifications.js';
+import { JobsNotionSync } from './notion.js';
 import { JobDiscoveryRunner } from './runner.js';
 
 const logger = createLogger('jobs-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
 const store = new JobStore(database);
+const notionClient = env.NOTION_API_KEY
+  ? new NotionClient({
+      apiKey: env.NOTION_API_KEY,
+      apiVersion: env.NOTION_API_VERSION,
+    })
+  : undefined;
+const notionSync =
+  notionClient && env.JOBS_NOTION_DATA_SOURCE_ID
+    ? new JobsNotionSync(store, notionClient, env.JOBS_NOTION_DATA_SOURCE_ID)
+    : undefined;
 const aiEvaluator = env.JOBS_AI_ENABLED
   ? new OpenAiCompatibleJobEvaluator({
       baseUrl: env.JOBS_AI_BASE_URL,
@@ -39,6 +51,7 @@ const runner = new JobDiscoveryRunner(
     teamtailorDomains: env.JOBS_TEAMTAILOR_DOMAINS,
   }),
   aiEvaluator,
+  notionSync,
 );
 await runner.initialize();
 await store.ensureSchedules(env.JOBS_TIMEZONE);

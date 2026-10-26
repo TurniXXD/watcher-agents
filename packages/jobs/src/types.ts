@@ -167,7 +167,7 @@ export type JobSourceAdapter = {
   id: string;
   name: string;
   baseUrl: string;
-  strategy: 'API' | 'RSS' | 'ATS';
+  strategy: 'API' | 'RSS' | 'ATS' | 'SITEMAP';
   attribution: string;
   fetchIntervalMinutes: number;
   rateLimitPerMinute: number;

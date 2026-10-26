@@ -16,6 +16,7 @@ import { Prisma } from './generated/prisma/client.js';
 import {
   JobApplicationStatus,
   JobEligibilityState,
+  JobNotionSyncStatus,
   JobNotificationStatus,
   JobRecommendationLevel,
   RunStatus,
@@ -764,6 +765,85 @@ export class JobStore {
     return evaluation;
   }
 
+  public async claimNotionSync(input: {
+    jobId: string;
+    contentHash: string;
+    staleAfterMs?: number;
+  }) {
+    const current = await this.db.jobNotionSync.upsert({
+      where: { jobId: input.jobId },
+      create: { jobId: input.jobId },
+      update: {},
+    });
+    if (
+      current.syncStatus === JobNotionSyncStatus.SYNCED &&
+      current.contentHash === input.contentHash
+    )
+      return { claimed: false, row: current };
+    const staleBefore = new Date(
+      Date.now() - (input.staleAfterMs ?? 5 * 60_000),
+    );
+    if (
+      current.syncStatus === JobNotionSyncStatus.SYNCING &&
+      current.claimedAt &&
+      current.claimedAt >= staleBefore
+    )
+      return { claimed: false, row: current };
+
+    const claimed = await this.db.jobNotionSync.updateMany({
+      where: {
+        jobId: input.jobId,
+        syncStatus: current.syncStatus,
+        updatedAt: current.updatedAt,
+      },
+      data: {
+        syncStatus: JobNotionSyncStatus.SYNCING,
+        claimedAt: new Date(),
+        lastError: null,
+      },
+    });
+    return {
+      claimed: claimed.count === 1,
+      row:
+        claimed.count === 1
+          ? await this.db.jobNotionSync.findUniqueOrThrow({
+              where: { jobId: input.jobId },
+            })
+          : current,
+    };
+  }
+
+  public completeNotionSync(input: {
+    jobId: string;
+    pageId: string;
+    contentHash: string;
+  }) {
+    return this.db.jobNotionSync.update({
+      where: { jobId: input.jobId },
+      data: {
+        pageId: input.pageId,
+        contentHash: input.contentHash,
+        syncStatus: JobNotionSyncStatus.SYNCED,
+        claimedAt: null,
+        lastSyncedAt: new Date(),
+        lastError: null,
+      },
+    });
+  }
+
+  public failNotionSync(jobId: string, error: unknown) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown Notion sync error';
+    return this.db.jobNotionSync.update({
+      where: { jobId },
+      data: {
+        syncStatus: JobNotionSyncStatus.FAILED,
+        claimedAt: null,
+        lastError: message.slice(0, 2_000),
+      },
+    });
+  }
+
   public findEvaluation(jobId: string, profileId: string) {
     return this.db.jobEvaluation.findUnique({
       where: { jobId_profileId: { jobId, profileId } },
@@ -868,6 +948,7 @@ export class JobStore {
     status?: keyof typeof JobApplicationStatus;
     minimumScore?: number;
     take?: number;
+    skip?: number;
   }) {
     const query = input?.query?.trim();
     return this.db.job.findMany({
@@ -894,6 +975,7 @@ export class JobStore {
       },
       orderBy: [{ publishedAt: 'desc' }, { firstSeenAt: 'desc' }],
       take: input?.take ?? 100,
+      skip: input?.skip ?? 0,
     });
   }
 

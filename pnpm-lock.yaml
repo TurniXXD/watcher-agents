@@ -169,6 +169,9 @@ importers:
       '@watcher/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@watcher/notion':
+        specifier: workspace:*
+        version: link:../../packages/notion
       '@watcher/telegram':
         specifier: workspace:*
         version: link:../../packages/telegram

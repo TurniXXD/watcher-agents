@@ -3948,6 +3948,13 @@ enum JobNotificationStatus {
   SKIPPED
 }
 
+enum JobNotionSyncStatus {
+  PENDING
+  SYNCING
+  SYNCED
+  FAILED
+}
+
 model JobCandidateProfile {
   id                    String              @id @default(uuid())
   name                  String
@@ -4116,11 +4123,28 @@ model Job {
   evaluations             JobEvaluation[]
   notifications           JobNotification[]
   application             JobApplication?
+  notionSync              JobNotionSync?
 
   @@index([publishedAt])
   @@index([availabilityStatus, lastSeenAt])
   @@index([normalizedCompany, normalizedTitle])
   @@map("jobs")
+}
+
+model JobNotionSync {
+  jobId        String              @id
+  pageId       String?             @unique
+  contentHash  String?
+  syncStatus   JobNotionSyncStatus @default(PENDING)
+  claimedAt    DateTime?
+  lastSyncedAt DateTime?
+  lastError    String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  job          Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([syncStatus, updatedAt])
+  @@map("job_notion_syncs")
 }
 
 model JobSourceReference {

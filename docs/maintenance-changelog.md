@@ -2,6 +2,17 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-26 — StartupJobs.cz job discovery
+
+- Enabled `startupjobs-cz` through the official active-offers sitemap and standardized public `schema.org/JobPosting` detail data after reviewing the current robots policy and public integration documentation.
+- Added stable offer IDs, structured company/location/salary normalization, conditional sitemap requests, 30-per-minute detail throttling, and normal new/changed/stale detail refresh behavior without login or private API access.
+
+## 2026-10-26 — Jobs Bot eligibility rules and Notion mirror
+
+- Added an idempotent optional Notion `Job Opportunities` mirror for all evaluated vacancies, including rejected listings and their deterministic blocker evidence; existing jobs are backfilled on startup and Notion failures remain retryable.
+- Jobs Bot now rejects Staff engineering roles, mandatory experience above the five-year profile, mandatory non-English languages, and country-only remote restrictions outside the configured eligible regions.
+- Foreign onsite and hybrid roles remain eligible when the vacancy does not impose an incompatible residence restriction and English is sufficient.
+
 ## 2026-10-24 — Jobs Bot target-stack filtering
 
 - Jobs Bot now requires Next.js, React.js, Node.js, or TypeScript evidence for engineering matches and rejects roles centered on PHP, Java, C++, Go, .NET, or Svelte.

@@ -311,6 +311,16 @@ const list = (value: unknown): Array<Record<string, unknown>> =>
         Boolean(item && typeof item === 'object'),
       )
     : [];
+const display = (value: unknown, fallback = 'nedostupné'): string => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean')
+    return `${value}`;
+  return fallback;
+};
+const stringList = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
 
 export const renderLeadIntelligence = (
   lead: IntelligenceLead,
@@ -327,13 +337,14 @@ export const renderLeadIntelligence = (
   const contactLines = contacts.length
     ? contacts.map(
         (item) =>
-          `- ${String(item.type)}: ${String(item.value)} (${String(item.verificationStatus)})`,
+          `- ${display(item.type)}: ${display(item.value)} (${display(item.verificationStatus)})`,
       )
     : ['- Nedostupné'];
   const opportunityLines = opportunities.map(
     (item, index) =>
-      `${index + 1}. ${String(item.title)} — ${String(item.relevance)}\nDůkaz: ${String(item.evidence)}\nDopad: ${String(item.impact)}\nŘešení: ${String(item.solution)}\nJistota: ${String(item.confidence)}`,
+      `${index + 1}. ${display(item.title)} — ${display(item.relevance)}\nDůkaz: ${display(item.evidence)}\nDopad: ${display(item.impact)}\nŘešení: ${display(item.solution)}\nJistota: ${display(item.confidence)}`,
   );
-  const message = `🎯 ${position ? `LEAD ${position} — ` : ''}${lead.companyName}\n\n🏢 Firma\nWeb: ${lead.websiteUrl ?? 'nedostupný'}\nPopis: ${String(profile.description ?? 'nedostupný')}\nCRM stav: ${lead.stage}\nVýzkum: ${research.researchedAt.toISOString()}\n\n📞 Kontakty\n${contactLines.join('\n')}\n\n🔍 Technická analýza\nHTTPS: ${String(audit.usesHttps ?? 'nedostupné')}\nMobile viewport: ${String(audit.hasMobileViewport ?? 'nedostupné')}\nMeta description: ${String(audit.hasDescription ?? 'nedostupné')}\nNadpisy: ${String(audit.headingCount ?? 'nedostupné')}\nObrázky bez alt: ${String(audit.imagesMissingAlt ?? 'nedostupné')}\nTechnologie: ${Array.isArray(audit.detectedTechnologies) && audit.detectedTechnologies.length ? audit.detectedTechnologies.join(', ') : 'nezjištěny'}\nPerformance: bez PageSpeed měření\n\n💡 Příležitosti\n${opportunityLines.join('\n\n')}\n\n🎯 Doporučený přístup\nKanál: ${String(outreach.recommendedChannel)}\nNabídka: ${String(outreach.primaryOffer)}\nÚhel: ${String(outreach.angle)}\nOtvírák: ${String(outreach.conversationOpener)}\n\n✉️ Návrh e-mailu\nPředmět: ${String(outreach.subject)}\n${String(outreach.body)}\n\n🔗 Zdroje\n${research.sourceUrls.map((url) => `- ${url}`).join('\n')}${crmUrl ? `\n\n📋 CRM\n${crmUrl}` : ''}`;
+  const technologies = stringList(audit.detectedTechnologies);
+  const message = `🎯 ${position ? `LEAD ${position} — ` : ''}${lead.companyName}\n\n🏢 Firma\nWeb: ${lead.websiteUrl ?? 'nedostupný'}\nPopis: ${display(profile.description, 'nedostupný')}\nCRM stav: ${lead.stage}\nVýzkum: ${research.researchedAt.toISOString()}\n\n📞 Kontakty\n${contactLines.join('\n')}\n\n🔍 Technická analýza\nHTTPS: ${display(audit.usesHttps)}\nMobile viewport: ${display(audit.hasMobileViewport)}\nMeta description: ${display(audit.hasDescription)}\nNadpisy: ${display(audit.headingCount)}\nObrázky bez alt: ${display(audit.imagesMissingAlt)}\nTechnologie: ${technologies.length ? technologies.join(', ') : 'nezjištěny'}\nPerformance: bez PageSpeed měření\n\n💡 Příležitosti\n${opportunityLines.join('\n\n')}\n\n🎯 Doporučený přístup\nKanál: ${display(outreach.recommendedChannel)}\nNabídka: ${display(outreach.primaryOffer)}\nÚhel: ${display(outreach.angle)}\nOtvírák: ${display(outreach.conversationOpener)}\n\n✉️ Návrh e-mailu\nPředmět: ${display(outreach.subject)}\n${display(outreach.body)}\n\n🔗 Zdroje\n${research.sourceUrls.map((url) => `- ${url}`).join('\n')}${crmUrl ? `\n\n📋 CRM\n${crmUrl}` : ''}`;
   return splitTelegramMessage(message, 3900);
 };
