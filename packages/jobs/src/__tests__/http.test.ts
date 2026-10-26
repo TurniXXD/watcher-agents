@@ -84,4 +84,33 @@ describe('job source HTTP client', () => {
       closed: 'CLOSED_CONFIRMED',
     });
   });
+
+  it('recognizes the Greenhouse expired-job response', async () => {
+    await expect(
+      verifyJobAvailability(
+        'https://8.8.8.8/job',
+        vi.fn<typeof fetch>().mockResolvedValue(
+          new Response('The job you are looking for is no longer open.', {
+            status: 200,
+          }),
+        ),
+      ),
+    ).resolves.toBe('CLOSED_CONFIRMED');
+  });
+
+  it('recognizes Greenhouse expired pages from their canonical error URL', async () => {
+    await expect(
+      verifyJobAvailability(
+        'https://8.8.8.8/job',
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(
+            new Response(
+              '<link rel="canonical" href="https://job-boards.greenhouse.io/example?error=true">',
+              { status: 200 },
+            ),
+          ),
+      ),
+    ).resolves.toBe('CLOSED_CONFIRMED');
+  });
 });

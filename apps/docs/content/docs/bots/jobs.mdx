@@ -67,6 +67,7 @@ persisted, daylight-saving-aware schedules.
 | Remote Frontend / Remote Backend public APIs             | Separate permitted job boards.                                                           |
 | Himalayas, Startup Jobs engineering, RemoteFirstJobs RSS | Public RSS discovery.                                                                    |
 | StartupJobs.cz                                           | Official active-offers sitemap plus rate-limited `schema.org/JobPosting` detail data.    |
+| Agoda Careers                                            | Built-in public `agoda` Greenhouse source; vacancies use Agoda's published hybrid mode.  |
 | Remote OK public API                                     | Public JSON discovery.                                                                   |
 | Greenhouse, Lever, Ashby, SmartRecruiters                | Official public ATS endpoints for explicitly configured company/board identifiers.       |
 | Workable, Recruitee, Teamtailor                          | Public company career endpoints/RSS for explicitly configured accounts or domains.       |
@@ -86,16 +87,21 @@ endpoint is called only for a new listing, a changed listing hash, or after the
 company, normalized title, and location form the conservative cross-source
 fingerprint while every source URL is preserved.
 
-When a source supplies a cross-host official application URL, detail refreshes
-perform a bounded public-URL check. Only explicit application controls confirm
-an open job; closure text or HTTP 404/410 confirms closure, and inconclusive or
-failed checks stay unverified/unknown. Redirect targets are revalidated against
-the SSRF policy.
+Before a new matching alert is reserved, the exact application URL receives a
+bounded public-URL check even when it uses the same hostname as the listing.
+Confirmed closed links are neither alerted nor included in `/jobs_latest`.
+Scheduled runs additionally revalidate up to 25 stale matching links per run,
+five at a time, with a 24-hour freshness window. Explicit application controls
+confirm an open job; HTTP 404/410 and closure text such as Greenhouse's “no
+longer open” response confirm closure. Inconclusive or failed checks remain
+unverified/unknown, and redirect targets are revalidated against the SSRF
+policy.
 
 Enabled global sources are the separate Remote Frontend and Remote Backend
 public API boards, Himalayas RSS, Startup Jobs engineering RSS,
-RemoteFirstJobs RSS, Remote OK's public API, and StartupJobs.cz's official
-active-offers sitemap with standardized `schema.org/JobPosting` detail data.
+RemoteFirstJobs RSS, Remote OK's public API, StartupJobs.cz's official
+active-offers sitemap with standardized `schema.org/JobPosting` detail data,
+and Agoda's fixed public Greenhouse board.
 StartupJobs.cz detail requests are limited to 30 per minute and run only for
 new, changed, or 72-hour-stale listings. Configured tenant identifiers
 also enable Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, and
@@ -107,12 +113,14 @@ automates logged-in pages or bypasses access controls.
 
 ## Eligibility and alerts
 
-Mandatory university degrees, every mandatory language other than English,
+Mandatory university degrees, unqualified Computer Science or related
+bachelor/BS/BSc/BCS requirements, every mandatory language other than English,
 Staff engineering titles, experience requirements above the five-year profile,
 graduate-only eligibility, incompatible country-only restrictions, and
 unrelated roles are hard blockers. Foreign onsite and hybrid roles remain
 eligible when they do not require residence in an incompatible country and
-English is sufficient. Ambiguous location, authorization, or fluent-English
+English is sufficient. Preferred degrees and degree-or-equivalent-experience
+wording are not blocked. Ambiguous location, authorization, or fluent-English
 requirements are marked `UNCERTAIN`. The deterministic 100-point score reports
 matched skills, gaps, blockers, uncertainties, and its weighted breakdown.
 

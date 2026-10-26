@@ -125,8 +125,15 @@ export const verifyJobAvailability = async (
       timeoutMs: 10_000,
     });
     const text = (await response.text()).slice(0, 500_000);
+    const finalUrl = response.url ? new URL(response.url) : undefined;
     if (
-      /\b(?:position|role|vacancy|job)\s+(?:has been\s+)?(?:filled|closed|expired|no longer available)\b|applications? (?:are )?closed/iu.test(
+      (finalUrl?.hostname === 'job-boards.greenhouse.io' &&
+        finalUrl.searchParams.get('error') === 'true') ||
+      /job-boards\.greenhouse\.io\/[^"'<>?\s]+\?error=true\b/iu.test(text)
+    )
+      return 'CLOSED_CONFIRMED';
+    if (
+      /\b(?:position|role|vacancy|job)(?:\s+posting)?\b[^.!?\n]{0,100}\b(?:filled|closed|expired|no longer (?:available|open))\b|\bno longer accepting applications?\b|applications? (?:are )?closed/iu.test(
         text,
       )
     )

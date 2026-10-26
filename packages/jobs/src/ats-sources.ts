@@ -158,11 +158,44 @@ const greenhouseJobSchema = z.object({
   departments: z.array(z.object({ name: z.string() })).optional(),
 });
 
-const greenhouseAdapter = (boards: readonly string[]): JobSourceAdapter =>
+export const parseGreenhouseJob = (input: {
+  sourceId: string;
+  board: string;
+  company?: string;
+  workMode?: NormalizedJob['workMode'];
+  job: unknown;
+}): NormalizedJob => {
+  const job = greenhouseJobSchema.parse(input.job);
+  return normalized({
+    sourceId: input.sourceId,
+    externalId: `${input.board}:${job.id}`,
+    title: job.title,
+    company: input.company ?? input.board,
+    description: job.content,
+    location: job.location?.name,
+    workMode: input.workMode,
+    originalUrl: job.absolute_url,
+    applicationUrl: job.absolute_url,
+    updatedAt: job.updated_at,
+    tags: job.departments?.map(({ name }) => name).join(' '),
+    raw: { board: input.board, job },
+  });
+};
+
+const greenhouseAdapter = (
+  boards: readonly string[],
+  options: {
+    id?: string;
+    name?: string;
+    baseUrl?: string;
+    company?: string;
+    workMode?: NormalizedJob['workMode'];
+  } = {},
+): JobSourceAdapter =>
   multiTenantAdapter({
-    id: 'greenhouse',
-    name: 'Greenhouse',
-    baseUrl: 'https://www.greenhouse.com',
+    id: options.id ?? 'greenhouse',
+    name: options.name ?? 'Greenhouse',
+    baseUrl: options.baseUrl ?? 'https://www.greenhouse.com',
     tenants: boards,
     discoverTenant: async (board, signal) => {
       const response = await fetchJobSource(
@@ -173,22 +206,27 @@ const greenhouseAdapter = (boards: readonly string[]): JobSourceAdapter =>
         .object({ jobs: z.array(greenhouseJobSchema) })
         .parse(await response.json());
       return payload.jobs.map((job) =>
-        normalized({
-          sourceId: 'greenhouse',
-          externalId: `${board}:${job.id}`,
-          title: job.title,
-          company: board,
-          description: job.content,
-          location: job.location?.name,
-          originalUrl: job.absolute_url,
-          applicationUrl: job.absolute_url,
-          updatedAt: job.updated_at,
-          tags: job.departments?.map(({ name }) => name).join(' '),
-          raw: { board, job },
+        parseGreenhouseJob({
+          sourceId: options.id ?? 'greenhouse',
+          board,
+          ...(options.company ? { company: options.company } : {}),
+          ...(options.workMode ? { workMode: options.workMode } : {}),
+          job,
         }),
       );
     },
   });
+
+export const createAgodaCareersAdapter = (): JobSourceAdapter => ({
+  ...greenhouseAdapter(['agoda'], {
+    id: 'agoda-careers',
+    name: 'Agoda Careers',
+    baseUrl: 'https://careersatagoda.com',
+    company: 'Agoda',
+    workMode: 'HYBRID',
+  }),
+  attribution: 'Jobs by Agoda Careers via the public Greenhouse Job Board API',
+});
 
 const leverJobSchema = z.object({
   id: z.string(),
@@ -578,7 +616,9 @@ const definition = (input: {
 export const createConfiguredAtsDefinitions = (
   configuration: AtsSourceConfiguration,
 ): JobSourceDefinition[] => {
-  const greenhouseBoards = parseIdentifiers(configuration.greenhouseBoards);
+  const greenhouseBoards = parseIdentifiers(
+    configuration.greenhouseBoards,
+  ).filter((board) => board.toLowerCase() !== 'agoda');
   const leverSites = parseIdentifiers(configuration.leverSites);
   const ashbyBoards = parseIdentifiers(configuration.ashbyBoards);
   const smartRecruitersCompanies = parseIdentifiers(

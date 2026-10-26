@@ -74,6 +74,8 @@ const createStore = (sourceIds: string[]) => ({
   recordSourceSuccess: vi.fn(async () => undefined),
   recordSourceFailure: vi.fn(async () => undefined),
   finishRun: vi.fn(async () => undefined),
+  listJobs: vi.fn(async () => []),
+  updateAvailability: vi.fn(async () => undefined),
 });
 
 const logger = {
@@ -315,5 +317,99 @@ describe('JobDiscoveryRunner orchestration', () => {
       expect.objectContaining({ listing, detailFetched: false }),
     );
     expect(store.saveEvaluation).not.toHaveBeenCalled();
+  });
+
+  it('checks the exact apply link and suppresses an expired new match', async () => {
+    const job = {
+      sourceId: 'expiry-check',
+      externalId: 'job-1',
+      title: 'Full-Stack Developer',
+      company: 'Example',
+      description: 'Build TypeScript products in Brno.',
+      location: 'Brno, Czechia',
+      workMode: 'HYBRID' as const,
+      remoteRegions: ['Europe'],
+      technologyStack: ['TypeScript'],
+      originalUrl: 'https://apply.example/jobs/job-1',
+      canonicalApplicationUrl: 'https://apply.example/jobs/job-1',
+      raw: {},
+    };
+    const store = {
+      ...createStore(['expiry-check']),
+      findRawJob: vi.fn(async () => null),
+      upsertJob: vi.fn(async () => ({
+        job: {
+          id: 'job-1',
+          availabilityStatus: 'LISTED_UNVERIFIED',
+          lastAvailabilityCheckAt: null,
+        },
+        isNew: true,
+        changed: true,
+        contentHash: 'content-hash',
+      })),
+      findEvaluation: vi.fn(async () => null),
+      saveEvaluation: vi.fn(async () => ({ id: 'evaluation-1' })),
+      reserveNotification: vi.fn(),
+    };
+    const availabilityVerifier = vi.fn(async () => 'CLOSED_CONFIRMED' as const);
+    const runner = new JobDiscoveryRunner(
+      store as never,
+      profile,
+      72,
+      logger,
+      [source('expiry-check', async () => ({ jobs: [job] }))],
+      undefined,
+      undefined,
+      availabilityVerifier,
+    );
+
+    const result = await runner.run({ trigger: 'SCHEDULED' });
+
+    expect(availabilityVerifier).toHaveBeenCalledWith(job.originalUrl);
+    expect(store.updateAvailability).toHaveBeenCalledWith(
+      'job-1',
+      'CLOSED_CONFIRMED',
+    );
+    expect(store.reserveNotification).not.toHaveBeenCalled();
+    expect(result.alerts).toEqual([]);
+  });
+
+  it('periodically rechecks a stale application link for a stored match', async () => {
+    const store = {
+      ...createStore(['stored-expiry-check']),
+      listJobs: vi.fn(async () => [
+        {
+          id: 'stored-job-1',
+          originalUrl: 'https://listing.example/jobs/stored-job-1',
+          canonicalApplicationUrl: 'https://apply.example/jobs/stored-job-1',
+          availabilityStatus: 'LISTED_UNVERIFIED',
+          lastAvailabilityCheckAt: new Date('2026-10-01T00:00:00.000Z'),
+          evaluations: [{ eligibility: 'ELIGIBLE' }],
+        },
+      ]),
+    };
+    const availabilityVerifier = vi.fn(async () =>
+      Promise.resolve('CLOSED_CONFIRMED' as const),
+    );
+    const runner = new JobDiscoveryRunner(
+      store as never,
+      profile,
+      72,
+      logger,
+      [source('stored-expiry-check', async () => ({ jobs: [] }))],
+      undefined,
+      undefined,
+      availabilityVerifier,
+    );
+
+    await runner.run({ trigger: 'SCHEDULED' });
+
+    expect(availabilityVerifier).toHaveBeenCalledWith(
+      'https://apply.example/jobs/stored-job-1',
+    );
+    expect(store.updateAvailability).toHaveBeenCalledWith(
+      'stored-job-1',
+      'CLOSED_CONFIRMED',
+    );
   });
 });

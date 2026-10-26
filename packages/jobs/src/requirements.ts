@@ -8,11 +8,27 @@ export type ExtractedJobRequirement = {
   evidence: string;
 };
 
+const computerScienceDegreePattern =
+  /(?:\b(?:bachelor(?:['’]?s)?(?:\s+degree)?|b\s*\.?\s*s\s*\.?|b\s*\.?\s*sc\s*\.?)\b[^.!?\n]{0,140}\b(?:computer\s+science|computer\s+engineering|software\s+engineering|information\s+(?:technology|systems)|cs|it|stem|(?:a\s+)?related\s+(?:technical\s+)?field)\b|\bb\s*\.?\s*c\s*\.?\s*s\s*\.?\b)/iu;
+
+const optionalDegreePattern =
+  /preferred|advantage|nice to have|plus|bonus|optional|or equivalent|equivalent (?:professional |practical |work )?experience/iu;
+
+export const hasMandatoryComputerScienceDegree = (text: string): boolean =>
+  text
+    .split(/[.!?\n]+/u)
+    .some(
+      (sentence) =>
+        computerScienceDegreePattern.test(sentence) &&
+        !optionalDegreePattern.test(sentence),
+    );
+
 const importanceFor = (
   sentence: string,
 ): ExtractedJobRequirement['importance'] => {
   if (/preferred|advantage|nice to have|plus|bonus|optional/iu.test(sentence))
     return 'PREFERRED';
+  if (hasMandatoryComputerScienceDegree(sentence)) return 'MANDATORY';
   if (
     /required|must|mandatory|need(?:ed)?|minimum|fluent|proficien|you have|we expect/iu.test(
       sentence,

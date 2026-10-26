@@ -4,8 +4,40 @@ import {
   parseRemoteOkJob,
   parseWorkingNomadsJob,
 } from '../sources.js';
+import { parseGreenhouseJob } from '../ats-sources.js';
 
 describe('verified job source schemas', () => {
+  it('normalizes Agoda jobs from its public Greenhouse board', () => {
+    const job = parseGreenhouseJob({
+      sourceId: 'agoda-careers',
+      board: 'agoda',
+      company: 'Agoda',
+      workMode: 'HYBRID',
+      job: {
+        id: 12345,
+        title: 'Full Stack Engineer',
+        updated_at: '2026-10-26T09:30:00Z',
+        location: { name: 'Bangkok, Thailand' },
+        absolute_url: 'https://job-boards.greenhouse.io/agoda/jobs/12345',
+        content: '<p>Build products with React, TypeScript and Node.js.</p>',
+        departments: [{ name: 'Technology' }],
+      },
+    });
+
+    expect(job).toMatchObject({
+      sourceId: 'agoda-careers',
+      externalId: 'agoda:12345',
+      company: 'Agoda',
+      title: 'Full Stack Engineer',
+      location: 'Bangkok, Thailand',
+      workMode: 'HYBRID',
+      originalUrl: 'https://job-boards.greenhouse.io/agoda/jobs/12345',
+    });
+    expect(job.technologyStack).toEqual(
+      expect.arrayContaining(['React', 'TypeScript', 'Node.js']),
+    );
+  });
+
   it('accepts the documented Remote Frontend Jobs comma-delimited API fields', () => {
     const job = parseRemoteFrontendJob('remote-frontend-jobs', {
       id: 'job-123',

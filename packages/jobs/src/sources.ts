@@ -1,6 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import { z } from 'zod';
 import {
+  createAgodaCareersAdapter,
   createConfiguredAtsDefinitions,
   type AtsSourceConfiguration,
 } from './ats-sources.js';
@@ -495,6 +496,7 @@ export const createJobSourceDefinitions = (
       attribution: 'Swiss developer jobs by SwissDevJobs',
     }),
     createStartupJobsCzAdapter(),
+    createAgodaCareersAdapter(),
     workingNomadsAdapter(),
     remoteOkAdapter(),
   ];

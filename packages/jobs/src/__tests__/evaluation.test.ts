@@ -74,6 +74,32 @@ describe('deterministic job evaluation', () => {
   });
 
   it.each([
+    'Bachelor’s degree in Computer Science.',
+    'BSc in Software Engineering.',
+    'BCS or a degree in a related technical field.',
+    'BS degree in CS.',
+  ])(
+    'rejects a listed computer-science bachelor requirement without needing an explicit required keyword: %s',
+    (requirement) => {
+      expect(evaluateJob(job(requirement), profile).hardBlockers).toContain(
+        'Mandatory degree requirement',
+      );
+    },
+  );
+
+  it.each([
+    "Bachelor's degree in Computer Science preferred.",
+    'BSc in Software Engineering or equivalent practical experience.',
+  ])(
+    'keeps optional or equivalent CS degree wording eligible: %s',
+    (requirement) => {
+      expect(evaluateJob(job(requirement), profile).hardBlockers).not.toContain(
+        'Mandatory degree requirement',
+      );
+    },
+  );
+
+  it.each([
     'German B1 is mandatory.',
     'You must have fluent French.',
     'Professional Spanish is required.',

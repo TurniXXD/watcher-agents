@@ -9,6 +9,7 @@ import {
   type CandidateProfile,
   type JobAiEvaluator,
   type JobAiMetadata,
+  type JobAvailability,
   type JobEvaluationResult,
   type JobSourceDefinition,
   type NormalizedJob,
@@ -68,7 +69,55 @@ export class JobDiscoveryRunner {
     private readonly definitions: JobSourceDefinition[] = createJobSourceDefinitions(),
     private readonly aiEvaluator?: JobAiEvaluator,
     private readonly notionSync?: JobsNotionSync,
+    private readonly availabilityVerifier: typeof verifyJobAvailability = verifyJobAvailability,
   ) {}
+
+  private async checkApplicationUrl(
+    jobId: string,
+    url: string,
+  ): Promise<JobAvailability> {
+    const availability = await this.availabilityVerifier(url);
+    await this.store.updateAvailability(jobId, availability);
+    return availability;
+  }
+
+  private async refreshStoredApplicationLinks(limit = 25): Promise<void> {
+    const cutoff = new Date(Date.now() - 24 * 3_600_000);
+    const jobs = await this.store.listJobs({
+      minimumScore: this.profile.thresholds.possible,
+      take: 200,
+    });
+    const candidates = jobs
+      .filter(
+        (job) =>
+          job.evaluations[0]?.eligibility !== 'INELIGIBLE' &&
+          job.availabilityStatus !== 'CLOSED_CONFIRMED' &&
+          (!job.lastAvailabilityCheckAt ||
+            job.lastAvailabilityCheckAt < cutoff) &&
+          Boolean(job.canonicalApplicationUrl ?? job.originalUrl),
+      )
+      .slice(0, limit);
+    for (let offset = 0; offset < candidates.length; offset += 5) {
+      const batch = candidates.slice(offset, offset + 5);
+      const results = await Promise.allSettled(
+        batch.map((job) =>
+          this.checkApplicationUrl(
+            job.id,
+            job.canonicalApplicationUrl ?? job.originalUrl,
+          ),
+        ),
+      );
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const refreshError: unknown = result.reason;
+          this.logger.warn(
+            { err: refreshError, jobId: batch[index]?.id },
+            'Stored job application-link check failed',
+          );
+        }
+      });
+    }
+  }
 
   private async synchronizeNotion(input: JobNotionRecord): Promise<void> {
     if (!this.notionSync) return;
@@ -274,7 +323,6 @@ export class JobDiscoveryRunner {
           const sourceAlerts: AlertJob[] = [];
           let sourceCreated = 0;
           let sourceEvaluated = 0;
-          let sourceAvailabilityChecks = 0;
           const activeProfile = dryRun
             ? undefined
             : await this.store.getActiveProfile();
@@ -315,19 +363,9 @@ export class JobDiscoveryRunner {
               listing: discoveredJob,
               detailFetched,
             });
-            if (
-              detailFetched &&
-              sourceAvailabilityChecks < 5 &&
-              job.canonicalApplicationUrl &&
-              new URL(job.canonicalApplicationUrl).hostname !==
-                new URL(job.originalUrl).hostname
-            ) {
-              sourceAvailabilityChecks += 1;
-              const availability = await verifyJobAvailability(
-                job.canonicalApplicationUrl,
-              );
-              await this.store.updateAvailability(stored.job.id, availability);
-            }
+            const applicationUrl =
+              job.canonicalApplicationUrl ?? job.originalUrl;
+            let availability = stored.job.availabilityStatus;
             if (stored.isNew) sourceCreated += 1;
             const previousEvaluation = await this.store.findEvaluation(
               stored.job.id,
@@ -364,6 +402,13 @@ export class JobDiscoveryRunner {
               result.eligibility !== 'INELIGIBLE' &&
               result.score >= activeProfile.profile.thresholds.notify
             ) {
+              if (!currentRun.baseline)
+                availability = await this.checkApplicationUrl(
+                  stored.job.id,
+                  applicationUrl,
+                );
+              if (!currentRun.baseline && availability === 'CLOSED_CONFIRMED')
+                continue;
               const notification = await this.store.reserveNotification({
                 jobId: stored.job.id,
                 evaluationId: evaluation.id,
@@ -447,6 +492,7 @@ export class JobDiscoveryRunner {
           : sourceFailures === selected.length
             ? 'FAILED'
             : 'PARTIAL';
+      if (!dryRun) await this.refreshStoredApplicationLinks();
       if (!dryRun)
         await this.store.finishRun(currentRun.id, {
           status,

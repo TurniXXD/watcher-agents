@@ -1,4 +1,5 @@
 import { normalizeText } from './normalization.js';
+import { hasMandatoryComputerScienceDegree } from './requirements.js';
 import type {
   CandidateProfile,
   JobEvaluationResult,
@@ -232,7 +233,10 @@ export const evaluateJob = (
     (technology) => mandatory(body, technologyPattern(technology)),
   );
 
-  if (mandatory(body, /\b(?:bachelor|master|phd|university degree|degree)\b/iu))
+  if (
+    mandatory(body, /\b(?:bachelor|master|phd|university degree|degree)\b/iu) ||
+    hasMandatoryComputerScienceDegree(body)
+  )
     hardBlockers.push('Mandatory degree requirement');
   if (mandatory(body, unsupportedLanguagePattern))
     hardBlockers.push('Mandatory unsupported language');

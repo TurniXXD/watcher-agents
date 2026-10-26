@@ -2,6 +2,16 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-27 — Application-link expiry checks
+
+- Jobs Bot now verifies the exact application URL before every new matching alert, including same-host links such as Agoda's Greenhouse pages, and suppresses links confirmed closed by HTTP 404/410 or explicit expiry text.
+- Scheduled runs revalidate up to 25 stale matching links with bounded concurrency, `/jobs_latest` omits confirmed closed vacancies, and `/jobs_show` labels their application link unavailable.
+
+## 2026-10-27 — Agoda Careers source and CS-degree exclusion
+
+- Added Agoda Careers as an enabled built-in source backed by Agoda's public `agoda` Greenhouse Job Board API; it requires no token or tenant environment variable.
+- Listings with an unqualified bachelor/BS/BSc/BCS requirement in Computer Science or a related technical field are now rejected, while preferred degrees and explicit equivalent-experience alternatives remain eligible.
+
 ## 2026-10-26 — StartupJobs.cz job discovery
 
 - Enabled `startupjobs-cz` through the official active-offers sitemap and standardized public `schema.org/JobPosting` detail data after reviewing the current robots policy and public integration documentation.

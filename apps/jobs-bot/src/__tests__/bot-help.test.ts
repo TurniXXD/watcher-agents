@@ -134,4 +134,33 @@ describe('jobs bot informational commands', () => {
     expect(harness.store.setSourceEnabled).not.toHaveBeenCalled();
     expect(harness.store.updateApplication).not.toHaveBeenCalled();
   });
+
+  it('omits confirmed closed vacancies from the latest matches', async () => {
+    const harness = createHarness();
+    harness.store.listJobs.mockResolvedValue([
+      {
+        id: 'closed-job',
+        title: 'Closed Developer',
+        company: 'Example',
+        originalUrl: 'https://example.com/closed',
+        canonicalApplicationUrl: null,
+        availabilityStatus: 'CLOSED_CONFIRMED',
+        evaluations: [{ score: 90, eligibility: 'ELIGIBLE' }],
+      },
+      {
+        id: 'open-job',
+        title: 'Open Developer',
+        company: 'Example',
+        originalUrl: 'https://example.com/open',
+        canonicalApplicationUrl: null,
+        availabilityStatus: 'OPEN_CONFIRMED',
+        evaluations: [{ score: 85, eligibility: 'ELIGIBLE' }],
+      },
+    ] as never);
+
+    await harness.bot.handleUpdate(update('/jobs_latest', 8));
+
+    expect(harness.messages.join('\n')).toContain('Open Developer');
+    expect(harness.messages.join('\n')).not.toContain('Closed Developer');
+  });
 });

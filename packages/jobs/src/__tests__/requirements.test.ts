@@ -28,4 +28,13 @@ describe('job requirement extraction', () => {
       ]),
     );
   });
+
+  it('classifies an unqualified CS bachelor listing as mandatory', () => {
+    expect(
+      extractJobRequirements('Bachelor’s degree in Computer Science.')[0],
+    ).toMatchObject({
+      category: 'EDUCATION',
+      importance: 'MANDATORY',
+    });
+  });
 });

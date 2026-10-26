@@ -66,7 +66,7 @@ export const jobsAbout = [
   'ℹ️ About Personal Job Discovery',
   '',
   'This private bot is for one authorized operator. PostgreSQL is the authoritative store for candidate settings, source checkpoints, jobs, evaluations, schedules, delivery state, and application notes.',
-  'It automatically reads only configured public APIs/RSS feeds, normalizes and deduplicates listings, applies deterministic eligibility/scoring rules, mirrors evaluated vacancies to Notion when configured, and sends new qualifying matches through Telegram or an optional operator-owned e-mail webhook. Optional local/OpenAI-compatible AI nuance scoring is validated and cannot remove deterministic blockers.',
+  'It automatically reads only configured public APIs/RSS feeds, normalizes and deduplicates listings, applies deterministic eligibility/scoring rules, revalidates application links before new alerts and during scheduled runs, mirrors evaluated vacancies to Notion when configured, and sends new qualifying matches through Telegram or an optional operator-owned e-mail webhook. Optional local/OpenAI-compatible AI nuance scoring is validated and cannot remove deterministic blockers.',
   'You must explicitly decide whether to save, dismiss, apply, contact anyone, or change an application status. The bot never submits applications, contacts employers, bypasses access controls, or claims that an aggregator listing is still open.',
   'All Telegram updates require an allowed user ID. Secrets remain server-side. Scores can be uncertain and must be checked against the original listing; unsupported sources stay disabled.',
   'Use /help next, or /jobs_run all dry for a no-write source preview.',
@@ -171,7 +171,11 @@ export const createJobsBot = (input: {
   });
   bot.command('jobs_latest', async (context) => {
     const jobs = (await input.store.listJobs({ minimumScore: 55, take: 100 }))
-      .filter((job) => job.evaluations[0]?.eligibility !== 'INELIGIBLE')
+      .filter(
+        (job) =>
+          job.evaluations[0]?.eligibility !== 'INELIGIBLE' &&
+          job.availabilityStatus !== 'CLOSED_CONFIRMED',
+      )
       .toSorted(
         (left, right) =>
           (right.evaluations[0]?.score ?? 0) -
@@ -232,7 +236,9 @@ export const createJobsBot = (input: {
       `Application: ${application?.status ?? 'NEW'}${application?.followUpAt ? ` · follow-up ${application.followUpAt.toISOString().slice(0, 10)}` : ''}`,
       ...(application?.notes.map((note) => `Note: ${note.note}`) ?? []),
       `Sources: ${job.sourceReferences.map((reference) => reference.source.name).join(', ')}`,
-      `Apply: ${job.canonicalApplicationUrl ?? job.originalUrl}`,
+      job.availabilityStatus === 'CLOSED_CONFIRMED'
+        ? 'Apply: unavailable — the vacancy is closed or expired'
+        : `Apply: ${job.canonicalApplicationUrl ?? job.originalUrl}`,
       '',
       job.description.slice(0, 5_000),
     ].join('\n');
