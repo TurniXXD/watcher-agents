@@ -1,57 +1,91 @@
-# Watcher
+<div align="center">
 
-Watcher is a production-oriented, self-hosted TypeScript monorepo for private Telegram bots and supporting agents. Services share PostgreSQL and reusable workspace packages while remaining separate long-running processes. Ollama is external to the Compose stack.
+# ◉ Watcher
 
-## Applications
+### A private, self-hosted intelligence system operated from Telegram
 
-Each application owns its setup, commands, configuration, source behavior, and limitations in its main folder.
+**17 focused applications · one TypeScript monorepo · one PostgreSQL source of truth**
 
-| Application       | Purpose                                                              | Documentation                              |
-| ----------------- | -------------------------------------------------------------------- | ------------------------------------------ |
-| Briefing Bot      | Personalized audio briefings, Calendar, weather, and journal context | [README](apps/briefing-bot/README.md)      |
-| Stocks Bot        | Watchlists, market intelligence, theses, alerts, and paper workflows | [README](apps/stocks-bot/README.md)        |
-| Publications Bot  | Publication and clinical-source monitoring                           | [README](apps/publications-bot/README.md)  |
-| News Bot          | RSS/Atom news monitoring and relevance analysis                      | [README](apps/news-bot/README.md)          |
-| Reality Bot       | Real-estate monitoring and investment calculations                   | [README](apps/reality-bot/README.md)       |
-| OSINT Bot         | Provenance-backed public-source investigations                       | [README](apps/osint-bot/README.md)         |
-| Sales Bot         | Lead research, call lists, controlled outreach, and CRM integrations | [README](apps/sales-bot/README.md)         |
-| Socials Bot       | Relational content planning, personal brand, and trend intelligence  | [README](apps/socials-bot/README.md)       |
-| Networking Bot    | Contacts, business cards, networking events, and follow-up reminders | [README](apps/networking-bot/README.md)    |
-| Jobs Bot          | Incremental job discovery, matching, and private alerts              | [README](apps/jobs-bot/README.md)          |
-| Study Bot         | PDF lectures, quizzes, summaries, and flashcards                     | [README](apps/study-bot/README.md)         |
-| Transport Bot     | Van-load compatibility and profitability decisions                   | [README](apps/transport-bot/README.md)     |
-| Maintenance Agent | Health, quality, capacity, and release monitoring                    | [README](apps/maintenance-agent/README.md) |
-| Brno Events Agent | Brno event discovery and briefing publication                        | [README](apps/brno-events-agent/README.md) |
-| MU Clubs Monitor  | Masaryk University club activity monitoring                          | [README](apps/mu-clubs-monitor/README.md)  |
-| Twenty Sales App  | Versioned Twenty CRM extension                                       | [README](apps/twenty-sales-app/README.md)  |
-| Documentation     | Versioned Fumadocs architecture and operations site                  | [README](apps/docs/README.md)              |
+[Explore the docs](https://bots.vantuch.dev) · [Deploy Watcher](deploy/README.md) · [Configure the stack](deploy/ENVIRONMENT.md)
 
-## Requirements and local development
+</div>
 
-- Node.js 24 or newer
-- pnpm 11
-- PostgreSQL 16 with pgvector
-- Docker and Docker Compose for the production-like stack
-- An external Ollama instance for LLM-enabled services
+---
+
+Watcher turns public sources, market data, documents, CRM records, and personal context into focused private workflows. Every bot owns its runtime boundary while sharing durable storage and carefully scoped workspace packages.
+
+> Telegram is the operator interface. PostgreSQL holds durable state. Ollama provides optional local inference. Docker Compose runs the production stack on one Linux server.
+
+## ✦ What lives here
+
+| Area                    | Applications                                                                                                                                              | What they do                                                             |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Daily intelligence**  | [Briefing](apps/briefing-bot/README.md) · [News](apps/news-bot/README.md) · [Publications](apps/publications-bot/README.md)                               | Build personal briefings and monitor relevant public information.        |
+| **Markets & decisions** | [Stocks](apps/stocks-bot/README.md) · [Reality](apps/reality-bot/README.md) · [Transport](apps/transport-bot/README.md)                                   | Track opportunities, evaluate evidence, and support bounded decisions.   |
+| **Business & career**   | [Sales](apps/sales-bot/README.md) · [Networking](apps/networking-bot/README.md) · [Jobs](apps/jobs-bot/README.md) · [Socials](apps/socials-bot/README.md) | Research leads, manage relationships, discover roles, and plan content.  |
+| **Research & learning** | [OSINT](apps/osint-bot/README.md) · [Study](apps/study-bot/README.md)                                                                                     | Produce provenance-backed investigations and learning material.          |
+| **Local discovery**     | [Brno Events](apps/brno-events-agent/README.md) · [MU Clubs](apps/mu-clubs-monitor/README.md)                                                             | Monitor events and university communities without duplicating delivery.  |
+| **Platform operations** | [Maintenance](apps/maintenance-agent/README.md) · [Twenty Sales App](apps/twenty-sales-app/README.md) · [Documentation](apps/docs/README.md)              | Keep services healthy, extend CRM workflows, and publish versioned docs. |
+
+## ⟶ How Watcher works
+
+```mermaid
+flowchart LR
+    S[Public sources and APIs] --> A[Independent bot and agent services]
+    T[Authorized Telegram operator] <--> A
+    A <--> P[(PostgreSQL + pgvector)]
+    A <--> O[External Ollama]
+    A --> X[Telegram reports and controlled actions]
+    C[Cloudflare Tunnel] --> D[Public documentation]
+    C --> R[Access-protected CRM]
+```
+
+The boundaries are deliberate:
+
+- each runnable app under `apps/` owns its process lifecycle, scheduling, readiness, and shutdown;
+- shared packages exist only for behavior with concrete consumers;
+- PostgreSQL constraints and persisted claims provide idempotency and overlap protection;
+- independent sources fail in isolation instead of cancelling an entire run;
+- every Telegram command, callback, upload, and free-text workflow is private by default;
+- research and generated drafts never imply permission to contact, publish, trade, or perform another external action.
+
+## ⚡ Start locally
+
+### Requirements
+
+| Runtime    | Version or role                                |
+| ---------- | ---------------------------------------------- |
+| Node.js    | 24 or newer                                    |
+| pnpm       | 11                                             |
+| PostgreSQL | 16 with pgvector                               |
+| Docker     | Docker Compose for the production-like stack   |
+| Ollama     | External and optional for LLM-enabled features |
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm db:generate
 pnpm db:deploy
 pnpm build
+```
+
+Start one application or the documentation site:
+
+```bash
 pnpm --filter @watcher/briefing-bot dev
 pnpm docs:dev
 ```
 
-Use a private environment file rather than adding secrets to `.env.example`:
+Run the Compose stack with a private environment file:
 
 ```bash
 WATCHER_ENV_FILE=/absolute/path/to/watcher.env docker compose up -d
 ```
 
-The complete environment inventory is in [deploy/ENVIRONMENT.md](deploy/ENVIRONMENT.md). Safe service-specific examples live in [deploy/presets](deploy/presets).
+Do not place secrets in `.env.example`. The complete inventory is in [deploy/ENVIRONMENT.md](deploy/ENVIRONMENT.md), with safe service presets in [`deploy/presets`](deploy/presets).
 
-## Quality gates
+## ✓ Quality contract
+
+Every completed change is expected to pass the same root gates used by CI:
 
 ```bash
 pnpm format:check
@@ -61,31 +95,56 @@ pnpm test
 pnpm build
 ```
 
-Run `pnpm db:validate` after Prisma changes and `docker compose config --quiet` after Compose changes.
+Also run `pnpm db:validate` after Prisma changes and `docker compose config --quiet` after Compose changes.
 
-## Shared architecture and operations
+## ◫ Workspace map
 
-- `packages/core`: watcher pipeline, contracts, scheduling, networking, and shared types
-- `packages/contact-network`: shared Google Sheets contact and business-card workflow used by Sales and Networking Bot
-- `packages/google-calendar`: shared encrypted Google Calendar OAuth and event API client used by Briefing and Networking Bot
-- `packages/database`: Prisma schema, migrations, repositories, and persisted configuration
-- `packages/llm`: Ollama requests, parsing, validation, and inference coordination
-- `packages/sources`: reusable source adapters, safe HTTP behavior, and caching
-- `packages/telegram`: authorization, keyboards, rendering, and message splitting
-- `packages/observability`: run, source, feedback, and resource telemetry
-- `packages/notion`: shared retrying Notion API client
-- `packages/jobs`: job source contracts, normalization, HTTP policy, and deterministic matching
+```text
+apps/       independently deployable bots, agents, CRM extension, and docs
+packages/   shared database, source, Telegram, LLM, and domain capabilities
+deploy/     production scripts, environment contracts, and safe presets
+docs/       focused architecture and operational notes
+```
 
-Independent sources use failure isolation and normalized `WatchItem` records. PostgreSQL constraints provide durable idempotency. Telegram commands and callbacks are private administration surfaces protected by `TELEGRAM_ALLOWED_USER_IDS`.
+| Package                    | Shared responsibility                                                       |
+| -------------------------- | --------------------------------------------------------------------------- |
+| `@watcher/core`            | Pipeline contracts, scheduling, networking, and common types                |
+| `@watcher/database`        | Prisma schema, migrations, repositories, and persisted configuration        |
+| `@watcher/sources`         | Reusable adapters, safe HTTP behavior, and caching                          |
+| `@watcher/telegram`        | Authorization, keyboards, rendering, and message splitting                  |
+| `@watcher/llm`             | Ollama requests, structured parsing, validation, and inference coordination |
+| `@watcher/observability`   | Run, source, feedback, and resource telemetry                               |
+| `@watcher/contact-network` | Shared contact and business-card workflows                                  |
+| `@watcher/google-calendar` | Encrypted Calendar OAuth and event operations                               |
+| `@watcher/jobs`            | Job discovery, normalization, HTTP policy, and deterministic matching       |
+| `@watcher/notion`          | Shared retrying Notion API client                                           |
 
-Production publishes one immutable image per commit and runs each application as its own Compose service. Cloudflared reaches approved HTTP origins, including documentation at [bots.vantuch.dev](https://bots.vantuch.dev) and the Access-protected Twenty CRM, through the external `vantuch` network and the `vantuch server` tunnel; databases and caches remain private. Runtime secrets live only in mode-`0600` files under `deploy/runtime`, and Ollama remains external. See [tunnel setup](deploy/README.md#cloudflare-tunnel-origins) before publishing the documentation.
+## ⛭ Production shape
 
-- [Production deployment](deploy/README.md)
-- [Environment inventory](deploy/ENVIRONMENT.md)
+Production publishes one immutable image per commit. Docker Compose runs each app as a separate service, with private databases and caches. Runtime secrets stay in mode-`0600` files under `deploy/runtime`; application secrets are never uploaded by CI.
+
+Cloudflared connects approved HTTP origins through the external `vantuch` Docker network and the `vantuch server` tunnel:
+
+- public documentation: [bots.vantuch.dev](https://bots.vantuch.dev)
+- Twenty CRM: protected by Cloudflare Access
+- PostgreSQL, Redis, and internal readiness endpoints: private
+- Ollama: external to the Compose stack
+
+Read the [production guide](deploy/README.md) and [Cloudflare tunnel setup](deploy/README.md#cloudflare-tunnel-origins) before publishing services.
+
+## ↗ Go deeper
+
+- [Versioned documentation website](apps/docs/README.md)
 - [Morning briefing architecture](docs/morning-briefing-architecture.md)
 - [Evening journal workflow](docs/evening-journal.md)
-- [Stock intelligence documentation](docs/stock-intelligence-phase-1.md)
+- [Stock intelligence](docs/stock-intelligence-phase-1.md)
 - [OSINT architecture](docs/osint-architecture.md)
-- [Versioned documentation website](apps/docs/README.md)
+- [Repository rules and completion criteria](AGENTS.md)
 
-See [AGENTS.md](AGENTS.md) for repository constraints and completion criteria.
+---
+
+<div align="center">
+
+Built for one operator, one server, and workflows that remain inspectable.
+
+</div>

@@ -42,6 +42,22 @@ the complete command guide.
 
 ## Architecture and flow
 
+<Mermaid
+  label="Socials Bot evidence, planning, approval, and feedback workflow"
+  chart={`flowchart LR
+    A["Manual captures and bounded trend sources"] --> B["Validate and normalize evidence"]
+    B --> C["Cluster repeated observations"]
+    C --> D["Compare Czech and US signals"]
+    D --> E["Score opportunity separately from confidence"]
+    E --> F["Qwen classification with deterministic fallback"]
+    F --> G["Generate schema-validated Czech concepts"]
+    G --> H["Persist versions and optional Notion mirror"]
+    H --> I["Telegram plan, pack, and reminders"]
+    I --> J["Operator feedback"]
+    J --> K["Small transparent future-ranking correction"]
+    K --> E`}
+/>
+
 `SocialsStore` owns relational persistence and versions; `SocialsService` owns
 capture, planning, packs, analytics, and optional Notion sync;
 `SocialsScheduler` owns durable reminders; lightweight Qwen classification has a

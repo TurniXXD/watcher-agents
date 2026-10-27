@@ -28,6 +28,21 @@ annuity payments, and stress cashflows.
 
 ## Architecture and flow
 
+<Mermaid
+  label="Property listing evaluation and alert workflow"
+  chart={`flowchart LR
+    A["DigiReality RSS"] --> B["Validate and normalize listing"]
+    B --> C["Deduplicate canonical property"]
+    C --> D["Persist current and historical observations"]
+    D --> E["Calculate discount and time on market"]
+    E --> F["Mortgage, yield, and cashflow model"]
+    F --> G{"Persisted investment gates pass?"}
+    G -->|No| H["Store result without alert"]
+    G -->|Yes| I["Telegram investment alert"]
+    J["Malformed listing"] -.-> K["Drop; never guess missing facts"]
+    K -.-> B`}
+/>
+
 DigiReality RSS records are validated, normalized, cached, and persisted with
 listing history. Historical observations support measured discount and
 time-on-market calculations. Photographs are not downloaded; malformed listings

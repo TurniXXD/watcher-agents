@@ -11,6 +11,22 @@ briefing events through an authenticated internal API.
 
 ## Architecture and flow
 
+<Mermaid
+  label="MU club activity monitoring workflow"
+  chart={`flowchart LR
+    A["Due club sources"] --> B["Public websites"]
+    A --> C["Bounded Instagram fetch"]
+    C --> D["Shared request cache"]
+    B --> E["Normalize observations"]
+    D --> E
+    E --> F["Classify club activity"]
+    F --> G["Persist observations and source health"]
+    G --> H["Publish normalized briefing events"]
+    H --> I["Authenticated Briefing integration"]
+    J["Source failure"] -.-> K["Visible failed source result"]
+    K -.-> E`}
+/>
+
 Per-source due checks and shared Instagram caching bound polling. Observations
 are normalized and classified before persistence. Source failures are isolated
 and exposed in health/run results instead of converted into empty data.

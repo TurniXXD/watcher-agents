@@ -29,6 +29,22 @@ display text and a normalized value prevents duplicates.
 
 ## Architecture and flow
 
+<Mermaid
+  label="Publication discovery and digest workflow"
+  chart={`flowchart LR
+    A["PubMed and configured publication sources"] --> B["Fetch sources independently"]
+    B --> C["Validate and normalize records"]
+    C --> D["Deduplicate by stable identity"]
+    D --> E["Bounded Ollama evidence analysis"]
+    E --> F["Persist outcomes and source health"]
+    F --> G{"Useful new publications?"}
+    G -->|Scheduled: no| H["Stay silent"]
+    G -->|Manual: no| I["Report no new results"]
+    G -->|Yes| J["Telegram digest"]
+    K["One source fails"] -.-> L["Partial run; other sources continue"]
+    L -.-> C`}
+/>
+
 Each source adapter retrieves and normalizes records independently. The shared
 watcher pipeline deduplicates, analyzes bounded evidence with Ollama, persists
 outcomes, and renders Telegram digests. A source failure does not cancel other

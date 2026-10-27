@@ -47,6 +47,23 @@ evidence never becomes automatic investment advice.
 
 ## Architecture and flow
 
+<Mermaid
+  label="Stocks Bot evidence, thesis, and alert workflow"
+  chart={`flowchart LR
+    A["SEC and configured market sources"] --> B["Fetch independently"]
+    B --> C["Validate and normalize observations"]
+    C --> D["Canonical event deduplication"]
+    D --> E["Materiality policy"]
+    E --> F["Bounded evidence-only Ollama analysis"]
+    F --> G["Update thesis and validation state"]
+    G --> H{"Actionable new evidence?"}
+    H -->|No| I["Persist without empty scheduled digest"]
+    H -->|Yes| J["Idempotent Telegram alert"]
+    G --> K["Discovery, replay, and paper workflows"]
+    L["High or extreme source failure"] -.-> M["Visible retryable failure"]
+    M -.-> C`}
+/>
+
 Source adapters normalize observations before canonical event deduplication,
 materiality policy, bounded Ollama analysis, thesis updates, and Telegram
 delivery. Independent sources settle separately. High/extreme failures remain

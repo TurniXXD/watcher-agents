@@ -25,6 +25,22 @@ export an Anki-compatible UTF-8 TSV deck.
 
 ## Architecture and flow
 
+<Mermaid
+  label="Study document processing and delivery workflow"
+  chart={`flowchart LR
+    A["Authorized document upload"] --> B["Validate type and size bounds"]
+    B --> C["Persist original document"]
+    C --> D["Extract page text"]
+    D --> E{"Enough machine-readable text?"}
+    E -->|No| F["Reject scanned or near-empty document"]
+    E -->|Yes| G["Chunk evidence with page references"]
+    G --> H["Coordinate bounded Ollama tasks"]
+    H --> I["Validate cited notes, questions, and cards"]
+    I --> J["Optional media synthesis"]
+    J --> K["Persist resumable progress"]
+    K --> L["Telegram delivery with page citations"]`}
+/>
+
 The job validates file bounds, stores the original, extracts page text, rejects
 scanned/near-empty documents, chunks evidence, coordinates Ollama work, creates
 cited output, synthesizes media, persists progress, and delivers through

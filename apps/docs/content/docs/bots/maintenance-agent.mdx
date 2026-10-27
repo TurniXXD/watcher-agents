@@ -26,6 +26,24 @@ alerts and recovery messages.
 
 ## Architecture and flow
 
+<Mermaid
+  label="Maintenance evidence, finding, and notification workflow"
+  chart={`flowchart LR
+    A["Scheduler or /run"] --> B{"Advisory lease acquired?"}
+    B -->|No| C["Skip overlapping evaluation"]
+    B -->|Yes| D["Read Watcher telemetry"]
+    D --> E["Read host and Ollama capacity"]
+    E --> F["Apply deterministic health rules"]
+    F --> G{"Finding supported now?"}
+    G -->|Yes| H["Open or refresh finding"]
+    G -->|No| I["Resolve stale finding"]
+    H --> J["Create diagnostic recommendation"]
+    J --> K["Idempotent Telegram outbox"]
+    I --> K
+    K --> L["Alert, recovery, daily, or weekly report"]
+    J -.-> M["No automatic production change"]`}
+/>
+
 Scheduled evaluations claim a PostgreSQL advisory lease so multiple containers
 cannot run the same due interval. Daily and weekly reports are placed in the
 persistent Telegram outbox with per-run/per-chat idempotency and transient retry.

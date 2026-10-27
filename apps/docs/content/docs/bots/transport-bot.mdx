@@ -26,6 +26,25 @@ It never bids, accepts jobs, or contacts customers.
 
 ## Architecture and flow
 
+<Mermaid
+  label="Transport compatibility, routing, and alert workflow"
+  chart={`flowchart LR
+    A["Manual search or proactive discovery"] --> B["Normalize cargo and trip request"]
+    B --> C{"Dimensions and weight known?"}
+    C -->|No| D["Mark incompatible or incomplete"]
+    C -->|Yes| E["Check vehicle compatibility"]
+    E --> F["Request OSRM-compatible route"]
+    F --> G{"Already-planned trip?"}
+    G -->|Yes| H["Calculate incremental distance and time"]
+    G -->|No| I["Calculate full route"]
+    H --> J["Estimate fuel with EC bulletin and CNB rate"]
+    I --> J
+    J --> K["Shared deterministic evaluator"]
+    K --> L{"Useful compatible result?"}
+    L -->|No| M["Persist without scheduled filler"]
+    L -->|Yes| N["Telegram recommendation"]`}
+/>
+
 Manual search and proactive discovery share one evaluator. Cargo dimensions and
 weight must be known before compatibility passes. Planned-trip recommendations
 charge incremental distance and time. Routing uses an OSRM-compatible service;

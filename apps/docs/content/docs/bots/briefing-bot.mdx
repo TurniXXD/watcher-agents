@@ -46,6 +46,26 @@ a compact Telegram index.
 
 ## Architecture and flow
 
+<Mermaid
+  label="Briefing generation and reflection workflow"
+  chart={`flowchart LR
+    A["Schedule, manual command, or test"] --> B["Claim one briefing run"]
+    B --> C["Load contexts in parallel"]
+    C --> C1["Weather and Calendar"]
+    C --> C2["Stocks, goals, and events"]
+    C --> C3["Previous-day journal context"]
+    C1 --> D["Cluster and rank persisted events"]
+    C2 --> D
+    C3 --> D
+    D --> E["Generate validated spoken script"]
+    E --> F["Piper speech synthesis"]
+    F --> G["Idempotent Telegram audio and index"]
+    H["Reflection answer"] --> I["Persist question state immediately"]
+    I --> J{"More questions?"}
+    J -->|Yes| H
+    J -->|No| K["Complete original journal date"]`}
+/>
+
 `BriefingCoordinator` loads independent contexts in parallel, clusters and ranks
 persisted events, calls `BriefingScriptGenerator`, then passes the script through
 Piper and the idempotent delivery service. Scheduled, manual, and test runs share

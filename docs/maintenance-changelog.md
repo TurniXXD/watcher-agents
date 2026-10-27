@@ -2,6 +2,12 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-27 — Bot workflow diagrams
+
+- Added a code-backed Mermaid workflow diagram to every detailed Applications documentation page, with accessible labels and horizontally scrollable full-size rendering in both light and dark themes.
+- Expanded the Jobs Bot diagram to show collection, canonicalization, ordered hard blockers, scoring, application-link expiry checks, and alert gates.
+- Expanded Networking and Sales diagrams to distinguish contact capture, event follow-up, controlled outbound, campaign-free CRM import, and inbound-lead notification boundaries.
+
 ## 2026-10-27 — Application-link expiry checks
 
 - Jobs Bot now verifies the exact application URL before every new matching alert, including same-host links such as Agoda's Greenhouse pages, and suppresses links confirmed closed by HTTP 404/410 or explicit expiry text.

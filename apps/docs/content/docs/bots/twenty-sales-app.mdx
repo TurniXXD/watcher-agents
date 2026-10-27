@@ -13,6 +13,20 @@ sending, or payment automation. It targets Twenty 2.43 or newer.
 
 ## Architecture
 
+<Mermaid
+  label="Twenty Sales App metadata and inbound lead notification workflow"
+  chart={`flowchart LR
+    A["Versioned app source"] --> B["Twenty CLI plan"]
+    B --> C["Operator applies metadata"]
+    C --> D["Custom Person fields and person.created logic"]
+    D --> E{"Creator EMAIL or lead source CONTACT_FORM?"}
+    E -->|No| F["No inbound notification"]
+    E -->|Yes| G["Authenticated private webhook"]
+    G --> H["Sales Bot validates and deduplicates event"]
+    H --> I["Telegram inbound-lead notification"]
+    J["Sales Bot CRM sync"] -. uses fields when enabled .-> D`}
+/>
+
 This package is a versioned Twenty extension, not a long-running Watcher
 process. The official Twenty CLI plans and applies its metadata and
 `person.created` logic function to a self-hosted workspace. Sales Bot uses the

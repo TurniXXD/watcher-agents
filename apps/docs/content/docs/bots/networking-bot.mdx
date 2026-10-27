@@ -40,6 +40,36 @@ and operational limits. `/help` remains the complete command reference.
 | `/network_followups`                                               | Lists agreed next actions.                                      |
 | Business-card photo                                                | Extracts a draft, checks duplicates, and waits for Save/Cancel. |
 
+## Workflows
+
+<Mermaid
+  label="Networking Bot contact capture and event follow-up workflows"
+  chart={`flowchart TB
+    subgraph Contacts["Contact capture"]
+      direction LR
+      A["Business-card photo or /network_add"] --> B["Ollama extraction or text parsing"]
+      B --> C["Validate 11-field contact draft"]
+      C --> D["Check Google Sheet duplicates"]
+      D --> E["Preview contact and context"]
+      E --> F{"Operator confirms Save?"}
+      F -->|No| G["Cancel without a write"]
+      F -->|Yes| H["Write authoritative Google Sheet row"]
+      H --> I["Search, update, introductions, and follow-ups"]
+      J["Sales Bot compatibility commands"] -. reuse .-> C
+    end
+    subgraph Events["Event to follow-up"]
+      direction LR
+      K["Brno Events Agent plus manual event"] --> L["Normalize and filter in-person events"]
+      L --> M["Telegram recommendations"]
+      M --> N{"Explicit operator action"}
+      N -->|Add to calendar| O["Idempotent Google Calendar event"]
+      N -->|Mark attendance| P["Durable attendance state"]
+      P --> Q["Pre-event and post-event reminders"]
+      Q --> R["Private event contact and approved follow-up"]
+      M -.-> S["Registration link only; never auto-submit"]
+    end`}
+/>
+
 ## Contacts and business cards
 
 The Google Sheet contract has exactly eleven columns, from `Jméno` through

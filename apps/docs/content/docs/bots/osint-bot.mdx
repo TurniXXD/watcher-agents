@@ -35,6 +35,22 @@ as a sourced fact.
 
 ## Architecture and flow
 
+<Mermaid
+  label="OSINT investigation and watch workflow"
+  chart={`flowchart LR
+    A["Authorized investigation or due watch"] --> B["Validate target and scope"]
+    B --> C["Run bounded public collectors in parallel"]
+    C --> D["Normalize evidence with provenance"]
+    D --> E["Conservative entity resolution"]
+    E --> F["Persist entities, relations, and timeline"]
+    F --> G["Optional clearly marked Ollama synthesis"]
+    G --> H["Telegram evidence report"]
+    F --> I["Persisted watch target"]
+    I --> A
+    J["Collector failure"] -.-> K["Partial result with visible failure"]
+    K -.-> D`}
+/>
+
 An investigation fans out over bounded collectors, normalizes evidence with
 provenance, resolves candidate entities conservatively, stores relations and
 timeline events, and renders a Telegram report. Watch polling revisits persisted

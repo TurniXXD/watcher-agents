@@ -3,7 +3,13 @@
 import { useEffect, useId, useState } from 'react';
 import { useTheme } from 'next-themes';
 
-export const Mermaid = ({ chart }: { chart: string }) => {
+export const Mermaid = ({
+  chart,
+  label = 'Workflow diagram',
+}: {
+  chart: string;
+  label?: string;
+}) => {
   const id = useId().replaceAll(':', '');
   const { resolvedTheme } = useTheme();
   const [svg, setSvg] = useState('');
@@ -16,6 +22,7 @@ export const Mermaid = ({ chart }: { chart: string }) => {
         securityLevel: 'strict',
         theme: resolvedTheme === 'dark' ? 'dark' : 'neutral',
         fontFamily: 'inherit',
+        flowchart: { useMaxWidth: false },
       });
       const result = await mermaid.render(`watcher-${id}`, chart.trim());
       if (active) setSvg(result.svg);
@@ -31,8 +38,8 @@ export const Mermaid = ({ chart }: { chart: string }) => {
 
   return (
     <div
-      aria-label="Architecture diagram"
-      className="my-6 overflow-x-auto rounded-xl border bg-fd-card p-4 [&_svg]:mx-auto"
+      aria-label={label}
+      className="my-6 overflow-x-auto rounded-xl border bg-fd-card p-4 [&_svg]:mx-auto [&_svg]:max-w-none"
       role="img"
       dangerouslySetInnerHTML={{ __html: svg }}
     />

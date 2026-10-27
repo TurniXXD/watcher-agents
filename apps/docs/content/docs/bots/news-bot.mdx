@@ -32,6 +32,22 @@ and steer relevance without being presented as sourced facts.
 
 ## Architecture and flow
 
+<Mermaid
+  label="News Bot feed monitoring and briefing event workflow"
+  chart={`flowchart LR
+    A["Configured RSS and Atom feeds"] --> B["Safe HTTP fetch and redirect validation"]
+    B --> C["Validate and normalize entries"]
+    C --> D["Stable deduplication"]
+    D --> E["Bounded Ollama relevance analysis"]
+    E --> F{"Useful new event?"}
+    F -->|No| G["Persist run result; no empty scheduled digest"]
+    F -->|Yes| H["Persist evidence and event"]
+    H --> I["Telegram digest"]
+    H --> J["Briefing Bot context"]
+    K["One feed fails"] -.-> L["Record source failure"]
+    L -.-> C`}
+/>
+
 Feed adapters use safe HTTP behavior and validate redirects against private,
 loopback, link-local, and unsafe targets. Entries normalize into the common
 watcher shape before deduplication and bounded Ollama analysis. Useful events are

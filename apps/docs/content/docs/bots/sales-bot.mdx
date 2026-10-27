@@ -50,6 +50,30 @@ Bot.
 
 ## Architecture and flow
 
+<Mermaid
+  label="Sales Bot discovery, approval, CRM, and inbound lead workflows"
+  chart={`flowchart LR
+    W["Sales Bot workflows"] --> A["Outbound campaign or /lead URL"]
+    A --> C["Discover, validate, deduplicate, audit, and research"]
+    C --> E["Score lead and prepare draft"]
+    E --> F{"Qualified and explicitly approved?"}
+    F -->|No| G["Keep research; do not contact"]
+    F -->|Yes| H{"Consent evidence, no suppression, capacity available?"}
+    H -->|No| I["Fail closed"]
+    H -->|Yes| J["Enroll in Quickly"]
+    C --> K["Optional Twenty Company and Note sync"]
+    W --> L["Campaign-free /sales_prospects"]
+    L --> M["Find public e-mail and explicit tel link"]
+    M --> N["Upsert Twenty Company and sourced Note"]
+    N --> O["No campaign, draft, approval, or outreach"]
+    W --> P["Twenty person.created"]
+    P --> Q{"Creator EMAIL or source CONTACT_FORM?"}
+    Q -->|No| R["Ignore manual and ordinary imports"]
+    Q -->|Yes| S["Authenticated Sales webhook"]
+    S --> T["Idempotent Telegram notification"]
+    U["Networking contact commands"] -. shared compatibility surface .-> C`}
+/>
+
 Discovery maps a Czech or English business description to validated Geoapify and
 CZ-NACE categories, queries providers, enriches public sites, records evidence,
 and scores leads. Periodic search stores its cursor and emits only new contacts.

@@ -14,6 +14,22 @@ used by Briefing and Networking Bot.
 
 ## Architecture and flow
 
+<Mermaid
+  label="Brno event collection and consumer workflow"
+  chart={`flowchart LR
+    A["Due enabled providers"] --> B["Fetch independently"]
+    B --> C["Parse and validate each source"]
+    C --> D["Normalize event occurrences"]
+    D --> E["Cross-source deduplication"]
+    E --> F["Relevance evaluation"]
+    F --> G[("PostgreSQL events and source health")]
+    G --> H["Authenticated briefing API"]
+    H --> I["Briefing Bot"]
+    G --> J["Networking recommendations"]
+    K["One provider fails"] -.-> L["Record source failure"]
+    L -.-> B`}
+/>
+
 Each provider has its own enable switch, interval, URL, parser, and source-health
 record. Due providers run independently; failures remain visible and do not
 cancel successful sources. Manual source runs reuse the scheduled pipeline.

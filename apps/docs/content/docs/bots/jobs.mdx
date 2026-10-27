@@ -78,6 +78,33 @@ persisted, daylight-saving-aware schedules.
 | Optional Notion `Job Opportunities` database             | Idempotent mirror of all evaluated vacancies and rejection evidence.                     |
 | Optional Ollama/OpenAI-compatible endpoint               | Adds bounded nuance; cannot remove deterministic blockers.                               |
 
+## Matching workflow
+
+<Mermaid
+  label="Jobs Bot collection, filtering, scoring, and alert workflow"
+  chart={`flowchart LR
+    A["1. Enabled sources discover independently"] --> B["2. Validate, normalize, and deduplicate"]
+    B --> E{"3. New, changed, or detail stale?"}
+    E -->|Yes| F["Fetch bounded detail"]
+    E -->|No| G["Reuse stored detail"]
+    F --> H["4. Persist observation and canonical job"]
+    G --> H
+    H --> I["5. Collect hard blockers in order:<br/>degree/language → seniority/experience →<br/>graduate/geography/role → technology"]
+    I --> J{"Any hard blocker?"}
+    J -->|Yes| K["INELIGIBLE: persist evidence, no alert"]
+    J -->|No| L["6. Record uncertainties and weighted score"]
+    L --> M{"7. New job and score at notify threshold?"}
+    M -->|No| N["Store for search and reevaluation"]
+    M -->|Yes| O["8. Check exact application URL"]
+    O --> P{"Confirmed closed?"}
+    P -->|Yes| Q["Mark closed and suppress alert"]
+    P -->|No or unknown| R["Reserve idempotent notification"]
+    R --> S["Telegram and optional e-mail digest"]
+    H --> I1
+    H --> T["Idempotent Notion mirror when configured"]
+    I1["Extract structured requirements"] -. evidence .-> I`}
+/>
+
 ## Collection contract
 
 Listing discovery uses conditional HTTP requests, timeouts, bounded retries,
