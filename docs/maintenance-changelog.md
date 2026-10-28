@@ -2,6 +2,17 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-28 — Czech job portal connectors
+
+- Enabled Jobs.cz, Prace.cz, Práce za rohem, JenPráce, Jobsi, Jobstack, and CoolJobs through their permitted public IT listings, sitemaps, structured data, and public detail pages.
+- Bounded sitemap imports to the latest 250 URLs, rate-limited detail enrichment, isolated category failures, and kept Jobs.cz internal APIs, account areas, reply endpoints, and application submission out of scope.
+- Added strict boundary validation and parser regression coverage so language, experience, education, location, and technology filters receive the available public vacancy text.
+
+## 2026-10-28 — Required Python skill exclusion
+
+- Jobs Bot now rejects mixed-stack vacancies when Python expertise is a strong or mandatory requirement, while optional Python mentions do not block otherwise matching TypeScript/Node.js roles.
+- A specific incompatible remote country now overrides a simultaneous broad region such as Europe, preventing Romania-only vacancies from being treated as generally European remote roles.
+
 ## 2026-10-27 — Job source inventory and documentation icon
 
 - Added a complete Jobs Bot source inventory that distinguishes built-in active adapters, implemented ATS connectors requiring tenant configuration, and unavailable portals needing a permitted connector.

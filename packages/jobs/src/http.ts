@@ -133,13 +133,13 @@ export const verifyJobAvailability = async (
     )
       return 'CLOSED_CONFIRMED';
     if (
-      /\b(?:position|role|vacancy|job)(?:\s+posting)?\b[^.!?\n]{0,100}\b(?:filled|closed|expired|no longer (?:available|open))\b|\bno longer accepting applications?\b|applications? (?:are )?closed/iu.test(
+      /\b(?:position|role|vacancy|job)(?:\s+posting)?\b[^.!?\n]{0,100}\b(?:filled|closed|expired|no longer (?:available|open))\b|\bno longer accepting applications?\b|applications? (?:are )?closed|(?:nabídka|inzerát|pozice)[^.\n]{0,100}(?:již není (?:aktivní|aktuální|dostupná)|byla obsazena|expiroval[ao]?)/iu.test(
         text,
       )
     )
       return 'CLOSED_CONFIRMED';
     if (
-      /\b(?:apply now|apply for (?:this|the) (?:job|position)|submit (?:your )?application)\b/iu.test(
+      /\b(?:apply now|apply for (?:this|the) (?:job|position)|submit (?:your )?application|odpovědět na nabídku|reagovat na nabídku|mám zájem)\b/iu.test(
         text,
       )
     )

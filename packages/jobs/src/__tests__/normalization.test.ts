@@ -45,7 +45,7 @@ describe('job normalization and identity', () => {
 
   it('keeps stable source IDs and explicit unsupported sources', () => {
     const definitions = createJobSourceDefinitions();
-    expect(definitions.filter((source) => source.adapter)).toHaveLength(15);
+    expect(definitions.filter((source) => source.adapter)).toHaveLength(22);
     expect(
       definitions.find((source) => source.id === 'remote-backend-jobs'),
     ).toMatchObject({ enabledByDefault: true, strategy: 'API' });

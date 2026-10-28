@@ -25,7 +25,7 @@ export const candidateProfileSchema = z
       .default(['Next.js', 'React.js', 'Node.js', 'TypeScript']),
     excludedTechnologies: z
       .array(z.string())
-      .default(['PHP', 'Java', 'C++', 'Go', '.NET', 'Svelte']),
+      .default(['PHP', 'Java', 'C++', 'Go', '.NET', 'Svelte', 'Python']),
     adjacentRoles: z
       .array(z.string())
       .default([
@@ -170,7 +170,7 @@ export type JobSourceAdapter = {
   id: string;
   name: string;
   baseUrl: string;
-  strategy: 'API' | 'RSS' | 'ATS' | 'SITEMAP';
+  strategy: 'API' | 'RSS' | 'ATS' | 'SITEMAP' | 'HTML';
   attribution: string;
   fetchIntervalMinutes: number;
   rateLimitPerMinute: number;

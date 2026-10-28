@@ -67,7 +67,15 @@ const defaultProfile = {
     'Android Developer',
   ],
   requiredTechnologies: ['Next.js', 'React.js', 'Node.js', 'TypeScript'],
-  excludedTechnologies: ['PHP', 'Java', 'C++', 'Go', '.NET', 'Svelte'],
+  excludedTechnologies: [
+    'PHP',
+    'Java',
+    'C++',
+    'Go',
+    '.NET',
+    'Svelte',
+    'Python',
+  ],
   adjacentRoles: [
     'Forward Deployed Engineer',
     'Forward Deployed Project Manager',

@@ -18,7 +18,7 @@ const mandatory = (text: string, subject: RegExp): boolean => {
       )
     )
       return false;
-    return /required|must|mandatory|need(?:ed)?|minimum|fluent|proficien/iu.test(
+    return /required|must|mandatory|need(?:ed)?|minimum|fluent|proficien|strong|expert(?:ise)?/iu.test(
       sentence,
     );
   });
@@ -191,6 +191,26 @@ const locationCompatibility = (
       return { compatible: false, explicitBlocker: true, uncertain: false };
     const evidence =
       regionValues.length > 0 ? regionValues : [location].filter(Boolean);
+    const allowedCountries =
+      profile.preferredLocations.countries.map(normalizeText);
+    const structuredCountryValues = [
+      ...regionValues.filter((value) => countryNames.includes(value)),
+      ...(country ? [country] : []),
+      ...countryNames.filter(
+        (countryName) =>
+          location === countryName ||
+          location.endsWith(` ${countryName}`) ||
+          location.includes(`, ${countryName}`),
+      ),
+    ];
+    const hasIncompatibleSpecificCountry = structuredCountryValues.some(
+      (value) =>
+        !allowedCountries.some(
+          (country) => value.includes(country) || country.includes(value),
+        ),
+    );
+    if (hasIncompatibleSpecificCountry)
+      return { compatible: false, explicitBlocker: true, uncertain: false };
     if (evidence.some(allowed))
       return { compatible: true, explicitBlocker: false, uncertain: false };
     if (regionValues.length > 0 && evidence.some((value) => !allowed(value)))

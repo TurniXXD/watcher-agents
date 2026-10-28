@@ -166,12 +166,16 @@ export class JobStore {
         !('requiredTechnologies' in existingData) ||
         !('excludedTechnologies' in existingData) ||
         !('adjacentRoles' in existingData) ||
-        !('preferredContractTypes' in existingData);
+        !('preferredContractTypes' in existingData) ||
+        !profileFromRow(existing).excludedTechnologies.some(
+          (technology) => normalizeText(technology) === 'python',
+        );
       if (!needsPreferenceMigration)
         return { row: existing, profile: profileFromRow(existing) };
 
       const migrated = candidateProfileSchema.parse({
         ...profileFromRow(existing),
+        excludedTechnologies: profile.excludedTechnologies,
         preferredContractTypes: profile.preferredContractTypes,
         preferredLocations: profile.preferredLocations,
       });

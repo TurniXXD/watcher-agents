@@ -87,6 +87,13 @@ verified permitted integration. Runtime health such as `DEGRADED` or
 | `jobicy`                   | Jobicy                            | `ACTIVE`             | Public remote-jobs JSON API plus batch status endpoint; only explicitly active listings are ingested. |
 | `working-nomads`           | Working Nomads                    | `ACTIVE`             | Public exposed-jobs JSON API.                                                                         |
 | `remote-ok`                | Remote OK                         | `ACTIVE`             | Public JSON API; missing region eligibility remains unknown.                                          |
+| `cooljobs-eu`              | CoolJobs.eu                       | `ACTIVE`             | Public active-position listing plus rate-limited public detail metadata.                              |
+| `prace-za-rohem`           | Práce za rohem                    | `ACTIVE`             | Public IT category pages and validated server-rendered listing/detail data.                           |
+| `jobs-cz`                  | Jobs.cz                           | `ACTIVE`             | Public IT category cards and rate-limited public detail pages; blocked internal APIs are not used.    |
+| `prace-cz`                 | Prace.cz                          | `ACTIVE`             | Public IT category pages plus rate-limited `schema.org/JobPosting` detail data.                       |
+| `jobstack-it`              | Jobstack.it                       | `ACTIVE`             | Public sitemap plus rate-limited semantic job detail pages.                                           |
+| `jobsi-cz`                 | Jobsi.cz                          | `ACTIVE`             | Public sitemap plus rate-limited public job detail pages.                                             |
+| `jenprace-cz`              | JenPrace.cz                       | `ACTIVE`             | Official offers sitemap plus rate-limited `schema.org/JobPosting` detail data.                        |
 | `greenhouse`               | Greenhouse curated boards         | `CONNECTOR_REQUIRED` | Configure public board tokens with `JOBS_GREENHOUSE_BOARDS`.                                          |
 | `lever`                    | Lever curated boards              | `CONNECTOR_REQUIRED` | Configure public site names with `JOBS_LEVER_SITES`.                                                  |
 | `ashby`                    | Ashby curated boards              | `CONNECTOR_REQUIRED` | Configure public board names with `JOBS_ASHBY_BOARDS`.                                                |
@@ -94,15 +101,8 @@ verified permitted integration. Runtime health such as `DEGRADED` or
 | `workable`                 | Workable companies                | `CONNECTOR_REQUIRED` | Configure public account subdomains with `JOBS_WORKABLE_ACCOUNTS`.                                    |
 | `recruitee`                | Recruitee companies               | `CONNECTOR_REQUIRED` | Configure public company subdomains with `JOBS_RECRUITEE_COMPANIES`.                                  |
 | `teamtailor`               | Teamtailor career sites           | `CONNECTOR_REQUIRED` | Configure public career-site domains with `JOBS_TEAMTAILOR_DOMAINS`.                                  |
-| `cooljobs-eu`              | CoolJobs.eu                       | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
-| `prace-za-rohem`           | Práce za rohem                    | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
 | `linkedin`                 | LinkedIn Jobs                     | `UNAVAILABLE`        | A permitted public job-seeker connector is needed; logged-in automation/scraping is unsupported.      |
-| `jobs-cz`                  | Jobs.cz                           | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
-| `prace-cz`                 | Prace.cz                          | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
-| `jobstack-it`              | Jobstack.it                       | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
 | `welcome-to-the-jungle`    | Welcome to the Jungle             | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
-| `jobsi-cz`                 | Jobsi.cz                          | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
-| `jenprace-cz`              | JenPrace.cz                       | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
 | `jobs-ch`                  | Jobs.ch                           | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
 | `jobscout24-ch`            | JobScout24.ch                     | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
 | `english-speaking-jobs-ch` | English Speaking Jobs Switzerland | `UNAVAILABLE`        | Robots disallows automated category access and no permitted public feed/API is published.             |
@@ -113,6 +113,12 @@ verified permitted integration. Runtime health such as `DEGRADED` or
 
 The repository rule and regression test require every future registry change
 to update this inventory and the Jobs Bot README in the same change.
+
+The Czech HTML connectors are deliberately bounded: category-based sources
+read only their public IT listings, sitemap sources retain at most the latest
+250 active URLs, and detail requests are rate-limited and performed only for
+new, changed, or stale jobs. Jobs.cz's disallowed internal API, private account
+areas, reply endpoints, and application submission are never accessed.
 
 ### Service integrations
 
@@ -206,7 +212,8 @@ blockers, uncertainties, and its weighted breakdown.
 
 The default profile requires evidence of Next.js, React.js, Node.js, or
 TypeScript for engineering vacancies and rejects roles centered on PHP, Java,
-C++, Go, .NET, or Svelte. Explicit adjacent paths remain eligible without a
+C++, Go, .NET, Svelte, or requiring strong Python skills. Explicit adjacent
+paths remain eligible without a
 target-stack keyword: Forward Deployed Engineer, Forward Deployed Project
 Manager, Technical Project/Program Manager, Implementation Engineer, and
 Solutions Engineer. Digests and `/jobs_latest` are ordered from highest to

@@ -18,7 +18,15 @@ const profile = candidateProfileSchema.parse({
   ],
   avoidedRoles: ['Helpdesk', 'Recruiter'],
   requiredTechnologies: ['Next.js', 'React.js', 'Node.js', 'TypeScript'],
-  excludedTechnologies: ['PHP', 'Java', 'C++', 'Go', '.NET', 'Svelte'],
+  excludedTechnologies: [
+    'PHP',
+    'Java',
+    'C++',
+    'Go',
+    '.NET',
+    'Svelte',
+    'Python',
+  ],
   adjacentRoles: [
     'Forward Deployed Engineer',
     'Forward Deployed Project Manager',
@@ -223,6 +231,20 @@ describe('deterministic job evaluation', () => {
     expect(result.hardBlockers).toContain('Incompatible geography');
   });
 
+  it('rejects a country-only restriction even when a broader allowed region is also present', () => {
+    const result = evaluateJob(
+      job('Remote full-stack role for candidates in Romania.', {
+        location: 'Europe, Romania',
+        country: 'Romania',
+        workMode: 'REMOTE',
+        remoteRegions: ['Europe'],
+      }),
+      profile,
+    );
+    expect(result.eligibility).toBe('INELIGIBLE');
+    expect(result.hardBlockers).toContain('Incompatible geography');
+  });
+
   it('rejects a foreign onsite role even when it has no residence wording', () => {
     const result = evaluateJob(
       job('The working language is English B2.', {
@@ -339,6 +361,39 @@ describe('deterministic job evaluation', () => {
       profile,
     );
     expect(result.hardBlockers).toContain('Missing required target technology');
+  });
+
+  it('rejects a mixed-stack role that requires strong Python and FastAPI skills', () => {
+    const result = evaluateJob(
+      job(
+        'Build applications using Python, FastAPI, React, TypeScript and Node.js. Strong Python skills and experience with FastAPI are required.',
+        {
+          title: 'Senior Software Engineer',
+          technologyStack: [
+            'Python',
+            'FastAPI',
+            'React',
+            'TypeScript',
+            'Node.js',
+          ],
+        },
+      ),
+      profile,
+    );
+    expect(result.eligibility).toBe('INELIGIBLE');
+    expect(result.hardBlockers).toContain(
+      'Mandatory excluded technology: Python',
+    );
+  });
+
+  it('does not reject an incidental optional Python mention', () => {
+    const result = evaluateJob(
+      job('Build the Node.js platform. Familiarity with Python is a plus.'),
+      profile,
+    );
+    expect(result.hardBlockers).not.toContain(
+      'Mandatory excluded technology: Python',
+    );
   });
 
   it('accepts target technology supplied by structured stack metadata', () => {

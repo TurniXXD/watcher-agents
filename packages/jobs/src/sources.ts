@@ -6,6 +6,15 @@ import {
   type AtsSourceConfiguration,
 } from './ats-sources.js';
 import { createDeveloperJobsAdapter } from './developerjobs-source.js';
+import {
+  createCoolJobsAdapter,
+  createJenPraceAdapter,
+  createJobsCzAdapter,
+  createJobsiAdapter,
+  createJobstackAdapter,
+  createPraceCzAdapter,
+  createPraceZaRohemAdapter,
+} from './czech-job-sources.js';
 import { fetchJobSource, responseCheckpoint } from './http.js';
 import {
   canonicalizeUrl,
@@ -507,6 +516,13 @@ export const createJobSourceDefinitions = (
     createJobicyAdapter(),
     workingNomadsAdapter(),
     remoteOkAdapter(),
+    createCoolJobsAdapter(),
+    createPraceZaRohemAdapter(),
+    createJobsCzAdapter(),
+    createPraceCzAdapter(),
+    createJobstackAdapter(),
+    createJobsiAdapter(),
+    createJenPraceAdapter(),
   ];
   const definitions: JobSourceDefinition[] = enabled.map((adapter) => ({
     id: adapter.id,
@@ -520,19 +536,12 @@ export const createJobSourceDefinitions = (
     adapter,
   }));
   const unsupported = [
-    ['cooljobs-eu', 'CoolJobs.eu', 'https://www.cooljobs.eu'],
-    ['prace-za-rohem', 'Práce za rohem', 'https://www.pracezarohem.cz'],
     ['linkedin', 'LinkedIn', 'https://www.linkedin.com/jobs'],
-    ['jobs-cz', 'Jobs.cz', 'https://www.jobs.cz'],
-    ['prace-cz', 'Prace.cz', 'https://www.prace.cz'],
-    ['jobstack-it', 'Jobstack.it', 'https://www.jobstack.it'],
     [
       'welcome-to-the-jungle',
       'Welcome to the Jungle',
       'https://www.welcometothejungle.com',
     ],
-    ['jobsi-cz', 'Jobsi.cz', 'https://www.jobsi.cz'],
-    ['jenprace-cz', 'JenPrace.cz', 'https://www.jenprace.cz'],
     ['jobs-ch', 'Jobs.ch', 'https://www.jobs.ch'],
     ['jobscout24-ch', 'JobScout24.ch', 'https://www.jobscout24.ch'],
     [

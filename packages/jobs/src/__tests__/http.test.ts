@@ -98,6 +98,28 @@ describe('job source HTTP client', () => {
     ).resolves.toBe('CLOSED_CONFIRMED');
   });
 
+  it('recognizes explicit Czech open and expired vacancy evidence', async () => {
+    const open = await verifyJobAvailability(
+      'https://8.8.8.8/job',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          new Response('<button>Odpovědět na nabídku</button>'),
+        ),
+    );
+    const closed = await verifyJobAvailability(
+      'https://8.8.8.8/job',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response('Tato nabídka již není aktuální.')),
+    );
+
+    expect({ open, closed }).toEqual({
+      open: 'OPEN_CONFIRMED',
+      closed: 'CLOSED_CONFIRMED',
+    });
+  });
+
   it('recognizes Greenhouse expired pages from their canonical error URL', async () => {
     await expect(
       verifyJobAvailability(
