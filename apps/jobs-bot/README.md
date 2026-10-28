@@ -25,25 +25,64 @@ Every Telegram update is checked against `TELEGRAM_ALLOWED_USER_IDS`.
 
 ## Sources
 
-| Source                                                  | Method                                       | Default  | Notes                                                                                                                       |
-| ------------------------------------------------------- | -------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Remote Frontend Jobs                                    | Public JSON API + detail endpoint            | Enabled  | Frontend board; attribution retained; detail fetched only for new/changed/stale listings.                                   |
-| Remote Backend Jobs                                     | Public JSON API + detail endpoint            | Enabled  | Backend board; shares the documented public API and detail contract.                                                        |
-| Himalayas                                               | Official RSS                                 | Enabled  | Feed contains the latest remote vacancies.                                                                                  |
-| Startup Jobs (`startup.jobs`)                           | Official engineering RSS                     | Enabled  | This is not StartupJobs.cz.                                                                                                 |
-| StartupJobs.cz                                          | Official offers sitemap + JobPosting JSON-LD | Enabled  | Public, robots-permitted pages only; details are rate-limited and refreshed only for new/changed/stale listings.            |
-| Agoda Careers                                           | Public Greenhouse Job Board API              | Enabled  | Built-in `agoda` board; Agoda's careers catalog labels its vacancies hybrid; no token or tenant env is required.            |
-| RemoteFirstJobs                                         | Official RSS                                 | Enabled  | Broad remote-jobs feed; eligibility is still evaluated from the listing text.                                               |
-| Remote OK                                               | Public JSON API                              | Enabled  | Remote eligibility remains unverified unless the listing states a region.                                                   |
-| Greenhouse, Lever, Ashby, SmartRecruiters               | Official public ATS endpoints                | Config   | Enabled when the corresponding board/site/company identifiers are configured.                                               |
-| Workable, Recruitee, Teamtailor                         | Public career endpoint / RSS                 | Config   | Enabled only for explicit public account/domain identifiers; no tenant discovery or HTML scraping.                          |
-| DeveloperJobs.ch, CoolJobs.eu, Práce za rohem, LinkedIn | None                                         | Disabled | No verified permitted public job-seeker feed/API is configured. LinkedIn logged-in automation is intentionally unsupported. |
+This inventory is authoritative for the repository. `ACTIVE` means the built-in
+adapter is enabled by default, although the operator can still turn it off with
+`/jobs_source`. `CONNECTOR_REQUIRED` means the adapter exists but remains
+unavailable until explicit public tenant identifiers are configured.
+`UNAVAILABLE` means no verified permitted integration is currently configured.
+Live health such as `HEALTHY`, `DEGRADED`, or `RATE_LIMITED` is reported by
+`/jobs_sources`; it is separate from the integration state below.
 
-The adapter registry is extensible. Do not enable a new HTML/browser collector until its current public collection method and terms have been reviewed. A source error is isolated and does not cancel other adapters.
+| Source ID                  | Provider                          | Integration state    | Collection method or connector needed                                                                 |
+| -------------------------- | --------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
+| `remote-frontend-jobs`     | Remote Frontend Jobs              | `ACTIVE`             | Public JSON listing API plus detail endpoint.                                                         |
+| `remote-backend-jobs`      | Remote Backend Jobs               | `ACTIVE`             | Public JSON listing API plus detail endpoint.                                                         |
+| `himalayas`                | Himalayas                         | `ACTIVE`             | Official public RSS feed.                                                                             |
+| `startup-jobs`             | Startup Jobs (`startup.jobs`)     | `ACTIVE`             | Official engineering RSS feed; distinct from StartupJobs.cz.                                          |
+| `remote-first-jobs`        | RemoteFirstJobs                   | `ACTIVE`             | Official public software-development RSS feed.                                                        |
+| `we-work-remotely`         | We Work Remotely                  | `ACTIVE`             | Official public remote-programming RSS feed.                                                          |
+| `remotive`                 | Remotive                          | `ACTIVE`             | Official public RSS feed.                                                                             |
+| `swissdevjobs`             | SwissDevJobs                      | `ACTIVE`             | Official public RSS feed.                                                                             |
+| `startupjobs-cz`           | StartupJobs.cz                    | `ACTIVE`             | Official active-offers sitemap plus rate-limited `schema.org/JobPosting` detail data.                 |
+| `agoda-careers`            | Agoda Careers                     | `ACTIVE`             | Fixed public `agoda` Greenhouse board; no tenant variable is required.                                |
+| `developerjobs-ch`         | DeveloperJobs.ch                  | `ACTIVE`             | Provider-owned English RSS plus rate-limited `schema.org/JobPosting` detail data.                     |
+| `arbeitnow`                | Arbeitnow                         | `ACTIVE`             | Public European jobs JSON API.                                                                        |
+| `jobicy`                   | Jobicy                            | `ACTIVE`             | Public remote-jobs JSON API plus batch status endpoint; only explicitly active listings are ingested. |
+| `working-nomads`           | Working Nomads                    | `ACTIVE`             | Public exposed-jobs JSON API.                                                                         |
+| `remote-ok`                | Remote OK                         | `ACTIVE`             | Public JSON API; missing region eligibility remains unknown.                                          |
+| `greenhouse`               | Greenhouse curated boards         | `CONNECTOR_REQUIRED` | Add public board tokens to `JOBS_GREENHOUSE_BOARDS`.                                                  |
+| `lever`                    | Lever curated boards              | `CONNECTOR_REQUIRED` | Add public site names to `JOBS_LEVER_SITES`.                                                          |
+| `ashby`                    | Ashby curated boards              | `CONNECTOR_REQUIRED` | Add public board names to `JOBS_ASHBY_BOARDS`.                                                        |
+| `smartrecruiters`          | SmartRecruiters companies         | `CONNECTOR_REQUIRED` | Add public company identifiers to `JOBS_SMARTRECRUITERS_COMPANIES`.                                   |
+| `workable`                 | Workable companies                | `CONNECTOR_REQUIRED` | Add public account subdomains to `JOBS_WORKABLE_ACCOUNTS`.                                            |
+| `recruitee`                | Recruitee companies               | `CONNECTOR_REQUIRED` | Add public company subdomains to `JOBS_RECRUITEE_COMPANIES`.                                          |
+| `teamtailor`               | Teamtailor career sites           | `CONNECTOR_REQUIRED` | Add public career-site domains to `JOBS_TEAMTAILOR_DOMAINS`.                                          |
+| `cooljobs-eu`              | CoolJobs.eu                       | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `prace-za-rohem`           | Práce za rohem                    | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `linkedin`                 | LinkedIn Jobs                     | `UNAVAILABLE`        | A permitted public job-seeker connector is needed; logged-in automation/scraping is unsupported.      |
+| `jobs-cz`                  | Jobs.cz                           | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `prace-cz`                 | Prace.cz                          | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `jobstack-it`              | Jobstack.it                       | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `welcome-to-the-jungle`    | Welcome to the Jungle             | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `jobsi-cz`                 | Jobsi.cz                          | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `jenprace-cz`              | JenPrace.cz                       | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `jobs-ch`                  | Jobs.ch                           | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `jobscout24-ch`            | JobScout24.ch                     | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `english-speaking-jobs-ch` | English Speaking Jobs Switzerland | `UNAVAILABLE`        | Robots disallows automated category access and no permitted public feed/API is published.             |
+| `ictcareer-ch`             | ICTcareer.ch                      | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `wellfound`                | Wellfound                         | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `flexjobs`                 | FlexJobs                          | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
+| `eures`                    | EURES                             | `UNAVAILABLE`        | Recognized EURES partner authorization and its vacancy-export connector are required.                 |
+
+The adapter registry is extensible. Every registry change must update this
+table, the versioned Jobs Bot docs, and the inventory regression test in the
+same change. Do not enable a new HTML/browser collector until its current
+public collection method and terms have been reviewed. A source error is
+isolated and does not cancel other adapters.
 
 ## Matching
 
-The validated initial profile contains the supplied Jakub Vantuch CV facts, links, preferred cities, five years of development experience, and six engagements. Agency work is stored with a separate `via` field and is never represented as direct employment. Set `JOBS_CANDIDATE_NAME`, supply the complete `JOBS_CANDIDATE_PROFILE_JSON`, or edit the persisted profile with authorized `/jobs_profile`. The default profile requires evidence of Next.js, React.js, Node.js, or TypeScript, except for explicitly allowed adjacent roles such as Forward Deployed Engineer, Forward Deployed Project Manager, Technical Project Manager/Program Manager, Implementation Engineer, and Solutions Engineer. Roles centered on PHP, Java, C++, Go, .NET, or Svelte are rejected. The engine also hard-rejects Staff engineering titles, requirements above the profile's five years, explicit mandatory degrees, unqualified listings of a Computer Science or related bachelor/BS/BSc/BCS requirement, any mandatory language other than English, country-only remote restrictions outside configured eligible regions, graduate-only roles, and clearly unrelated roles. Preferred degrees and degree-or-equivalent-experience wording remain eligible. A foreign onsite or hybrid location is allowed when the listing does not impose an incompatible residence restriction and English is sufficient. Missing or ambiguous facts become `UNCERTAIN`, not invented facts. Digests and `/jobs_latest` are ordered by match score from highest to lowest.
+The validated initial profile contains the supplied Jakub Vantuch CV facts, links, preferred cities, five years of development experience, and six engagements. Agency work is stored with a separate `via` field and is never represented as direct employment. Set `JOBS_CANDIDATE_NAME`, supply the complete `JOBS_CANDIDATE_PROFILE_JSON`, or edit the persisted profile with authorized `/jobs_profile`. The default profile requires evidence of Next.js, React.js, Node.js, or TypeScript, except for explicitly allowed adjacent roles such as Forward Deployed Engineer, Forward Deployed Project Manager, Technical Project Manager/Program Manager, Implementation Engineer, and Solutions Engineer. Roles centered on PHP, Java, C++, Go, .NET, or Svelte are rejected. The engine also hard-rejects Staff engineering titles, requirements above the profile's five years, explicit mandatory degrees, unqualified listings of a Computer Science or related bachelor/BS/BSc/BCS requirement, any mandatory language other than English, remote vacancies restricted outside Europe/EU/Czechia, every hybrid vacancy, onsite vacancies outside Czechia, graduate-only roles, and clearly unrelated roles. Preferred degrees and degree-or-equivalent-experience wording remain eligible. Missing remote eligibility remains `UNCERTAIN`, not invented. Full-remote vacancies receive the highest location score; IČO, B2B, contractor, freelance, and contract arrangements receive the conditions preference. Digests and `/jobs_latest` are ordered by match score from highest to lowest.
 
 Weights are technology 30, experience 20, role 15, location 15, language 10, career direction 5, and conditions 5. Defaults: excellent 85, strong 70, possible 55, notification 70. A profile version plus job content hash caches evaluations.
 

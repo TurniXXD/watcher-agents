@@ -36,12 +36,15 @@ export const candidateProfileSchema = z
         'Implementation Engineer',
         'Solutions Engineer',
       ]),
+    preferredContractTypes: z
+      .array(z.string())
+      .default(['IČO', 'ICO', 'B2B', 'contractor', 'freelance', 'contract']),
     preferredLocations: z.object({
       countries: z.array(z.string()).default(['Czechia']),
       regions: z.array(z.string()).default(['Europe', 'EU', 'Worldwide']),
       cities: z.array(z.string()).default([]),
       remote: z.boolean().default(true),
-      hybrid: z.boolean().default(true),
+      hybrid: z.boolean().default(false),
       onsite: z.boolean().default(true),
     }),
     skills: z.array(

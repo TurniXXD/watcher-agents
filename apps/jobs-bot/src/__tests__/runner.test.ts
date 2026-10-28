@@ -17,6 +17,7 @@ const profile: CandidateProfile = {
   requiredTechnologies: [],
   excludedTechnologies: [],
   adjacentRoles: [],
+  preferredContractTypes: ['IČO', 'B2B'],
   preferredLocations: {
     countries: ['Czechia'],
     regions: ['Europe'],
@@ -199,8 +200,9 @@ describe('JobDiscoveryRunner orchestration', () => {
       location: 'Brno, Czechia',
       country: 'Czechia',
       city: 'Brno',
-      workMode: 'HYBRID' as const,
+      workMode: 'REMOTE' as const,
       remoteRegions: ['Europe'],
+      contractType: 'B2B contractor',
       technologyStack: ['React', 'Node.js', 'TypeScript'],
       originalUrl: 'https://baseline.example/jobs/job-1',
       raw: {},

@@ -2,6 +2,23 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-27 — Job source inventory and documentation icon
+
+- Added a complete Jobs Bot source inventory that distinguishes built-in active adapters, implemented ATS connectors requiring tenant configuration, and unavailable portals needing a permitted connector.
+- Added a regression check and repository rule requiring every future job-source registry change to update the README and versioned documentation together.
+- Added a compact robot SVG icon to the documentation site's Next.js metadata route for browser tabs and bookmarks.
+
+## 2026-10-27 — Additional permitted job sources
+
+- Enabled DeveloperJobs.ch through its provider-owned English RSS feed with rate-limited `schema.org/JobPosting` enrichment, Arbeitnow through its public European jobs API, and Jobicy through its public software-engineering API.
+- Jobicy discovery now checks listing IDs against the provider's batch status endpoint and ingests only explicitly active vacancies; attribution and canonical provider links are preserved for all three sources.
+- Kept EURES disabled because automated export requires recognized partner authorization, and kept English Speaking Jobs Switzerland disabled because its robots policy blocks automated category-page access.
+
+## 2026-10-27 — Remote-first Czech job matching
+
+- Jobs Bot now rejects hybrid work, non-Czech onsite roles, and geographically incompatible remote roles.
+- Full-remote vacancies and IČO/B2B-style contracts receive scoring priority over otherwise similar Czech employment roles.
+
 ## 2026-10-27 — Bot workflow diagrams
 
 - Added a code-backed Mermaid workflow diagram to every detailed Applications documentation page, with accessible labels and horizontally scrollable full-size rendering in both light and dark themes.

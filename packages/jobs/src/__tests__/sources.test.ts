@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  createJobSourceDefinitions,
   parseRemoteFrontendJob,
   parseRemoteOkJob,
   parseWorkingNomadsJob,
 } from '../sources.js';
+import { parseArbeitnowJob, parseJobicyJob } from '../public-api-sources.js';
 import { parseGreenhouseJob } from '../ats-sources.js';
 
 describe('verified job source schemas', () => {
@@ -100,5 +103,80 @@ describe('verified job source schemas', () => {
     expect(job.technologyStack).toEqual(
       expect.arrayContaining(['React', 'TypeScript', 'Node.js']),
     );
+  });
+
+  it('normalizes the public Arbeitnow API payload', () => {
+    const job = parseArbeitnowJob({
+      slug: 'typescript-engineer-example-123',
+      company_name: 'Example GmbH',
+      title: 'TypeScript Engineer',
+      description:
+        '<p>Build React and Node.js services in English. Fully remote.</p>',
+      remote: true,
+      url: 'https://www.arbeitnow.com/jobs/companies/example/typescript-engineer-example-123',
+      tags: ['TypeScript', 'React'],
+      job_types: ['Full-time', 'Contract'],
+      location: 'Europe',
+      created_at: 1_793_086_241,
+    });
+
+    expect(job).toMatchObject({
+      externalId: 'typescript-engineer-example-123',
+      sourceId: 'arbeitnow',
+      company: 'Example GmbH',
+      workMode: 'REMOTE',
+      contractType: 'Full-time, Contract',
+    });
+    expect(job.technologyStack).toEqual(
+      expect.arrayContaining(['TypeScript', 'React', 'Node.js']),
+    );
+  });
+
+  it('normalizes Jobicy without broadening its remote location', () => {
+    const job = parseJobicyJob({
+      id: 157_288,
+      url: 'https://jobicy.com/jobs/157288-typescript-engineer',
+      jobTitle: 'TypeScript Engineer',
+      companyName: 'Example',
+      jobIndustry: ['Software Engineering'],
+      jobType: ['Contract'],
+      jobGeo: 'Europe',
+      jobLevel: 'Mid-level',
+      jobExcerpt: 'Build web products.',
+      jobDescription: '<p>Build React and Node.js products.</p>',
+      pubDate: '2026-10-27T05:21:41+00:00',
+      salaryMin: 80_000.4,
+      salaryMax: 100_000.8,
+      salaryCurrency: 'EUR',
+      salaryPeriod: 'yearly',
+    });
+
+    expect(job).toMatchObject({
+      externalId: '157288',
+      sourceId: 'jobicy',
+      workMode: 'REMOTE',
+      remoteRegions: ['Europe'],
+      salaryMin: 80_000,
+      salaryMax: 100_001,
+      canonicalApplicationUrl:
+        'https://jobicy.com/jobs/157288-typescript-engineer',
+    });
+  });
+});
+
+describe('job source documentation inventory', () => {
+  it('lists every registered source exactly once in the Jobs Bot README', () => {
+    const readme = readFileSync(
+      new URL('../../../../apps/jobs-bot/README.md', import.meta.url),
+      'utf8',
+    );
+    const documentedSourceIds = [
+      ...readme.matchAll(/^\| `([^`]+)`\s+\|/gmu),
+    ].map((match) => match[1]);
+    const registeredSourceIds = createJobSourceDefinitions().map(
+      ({ id }) => id,
+    );
+
+    expect(documentedSourceIds).toEqual(registeredSourceIds);
   });
 });

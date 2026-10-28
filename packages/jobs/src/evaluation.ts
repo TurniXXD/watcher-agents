@@ -178,6 +178,7 @@ const locationCompatibility = (
   ].map(normalizeText);
   const regionValues = job.remoteRegions.map(normalizeText);
   const location = normalizeText(job.location ?? '');
+  const country = normalizeText(job.country ?? '');
   const allowed = (value: string): boolean =>
     Boolean(value) &&
     (allowedPlaces.some(
@@ -203,7 +204,19 @@ const locationCompatibility = (
     return { compatible: false, explicitBlocker: true, uncertain: false };
   if (!location)
     return { compatible: false, explicitBlocker: false, uncertain: true };
-  return { compatible: true, explicitBlocker: false, uncertain: false };
+  const allowedLocalPlaces = [
+    ...profile.preferredLocations.countries,
+    ...profile.preferredLocations.cities,
+  ].map(normalizeText);
+  const localEvidence = country || location;
+  return allowedLocalPlaces.some(
+    (place) =>
+      localEvidence.includes(place) ||
+      place.includes(localEvidence) ||
+      location.includes(place),
+  )
+    ? { compatible: true, explicitBlocker: false, uncertain: false }
+    : { compatible: false, explicitBlocker: true, uncertain: false };
 };
 
 export const evaluateJob = (
@@ -324,17 +337,34 @@ export const evaluateJob = (
   const technologyRatio = wantedJobSkills.length
     ? proportion(matchedWantedSkills.length, wantedJobSkills.length)
     : Math.min(1, matchingSkills.length / Math.min(5, skillNames.length));
+  const preferredContract = Boolean(
+    job.contractType &&
+    profile.preferredContractTypes.some((contractType) =>
+      normalizeText(job.contractType ?? '').includes(
+        normalizeText(contractType),
+      ),
+    ),
+  );
+  const locationRatio = geography.compatible
+    ? job.workMode === 'REMOTE'
+      ? 1
+      : 0.75
+    : 0.4;
 
   const scoreBreakdown = {
     role: profile.weights.role * roleRatio,
     technology: profile.weights.technology * technologyRatio,
     experience: profile.weights.experience * experienceRatio,
-    location: profile.weights.location * (geography.compatible ? 1 : 0.4),
+    location: profile.weights.location * locationRatio,
     language: profile.weights.language * 0.8,
     career: profile.weights.career * (roleRatio ? 0.9 : 0.3),
     conditions:
       profile.weights.conditions *
-      (job.salaryMin || job.salaryMax || job.contractType ? 1 : 0.6),
+      (preferredContract
+        ? 1
+        : job.salaryMin || job.salaryMax || job.contractType
+          ? 0.75
+          : 0.5),
   };
   const score = Math.max(
     0,

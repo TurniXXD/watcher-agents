@@ -19,6 +19,7 @@ const profile: CandidateProfile = {
   requiredTechnologies: [],
   excludedTechnologies: [],
   adjacentRoles: [],
+  preferredContractTypes: ['IČO', 'B2B'],
   preferredLocations: {
     countries: ['Czechia'],
     regions: ['Europe'],

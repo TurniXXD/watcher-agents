@@ -45,7 +45,7 @@ describe('job normalization and identity', () => {
 
   it('keeps stable source IDs and explicit unsupported sources', () => {
     const definitions = createJobSourceDefinitions();
-    expect(definitions.filter((source) => source.adapter)).toHaveLength(12);
+    expect(definitions.filter((source) => source.adapter)).toHaveLength(15);
     expect(
       definitions.find((source) => source.id === 'remote-backend-jobs'),
     ).toMatchObject({ enabledByDefault: true, strategy: 'API' });
@@ -65,6 +65,16 @@ describe('job normalization and identity', () => {
       baseUrl: 'https://careersatagoda.com',
       enabledByDefault: true,
       strategy: 'ATS',
+    });
+    expect(
+      definitions.find((source) => source.id === 'developerjobs-ch'),
+    ).toMatchObject({ enabledByDefault: true, strategy: 'RSS' });
+    expect(
+      definitions.find((source) => source.id === 'arbeitnow'),
+    ).toMatchObject({ enabledByDefault: true, strategy: 'API' });
+    expect(definitions.find((source) => source.id === 'jobicy')).toMatchObject({
+      enabledByDefault: true,
+      strategy: 'API',
     });
     expect(
       definitions.find((source) => source.id === 'linkedin'),

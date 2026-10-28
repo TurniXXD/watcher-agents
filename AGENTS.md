@@ -168,6 +168,7 @@ Before declaring a new or modified Telegram bot complete, verify all of the foll
 ### Documentation Maintenance
 
 - Versioned documentation is located in `apps/docs` and its local MDX content is under `apps/docs/content/docs`.
+- Treat the source inventory in `apps/jobs-bot/README.md` as authoritative. Whenever a job source is added, removed, enabled, disabled, or changes connector requirements, update its source ID, integration state, collection method, required connector/configuration, the corresponding Jobs Bot versioned documentation, and the source-inventory regression test in the same change.
 - Whenever modifying bot behavior, integrations, environment variables, configuration, APIs or interfaces, scheduling, deployment, or architecture, update the corresponding documentation in the same change.
 - When introducing a new bot or runnable application, create both its main-folder `README.md` and its dedicated documentation page, then link both from their indexes.
 - When removing functionality, remove or update obsolete documentation.

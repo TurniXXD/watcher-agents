@@ -23,12 +23,13 @@ const profile = candidateProfileSchema.parse({
     'Forward Deployed Engineer',
     'Forward Deployed Project Manager',
   ],
+  preferredContractTypes: ['IČO', 'B2B', 'contractor', 'freelance'],
   preferredLocations: {
-    countries: ['Czechia', 'Switzerland'],
+    countries: ['Czechia', 'Czech Republic'],
     regions: ['Europe', 'EU', 'Worldwide'],
     cities: ['Brno'],
     remote: true,
-    hybrid: true,
+    hybrid: false,
     onsite: true,
   },
   skills: ['React', 'TypeScript', 'Node.js', 'PostgreSQL'].map((name) => ({
@@ -45,7 +46,7 @@ const job = (description: string, overrides: Record<string, unknown> = {}) =>
     company: 'Example',
     description,
     location: 'Brno, Czechia',
-    workMode: 'HYBRID',
+    workMode: 'REMOTE',
     remoteRegions: ['Europe'],
     technologyStack: ['React', 'TypeScript', 'Node.js', 'Kubernetes'],
     originalUrl: 'https://example.com/jobs/1',
@@ -222,7 +223,7 @@ describe('deterministic job evaluation', () => {
     expect(result.hardBlockers).toContain('Incompatible geography');
   });
 
-  it('accepts a foreign onsite role when it is not country-restricted', () => {
+  it('rejects a foreign onsite role even when it has no residence wording', () => {
     const result = evaluateJob(
       job('The working language is English B2.', {
         location: 'Berlin, Germany',
@@ -233,10 +234,36 @@ describe('deterministic job evaluation', () => {
       }),
       profile,
     );
-    expect(result.hardBlockers).not.toContain('Incompatible geography');
-    expect(result.uncertainties).not.toContain(
-      'Location eligibility is not explicit',
+    expect(result.hardBlockers).toContain('Incompatible geography');
+  });
+
+  it('accepts a local Czech onsite role', () => {
+    const result = evaluateJob(
+      job('Build React and TypeScript products.', {
+        location: 'Prague, Czech Republic',
+        country: 'Czech Republic',
+        city: 'Prague',
+        workMode: 'ONSITE',
+        remoteRegions: [],
+      }),
+      profile,
     );
+    expect(result.hardBlockers).not.toContain('Incompatible geography');
+  });
+
+  it('rejects the Canadian hybrid Questrade-style vacancy', () => {
+    const result = evaluateJob(
+      job('Work from our office at least three days per week.', {
+        title: 'Unified Customer Experience Software Engineer',
+        location: 'North York, Ontario, Canada',
+        country: 'Canada',
+        workMode: 'HYBRID',
+        remoteRegions: [],
+      }),
+      profile,
+    );
+    expect(result.eligibility).toBe('INELIGIBLE');
+    expect(result.hardBlockers).toContain('Incompatible geography');
   });
 
   it('keeps remote eligibility uncertain when no permitted region is stated', () => {
@@ -264,6 +291,28 @@ describe('deterministic job evaluation', () => {
       expect.arrayContaining(['React', 'TypeScript', 'Node.js', 'PostgreSQL']),
     );
     expect(result.missingSkills).toContain('Kubernetes');
+  });
+
+  it('ranks full-remote IČO or B2B work above Czech employment', () => {
+    const remoteContract = evaluateJob(
+      job('Build React, TypeScript and Node.js services.', {
+        workMode: 'REMOTE',
+        remoteRegions: ['Europe'],
+        contractType: 'B2B contractor',
+      }),
+      profile,
+    );
+    const localEmployment = evaluateJob(
+      job('Build React, TypeScript and Node.js services.', {
+        workMode: 'ONSITE',
+        remoteRegions: [],
+        location: 'Brno, Czechia',
+        country: 'Czechia',
+        contractType: 'Full-time employment',
+      }),
+      profile,
+    );
+    expect(remoteContract.score).toBeGreaterThan(localEmployment.score);
   });
 
   it.each([

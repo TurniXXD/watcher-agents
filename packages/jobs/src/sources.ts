@@ -5,6 +5,7 @@ import {
   createConfiguredAtsDefinitions,
   type AtsSourceConfiguration,
 } from './ats-sources.js';
+import { createDeveloperJobsAdapter } from './developerjobs-source.js';
 import { fetchJobSource, responseCheckpoint } from './http.js';
 import {
   canonicalizeUrl,
@@ -18,6 +19,10 @@ import {
   type NormalizedJob,
 } from './types.js';
 import { createStartupJobsCzAdapter } from './startupjobs-source.js';
+import {
+  createArbeitnowAdapter,
+  createJobicyAdapter,
+} from './public-api-sources.js';
 
 const optionalDate = (value: unknown): Date | undefined => {
   if (typeof value !== 'string') return undefined;
@@ -497,6 +502,9 @@ export const createJobSourceDefinitions = (
     }),
     createStartupJobsCzAdapter(),
     createAgodaCareersAdapter(),
+    createDeveloperJobsAdapter(),
+    createArbeitnowAdapter(),
+    createJobicyAdapter(),
     workingNomadsAdapter(),
     remoteOkAdapter(),
   ];
@@ -512,7 +520,6 @@ export const createJobSourceDefinitions = (
     adapter,
   }));
   const unsupported = [
-    ['developerjobs-ch', 'DeveloperJobs.ch', 'https://www.developerjobs.ch'],
     ['cooljobs-eu', 'CoolJobs.eu', 'https://www.cooljobs.eu'],
     ['prace-za-rohem', 'Práce za rohem', 'https://www.pracezarohem.cz'],
     ['linkedin', 'LinkedIn', 'https://www.linkedin.com/jobs'],
@@ -538,6 +545,16 @@ export const createJobSourceDefinitions = (
     ['flexjobs', 'FlexJobs', 'https://www.flexjobs.com'],
     ['eures', 'EURES', 'https://eures.europa.eu'],
   ] as const;
+  const restrictedReasons: Partial<
+    Record<(typeof unsupported)[number][0], string>
+  > = {
+    eures:
+      'EURES permits API-style vacancy extraction only for recognized EURES partner organisations; partner authorization is not configured.',
+    'english-speaking-jobs-ch':
+      'The site robots policy disallows automated access to its job-category pages and no permitted public feed/API is published.',
+    linkedin:
+      'LinkedIn has no configured permitted public job-seeker feed/API; logged-in automation and scraping are intentionally unsupported.',
+  };
   return [
     ...definitions,
     ...createConfiguredAtsDefinitions(atsConfiguration),
@@ -548,6 +565,7 @@ export const createJobSourceDefinitions = (
       strategy: 'DISABLED',
       enabledByDefault: false,
       disabledReason:
+        restrictedReasons[id] ??
         'No verified permitted public job-seeker API or feed is configured. Automated scraping is intentionally disabled.',
     })),
   ];
