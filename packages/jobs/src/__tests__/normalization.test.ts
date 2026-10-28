@@ -3,6 +3,7 @@ import {
   canonicalizeUrl,
   cleanHtml,
   createJobSourceDefinitions,
+  createLinkedinAlertAdapter,
   jobContentHash,
   jobFingerprint,
 } from '../index.js';
@@ -82,6 +83,12 @@ describe('job normalization and identity', () => {
       enabledByDefault: false,
       strategy: 'DISABLED',
     });
+    expect(
+      createJobSourceDefinitions(
+        {},
+        createLinkedinAlertAdapter(async () => []),
+      ).find((source) => source.id === 'linkedin'),
+    ).toMatchObject({ enabledByDefault: true, strategy: 'EMAIL' });
     expect(new Set(definitions.map((source) => source.id)).size).toBe(
       definitions.length,
     );

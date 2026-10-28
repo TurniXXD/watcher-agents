@@ -73,6 +73,7 @@ const createStore = (sourceIds: string[]) => ({
     profile,
   })),
   recordSourceSuccess: vi.fn(async () => undefined),
+  recordSourceDegraded: vi.fn(async () => undefined),
   recordSourceFailure: vi.fn(async () => undefined),
   finishRun: vi.fn(async () => undefined),
   listJobs: vi.fn(async () => []),
@@ -412,6 +413,92 @@ describe('JobDiscoveryRunner orchestration', () => {
     expect(store.updateAvailability).toHaveBeenCalledWith(
       'stored-job-1',
       'CLOSED_CONFIRMED',
+    );
+  });
+
+  it('marks a source degraded and logs detail failures while retaining listing data', async () => {
+    const listing = {
+      sourceId: 'detail-source',
+      externalId: 'job-1',
+      title: 'Full-Stack Developer',
+      company: 'Example',
+      description: 'Short listing copy.',
+      location: 'Brno, Czechia',
+      workMode: 'ONSITE' as const,
+      remoteRegions: [],
+      technologyStack: ['TypeScript'],
+      originalUrl: 'https://detail-source.example/jobs/1',
+      raw: {},
+    };
+    const definition = source('detail-source', async () => ({
+      jobs: [listing],
+    }));
+    definition.adapter!.fetchDetail = vi.fn(async () => {
+      throw new Error('HTTP 403 from detail source');
+    });
+    const store = {
+      ...createStore(['detail-source']),
+      findRawJob: vi.fn(async () => null),
+      upsertJob: vi.fn(async () => ({
+        job: { id: 'job-1' },
+        isNew: false,
+        contentHash: 'content-hash',
+      })),
+      findEvaluation: vi.fn(async () => ({
+        profileVersion: 1,
+        jobContentHash: 'content-hash',
+      })),
+    };
+    const runner = new JobDiscoveryRunner(store as never, profile, 72, logger, [
+      definition,
+    ]);
+    await runner.run({ trigger: 'MANUAL' });
+    expect(store.recordSourceDegraded).toHaveBeenCalledWith(
+      'detail-source',
+      1,
+      1,
+    );
+    expect(store.recordSourceSuccess).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'detail-source',
+        discovered: 1,
+        detailFailures: 1,
+      }),
+      'Job source completed with detail failures',
+    );
+  });
+
+  it('does not automatically request a LinkedIn application page', async () => {
+    const store = {
+      ...createStore(['linkedin']),
+      listJobs: vi.fn(async () => [
+        {
+          id: 'linkedin-job',
+          originalUrl: 'https://www.linkedin.com/jobs/view/123/',
+          canonicalApplicationUrl: null,
+          availabilityStatus: 'LISTED_UNVERIFIED',
+          lastAvailabilityCheckAt: null,
+          evaluations: [{ eligibility: 'UNCERTAIN' }],
+        },
+      ]),
+    };
+    const availabilityVerifier = vi.fn(async () => 'OPEN_CONFIRMED' as const);
+    const runner = new JobDiscoveryRunner(
+      store as never,
+      profile,
+      72,
+      logger,
+      [source('linkedin', async () => ({ jobs: [] }))],
+      undefined,
+      undefined,
+      availabilityVerifier,
+    );
+    await runner.run({ trigger: 'SCHEDULED' });
+    expect(availabilityVerifier).not.toHaveBeenCalled();
+    expect(store.updateAvailability).toHaveBeenCalledWith(
+      'linkedin-job',
+      'LISTED_UNVERIFIED',
     );
   });
 });

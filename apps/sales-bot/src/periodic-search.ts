@@ -2,7 +2,7 @@ import { errorMessage, type WatcherLogger } from '@watcher/core';
 import type { SalesStore } from '@watcher/database';
 import type { SalesService } from './service.js';
 import {
-  renderSalesSearchTableMessages,
+  renderSalesSearchListMessages,
   salesSearchResultKey,
 } from './search-table.js';
 
@@ -48,7 +48,7 @@ export const runPeriodicSalesSearch = async (
     const newCompanies = companies.filter((company) =>
       unseenKeys.has(salesSearchResultKey(company)),
     );
-    for (const message of renderSalesSearchTableMessages(
+    for (const message of renderSalesSearchListMessages(
       newCompanies,
       subscription.query,
       subscription.locality,

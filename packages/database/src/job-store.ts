@@ -166,10 +166,7 @@ export class JobStore {
         !('requiredTechnologies' in existingData) ||
         !('excludedTechnologies' in existingData) ||
         !('adjacentRoles' in existingData) ||
-        !('preferredContractTypes' in existingData) ||
-        !profileFromRow(existing).excludedTechnologies.some(
-          (technology) => normalizeText(technology) === 'python',
-        );
+        !('preferredContractTypes' in existingData);
       if (!needsPreferenceMigration)
         return { row: existing, profile: profileFromRow(existing) };
 
@@ -202,6 +199,7 @@ export class JobStore {
           excludedTechnologies: profile.excludedTechnologies,
           adjacentRoles: profile.adjacentRoles,
           preferredContractTypes: profile.preferredContractTypes,
+          ...(profile.filters ? { filters: profile.filters } : {}),
         }),
         scoringWeights: json(profile.weights),
         excellentThreshold: profile.thresholds.excellent,
@@ -258,6 +256,7 @@ export class JobStore {
             excludedTechnologies: profile.excludedTechnologies,
             adjacentRoles: profile.adjacentRoles,
             preferredContractTypes: profile.preferredContractTypes,
+            ...(profile.filters ? { filters: profile.filters } : {}),
           }),
           scoringWeights: json(profile.weights),
           excellentThreshold: profile.thresholds.excellent,
@@ -458,6 +457,23 @@ export class JobStore {
         lastCheckedAt: now,
         lastSuccessfulAt: now,
         lastError: null,
+        discoveredCount: { increment: discovered },
+      },
+    });
+  }
+
+  public async recordSourceDegraded(
+    sourceId: string,
+    discovered: number,
+    detailFailures: number,
+    now = new Date(),
+  ) {
+    await this.db.jobSource.update({
+      where: { id: sourceId },
+      data: {
+        healthStatus: SourceHealthStatus.DEGRADED,
+        lastCheckedAt: now,
+        lastError: `${detailFailures} listing detail request(s) failed; listing data was used`,
         discoveredCount: { increment: discovered },
       },
     });

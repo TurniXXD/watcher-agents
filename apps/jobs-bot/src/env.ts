@@ -234,6 +234,22 @@ const schema = z
     JOBS_WORKABLE_ACCOUNTS: commaSeparatedIdentifiers,
     JOBS_RECRUITEE_COMPANIES: commaSeparatedIdentifiers,
     JOBS_TEAMTAILOR_DOMAINS: commaSeparatedIdentifiers,
+    JOBS_LINKEDIN_IMAP_HOST: optionalText,
+    JOBS_LINKEDIN_IMAP_PORT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(993),
+    JOBS_LINKEDIN_IMAP_USER: optionalText,
+    JOBS_LINKEDIN_IMAP_PASSWORD: optionalText,
+    JOBS_LINKEDIN_IMAP_MAILBOX: z.string().trim().min(1).default('INBOX'),
+    JOBS_LINKEDIN_IMAP_LOOKBACK_DAYS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(30)
+      .default(14),
     JOBS_CANDIDATE_NAME: z.string().trim().min(1).default('Jakub Vantuch'),
     JOBS_CANDIDATE_PROFILE_JSON: optionalText,
     JOBS_AI_ENABLED: z
@@ -253,6 +269,19 @@ const schema = z
     LOG_LEVEL: z.string().default('info'),
   })
   .superRefine((value, context) => {
+    const linkedinMailbox = [
+      value.JOBS_LINKEDIN_IMAP_HOST,
+      value.JOBS_LINKEDIN_IMAP_USER,
+      value.JOBS_LINKEDIN_IMAP_PASSWORD,
+    ];
+    if (linkedinMailbox.some(Boolean) && !linkedinMailbox.every(Boolean)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['JOBS_LINKEDIN_IMAP_HOST'],
+        message:
+          'JOBS_LINKEDIN_IMAP_HOST, JOBS_LINKEDIN_IMAP_USER and JOBS_LINKEDIN_IMAP_PASSWORD must be configured together',
+      });
+    }
     if (
       Boolean(value.JOBS_EMAIL_WEBHOOK_URL) !==
       Boolean(value.JOBS_EMAIL_RECIPIENT)

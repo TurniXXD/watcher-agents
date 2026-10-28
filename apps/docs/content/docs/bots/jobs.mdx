@@ -10,55 +10,64 @@ persisted, daylight-saving-aware schedules.
 
 ## Commands
 
-| Command                                   | What it does                                                      |
-| ----------------------------------------- | ----------------------------------------------------------------- |
-| `/start`                                  | Opens the bot without changing settings or starting collection.   |
-| `/help`                                   | Shows commands, syntax, statuses, and examples.                   |
-| `/about`                                  | Explains matching, data ownership, automation, and limits.        |
-| `/jobs_run [all\|SOURCE_ID] [dry]`        | Runs enabled/all or one source; `dry` prevents writes and alerts. |
-| `/jobs_status`                            | Shows scheduler and source health.                                |
-| `/jobs_sources`                           | Lists implemented sources and disabled reasons.                   |
-| `/jobs_latest`                            | Lists recent scored vacancies and IDs.                            |
-| `/jobs_show JOB_ID`                       | Shows source evidence, evaluation, and application notes.         |
-| `/jobs_search QUERY`                      | Searches stored title/company text.                               |
-| `/jobs_applications [STATUS]`             | Lists the private application pipeline.                           |
-| `/jobs_source SOURCE_ID on\|off`          | Enables or disables a supported source.                           |
-| `/jobs_mark JOB_ID STATUS`                | Sets the application status.                                      |
-| `/jobs_note JOB_ID NOTE`                  | Adds a private note.                                              |
-| `/jobs_followup JOB_ID YYYY-MM-DD\|clear` | Sets or clears a follow-up date.                                  |
-| `/jobs_profile [COMPLETE_JSON]`           | Shows or replaces the validated candidate profile.                |
-| `/jobs_reevaluate`                        | Re-scores stored jobs after profile changes.                      |
+| Command                                                       | What it does                                                        |
+| ------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `/start`                                                      | Opens the bot without changing settings or starting collection.     |
+| `/help`                                                       | Shows commands, syntax, statuses, and examples.                     |
+| `/about`                                                      | Explains matching, data ownership, automation, and limits.          |
+| `/jobs_run [all\|SOURCE_ID] [dry]`                            | Runs enabled/all or one source; `dry` prevents writes and alerts.   |
+| `/jobs_status`                                                | Shows scheduler and source health.                                  |
+| `/jobs_sources`                                               | Lists implemented sources and disabled reasons.                     |
+| `/jobs_latest`                                                | Lists recent scored vacancies and IDs.                              |
+| `/jobs_show JOB_ID`                                           | Shows source evidence, evaluation, and application notes.           |
+| `/jobs_search QUERY`                                          | Searches stored title/company text.                                 |
+| `/jobs_applications [STATUS]`                                 | Lists the private application pipeline.                             |
+| `/jobs_source SOURCE_ID on\|off`                              | Enables or disables a supported source.                             |
+| `/jobs_mark JOB_ID STATUS`                                    | Sets the application status.                                        |
+| `/jobs_note JOB_ID NOTE`                                      | Adds a private note.                                                |
+| `/jobs_followup JOB_ID YYYY-MM-DD\|clear`                     | Sets or clears a follow-up date.                                    |
+| `/jobs_profile [COMPLETE_JSON]`                               | Shows or replaces the validated candidate profile.                  |
+| `/jobs_filter [list]`                                         | Shows current title/country/technology/keyword/language lists.      |
+| `/jobs_filter CATEGORY allow\|block add\|remove\|clear VALUE` | Edits a persisted whitelist or blacklist and re-scores stored jobs. |
+| `/jobs_filter max_years N`                                    | Sets maximum required experience years.                             |
+| `/jobs_filter degree on\|off`                                 | Blocks/allows mandatory degree requirements.                        |
+| `/jobs_filter staff on\|off`                                  | Blocks/allows Staff engineering titles.                             |
+| `/jobs_reevaluate`                                            | Re-scores stored jobs after profile changes.                        |
 
 ## Configuration
 
-| Variable                                         | Required/default          | Purpose                                                              |
-| ------------------------------------------------ | ------------------------- | -------------------------------------------------------------------- |
-| `DATABASE_URL`                                   | Required                  | PostgreSQL source, job, evaluation, delivery, and application state. |
-| `JOBS_TELEGRAM_TOKEN`                            | Required                  | Dedicated Telegram token.                                            |
-| `TELEGRAM_ALLOWED_USER_IDS`                      | Required                  | Authorized private operators.                                        |
-| `JOBS_TIMEZONE`                                  | `Europe/Prague`           | Persisted schedule timezone.                                         |
-| `JOBS_HEALTH_PORT`                               | `4090`                    | Private readiness port.                                              |
-| `JOBS_SCHEDULER_INTERVAL_MS`                     | `30000`                   | Due-schedule polling interval.                                       |
-| `JOBS_DETAIL_REFRESH_HOURS`                      | `72`                      | Detail-page revalidation interval.                                   |
-| `JOBS_CANDIDATE_NAME`                            | Built-in operator default | Name used by the default profile.                                    |
-| `JOBS_CANDIDATE_PROFILE_JSON`                    | Optional                  | Complete validated profile override.                                 |
-| `JOBS_AI_ENABLED`                                | `false`                   | Enables bounded AI nuance scoring.                                   |
-| `JOBS_AI_BASE_URL`, `JOBS_AI_MODEL`              | Local defaults            | OpenAI-compatible/Ollama endpoint and model.                         |
-| `JOBS_AI_API_KEY`                                | Optional                  | Provider credential when required.                                   |
-| `JOBS_AI_TIMEOUT_MS`                             | `45000`                   | AI request timeout.                                                  |
-| `JOBS_EMAIL_WEBHOOK_URL`, `JOBS_EMAIL_RECIPIENT` | Optional pair             | Operator-owned e-mail delivery gateway and recipient.                |
-| `JOBS_EMAIL_WEBHOOK_API_KEY`                     | Optional                  | Gateway credential; requires the URL pair.                           |
-| `NOTION_API_KEY`                                 | Optional paired           | Internal integration secret for the Notion vacancy mirror.           |
-| `JOBS_NOTION_DATA_SOURCE_ID`                     | Optional paired           | `Job Opportunities` data-source ID.                                  |
-| `NOTION_API_VERSION`                             | `2026-03-11`              | Notion REST version header.                                          |
-| `JOBS_GREENHOUSE_BOARDS`                         | Optional CSV              | Public Greenhouse board tokens to collect through its Jobs API.      |
-| `JOBS_LEVER_SITES`                               | Optional CSV              | Public Lever site names to collect through Postings API.             |
-| `JOBS_ASHBY_BOARDS`                              | Optional CSV              | Public Ashby job-board names to collect.                             |
-| `JOBS_SMARTRECRUITERS_COMPANIES`                 | Optional CSV              | Public SmartRecruiters company identifiers to collect.               |
-| `JOBS_WORKABLE_ACCOUNTS`                         | Optional CSV              | Public Workable account subdomains to collect.                       |
-| `JOBS_RECRUITEE_COMPANIES`                       | Optional CSV              | Public Recruitee company subdomains to collect.                      |
-| `JOBS_TEAMTAILOR_DOMAINS`                        | Optional CSV              | Public Teamtailor career-site domains whose RSS feed is enabled.     |
-| `LOG_LEVEL`                                      | `info`                    | Structured log level.                                                |
+| Variable                                                                            | Required/default          | Purpose                                                                                    |
+| ----------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                                                                      | Required                  | PostgreSQL source, job, evaluation, delivery, and application state.                       |
+| `JOBS_TELEGRAM_TOKEN`                                                               | Required                  | Dedicated Telegram token.                                                                  |
+| `TELEGRAM_ALLOWED_USER_IDS`                                                         | Required                  | Authorized private operators.                                                              |
+| `JOBS_TIMEZONE`                                                                     | `Europe/Prague`           | Persisted schedule timezone.                                                               |
+| `JOBS_HEALTH_PORT`                                                                  | `4090`                    | Private readiness port.                                                                    |
+| `JOBS_SCHEDULER_INTERVAL_MS`                                                        | `30000`                   | Due-schedule polling interval.                                                             |
+| `JOBS_DETAIL_REFRESH_HOURS`                                                         | `72`                      | Detail-page revalidation interval.                                                         |
+| `JOBS_LINKEDIN_IMAP_HOST`, `JOBS_LINKEDIN_IMAP_USER`, `JOBS_LINKEDIN_IMAP_PASSWORD` | Optional group            | TLS IMAP inbox for official LinkedIn Job Alert emails; all three values required together. |
+| `JOBS_LINKEDIN_IMAP_PORT`                                                           | `993`                     | TLS IMAP port.                                                                             |
+| `JOBS_LINKEDIN_IMAP_MAILBOX`                                                        | `INBOX`                   | Read-only mailbox folder.                                                                  |
+| `JOBS_LINKEDIN_IMAP_LOOKBACK_DAYS`                                                  | `14` (max `30`)           | Recent message scan window.                                                                |
+| `JOBS_CANDIDATE_NAME`                                                               | Built-in operator default | Name used by the default profile.                                                          |
+| `JOBS_CANDIDATE_PROFILE_JSON`                                                       | Optional                  | Complete validated profile override.                                                       |
+| `JOBS_AI_ENABLED`                                                                   | `false`                   | Enables bounded AI nuance scoring.                                                         |
+| `JOBS_AI_BASE_URL`, `JOBS_AI_MODEL`                                                 | Local defaults            | OpenAI-compatible/Ollama endpoint and model.                                               |
+| `JOBS_AI_API_KEY`                                                                   | Optional                  | Provider credential when required.                                                         |
+| `JOBS_AI_TIMEOUT_MS`                                                                | `45000`                   | AI request timeout.                                                                        |
+| `JOBS_EMAIL_WEBHOOK_URL`, `JOBS_EMAIL_RECIPIENT`                                    | Optional pair             | Operator-owned e-mail delivery gateway and recipient.                                      |
+| `JOBS_EMAIL_WEBHOOK_API_KEY`                                                        | Optional                  | Gateway credential; requires the URL pair.                                                 |
+| `NOTION_API_KEY`                                                                    | Optional paired           | Internal integration secret for the Notion vacancy mirror.                                 |
+| `JOBS_NOTION_DATA_SOURCE_ID`                                                        | Optional paired           | `Job Opportunities` data-source ID.                                                        |
+| `NOTION_API_VERSION`                                                                | `2026-03-11`              | Notion REST version header.                                                                |
+| `JOBS_GREENHOUSE_BOARDS`                                                            | Optional CSV              | Public Greenhouse board tokens to collect through its Jobs API.                            |
+| `JOBS_LEVER_SITES`                                                                  | Optional CSV              | Public Lever site names to collect through Postings API.                                   |
+| `JOBS_ASHBY_BOARDS`                                                                 | Optional CSV              | Public Ashby job-board names to collect.                                                   |
+| `JOBS_SMARTRECRUITERS_COMPANIES`                                                    | Optional CSV              | Public SmartRecruiters company identifiers to collect.                                     |
+| `JOBS_WORKABLE_ACCOUNTS`                                                            | Optional CSV              | Public Workable account subdomains to collect.                                             |
+| `JOBS_RECRUITEE_COMPANIES`                                                          | Optional CSV              | Public Recruitee company subdomains to collect.                                            |
+| `JOBS_TEAMTAILOR_DOMAINS`                                                           | Optional CSV              | Public Teamtailor career-site domains whose RSS feed is enabled.                           |
+| `LOG_LEVEL`                                                                         | `info`                    | Structured log level.                                                                      |
 
 ## Sources and integrations
 
@@ -101,7 +110,7 @@ verified permitted integration. Runtime health such as `DEGRADED` or
 | `workable`                 | Workable companies                | `CONNECTOR_REQUIRED` | Configure public account subdomains with `JOBS_WORKABLE_ACCOUNTS`.                                    |
 | `recruitee`                | Recruitee companies               | `CONNECTOR_REQUIRED` | Configure public company subdomains with `JOBS_RECRUITEE_COMPANIES`.                                  |
 | `teamtailor`               | Teamtailor career sites           | `CONNECTOR_REQUIRED` | Configure public career-site domains with `JOBS_TEAMTAILOR_DOMAINS`.                                  |
-| `linkedin`                 | LinkedIn Jobs                     | `UNAVAILABLE`        | A permitted public job-seeker connector is needed; logged-in automation/scraping is unsupported.      |
+| `linkedin`                 | LinkedIn Jobs                     | `CONNECTOR_REQUIRED` | Official Job Alert emails in a dedicated TLS IMAP inbox; no automated LinkedIn page access.           |
 | `welcome-to-the-jungle`    | Welcome to the Jungle             | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
 | `jobs-ch`                  | Jobs.ch                           | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
 | `jobscout24-ch`            | JobScout24.ch                     | `UNAVAILABLE`        | A verified permitted public feed/API connector is still needed.                                       |
@@ -122,13 +131,14 @@ areas, reply endpoints, and application submission are never accessed.
 
 ### Service integrations
 
-| Service                                      | Role                                                                                     |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| PostgreSQL                                   | Authoritative jobs, observations, checkpoints, profile, schedule, and application state. |
-| Telegram                                     | Primary private UI and alert delivery.                                                   |
-| Optional e-mail webhook                      | Sends the same digest to an operator-owned gateway.                                      |
-| Optional Notion `Job Opportunities` database | Idempotent mirror of all evaluated vacancies and rejection evidence.                     |
-| Optional Ollama/OpenAI-compatible endpoint   | Adds bounded nuance; cannot remove deterministic blockers.                               |
+| Service                                      | Role                                                                                      |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| PostgreSQL                                   | Authoritative jobs, observations, checkpoints, profile, schedule, and application state.  |
+| Telegram                                     | Primary private UI and alert delivery.                                                    |
+| Optional e-mail webhook                      | Sends the same digest to an operator-owned gateway.                                       |
+| Optional LinkedIn Job Alert IMAP inbox       | Read-only ingestion of operator-received job alert emails; no LinkedIn login or scraping. |
+| Optional Notion `Job Opportunities` database | Idempotent mirror of all evaluated vacancies and rejection evidence.                      |
+| Optional Ollama/OpenAI-compatible endpoint   | Adds bounded nuance; cannot remove deterministic blockers.                                |
 
 ## Matching workflow
 
@@ -141,13 +151,13 @@ areas, reply endpoints, and application submission are never accessed.
     E -->|No| G["Reuse stored detail"]
     F --> H["4. Persist observation and canonical job"]
     G --> H
-    H --> I["5. Collect hard blockers in order:<br/>degree/language → seniority/experience →<br/>graduate/geography/role → technology"]
+    H --> I["5. Apply editable allow/block lists:<br/>title, country, technology, keyword, language;<br/>then degree/experience/Staff rules"]
     I --> J{"Any hard blocker?"}
     J -->|Yes| K["INELIGIBLE: persist evidence, no alert"]
     J -->|No| L["6. Record uncertainties and weighted score"]
     L --> M{"7. New job and score at notify threshold?"}
     M -->|No| N["Store for search and reevaluation"]
-    M -->|Yes| O["8. Check exact application URL"]
+    M -->|Yes| O["8. Check application URL<br/>(LinkedIn email links stay unverified)"]
     O --> P{"Confirmed closed?"}
     P -->|Yes| Q["Mark closed and suppress alert"]
     P -->|No or unknown| R["Reserve idempotent notification"]
@@ -167,7 +177,8 @@ company, normalized title, and location form the conservative cross-source
 fingerprint while every source URL is preserved.
 
 Before a new matching alert is reserved, the exact application URL receives a
-bounded public-URL check even when it uses the same hostname as the listing.
+bounded public-URL check even when it uses the same hostname as the listing,
+except for LinkedIn email-alert links, which are never fetched by the bot.
 Confirmed closed links are neither alerted nor included in `/jobs_latest`.
 Scheduled runs additionally revalidate up to 25 stale matching links per run,
 five at a time, with a 24-hour freshness window. Explicit application controls
@@ -221,6 +232,33 @@ lowest match score. Full-remote work receives the highest location component;
 IČO, B2B, contractor, freelance, and contract arrangements receive the
 conditions preference, so remote IČO-compatible roles sort ahead of otherwise
 similar Czech employment vacancies.
+
+`/jobs_filter` provides persistent title, country, technology, keyword, and
+mandatory-language allowlists and blocklists. The current role, location,
+technology, English-only, five-year, degree, and Staff rules form the default.
+Blocklists override allowlists; an empty allowlist has no requirement. For
+example, `/jobs_filter country block add India`,
+`/jobs_filter title allow add Full-Stack Developer`, and
+`/jobs_filter technology block remove Python` change the active rules and
+immediately re-evaluate stored jobs. `/jobs_filter max_years 5`,
+`/jobs_filter degree on|off`, and `/jobs_filter staff on|off` control the
+numeric and Boolean blockers. The complete profile JSON remains editable via
+`/jobs_profile`, including work-mode preferences, scoring weights, and alert
+thresholds. PostgreSQL stores these edits across restarts.
+
+LinkedIn uses only the operator's official Job Alert emails. Create a daily
+alert for [Full Stack Developer in Czechia](https://www.linkedin.com/jobs/search/?keywords=Full%20Stack%20Developer&location=Czechia)
+in your LinkedIn account, then route it to a dedicated TLS IMAP inbox and set
+the three `JOBS_LINKEDIN_IMAP_*` credentials in VPS runtime secrets. An optional
+second alert may cover remote Europe roles. The connector reads at most 100
+messages within the configured lookback window without marking mail as read,
+accepts recognizable job IDs from `@linkedin.com` sender addresses, and
+deduplicates by ID. An email summary cannot establish every mandatory
+requirement or whether a role is still open, so LinkedIn records remain
+`UNCERTAIN` and `LISTED_UNVERIFIED` until manually reviewed. Sender-address
+matching is not cryptographic authentication; mailbox-provider filtering is
+part of the trust boundary. The bot never logs in to LinkedIn, fetches its Jobs
+pages, or submits applications.
 
 The first import is baseline-only. Later runs reserve one immutable initial
 digest key per canonical job, so neither a second source nor a changed listing

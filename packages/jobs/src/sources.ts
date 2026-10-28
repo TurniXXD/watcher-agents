@@ -463,6 +463,7 @@ const workingNomadsAdapter = (): JobSourceAdapter => ({
 
 export const createJobSourceDefinitions = (
   atsConfiguration: AtsSourceConfiguration = {},
+  linkedinAlertAdapter?: JobSourceAdapter,
 ): JobSourceDefinition[] => {
   const enabled = [
     remoteFrontendAdapter('frontend'),
@@ -523,6 +524,7 @@ export const createJobSourceDefinitions = (
     createJobstackAdapter(),
     createJobsiAdapter(),
     createJenPraceAdapter(),
+    ...(linkedinAlertAdapter ? [linkedinAlertAdapter] : []),
   ];
   const definitions: JobSourceDefinition[] = enabled.map((adapter) => ({
     id: adapter.id,
@@ -536,7 +538,6 @@ export const createJobSourceDefinitions = (
     adapter,
   }));
   const unsupported = [
-    ['linkedin', 'LinkedIn', 'https://www.linkedin.com/jobs'],
     [
       'welcome-to-the-jungle',
       'Welcome to the Jungle',
@@ -561,12 +562,23 @@ export const createJobSourceDefinitions = (
       'EURES permits API-style vacancy extraction only for recognized EURES partner organisations; partner authorization is not configured.',
     'english-speaking-jobs-ch':
       'The site robots policy disallows automated access to its job-category pages and no permitted public feed/API is published.',
-    linkedin:
-      'LinkedIn has no configured permitted public job-seeker feed/API; logged-in automation and scraping are intentionally unsupported.',
   };
   return [
     ...definitions,
     ...createConfiguredAtsDefinitions(atsConfiguration),
+    ...(!linkedinAlertAdapter
+      ? [
+          {
+            id: 'linkedin',
+            name: 'LinkedIn Jobs (email alerts)',
+            baseUrl: 'https://www.linkedin.com/jobs',
+            strategy: 'DISABLED',
+            enabledByDefault: false,
+            disabledReason:
+              'Configure LinkedIn Job Alert emails in JOBS_LINKEDIN_IMAP_*; direct LinkedIn website automation and scraping remain unsupported.',
+          },
+        ]
+      : []),
     ...unsupported.map(([id, name, baseUrl]) => ({
       id,
       name,

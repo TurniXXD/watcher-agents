@@ -3,11 +3,13 @@ import { JobStore, createDatabaseClient } from '@watcher/database';
 import {
   OpenAiCompatibleJobEvaluator,
   createJobSourceDefinitions,
+  createLinkedinAlertAdapter,
 } from '@watcher/jobs';
 import { NotionClient } from '@watcher/notion';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { createJobsBot, jobsBotCommands } from './bot.js';
 import { env } from './env.js';
+import { readLinkedinAlerts } from './linkedin-mailbox.js';
 import { deliverJobDigest } from './notifications.js';
 import { JobsNotionSync } from './notion.js';
 import { JobDiscoveryRunner } from './runner.js';
@@ -41,15 +43,31 @@ const runner = new JobDiscoveryRunner(
   env.CANDIDATE_PROFILE,
   env.JOBS_DETAIL_REFRESH_HOURS,
   logger,
-  createJobSourceDefinitions({
-    greenhouseBoards: env.JOBS_GREENHOUSE_BOARDS,
-    leverSites: env.JOBS_LEVER_SITES,
-    ashbyBoards: env.JOBS_ASHBY_BOARDS,
-    smartRecruitersCompanies: env.JOBS_SMARTRECRUITERS_COMPANIES,
-    workableAccounts: env.JOBS_WORKABLE_ACCOUNTS,
-    recruiteeCompanies: env.JOBS_RECRUITEE_COMPANIES,
-    teamtailorDomains: env.JOBS_TEAMTAILOR_DOMAINS,
-  }),
+  createJobSourceDefinitions(
+    {
+      greenhouseBoards: env.JOBS_GREENHOUSE_BOARDS,
+      leverSites: env.JOBS_LEVER_SITES,
+      ashbyBoards: env.JOBS_ASHBY_BOARDS,
+      smartRecruitersCompanies: env.JOBS_SMARTRECRUITERS_COMPANIES,
+      workableAccounts: env.JOBS_WORKABLE_ACCOUNTS,
+      recruiteeCompanies: env.JOBS_RECRUITEE_COMPANIES,
+      teamtailorDomains: env.JOBS_TEAMTAILOR_DOMAINS,
+    },
+    env.JOBS_LINKEDIN_IMAP_HOST &&
+      env.JOBS_LINKEDIN_IMAP_USER &&
+      env.JOBS_LINKEDIN_IMAP_PASSWORD
+      ? createLinkedinAlertAdapter(() =>
+          readLinkedinAlerts({
+            host: env.JOBS_LINKEDIN_IMAP_HOST!,
+            port: env.JOBS_LINKEDIN_IMAP_PORT,
+            user: env.JOBS_LINKEDIN_IMAP_USER!,
+            password: env.JOBS_LINKEDIN_IMAP_PASSWORD!,
+            mailbox: env.JOBS_LINKEDIN_IMAP_MAILBOX,
+            lookbackDays: env.JOBS_LINKEDIN_IMAP_LOOKBACK_DAYS,
+          }),
+        )
+      : undefined,
+  ),
   aiEvaluator,
   notionSync,
 );

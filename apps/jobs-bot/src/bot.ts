@@ -6,10 +6,24 @@ import {
   sendSplitMessage,
 } from '@watcher/telegram';
 import { Bot } from 'grammy';
+import {
+  jobsFilterUsage,
+  renderJobsFilters,
+  updateJobsFilter,
+} from './filters.js';
 import type { JobDiscoveryRunner } from './runner.js';
 
 const escapeHtml = (value: string): string =>
   value.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;');
+
+const safeSourceDiagnostic = (value: string): string =>
+  value
+    .replace(/https?:\/\/[^\s]+/giu, '[URL redacted]')
+    .replace(
+      /\b(?:token|secret|password|api[_-]?key)\s*[:=]\s*\S+/giu,
+      '[credential redacted]',
+    )
+    .slice(0, 350);
 
 export const jobsBotCommands = [
   { command: 'start', description: 'Open the private job-search bot' },
@@ -27,6 +41,7 @@ export const jobsBotCommands = [
   { command: 'jobs_note', description: 'Add a private note to a job' },
   { command: 'jobs_followup', description: 'Set or clear a follow-up date' },
   { command: 'jobs_profile', description: 'Show or replace candidate profile' },
+  { command: 'jobs_filter', description: 'Edit job allowlists and blocklists' },
   { command: 'jobs_reevaluate', description: 'Re-score stored jobs' },
 ] as const;
 
@@ -57,6 +72,14 @@ export const jobsHelp = [
   '/jobs_followup JOB_ID 2026-11-03 – set a follow-up date; use clear to remove it',
   '/jobs_profile – show the active profile',
   '/jobs_profile {"name":"Candidate",...} – replace the complete profile after validation',
+  '/jobs_filter – show title/country/technology/keyword/language allowlists and blocklists',
+  '/jobs_filter title allow add Full-Stack Developer – add a title whitelist phrase',
+  '/jobs_filter country block add India – exclude a country',
+  '/jobs_filter technology block remove Python – remove a technology ban',
+  '/jobs_filter keyword allow clear – accept any keyword',
+  '/jobs_filter max_years 5 – maximum required experience',
+  '/jobs_filter degree on|off – block or allow mandatory degree listings',
+  '/jobs_filter staff on|off – block or allow Staff engineering titles',
   '/jobs_reevaluate – re-score stored jobs after a profile change',
   '/help – this command list',
   '/about – matching rules and limitations',
@@ -66,7 +89,7 @@ export const jobsAbout = [
   'ℹ️ About Personal Job Discovery',
   '',
   'This private bot is for one authorized operator. PostgreSQL is the authoritative store for candidate settings, source checkpoints, jobs, evaluations, schedules, delivery state, and application notes.',
-  'It automatically reads only configured public APIs/RSS feeds, normalizes and deduplicates listings, applies deterministic eligibility/scoring rules, revalidates application links before new alerts and during scheduled runs, mirrors evaluated vacancies to Notion when configured, and sends new qualifying matches through Telegram or an optional operator-owned e-mail webhook. Optional local/OpenAI-compatible AI nuance scoring is validated and cannot remove deterministic blockers.',
+  'It automatically reads configured permitted public sources and optional operator-delivered LinkedIn job-alert e-mails, normalizes and deduplicates listings, applies deterministic eligibility/scoring rules, revalidates supported application links before new alerts and during scheduled runs, mirrors evaluated vacancies to Notion when configured, and sends new qualifying matches through Telegram or an optional operator-owned e-mail webhook. Optional local/OpenAI-compatible AI nuance scoring is validated and cannot remove deterministic blockers.',
   'You must explicitly decide whether to save, dismiss, apply, contact anyone, or change an application status. The bot never submits applications, contacts employers, bypasses access controls, or claims that an aggregator listing is still open.',
   'All Telegram updates require an allowed user ID. Secrets remain server-side. Scores can be uncertain and must be checked against the original listing; unsupported sources stay disabled.',
   'Use /help next, or /jobs_run all dry for a no-write source preview.',
@@ -161,10 +184,23 @@ export const createJobsBot = (input: {
       BigInt(context.chat.id),
       escapeHtml(
         sources
-          .map(
-            (source) =>
-              `${source.enabled ? '✅' : '⏸️'} ${source.id} · ${source.healthStatus}${source.disabledReason ? `\n   ${source.disabledReason}` : ''}`,
-          )
+          .map((source) => {
+            const details = [
+              source.disabledReason,
+              source.enabled && source.lastError
+                ? `Last error: ${safeSourceDiagnostic(source.lastError)}`
+                : undefined,
+              source.enabled &&
+              source.healthStatus === 'DEGRADED' &&
+              !source.lastCheckedAt
+                ? 'Awaiting first successful source run.'
+                : undefined,
+              source.enabled && source.lastCheckedAt
+                ? `Checked: ${source.lastCheckedAt.toISOString()}${source.lastSuccessfulAt ? ` · Last success: ${source.lastSuccessfulAt.toISOString()}` : ''}`
+                : undefined,
+            ].filter(Boolean);
+            return `${source.enabled ? '✅' : '⏸️'} ${source.id} · ${source.healthStatus}${details.length ? `\n   ${details.join('\n   ')}` : ''}`;
+          })
           .join('\n'),
       ),
     );
@@ -431,6 +467,32 @@ export const createJobsBot = (input: {
     } catch (error) {
       await context.reply(
         `Profile update failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  });
+  bot.command('jobs_filter', async (context) => {
+    const argument = commandArgument(context.message?.text).trim();
+    const active = await input.store.getActiveProfile();
+    if (!active) throw new Error('Candidate profile is not initialized');
+    if (!argument || argument === 'list') {
+      await sendSplitMessage(
+        context.api,
+        BigInt(context.chat.id),
+        escapeHtml(renderJobsFilters(active.profile)),
+      );
+      return;
+    }
+    try {
+      const profile = updateJobsFilter(active.profile, argument);
+      await input.store.updateProfile(active.row.id, profile);
+      await context.reply('✅ Filter saved. Re-evaluating stored jobs…');
+      const result = await input.runner.reevaluateExisting();
+      await context.reply(
+        `Re-evaluated ${result.evaluated} of ${result.scanned} stored jobs.`,
+      );
+    } catch (error) {
+      await context.reply(
+        `Filter update failed: ${error instanceof Error ? error.message : jobsFilterUsage}`,
       );
     }
   });

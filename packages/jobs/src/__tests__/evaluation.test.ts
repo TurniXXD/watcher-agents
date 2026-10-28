@@ -134,6 +134,28 @@ describe('deterministic job evaluation', () => {
     expect(result.hardBlockers).not.toContain('Mandatory unsupported language');
   });
 
+  it('does not invent a language blocker when both editable language lists are empty', () => {
+    const unrestrictedLanguageProfile = candidateProfileSchema.parse({
+      ...profile,
+      filters: {
+        title: { allow: [], block: [] },
+        country: { allow: [], block: [] },
+        technology: { allow: [], block: [] },
+        keyword: { allow: [], block: [] },
+        language: { allow: [], block: [] },
+        maxRequiredExperienceYears: 5,
+        blockMandatoryDegree: true,
+        blockStaffEngineering: true,
+      },
+    });
+
+    const result = evaluateJob(
+      job('Native German is required for this role.'),
+      unrestrictedLanguageProfile,
+    );
+    expect(result.hardBlockers).not.toContain('Mandatory unsupported language');
+  });
+
   it.each(['Staff Software Engineer', 'Software Engineer, Staff'])(
     'rejects staff software engineering title: %s',
     (title) => {

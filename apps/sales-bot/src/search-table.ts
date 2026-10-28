@@ -2,25 +2,7 @@ import { createHash } from 'node:crypto';
 import type { BusinessSearchResult } from './discovery-types.js';
 import type { BusinessCategoryTranslation } from './geoapify.js';
 
-export const salesSearchTableHeader = [
-  'Jméno',
-  'Datum potkání',
-  'Místo potkání',
-  'Telefon',
-  'Email',
-  'Web',
-  'sociální síť',
-  'Poznámka k potkání',
-  'Typ kontaktu',
-  'Domluvena další schůzka',
-  'Aktivní kontakt',
-].join('\t');
-
-const salesSearchTableLabels = salesSearchTableHeader.split('\t');
-const labelWidth = 23;
-const valueWidth = 34;
-
-const cell = (value: string | undefined, maxLength = 300): string =>
+const clean = (value: string | undefined, maxLength = 300): string =>
   (value ?? '')
     .replaceAll(/[\t\r\n]+/gu, ' ')
     .replaceAll(/\s+/gu, ' ')
@@ -32,6 +14,9 @@ const escapeHtml = (value: string): string =>
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
+
+const escapeHtmlAttribute = (value: string): string =>
+  escapeHtml(value).replaceAll('"', '&quot;');
 
 const translationSourceLabel = (
   source: BusinessCategoryTranslation['source'],
@@ -85,79 +70,53 @@ export const salesSearchResultKey = (company: BusinessSearchResult): string => {
   return createHash('sha256').update(identity).digest('hex');
 };
 
-export const salesSearchTableRow = (
-  company: BusinessSearchResult,
-  query: string,
-  locality: string,
-): string => {
-  const note = [
-    `Automaticky nalezený lead pro ${locality}.`,
-    company.address ? `Adresa: ${company.address}.` : undefined,
-    `Zdroj: ${company.provider}.`,
-    company.registrationId ? `IČO: ${company.registrationId}.` : undefined,
-    company.naceCodes?.length
-      ? `CZ-NACE: ${company.naceCodes.join(', ')}.`
-      : undefined,
-    `Detail zdroje: ${company.sourceUrl}`,
-  ]
-    .filter((part): part is string => Boolean(part))
-    .join(' ');
-  return [
-    cell(company.name),
-    '',
-    '',
-    cell(company.phone),
-    cell(company.email),
-    cell(company.websiteUrl),
-    '',
-    cell(note, 700),
-    cell(query),
-    '',
-    'ANO',
-  ].join('\t');
-};
-
-const wrapCell = (value: string, width: number): string[] => {
-  if (!value) return [''];
-  const lines: string[] = [];
-  let remaining = value;
-  while (remaining.length > width) {
-    const candidate = remaining.slice(0, width + 1);
-    const lastSpace = candidate.lastIndexOf(' ');
-    const splitAt = lastSpace > 0 ? lastSpace : width;
-    lines.push(remaining.slice(0, splitAt).trimEnd());
-    remaining = remaining.slice(splitAt).trimStart();
+const httpLink = (label: string, value: string | undefined): string => {
+  const visibleLabel = escapeHtml(clean(label, 500));
+  if (!value) return visibleLabel;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:')
+      return visibleLabel;
+    return `<a href="${escapeHtmlAttribute(url.toString())}">${visibleLabel}</a>`;
+  } catch {
+    return visibleLabel;
   }
-  lines.push(remaining);
-  return lines;
 };
 
-const renderContactTable = (
+const line = (label: string, value: string | undefined): string | undefined => {
+  const normalized = clean(value);
+  return normalized ? `<b>${label}:</b> ${escapeHtml(normalized)}` : undefined;
+};
+
+const renderContactListItem = (
   company: BusinessSearchResult,
   query: string,
   locality: string,
   index: number,
 ): string => {
-  const values = salesSearchTableRow(company, query, locality).split('\t');
-  const horizontal = `├${'─'.repeat(labelWidth)}┼${'─'.repeat(valueWidth)}┤`;
-  const lines = [
-    `Kontakt ${index}`,
-    `┌${'─'.repeat(labelWidth)}┬${'─'.repeat(valueWidth)}┐`,
-  ];
-  for (const [rowIndex, label] of salesSearchTableLabels.entries()) {
-    const wrapped = wrapCell(values[rowIndex] ?? '', valueWidth);
-    for (const [lineIndex, value] of wrapped.entries()) {
-      lines.push(
-        `│${(lineIndex === 0 ? label : '').padEnd(labelWidth)}│${value.padEnd(valueWidth)}│`,
-      );
-    }
-    if (rowIndex < salesSearchTableLabels.length - 1) lines.push(horizontal);
-  }
-  lines.push(`└${'─'.repeat(labelWidth)}┴${'─'.repeat(valueWidth)}┘`);
-  return `<pre>${escapeHtml(lines.join('\n'))}</pre>`;
+  const website = clean(company.websiteUrl, 500);
+  const sourceUrl = clean(company.sourceUrl, 500);
+  return [
+    `<b>${index}. ${escapeHtml(clean(company.name, 300))}</b>`,
+    line('Obor', query),
+    line('Lokalita hledání', locality),
+    line('Adresa', company.address),
+    line('Telefon', company.phone),
+    line('E-mail', company.email),
+    website ? `<b>Web:</b> ${httpLink(website, website)}` : undefined,
+    line('IČO', company.registrationId),
+    company.naceCodes?.length
+      ? `<b>CZ-NACE:</b> ${escapeHtml(company.naceCodes.map((value) => clean(value, 30)).join(', '))}`
+      : undefined,
+    `<b>Zdroj:</b> ${escapeHtml(clean(company.provider, 80))}${
+      sourceUrl ? ` · ${httpLink('otevřít detail', sourceUrl)}` : ''
+    }`,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join('\n');
 };
 
-export const renderSalesSearchTableMessages = (
+export const renderSalesSearchListMessages = (
   companies: readonly BusinessSearchResult[],
   query: string,
   locality: string,
@@ -165,21 +124,18 @@ export const renderSalesSearchTableMessages = (
   maxLength = 3_800,
 ): string[] => {
   if (companies.length === 0) return [];
-  const tables = companies.map((company, index) =>
-    renderContactTable(company, query, locality, index + 1),
+  const items = companies.map((company, index) =>
+    renderContactListItem(company, query, locality, index + 1),
   );
   const messages: string[] = [];
   let selected: string[] = [];
   const render = (values: readonly string[]) => values.join('\n\n');
-  for (const table of tables) {
-    if (
-      selected.length > 0 &&
-      render([...selected, table]).length > maxLength
-    ) {
+  for (const item of items) {
+    if (selected.length > 0 && render([...selected, item]).length > maxLength) {
       messages.push(render(selected));
       selected = [];
     }
-    selected.push(table);
+    selected.push(item);
   }
   if (selected.length > 0) messages.push(render(selected));
   if (category && messages[0]) {

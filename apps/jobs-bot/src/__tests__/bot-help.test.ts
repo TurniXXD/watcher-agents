@@ -163,4 +163,38 @@ describe('jobs bot informational commands', () => {
     expect(harness.messages.join('\n')).toContain('Open Developer');
     expect(harness.messages.join('\n')).not.toContain('Closed Developer');
   });
+
+  it('shows the stored reason and check time for a degraded source', async () => {
+    const harness = createHarness();
+    harness.store.listSources.mockResolvedValue([
+      {
+        id: 'jobs-cz',
+        enabled: true,
+        healthStatus: 'DEGRADED',
+        lastError: 'HTTP 403 from jobs.cz',
+        lastCheckedAt: new Date('2026-10-28T10:00:00Z'),
+        lastSuccessfulAt: new Date('2026-10-27T10:00:00Z'),
+      },
+    ] as never);
+    await harness.bot.handleUpdate(update('/jobs_sources', 9));
+    expect(harness.messages.join('\n')).toContain(
+      'Last error: HTTP 403 from jobs.cz',
+    );
+    expect(harness.messages.join('\n')).toContain(
+      'Checked: 2026-10-28T10:00:00.000Z',
+    );
+    expect(harness.messages.join('\n')).toContain(
+      'Last success: 2026-10-27T10:00:00.000Z',
+    );
+  });
+
+  it('does not let an unauthorized user edit filters', async () => {
+    const harness = createHarness();
+    await harness.bot.handleUpdate(
+      update('/jobs_filter country block add Czechia', 10, 999),
+    );
+    expect(harness.messages).toEqual(['Unauthorized.']);
+    expect(harness.store.getActiveProfile).not.toHaveBeenCalled();
+    expect(harness.store.updateProfile).not.toHaveBeenCalled();
+  });
 });

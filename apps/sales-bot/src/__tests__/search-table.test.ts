@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { BusinessSearchResult } from '../discovery-types.js';
 import {
-  renderSalesSearchTableMessages,
+  renderSalesSearchListMessages,
   salesSearchResultKey,
-  salesSearchTableHeader,
-  salesSearchTableRow,
 } from '../search-table.js';
 
 const company: BusinessSearchResult = {
@@ -20,33 +18,9 @@ const company: BusinessSearchResult = {
   naceCodes: ['71110'],
 };
 
-describe('sales search table', () => {
-  it('uses the exact requested 11-column header and leaves meeting fields empty', () => {
-    expect(salesSearchTableHeader).toBe(
-      'Jméno\tDatum potkání\tMísto potkání\tTelefon\tEmail\tWeb\tsociální síť\tPoznámka k potkání\tTyp kontaktu\tDomluvena další schůzka\tAktivní kontakt',
-    );
-    const cells = salesSearchTableRow(company, 'architekti', 'Brno').split(
-      '\t',
-    );
-    expect(cells).toHaveLength(11);
-    expect(cells).toEqual([
-      'Studio <Test> & syn',
-      '',
-      '',
-      '+420 123 456 789',
-      'hello@example.test',
-      'https://www.example.test',
-      '',
-      expect.stringContaining('Automaticky nalezený lead pro Brno.'),
-      'architekti',
-      '',
-      'ANO',
-    ]);
-    expect(cells[7]).not.toContain('\n');
-  });
-
-  it('renders each result as a narrow two-column table that fits Telegram', () => {
-    const messages = renderSalesSearchTableMessages(
+describe('sales search list', () => {
+  it('renders a compact list with working website and source links', () => {
+    const messages = renderSalesSearchListMessages(
       [company, { ...company, id: 'place-2', registrationId: '87654321' }],
       'architekti',
       'Brno',
@@ -54,18 +28,21 @@ describe('sales search table', () => {
       500,
     );
     expect(messages).toHaveLength(2);
-    expect(messages.every((message) => message.startsWith('<pre>'))).toBe(true);
-    expect(messages.every((message) => message.includes('│Jméno'))).toBe(true);
-    expect(
-      messages.every((message) => message.includes('│Datum potkání')),
-    ).toBe(true);
-    expect(messages[0]).toContain('Kontakt 1');
-    expect(messages[0]).toContain('Studio &lt;Test&gt; &amp; syn');
-    expect(messages[0]).not.toContain('\t');
+    expect(messages[0]).toContain('<b>1. Studio &lt;Test&gt; &amp; syn</b>');
+    expect(messages[0]).toContain(
+      '<a href="https://www.example.test/">https://www.example.test</a>',
+    );
+    expect(messages[0]).toContain(
+      '<a href="https://example.test/source">otevřít detail</a>',
+    );
+    expect(messages[0]).toContain('<b>Telefon:</b> +420 123 456 789');
+    expect(messages[0]).toContain('<b>E-mail:</b> hello@example.test');
+    expect(messages[0]).not.toMatch(/[│┌┐└┘├┤┬┴┼]/u);
+    expect(messages[0]).not.toContain('<pre>');
   });
 
   it('prints the translated Geoapify and CZ-NACE categories above results', () => {
-    const [message] = renderSalesSearchTableMessages(
+    const [message] = renderSalesSearchListMessages(
       [company],
       'farmy',
       'Brno',
@@ -81,6 +58,22 @@ describe('sales search table', () => {
     );
     expect(message).toContain('CZ-NACE: 01');
     expect(message).toContain('Překlad oboru „farmy“: slovník');
+  });
+
+  it('does not turn unsafe URL schemes into Telegram links', () => {
+    const [message] = renderSalesSearchListMessages(
+      [
+        {
+          ...company,
+          websiteUrl: 'javascript:alert(1)',
+          sourceUrl: 'data:text/html,unsafe',
+        },
+      ],
+      'architekti',
+      'Brno',
+    );
+
+    expect(message).not.toContain('<a href=');
   });
 
   it('deduplicates primarily by IČO, then normalized domain', () => {

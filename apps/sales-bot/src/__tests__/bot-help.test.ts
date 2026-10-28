@@ -255,7 +255,7 @@ describe('sales bot help', () => {
     expect(messages[1]).toContain('1 již dříve přidáno');
   });
 
-  it('prints a narrow contact table and persists the periodic search', async () => {
+  it('prints a linked contact list and persists the periodic search', async () => {
     const searchBusinessesDetailed = vi.fn().mockResolvedValue({
       companies: [
         {
@@ -333,10 +333,11 @@ describe('sales bot help', () => {
     ]);
     expect(messages).toHaveLength(3);
     expect(messages[0]).toContain('45 minut');
-    expect(messages[1]).toContain('│Jméno');
-    expect(messages[1]).toContain('│Datum potkání');
-    expect(messages[1]).toContain('│Domluvena další schůzka');
-    expect(messages[1]).not.toContain('\t');
+    expect(messages[1]).toContain('<b>1. Autoservis Test</b>');
+    expect(messages[1]).toContain('<b>Web:</b> <a href=');
+    expect(messages[1]).toContain('otevřít detail</a>');
+    expect(messages[1]).not.toMatch(/[│┌┐└┘├┤┬┴┼]/u);
+    expect(messages[1]).not.toContain('<pre>');
     expect(messages[1]).toContain('Autoservis Test');
     expect(messages[1]).toContain('+420 123 456 789');
     expect(messages[1]).toContain(

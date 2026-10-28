@@ -7,6 +7,7 @@ export * from './ats-sources.js';
 export * from './developerjobs-source.js';
 export * from './czech-job-sources.js';
 export * from './public-api-sources.js';
+export * from './linkedin-alerts.js';
 export * from './sources.js';
 export * from './startupjobs-source.js';
 export * from './types.js';

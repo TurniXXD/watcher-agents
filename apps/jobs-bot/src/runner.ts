@@ -58,6 +58,11 @@ const listingHash = (job: NormalizedJob): string =>
     ...(job.location ? { location: job.location } : {}),
   });
 
+const isLinkedinUrl = (value: string): boolean => {
+  const hostname = new URL(value).hostname.toLowerCase();
+  return hostname === 'linkedin.com' || hostname === 'www.linkedin.com';
+};
+
 export class JobDiscoveryRunner {
   private running = false;
 
@@ -76,7 +81,9 @@ export class JobDiscoveryRunner {
     jobId: string,
     url: string,
   ): Promise<JobAvailability> {
-    const availability = await this.availabilityVerifier(url);
+    const availability = isLinkedinUrl(url)
+      ? 'LISTED_UNVERIFIED'
+      : await this.availabilityVerifier(url);
     await this.store.updateAvailability(jobId, availability);
     return availability;
   }
@@ -136,20 +143,37 @@ export class JobDiscoveryRunner {
     profile: CandidateProfile,
   ): Promise<{ result: JobEvaluationResult; ai?: JobAiMetadata }> {
     const deterministic = evaluateJob(job, profile);
-    if (!this.aiEvaluator) return { result: deterministic };
+    const partialEvidence = (
+      result: JobEvaluationResult,
+    ): JobEvaluationResult =>
+      job.sourceId === 'linkedin' && result.eligibility !== 'INELIGIBLE'
+        ? {
+            ...result,
+            eligibility: 'UNCERTAIN',
+            uncertainties: [
+              ...result.uncertainties,
+              'LinkedIn email contains only a listing summary; detailed requirements and open status require manual review',
+            ],
+            reasoning: `${result.reasoning} LinkedIn email summary only; verify the full listing manually.`,
+          }
+        : result;
+    if (!this.aiEvaluator) return { result: partialEvidence(deterministic) };
     try {
       const evaluated = await this.aiEvaluator.evaluate(
         job,
         profile,
         deterministic,
       );
-      return { result: evaluated.result, ai: evaluated.metadata };
+      return {
+        result: partialEvidence(evaluated.result),
+        ai: evaluated.metadata,
+      };
     } catch (error) {
       this.logger.warn(
         { err: error, source: job.sourceId, externalId: job.externalId },
         'AI evaluation failed; using deterministic evaluation',
       );
-      return { result: deterministic };
+      return { result: partialEvidence(deterministic) };
     }
   }
 
@@ -298,6 +322,8 @@ export class JobDiscoveryRunner {
       }
       const settled = await Promise.allSettled(
         selected.map(async (definition) => {
+          const startedAt = Date.now();
+          let detailFailures = 0;
           const adapter = definition.adapter!;
           const storedCheckpoint = await this.store.getCheckpoint(adapter.id);
           const checkpoint = storedCheckpoint
@@ -346,11 +372,13 @@ export class JobDiscoveryRunner {
                 job = await adapter.fetchDetail(discoveredJob, {});
                 detailFetched = true;
               } catch (error) {
+                detailFailures += 1;
                 this.logger.warn(
                   {
                     err: error,
                     source: adapter.id,
                     externalId: job.externalId,
+                    phase: 'detail',
                   },
                   'Job detail enrichment failed; using listing data',
                 );
@@ -443,11 +471,35 @@ export class JobDiscoveryRunner {
               }
             }
           }
-          if (!dryRun)
-            await this.store.recordSourceSuccess(
-              adapter.id,
-              sourceResult.jobs.length,
-            );
+          if (!dryRun) {
+            if (detailFailures > 0)
+              await this.store.recordSourceDegraded(
+                adapter.id,
+                sourceResult.jobs.length,
+                detailFailures,
+              );
+            else
+              await this.store.recordSourceSuccess(
+                adapter.id,
+                sourceResult.jobs.length,
+              );
+          }
+          this.logger.info(
+            {
+              source: adapter.id,
+              phase: 'complete',
+              dryRun,
+              discovered: sourceResult.jobs.length,
+              created: sourceCreated,
+              evaluated: sourceEvaluated,
+              detailFailures,
+              notModified: sourceResult.notModified ?? false,
+              durationMs: Date.now() - startedAt,
+            },
+            detailFailures > 0
+              ? 'Job source completed with detail failures'
+              : 'Job source completed',
+          );
           return {
             discovered: sourceResult.jobs.length,
             created: sourceCreated,
@@ -481,7 +533,16 @@ export class JobDiscoveryRunner {
               retryable,
             );
           this.logger.error(
-            { err: sourceError, source: definition.id },
+            {
+              err: sourceError,
+              source: definition.id,
+              phase: 'discovery-or-persistence',
+              retryable,
+              httpStatus:
+                sourceError instanceof JobSourceHttpError
+                  ? sourceError.status
+                  : undefined,
+            },
             'Job source failed',
           );
         }

@@ -7,6 +7,24 @@ export const jobWorkModeSchema = z.enum([
   'UNKNOWN',
 ]);
 
+const filterListSchema = z.object({
+  allow: z.array(z.string().trim().min(1)).default([]),
+  block: z.array(z.string().trim().min(1)).default([]),
+});
+
+export const jobFiltersSchema = z.object({
+  title: filterListSchema,
+  country: filterListSchema,
+  technology: filterListSchema,
+  keyword: filterListSchema,
+  language: filterListSchema,
+  maxRequiredExperienceYears: z.number().int().nonnegative(),
+  blockMandatoryDegree: z.boolean(),
+  blockStaffEngineering: z.boolean(),
+});
+
+export type JobFilters = z.infer<typeof jobFiltersSchema>;
+
 export const candidateProfileSchema = z
   .object({
     name: z.string().trim().min(1),
@@ -47,6 +65,7 @@ export const candidateProfileSchema = z
       hybrid: z.boolean().default(false),
       onsite: z.boolean().default(true),
     }),
+    filters: jobFiltersSchema.optional(),
     skills: z.array(
       z.object({
         name: z.string().min(1),
@@ -126,6 +145,28 @@ export const candidateProfileSchema = z
 
 export type CandidateProfile = z.infer<typeof candidateProfileSchema>;
 
+export const resolveJobFilters = (profile: CandidateProfile): JobFilters =>
+  profile.filters ??
+  jobFiltersSchema.parse({
+    title: {
+      allow: [...profile.preferredRoles, ...profile.adjacentRoles],
+      block: profile.avoidedRoles,
+    },
+    country: {
+      allow: profile.preferredLocations.countries,
+      block: [],
+    },
+    technology: {
+      allow: profile.requiredTechnologies,
+      block: profile.excludedTechnologies,
+    },
+    keyword: { allow: [], block: [] },
+    language: { allow: ['English'], block: [] },
+    maxRequiredExperienceYears: profile.yearsExperience,
+    blockMandatoryDegree: true,
+    blockStaffEngineering: true,
+  });
+
 export const normalizedJobSchema = z.object({
   externalId: z.string().min(1),
   sourceId: z.string().min(1),
@@ -170,7 +211,7 @@ export type JobSourceAdapter = {
   id: string;
   name: string;
   baseUrl: string;
-  strategy: 'API' | 'RSS' | 'ATS' | 'SITEMAP' | 'HTML';
+  strategy: 'API' | 'RSS' | 'ATS' | 'SITEMAP' | 'HTML' | 'EMAIL';
   attribution: string;
   fetchIntervalMinutes: number;
   rateLimitPerMinute: number;

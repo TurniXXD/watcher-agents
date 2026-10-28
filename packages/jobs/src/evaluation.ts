@@ -2,10 +2,15 @@ import { normalizeText } from './normalization.js';
 import { hasMandatoryComputerScienceDegree } from './requirements.js';
 import type {
   CandidateProfile,
+  JobFilters,
   JobEvaluationResult,
   NormalizedJob,
   Recommendation,
 } from './types.js';
+import { resolveJobFilters } from './types.js';
+
+const includesPhrase = (text: string, phrase: string): boolean =>
+  ` ${normalizeText(text)} `.includes(` ${normalizeText(phrase)} `);
 
 const mandatory = (text: string, subject: RegExp): boolean => {
   const sentences = text.split(/[.!?\n]+/u);
@@ -38,6 +43,15 @@ const titlePhraseMatches = (title: string, roles: string[]): boolean => {
   const normalized = normalizeText(title);
   return roles.some((role) => normalized.includes(normalizeText(role)));
 };
+
+const allowedTitleMatches = (
+  title: string,
+  profile: CandidateProfile,
+  filters: JobFilters,
+): boolean =>
+  profile.filters
+    ? titlePhraseMatches(title, filters.title.allow)
+    : titleMatches(title, filters.title.allow);
 
 const technologyPattern = (technology: string): RegExp => {
   const normalized = normalizeText(technology);
@@ -86,26 +100,40 @@ const twoLetterDisplayNames = (type: 'language' | 'region'): string[] => {
 const escapePattern = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
 
-const unsupportedLanguagePattern = new RegExp(
-  String.raw`\b(?:${[
-    ...twoLetterDisplayNames('language').filter(
-      (language) => language !== 'english',
-    ),
-    'deutsch',
-    'français',
-    'español',
-    'čeština',
-    'slovenčina',
-    'polski',
-    'italiano',
-    'nederlands',
-    'português',
-    'mandarin',
-  ]
-    .map(escapePattern)
-    .join('|')})\b`,
-  'iu',
-);
+const knownLanguages = [
+  ...twoLetterDisplayNames('language'),
+  'deutsch',
+  'français',
+  'español',
+  'čeština',
+  'slovenčina',
+  'polski',
+  'italiano',
+  'nederlands',
+  'português',
+  'mandarin',
+];
+
+const unsupportedLanguagePattern = (filters: JobFilters): RegExp => {
+  const unsupportedLanguages = [
+    ...(filters.language.allow.length > 0
+      ? knownLanguages.filter(
+          (language) =>
+            !filters.language.allow.some(
+              (allowed) => normalizeText(allowed) === normalizeText(language),
+            ),
+        )
+      : []),
+    ...filters.language.block,
+  ];
+
+  return unsupportedLanguages.length > 0
+    ? new RegExp(
+        String.raw`\b(?:${unsupportedLanguages.map(escapePattern).join('|')})\b`,
+        'iu',
+      )
+    : /$(?!)/u;
+};
 
 const countryNames = (() => {
   const names = new Set(twoLetterDisplayNames('region'));
@@ -170,12 +198,14 @@ const requiredExperienceYears = (text: string): number | undefined => {
 const locationCompatibility = (
   job: NormalizedJob,
   profile: CandidateProfile,
+  filters: JobFilters,
 ): { compatible: boolean; explicitBlocker: boolean; uncertain: boolean } => {
   const allowedPlaces = [
-    ...profile.preferredLocations.countries,
+    ...filters.country.allow,
     ...profile.preferredLocations.regions,
     ...profile.preferredLocations.cities,
   ].map(normalizeText);
+  const unrestrictedCountries = filters.country.allow.length === 0;
   const regionValues = job.remoteRegions.map(normalizeText);
   const location = normalizeText(job.location ?? '');
   const country = normalizeText(job.country ?? '');
@@ -191,8 +221,7 @@ const locationCompatibility = (
       return { compatible: false, explicitBlocker: true, uncertain: false };
     const evidence =
       regionValues.length > 0 ? regionValues : [location].filter(Boolean);
-    const allowedCountries =
-      profile.preferredLocations.countries.map(normalizeText);
+    const allowedCountries = filters.country.allow.map(normalizeText);
     const structuredCountryValues = [
       ...regionValues.filter((value) => countryNames.includes(value)),
       ...(country ? [country] : []),
@@ -209,8 +238,14 @@ const locationCompatibility = (
           (country) => value.includes(country) || country.includes(value),
         ),
     );
-    if (hasIncompatibleSpecificCountry)
+    if (hasIncompatibleSpecificCountry && !unrestrictedCountries)
       return { compatible: false, explicitBlocker: true, uncertain: false };
+    if (unrestrictedCountries)
+      return {
+        compatible: evidence.length > 0,
+        explicitBlocker: false,
+        uncertain: evidence.length === 0,
+      };
     if (evidence.some(allowed))
       return { compatible: true, explicitBlocker: false, uncertain: false };
     if (regionValues.length > 0 && evidence.some((value) => !allowed(value)))
@@ -224,8 +259,10 @@ const locationCompatibility = (
     return { compatible: false, explicitBlocker: true, uncertain: false };
   if (!location)
     return { compatible: false, explicitBlocker: false, uncertain: true };
+  if (unrestrictedCountries)
+    return { compatible: true, explicitBlocker: false, uncertain: false };
   const allowedLocalPlaces = [
-    ...profile.preferredLocations.countries,
+    ...filters.country.allow,
     ...profile.preferredLocations.cities,
   ].map(normalizeText);
   const localEvidence = country || location;
@@ -243,44 +280,50 @@ export const evaluateJob = (
   job: NormalizedJob,
   profile: CandidateProfile,
 ): JobEvaluationResult => {
+  const filters = resolveJobFilters(profile);
   const body = `${job.title}\n${job.description}`;
   const technologyEvidence = `${body}\n${job.technologyStack.join('\n')}`;
   const normalizedBody = normalizeText(body);
   const hardBlockers: string[] = [];
   const uncertainties: string[] = [];
-  const geography = locationCompatibility(job, profile);
+  const geography = locationCompatibility(job, profile, filters);
   const allowedPlaces = [
-    ...profile.preferredLocations.countries,
+    ...filters.country.allow,
     ...profile.preferredLocations.regions,
     ...profile.preferredLocations.cities,
   ].map(normalizeText);
   const requiredYears = requiredExperienceYears(body);
   const adjacentRole = titlePhraseMatches(job.title, profile.adjacentRoles);
-  const matchedRequiredTechnologies = profile.requiredTechnologies.filter(
+  const matchedRequiredTechnologies = filters.technology.allow.filter(
     (technology) => technologyPattern(technology).test(technologyEvidence),
   );
-  const excludedTitleTechnologies = profile.excludedTechnologies.filter(
+  const excludedTitleTechnologies = filters.technology.block.filter(
     (technology) => technologyPattern(technology).test(job.title),
   );
-  const mandatoryExcludedTechnologies = profile.excludedTechnologies.filter(
+  const mandatoryExcludedTechnologies = filters.technology.block.filter(
     (technology) => mandatory(body, technologyPattern(technology)),
   );
 
   if (
-    mandatory(body, /\b(?:bachelor|master|phd|university degree|degree)\b/iu) ||
-    hasMandatoryComputerScienceDegree(body)
+    filters.blockMandatoryDegree &&
+    (mandatory(
+      body,
+      /\b(?:bachelor|master|phd|university degree|degree)\b/iu,
+    ) ||
+      hasMandatoryComputerScienceDegree(body))
   )
     hardBlockers.push('Mandatory degree requirement');
-  if (mandatory(body, unsupportedLanguagePattern))
+  if (mandatory(body, unsupportedLanguagePattern(filters)))
     hardBlockers.push('Mandatory unsupported language');
   if (
+    filters.blockStaffEngineering &&
     /\bstaff\b/iu.test(job.title) &&
     /\b(?:engineer|developer)\b/iu.test(job.title)
   )
     hardBlockers.push('Staff-level engineering role');
-  if (requiredYears && requiredYears > profile.yearsExperience)
+  if (requiredYears && requiredYears > filters.maxRequiredExperienceYears)
     hardBlockers.push(
-      `Requires ${requiredYears} years of experience; profile has ${profile.yearsExperience}`,
+      `Requires ${requiredYears} years of experience; filter maximum is ${filters.maxRequiredExperienceYears}`,
     );
   if (
     /\b(?:graduate programme|graduate program|new grad(?:uate)?|internship|intern)\b/iu.test(
@@ -288,7 +331,10 @@ export const evaluateJob = (
     )
   )
     hardBlockers.push('Graduate-only or internship role');
-  if (explicitlyRestrictedGeography(body, allowedPlaces))
+  if (
+    filters.country.allow.length > 0 &&
+    explicitlyRestrictedGeography(body, allowedPlaces)
+  )
     hardBlockers.push('Incompatible geography');
   if (
     geography.explicitBlocker &&
@@ -296,11 +342,22 @@ export const evaluateJob = (
   )
     hardBlockers.push('Incompatible geography');
   if (
-    profile.avoidedRoles.length > 0 &&
-    titleMatches(job.title, profile.avoidedRoles)
+    filters.country.block.some((country) =>
+      [job.country, job.location, ...job.remoteRegions].some(
+        (value) => value && includesPhrase(value, country),
+      ),
+    )
+  )
+    hardBlockers.push('Blocked country');
+  if (
+    filters.title.block.length > 0 &&
+    titlePhraseMatches(job.title, filters.title.block)
   )
     hardBlockers.push('Explicitly avoided role');
-  if (!titleMatches(job.title, profile.preferredRoles) && !adjacentRole)
+  if (
+    filters.title.allow.length > 0 &&
+    !allowedTitleMatches(job.title, profile, filters)
+  )
     hardBlockers.push('Unrelated role');
   if (excludedTitleTechnologies.length > 0)
     hardBlockers.push(
@@ -311,11 +368,18 @@ export const evaluateJob = (
       `Mandatory excluded technology: ${mandatoryExcludedTechnologies.join(', ')}`,
     );
   if (
-    profile.requiredTechnologies.length > 0 &&
+    filters.technology.allow.length > 0 &&
     matchedRequiredTechnologies.length === 0 &&
     !adjacentRole
   )
     hardBlockers.push('Missing required target technology');
+  if (filters.keyword.block.some((keyword) => includesPhrase(body, keyword)))
+    hardBlockers.push('Blocked keyword');
+  if (
+    filters.keyword.allow.length > 0 &&
+    !filters.keyword.allow.some((keyword) => includesPhrase(body, keyword))
+  )
+    hardBlockers.push('Missing required keyword');
 
   if (
     mandatory(body, /\benglish\b/iu) &&
@@ -349,11 +413,13 @@ export const evaluateJob = (
   const experienceRatio = requiredYears
     ? Math.min(1, profile.yearsExperience / Math.max(1, requiredYears))
     : 0.8;
-  const roleRatio = titleMatches(job.title, profile.preferredRoles)
-    ? 1
-    : adjacentRole
-      ? 0.9
-      : 0;
+  const roleRatio =
+    filters.title.allow.length === 0 ||
+    allowedTitleMatches(job.title, profile, filters)
+      ? 1
+      : adjacentRole
+        ? 0.9
+        : 0;
   const technologyRatio = wantedJobSkills.length
     ? proportion(matchedWantedSkills.length, wantedJobSkills.length)
     : Math.min(1, matchingSkills.length / Math.min(5, skillNames.length));

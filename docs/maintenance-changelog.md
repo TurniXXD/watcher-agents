@@ -2,6 +2,17 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-28 — Editable job filters, LinkedIn alert inbox, and source diagnostics
+
+- Added persistent title, country, technology, keyword, and language allowlists/blocklists to Jobs Bot, plus editable experience-year, mandatory-degree, and Staff-engineering rules. Existing candidate preferences remain the defaults.
+- Added optional read-only TLS IMAP ingestion of operator-received LinkedIn Job Alert emails; direct LinkedIn page automation remains disabled and email-only vacancies stay unverified for human review.
+- `/jobs_sources` now displays last checks and redacted error detail; structured per-source completion logs include counts, duration, and detail-enrichment failures, which now produce `DEGRADED` status.
+
+## 2026-10-28 — Compact linked Sales lead results
+
+- Replaced the fixed-width `/sales_search` contact table with compact lead blocks for both immediate and periodic results.
+- Made validated public company websites and provider details clickable while rejecting non-HTTP(S) link schemes.
+
 ## 2026-10-28 — Czech job portal connectors
 
 - Enabled Jobs.cz, Prace.cz, Práce za rohem, JenPráce, Jobsi, Jobstack, and CoolJobs through their permitted public IT listings, sitemaps, structured data, and public detail pages.

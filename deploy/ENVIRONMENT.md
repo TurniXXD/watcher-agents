@@ -282,6 +282,26 @@ endpoints for those explicit tenants. Empty lists keep an adapter unavailable;
 the bot never guesses tenants, scrapes logged-in pages, or treats an
 unconfigured company platform as a global job feed.
 
+Optional LinkedIn ingestion uses **official Job Alert emails**, not LinkedIn
+website automation. In the operator's LinkedIn account, create a daily alert
+for [Full Stack Developer in Czechia](https://www.linkedin.com/jobs/search/?keywords=Full%20Stack%20Developer&location=Czechia)
+and route it to a dedicated TLS IMAP mailbox. Set `JOBS_LINKEDIN_IMAP_HOST`,
+`JOBS_LINKEDIN_IMAP_USER`, and `JOBS_LINKEDIN_IMAP_PASSWORD` together in the
+VPS runtime secrets; `JOBS_LINKEDIN_IMAP_PORT` defaults to `993`,
+`JOBS_LINKEDIN_IMAP_MAILBOX` to `INBOX`, and
+`JOBS_LINKEDIN_IMAP_LOOKBACK_DAYS` to `14` (maximum `30`). The bot reads
+without marking messages read and never logs in to or fetches LinkedIn Jobs
+pages. Alert summaries and application status remain unverified and need
+manual review. No IMAP credential belongs in Git or Telegram.
+
+Use `/jobs_filter` for the persisted job-title, country, technology, keyword,
+and language allowlists/blocklists. Maximum required experience years,
+mandatory-degree blocking, and Staff-role blocking are also editable there.
+Current candidate preferences initialize the filters by default; edits persist
+in PostgreSQL and immediately re-evaluate stored vacancies. `/jobs_sources`
+shows the last check, last success, and a redacted last error for unhealthy
+sources; the worker logs one structured summary per source per run.
+
 Set `NOTION_API_KEY` together with `JOBS_NOTION_DATA_SOURCE_ID` to mirror every
 evaluated vacancy into the `Job Opportunities` database. Existing evaluated
 jobs are backfilled on startup, local job IDs make retries idempotent, and a

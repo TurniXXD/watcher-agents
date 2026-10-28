@@ -10,7 +10,7 @@ import {
   type SalesIntelligenceService,
 } from './sales-intelligence.js';
 import {
-  renderSalesSearchTableMessages,
+  renderSalesSearchListMessages,
   salesSearchCategorySummary,
   salesSearchResultKey,
 } from './search-table.js';
@@ -26,7 +26,7 @@ This private bot reviews discovered companies, prepares outreach drafts, and—w
 Getting started
 1. Run /sales_status to check the current pipeline counts.
 2. Run /sales_prospects <service> | <location> | [limit] to find up to 10 companies by default, enrich their public contacts, and idempotently add them to Twenty without a campaign. Example: /sales_prospects autoservis | Brno | 10
-3. Run /sales_search <service> | <location> | <limit> to search immediately and save a periodic ARES + Geoapify search. Google Places is used only as an optional fallback. The first result and every newly discovered contact are sent as a TSV table. Example: /sales_search autoservis | Brno | 15
+3. Run /sales_search <service> | <location> | <limit> to search immediately and save a periodic ARES + Geoapify search. Google Places is used only as an optional fallback. The first result and every newly discovered contact are sent as a simple list. Example: /sales_search autoservis | Brno | 15
 4. To import candidates for later campaign analysis, run /sales_find <campaign-id> | <service> | <location> | <limit>. Example: /sales_find 5a... | autoservis | Brno | 15
 5. Run /sales_run to audit newly discovered campaign websites, collect sourced public contacts, score the leads, and sync configured integrations.
 6. Use /sales_calls to get the highest-scoring public phone contacts, or /sales_leads for all recent campaign leads.
@@ -40,7 +40,7 @@ Commands
 /sales_status — show campaign count, recent leads, qualified leads, and Quickly enrollments
 /sales_campaigns — list campaign IDs needed by /sales_find
 /sales_prospects <service> | <location> | [limit] — add deduplicated researched companies directly to Twenty without a campaign; default 10
-/sales_search <service> | <location> | <limit> — search immediately, save the periodic search, and print new contacts as a TSV table
+/sales_search <service> | <location> | <limit> — search immediately, save the periodic search, and print new contacts as a simple list
 /sales_searches — list active periodic searches
 /sales_search_stop <id|all> — stop one or all periodic searches
 /sales_find <campaign-id> | <service> | <location> | <limit> — run the same combined discovery and import candidates with an official website
@@ -315,7 +315,7 @@ export const createSalesBot = (
       if (companies.length > 0) {
         await sendSearchTable(
           ctx,
-          renderSalesSearchTableMessages(
+          renderSalesSearchListMessages(
             companies,
             input.query,
             input.locality,
