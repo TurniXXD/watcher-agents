@@ -1,6 +1,7 @@
 import type { SalesStore } from '@watcher/database';
 import { describe, expect, it, vi } from 'vitest';
 import type { SalesService } from '../service.js';
+import type { SalesIntelligenceService } from '../sales-intelligence.js';
 import {
   createSalesBot,
   parseSalesFind,
@@ -25,6 +26,22 @@ const update = (text: string, updateId: number) => ({
         type: 'bot_command' as const,
       },
     ],
+  },
+});
+
+const callbackUpdate = (data: string, updateId: number, userId = 123) => ({
+  update_id: updateId,
+  callback_query: {
+    id: `callback-${updateId}`,
+    from: { id: userId, is_bot: false, first_name: 'Operator' },
+    chat_instance: 'test-chat',
+    data,
+    message: {
+      message_id: updateId,
+      date: 1_788_704_068,
+      chat: { id: 123, type: 'private' as const, first_name: 'Operator' },
+      text: 'Přidat tento lead do Twenty CRM?',
+    },
   },
 });
 
@@ -129,6 +146,7 @@ describe('sales bot help', () => {
       '/sales_approve <id>',
       '/sales_reject <id>',
       '/sales_run',
+      '/link_to_lead <url>',
     ]) {
       expect(salesHelp).toContain(command);
     }
@@ -167,6 +185,101 @@ describe('sales bot help', () => {
     expect(salesBotCommands).toContainEqual(
       expect.objectContaining({ command: 'sales_calls' }),
     );
+    expect(salesBotCommands).toContainEqual(
+      expect.objectContaining({ command: 'link_to_lead' }),
+    );
+  });
+
+  it('previews a linked website and writes to Twenty only after owner confirmation', async () => {
+    const leadId = '11111111-1111-4111-8111-111111111111';
+    const lead = {
+      id: leadId,
+      companyName: 'Example s.r.o.',
+      websiteUrl: 'https://example.com/',
+      stage: 'DISCOVERED',
+      twentyCompanyId: null,
+      email: 'info@example.com',
+      phone: null,
+      research: {
+        researchedAt: new Date('2026-10-29T08:00:00.000Z'),
+        profile: { description: 'Example company' },
+        outreach: {
+          recommendedChannel: 'email',
+          primaryOffer: 'Web audit',
+          angle: 'Public finding',
+          conversationOpener: 'Hello',
+          subject: 'Audit',
+          body: 'Draft only',
+        },
+        technicalAudit: {
+          usesHttps: true,
+          hasMobileViewport: true,
+          hasDescription: true,
+          headingCount: 1,
+          imagesMissingAlt: 0,
+          detectedTechnologies: ['Next.js'],
+        },
+        contacts: [
+          {
+            type: 'general_email',
+            value: 'info@example.com',
+            verificationStatus: 'verified_public',
+          },
+        ],
+        opportunities: [],
+        sourceUrls: ['https://example.com/'],
+      },
+    };
+    const link = vi.fn().mockResolvedValue(lead);
+    const syncLinkedLeadToTwenty = vi
+      .fn()
+      .mockResolvedValue({ companyId: 'company-1' });
+    const bot = createSalesBot(
+      'test-token',
+      new Set([123]),
+      {} as SalesStore,
+      { syncLinkedLeadToTwenty } as unknown as SalesService,
+      undefined,
+      30,
+      { link } as unknown as SalesIntelligenceService,
+    );
+    bot.botInfo = {
+      id: 456,
+      is_bot: true,
+      first_name: 'Sales Bot',
+      username: 'sales_test_bot',
+      can_join_groups: false,
+      can_read_all_group_messages: false,
+      supports_inline_queries: false,
+      can_connect_to_business: false,
+      has_main_web_app: false,
+      has_topics_enabled: false,
+      allows_users_to_create_topics: false,
+      can_manage_bots: false,
+      supports_join_request_queries: false,
+    };
+    const methods: string[] = [];
+    bot.api.config.use(async (_previous, method) => {
+      methods.push(method);
+      return {
+        ok: true,
+        result: method === 'sendMessage' ? { message_id: 1 } : true,
+      } as never;
+    });
+
+    await bot.handleUpdate(update('/link_to_lead https://example.com', 700));
+
+    expect(link).toHaveBeenCalledWith('https://example.com');
+    expect(syncLinkedLeadToTwenty).not.toHaveBeenCalled();
+    expect(methods.filter((method) => method === 'sendMessage')).toHaveLength(
+      2,
+    );
+
+    await bot.handleUpdate(callbackUpdate(`sales:link:confirm:${leadId}`, 701));
+
+    expect(syncLinkedLeadToTwenty).toHaveBeenCalledWith(leadId);
+    expect(methods).toContain('answerCallbackQuery');
+    expect(methods).toContain('editMessageReplyMarkup');
   });
 
   it('parses bounded discovery input', () => {

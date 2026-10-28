@@ -2,13 +2,15 @@
 
 Private lead-research and outreach-preparation Telegram service. It discovers Czech businesses through ARES and Geoapify, optionally falls back to Google Places, crawls public company websites, records evidence, scores leads, prepares grounded drafts, and integrates with Quickly and Twenty when configured.
 
-`/lead <url>` safely creates or enriches an existing domain-matched CRM lead and stores a sourced intelligence report for 14 days. `/lead_analysis`, `/lead_refresh`, `/leads_today`, `/leads_next`, and `/leads_stats` expose the same research workflow. On working days at `SALES_INTELLIGENCE_TIME` (09:00 by default in `Europe/Prague`) the bot reserves up to five oldest eligible uncontacted leads, avoids repeatedly choosing already suggested records, refreshes stale research, and queues one summary plus detailed Telegram reports. Saturday and Sunday create no batch and send nothing. Suggestion never marks a lead contacted and never sends outreach.
+`/link_to_lead <url>` (with `/lead` as an alias) safely researches a public website, shows the sourced preview in Telegram, and waits for an explicit 15-minute Save/Cancel confirmation. Only Save idempotently creates or updates the Twenty Company and its research Note. A lost or expired confirmation writes nothing and can be restarted safely. `/lead_analysis`, `/lead_refresh`, `/leads_today`, `/leads_next`, and `/leads_stats` expose the same research workflow. On working days at `SALES_INTELLIGENCE_TIME` (09:00 by default in `Europe/Prague`) the bot reserves up to five oldest eligible uncontacted leads, avoids repeatedly choosing already suggested records, refreshes stale research, and queues one summary plus detailed Telegram reports. Saturday and Sunday create no batch and send nothing. Suggestion never marks a lead contacted and never sends outreach.
 
 Research and drafting never imply authorization to contact a recipient. Quickly enrollment fails closed unless a qualified, approved lead has valid `RECIPIENT_OPT_IN` or `EXISTING_CUSTOMER` evidence, no suppression, an enabled campaign, and available capacity. Public contact data or Telegram approval alone is not consent.
 
 ## Commands
 
 Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands include `/sales_status`, `/sales_campaigns`, `/sales_prospects`, `/sales_search`, `/sales_searches`, `/sales_search_stop`, `/sales_find`, `/sales_calls`, `/sales_leads`, `/sales_lead`, `/sales_approve`, `/sales_reject`, and `/sales_run`.
+
+Use `/link_to_lead https://firma.cz` to research one website. Review the Telegram report and press **Přidat do CRM** to write it to Twenty, or **Zrušit** to leave Twenty unchanged. `/lead` remains a backward-compatible alias.
 
 `/sales_prospects <business type> | <location> | [limit]` is the campaign-free CRM workflow. The limit defaults to 10 and is bounded to 1–20. It searches ARES and Geoapify with the optional Google Places fallback, keeps candidates that have a website, audits their public website for an email and explicit `tel:` link, and creates or updates a Twenty Company plus a linked contact Note. PostgreSQL prevents repeat creation by provider identity, normalized domain, and IČO; a previously completed prospect is skipped. This command never enrolls a lead in Quickly and never sends outreach.
 

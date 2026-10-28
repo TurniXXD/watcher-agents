@@ -1,4 +1,4 @@
-import { Bot, type Context } from 'grammy';
+import { Bot, InlineKeyboard, type Context } from 'grammy';
 import type { SalesStore } from '@watcher/database';
 import {
   authorizationMiddleware,
@@ -50,7 +50,8 @@ Commands
 /sales_approve <id> — record manual approval; the lead is enrolled only if every remaining eligibility check passes
 /sales_reject <id> — reject the lead so it is not enrolled
 /sales_run — immediately run discovery, analysis, scoring, and configured CRM/email synchronization
-/lead <url> — safely analyze a public website and create or enrich the deduplicated CRM lead
+/link_to_lead <url> — analyze a public website, show a preview, and add it to Twenty only after confirmation
+/lead <url> — alias for /link_to_lead
 /lead_analysis <lead-id> — show the cached detailed intelligence report
 /lead_refresh <lead-id> — force a fresh website research run
 /leads_today — show today's reserved reports without creating another batch
@@ -150,7 +151,11 @@ export const salesBotCommands = [
     description: 'Zamítnout lead: /sales_reject <id>',
   },
   { command: 'sales_run', description: 'Spustit Sales pipeline nyní' },
-  { command: 'lead', description: 'Přidat nebo obohatit lead z URL' },
+  {
+    command: 'link_to_lead',
+    description: 'Náhled leadu z URL a potvrzení CRM',
+  },
+  { command: 'lead', description: 'Alias pro /link_to_lead' },
   { command: 'lead_analysis', description: 'Zobrazit analýzu leadu' },
   { command: 'lead_refresh', description: 'Obnovit analýzu leadu' },
   { command: 'leads_today', description: 'Dnešní Sales intelligence' },
@@ -228,6 +233,10 @@ export const createSalesBot = (
   timezone = 'Europe/Prague',
 ): Bot => {
   const bot = new Bot(token);
+  const pendingLinkConfirmations = new Map<
+    string,
+    { userId: number; chatId: number; expiresAt: number }
+  >();
   bot.use(authorizationMiddleware(allowedUserIds));
   bot.command(['start', 'help', 'sales_help'], (ctx) => send(ctx, salesHelp));
   bot.command(['about', 'sales_about'], (ctx) => send(ctx, salesAbout));
@@ -445,21 +454,84 @@ export const createSalesBot = (
       ),
     );
   });
-  bot.command('lead', async (ctx) => {
+  const linkToLead = async (ctx: Context) => {
     if (!intelligence)
       return void (await ctx.reply('Sales intelligence není nakonfigurovaná.'));
+    const url = typeof ctx.match === 'string' ? ctx.match.trim() : '';
+    if (!url)
+      return void (await ctx.reply(
+        'Použití: /link_to_lead <veřejná URL webu>',
+      ));
     try {
-      const lead = await intelligence.link(ctx.match);
-      await send(
-        ctx,
-        `Lead ${lead.companyName} byl vytvořen nebo obohacen bez změny historie a stavu.\n${lead.email ? `E-mail: ${lead.email}\n` : ''}${lead.phone ? `Telefon: ${lead.phone}\n` : ''}Detail: /lead_analysis ${lead.id}`,
+      const lead = await intelligence.link(url);
+      for (const part of renderLeadIntelligence(lead))
+        await ctx.reply(part, {
+          link_preview_options: { is_disabled: true },
+        });
+      pendingLinkConfirmations.set(lead.id, {
+        userId: ctx.from!.id,
+        chatId: ctx.chat!.id,
+        expiresAt: Date.now() + 15 * 60_000,
+      });
+      await ctx.reply(
+        'Přidat tento lead do Twenty CRM? Potvrzení platí 15 minut.',
+        {
+          reply_markup: new InlineKeyboard()
+            .text('✅ Přidat do CRM', `sales:link:confirm:${lead.id}`)
+            .text('❌ Zrušit', `sales:link:cancel:${lead.id}`),
+        },
       );
     } catch (error) {
       await ctx.reply(
         `Lead se nepodařilo zpracovat: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-  });
+  };
+  bot.command(['link_to_lead', 'lead'], linkToLead);
+  bot.callbackQuery(
+    /^sales:link:(confirm|cancel):([0-9a-f-]{36})$/u,
+    async (ctx) => {
+      const [, action, leadId] = ctx.match;
+      const pending = leadId ? pendingLinkConfirmations.get(leadId) : undefined;
+      if (
+        !leadId ||
+        !pending ||
+        pending.expiresAt < Date.now() ||
+        pending.userId !== ctx.from.id ||
+        pending.chatId !== ctx.chat?.id
+      ) {
+        if (leadId) pendingLinkConfirmations.delete(leadId);
+        await ctx.answerCallbackQuery({
+          text: 'Potvrzení vypršelo. Spusť /link_to_lead znovu.',
+          show_alert: true,
+        });
+        return;
+      }
+      pendingLinkConfirmations.delete(leadId);
+      if (action === 'cancel') {
+        await ctx.answerCallbackQuery({ text: 'Zrušeno.' });
+        await ctx.editMessageReplyMarkup();
+        await ctx.reply('Lead nebyl přidán do Twenty CRM.');
+        return;
+      }
+      try {
+        const synced = await service.syncLinkedLeadToTwenty(leadId);
+        await ctx.answerCallbackQuery({ text: 'Lead byl přidán do CRM.' });
+        await ctx.editMessageReplyMarkup();
+        await ctx.reply(
+          `✅ Lead byl idempotentně přidán nebo aktualizován v Twenty CRM.\nCompany ID: ${synced.companyId}\nDetail: /lead_analysis ${leadId}`,
+        );
+      } catch (error) {
+        await ctx.answerCallbackQuery({
+          text: 'Zápis do CRM selhal.',
+          show_alert: true,
+        });
+        await ctx.reply(
+          `Lead se nepodařilo přidat do Twenty CRM: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    },
+  );
   const showAnalysis = async (ctx: Context, refresh: boolean) => {
     if (!intelligence)
       return void (await ctx.reply('Sales intelligence není nakonfigurovaná.'));

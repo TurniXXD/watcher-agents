@@ -16,7 +16,8 @@ Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands
 include `/sales_status`, `/sales_campaigns`, `/sales_prospects`,
 `/sales_search`, `/sales_searches`, `/sales_search_stop`, `/sales_find`,
 `/sales_calls`, `/sales_leads`, `/sales_lead`, `/sales_approve`,
-`/sales_reject`, and `/sales_run`. Sales intelligence adds `/lead URL`,
+`/sales_reject`, and `/sales_run`. Sales intelligence adds `/link_to_lead URL`
+(with `/lead URL` as an alias),
 `/lead_analysis ID`, `/lead_refresh ID`, `/leads_today`, `/leads_next`, and
 `/leads_stats`. It caches sourced research for 14 days. On working days at 09:00
 Europe/Prague the bot reserves up to five eligible uncontacted leads and queues
@@ -45,6 +46,7 @@ Bot.
 | `/sales_lead ID`                                                                                                                                      | Shows company/contact evidence, draft, stage, and eligibility.                                        |
 | `/sales_approve ID` / `/sales_reject ID`                                                                                                              | Records an operator decision; approval alone never establishes consent.                               |
 | `/sales_run`                                                                                                                                          | Runs discovery, audit, scoring, drafting, and configured sync.                                        |
+| `/link_to_lead URL` / `/lead URL`                                                                                                                     | Researches one public website, previews it, and writes to Twenty only after Save confirmation.        |
 | `/network_help`, `/network_add`, `/network_context`, `/network_search`, `/network_contact`, `/network_update`, `/network_intro`, `/network_followups` | Backward-compatible shared contact workflow; Networking Bot is the owning surface.                    |
 | Business-card photo                                                                                                                                   | Builds a contact preview and requires explicit Save/Cancel.                                           |
 
@@ -53,7 +55,7 @@ Bot.
 <Mermaid
   label="Sales Bot discovery, approval, CRM, and inbound lead workflows"
   chart={`flowchart LR
-    W["Sales Bot workflows"] --> A["Outbound campaign or /lead URL"]
+    W["Sales Bot workflows"] --> A["Outbound campaign or /link_to_lead URL"]
     A --> C["Discover, validate, deduplicate, audit, and research"]
     C --> E["Score lead and prepare draft"]
     E --> F{"Qualified and explicitly approved?"}
@@ -80,6 +82,12 @@ and scores leads. Immediate and periodic search results use compact lead blocks
 instead of fixed-width tables; valid public company and provider-detail HTTP(S)
 URLs are clickable. Periodic search stores its cursor and emits only new contacts.
 Lead research and call lists do not send email.
+
+`/link_to_lead URL` creates or refreshes the deduplicated internal research
+record, sends its sourced intelligence report to Telegram, and presents Save
+and Cancel buttons. Save is valid for 15 minutes and idempotently upserts the
+Twenty Company plus a linked research Note. Cancel, expiry, a bot restart, or a
+confirmation from a different operator writes nothing to Twenty.
 
 `/sales_prospects <business type> | <location> | [limit]` performs a separate
 campaign-free CRM import. It defaults to 10 results, accepts 1–20, audits public

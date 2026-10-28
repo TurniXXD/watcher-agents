@@ -132,6 +132,50 @@ export class SalesService {
     return Boolean(this.twenty);
   }
 
+  public async syncLinkedLeadToTwenty(leadId: string): Promise<{
+    companyId: string;
+  }> {
+    if (!this.twenty) throw new Error('Twenty CRM is not configured');
+    const lead = await this.store.getLeadWithResearch(leadId);
+    if (!lead) throw new Error('Lead was not found');
+    if (!lead.websiteUrl || !lead.research)
+      throw new Error('Lead must be researched before CRM synchronization');
+
+    const websiteUrl = new URL(lead.websiteUrl).toString();
+    const domain = new URL(websiteUrl).hostname
+      .replace(/^www\./u, '')
+      .toLowerCase();
+    const company = await this.twenty.upsertCompany({
+      name: lead.companyName,
+      websiteUrl,
+      domain,
+      externalId: `${lead.source}:${lead.sourceExternalId}`,
+      ...(lead.location ? { location: lead.location } : {}),
+      source: lead.source,
+      ...(lead.sourceUrl ? { sourceUrl: lead.sourceUrl } : {}),
+      lastResearchedAt: lead.research.researchedAt,
+    });
+    const note = await this.twenty.recordInteraction({
+      externalId: `link-to-lead:${lead.id}`,
+      companyId: company.id,
+      title: 'Link to lead research',
+      body: [
+        `Website: ${websiteUrl}`,
+        `Email: ${lead.email ?? 'not found'}`,
+        `Phone: ${lead.phone ?? 'not found'}`,
+        `Contact source: ${lead.contactSourceUrl ?? lead.phoneSourceUrl ?? lead.sourceUrl ?? websiteUrl}`,
+        `Research sources:\n${lead.research.sourceUrls.map((url) => `- ${url}`).join('\n')}`,
+        '',
+        'Research only — verify the recipient and legal basis before outreach.',
+      ].join('\n\n'),
+    });
+    await this.store.setTwentySyncIds(lead.id, {
+      companyId: company.id,
+      draftNoteId: note.id,
+    });
+    return { companyId: company.id };
+  }
+
   public async syncProspects(input: {
     query: string;
     locality: string;

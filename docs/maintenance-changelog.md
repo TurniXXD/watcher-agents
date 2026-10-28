@@ -279,3 +279,9 @@ Each code update that changes runtime behavior must add a concise entry here. Th
 - Added `/lead`, cached lead analysis/refresh, daily queue inspection and statistics commands.
 - Added restart-safe five-lead Sales Intelligence reports at 09:00 Europe/Prague on Monday through Friday only; weekends create no batch and send no report.
 - Added sourced website/contact/technical research, opportunity recommendations, outreach drafts, 14-day caching, CRM deduplication, and persistent suggestion history without marking suggestions as contacted.
+
+## 2026-10-29 — Confirmed link-to-lead CRM import
+
+- Added the visible `/link_to_lead URL` Sales Bot command with `/lead` as a backward-compatible alias.
+- The bot now sends the sourced research preview first and writes the Company and research Note to Twenty only after the initiating operator confirms within 15 minutes.
+- Cancelled, expired, cross-user, or restart-lost confirmations leave Twenty unchanged.
