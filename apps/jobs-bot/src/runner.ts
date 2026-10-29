@@ -3,6 +3,9 @@ import {
   JobSourceHttpError,
   createJobSourceDefinitions,
   evaluateJob,
+  evaluateSalesBusinessJob,
+  buildSalesBusinessProfile,
+  isSalesBusinessDevelopmentJob,
   jobContentHash,
   normalizedJobSchema,
   verifyJobAvailability,
@@ -142,7 +145,15 @@ export class JobDiscoveryRunner {
     job: NormalizedJob,
     profile: CandidateProfile,
   ): Promise<{ result: JobEvaluationResult; ai?: JobAiMetadata }> {
-    const deterministic = evaluateJob(job, profile);
+    const salesCategory =
+      profile.searchCategories.salesBusinessDevelopment &&
+      isSalesBusinessDevelopmentJob(job);
+    const evaluationProfile = salesCategory
+      ? buildSalesBusinessProfile(profile)
+      : profile;
+    const deterministic = salesCategory
+      ? evaluateSalesBusinessJob(job, profile)
+      : evaluateJob(job, profile);
     const partialEvidence = (
       result: JobEvaluationResult,
     ): JobEvaluationResult =>
@@ -161,7 +172,7 @@ export class JobDiscoveryRunner {
     try {
       const evaluated = await this.aiEvaluator.evaluate(
         job,
-        profile,
+        evaluationProfile,
         deterministic,
       );
       return {

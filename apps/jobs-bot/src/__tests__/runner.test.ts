@@ -10,6 +10,8 @@ const profile: CandidateProfile = {
   name: 'Candidate',
   professionalTitle: 'Full-Stack Developer',
   yearsExperience: 5,
+  evaluationMode: 'TECHNICAL',
+  searchCategories: { salesBusinessDevelopment: false },
   educationLevel: 'Secondary technical school',
   languages: { Czech: 'native', English: 'B2' },
   preferredRoles: ['Full-Stack Developer'],
@@ -499,6 +501,81 @@ describe('JobDiscoveryRunner orchestration', () => {
     expect(store.updateAvailability).toHaveBeenCalledWith(
       'linkedin-job',
       'LISTED_UNVERIFIED',
+    );
+  });
+
+  it('routes sales roles through the separate career-transition evaluation profile', async () => {
+    const salesProfile: CandidateProfile = {
+      ...profile,
+      searchCategories: { salesBusinessDevelopment: true },
+    };
+    const salesJob = {
+      sourceId: 'sales-source',
+      externalId: 'sales-1',
+      title: 'Business Development Representative',
+      company: 'Example SaaS',
+      description:
+        'Entry-level B2B SaaS position. No previous sales experience required. Structured onboarding and fixed salary.',
+      location: 'Brno, Czechia',
+      country: 'Czechia',
+      city: 'Brno',
+      workMode: 'ONSITE' as const,
+      remoteRegions: [],
+      technologyStack: [],
+      originalUrl: 'https://sales-source.example/jobs/1',
+      raw: {},
+    };
+    const store = {
+      ...createStore(['sales-source']),
+      getActiveProfile: vi.fn(async () => ({
+        row: { id: 'profile-1', version: 2 },
+        profile: salesProfile,
+      })),
+      findRawJob: vi.fn(async () => null),
+      upsertJob: vi.fn(async () => ({
+        job: {
+          id: 'sales-job-1',
+          availabilityStatus: 'LISTED_UNVERIFIED',
+        },
+        isNew: true,
+        changed: true,
+        contentHash: 'sales-content-hash',
+      })),
+      findEvaluation: vi.fn(async () => null),
+      saveEvaluation: vi.fn(async (input: unknown) => {
+        void input;
+        return { id: 'sales-evaluation-1' };
+      }),
+      reserveNotification: vi.fn(async () => ({
+        row: { id: 'sales-notification-1', status: 'PENDING' },
+        reserved: true,
+      })),
+    };
+    const runner = new JobDiscoveryRunner(
+      store as never,
+      salesProfile,
+      72,
+      logger,
+      [source('sales-source', async () => ({ jobs: [salesJob] }))],
+      undefined,
+      undefined,
+      vi.fn(async () => 'OPEN_CONFIRMED' as const),
+    );
+
+    const result = await runner.run({ trigger: 'MANUAL' });
+
+    const savedEvaluation: unknown = store.saveEvaluation.mock.calls[0]?.[0];
+    expect(savedEvaluation).toMatchObject({
+      profileVersion: 2,
+      result: {
+        eligibility: 'ELIGIBLE',
+      },
+    });
+    expect(JSON.stringify(savedEvaluation)).toContain(
+      'Sales & Business Development category',
+    );
+    expect(result.alerts[0]?.reasoning).toContain(
+      'No professional sales achievements, revenue targets, or managed client portfolio were assumed',
     );
   });
 });

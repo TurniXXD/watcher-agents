@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  jobsCzDiscoveryUrls,
   parseCoolJobsDetail,
   parseCoolJobsListings,
   parseJobsCzDetail,
@@ -9,6 +10,8 @@ import {
   parsePraceCzListings,
   parsePraceZaRohemDetail,
   parsePraceZaRohemListings,
+  praceCzDiscoveryUrls,
+  praceZaRohemDiscoveryUrls,
 } from '../czech-job-sources.js';
 import { parseSchemaJobPostingPage } from '../schema-jobposting.js';
 import { createJobSourceDefinitions } from '../sources.js';
@@ -52,6 +55,29 @@ describe('Czech job source connectors', () => {
       });
       expect(definitions.get(id)?.adapter).toBeDefined();
     }
+  });
+
+  it('keeps the technical discovery pages and adds verified Czech sales searches', () => {
+    expect(jobsCzDiscoveryUrls).toEqual(
+      expect.arrayContaining([
+        'https://www.jobs.cz/prace/is-it-vyvoj-aplikaci-a-systemu/',
+        'https://www.jobs.cz/prace/brno/account-manager/',
+        'https://www.jobs.cz/prace/obchodni-zastupce/',
+      ]),
+    );
+    expect(praceCzDiscoveryUrls).toEqual(
+      expect.arrayContaining([
+        'https://www.prace.cz/nabidky/programator/',
+        'https://www.prace.cz/nabidky/obchodni-zastupce/',
+        'https://www.prace.cz/nabidky/account-manager/',
+      ]),
+    );
+    expect(praceZaRohemDiscoveryUrls).toEqual(
+      expect.arrayContaining([
+        'https://www.pracezarohem.cz/nabidky/is-it-vyvoj-aplikaci-a-systemu',
+        'https://www.pracezarohem.cz/nabidky/jihomoravsky/brno-mesto/prodej-a-obchod',
+      ]),
+    );
   });
 
   it('parses Jobs.cz public cards and combines public detail metadata and body', () => {

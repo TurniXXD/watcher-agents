@@ -166,7 +166,8 @@ export class JobStore {
         !('requiredTechnologies' in existingData) ||
         !('excludedTechnologies' in existingData) ||
         !('adjacentRoles' in existingData) ||
-        !('preferredContractTypes' in existingData);
+        !('preferredContractTypes' in existingData) ||
+        !('searchCategories' in existingData);
       if (!needsPreferenceMigration)
         return { row: existing, profile: profileFromRow(existing) };
 
@@ -175,6 +176,7 @@ export class JobStore {
         excludedTechnologies: profile.excludedTechnologies,
         preferredContractTypes: profile.preferredContractTypes,
         preferredLocations: profile.preferredLocations,
+        searchCategories: profile.searchCategories,
       });
       const row = await this.updateProfile(existing.id, migrated);
       return { row, profile: profileFromRow(row) };
@@ -199,6 +201,8 @@ export class JobStore {
           excludedTechnologies: profile.excludedTechnologies,
           adjacentRoles: profile.adjacentRoles,
           preferredContractTypes: profile.preferredContractTypes,
+          evaluationMode: profile.evaluationMode,
+          searchCategories: profile.searchCategories,
           ...(profile.filters ? { filters: profile.filters } : {}),
         }),
         scoringWeights: json(profile.weights),
@@ -256,6 +260,8 @@ export class JobStore {
             excludedTechnologies: profile.excludedTechnologies,
             adjacentRoles: profile.adjacentRoles,
             preferredContractTypes: profile.preferredContractTypes,
+            evaluationMode: profile.evaluationMode,
+            searchCategories: profile.searchCategories,
             ...(profile.filters ? { filters: profile.filters } : {}),
           }),
           scoringWeights: json(profile.weights),

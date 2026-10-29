@@ -274,6 +274,15 @@ Ollama endpoint, while `JOBS_AI_MODEL`, optional `JOBS_AI_API_KEY`, and
 `JOBS_EMAIL_RECIPIENT` configure an HTTP mail gateway. Never commit populated
 profile JSON or credentials.
 
+`JOBS_SALES_CATEGORY_ENABLED` controls the initial state of the additive Sales
+& Business Development search category and defaults to `true`. Once the
+candidate profile exists, use the authorized `/jobs_category sales on|off`
+command to persistently change it. The established technical profile remains
+enabled and unchanged. Sales roles use a separate career-transition profile
+with zero assumed professional sales experience; startup/product validation
+and technical SaaS, automation, and AI experience remain factual advantages,
+not invented revenue or client-portfolio achievements.
+
 Optional comma-separated `JOBS_GREENHOUSE_BOARDS`, `JOBS_LEVER_SITES`,
 `JOBS_ASHBY_BOARDS`, `JOBS_SMARTRECRUITERS_COMPANIES`,
 `JOBS_WORKABLE_ACCOUNTS`, `JOBS_RECRUITEE_COMPANIES`, and

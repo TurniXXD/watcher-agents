@@ -27,6 +27,8 @@ persisted, daylight-saving-aware schedules.
 | `/jobs_note JOB_ID NOTE`                                      | Adds a private note.                                                |
 | `/jobs_followup JOB_ID YYYY-MM-DD\|clear`                     | Sets or clears a follow-up date.                                    |
 | `/jobs_profile [COMPLETE_JSON]`                               | Shows or replaces the validated candidate profile.                  |
+| `/jobs_category [list]`                                       | Shows the independently configurable search categories.             |
+| `/jobs_category sales on\|off`                                | Enables/disables additive sales matching and re-scores stored jobs. |
 | `/jobs_filter [list]`                                         | Shows current title/country/technology/keyword/language lists.      |
 | `/jobs_filter CATEGORY allow\|block add\|remove\|clear VALUE` | Edits a persisted whitelist or blacklist and re-scores stored jobs. |
 | `/jobs_filter max_years N`                                    | Sets maximum required experience years.                             |
@@ -51,6 +53,7 @@ persisted, daylight-saving-aware schedules.
 | `JOBS_LINKEDIN_IMAP_LOOKBACK_DAYS`                                                  | `14` (max `30`)           | Recent message scan window.                                                                |
 | `JOBS_CANDIDATE_NAME`                                                               | Built-in operator default | Name used by the default profile.                                                          |
 | `JOBS_CANDIDATE_PROFILE_JSON`                                                       | Optional                  | Complete validated profile override.                                                       |
+| `JOBS_SALES_CATEGORY_ENABLED`                                                       | `true`                    | Initial Sales & Business Development category state; Telegram changes persist afterward.   |
 | `JOBS_AI_ENABLED`                                                                   | `false`                   | Enables bounded AI nuance scoring.                                                         |
 | `JOBS_AI_BASE_URL`, `JOBS_AI_MODEL`                                                 | Local defaults            | OpenAI-compatible/Ollama endpoint and model.                                               |
 | `JOBS_AI_API_KEY`                                                                   | Optional                  | Provider credential when required.                                                         |
@@ -97,9 +100,9 @@ verified permitted integration. Runtime health such as `DEGRADED` or
 | `working-nomads`           | Working Nomads                    | `ACTIVE`             | Public exposed-jobs JSON API.                                                                         |
 | `remote-ok`                | Remote OK                         | `ACTIVE`             | Public JSON API; missing region eligibility remains unknown.                                          |
 | `cooljobs-eu`              | CoolJobs.eu                       | `ACTIVE`             | Public active-position listing plus rate-limited public detail metadata.                              |
-| `prace-za-rohem`           | Práce za rohem                    | `ACTIVE`             | Public IT category pages and validated server-rendered listing/detail data.                           |
-| `jobs-cz`                  | Jobs.cz                           | `ACTIVE`             | Public IT category cards and rate-limited public detail pages; blocked internal APIs are not used.    |
-| `prace-cz`                 | Prace.cz                          | `ACTIVE`             | Public IT category pages plus rate-limited `schema.org/JobPosting` detail data.                       |
+| `prace-za-rohem`           | Práce za rohem                    | `ACTIVE`             | Public IT pages plus the Brno `prodej-a-obchod` page and validated listing/detail data.               |
+| `jobs-cz`                  | Jobs.cz                           | `ACTIVE`             | Public IT pages plus verified Brno Account Manager and Obchodní zástupce searches.                    |
+| `prace-cz`                 | Prace.cz                          | `ACTIVE`             | Public IT, Obchodní zástupce, and Account Manager pages plus structured detail data.                  |
 | `jobstack-it`              | Jobstack.it                       | `ACTIVE`             | Public sitemap plus rate-limited semantic job detail pages.                                           |
 | `jobsi-cz`                 | Jobsi.cz                          | `ACTIVE`             | Public sitemap plus rate-limited public job detail pages.                                             |
 | `jenprace-cz`              | JenPrace.cz                       | `ACTIVE`             | Official offers sitemap plus rate-limited `schema.org/JobPosting` detail data.                        |
@@ -124,7 +127,8 @@ The repository rule and regression test require every future registry change
 to update this inventory and the Jobs Bot README in the same change.
 
 The Czech HTML connectors are deliberately bounded: category-based sources
-read only their public IT listings, sitemap sources retain at most the latest
+read their existing public IT listings plus the documented Brno/Czech sales
+searches, sitemap sources retain at most the latest
 250 active URLs, and detail requests are rate-limited and performed only for
 new, changed, or stale jobs. Jobs.cz's disallowed internal API, private account
 areas, reply endpoints, and application submission are never accessed.
@@ -151,7 +155,11 @@ areas, reply endpoints, and application submission are never accessed.
     E -->|No| G["Reuse stored detail"]
     F --> H["4. Persist observation and canonical job"]
     G --> H
-    H --> I["5. Apply editable allow/block lists:<br/>title, country, technology, keyword, language;<br/>then degree/experience/Staff rules"]
+    H --> C{"5. Recognized Sales & BD title<br/>and category enabled?"}
+    C -->|No| I["Established technical profile:<br/>editable allow/block lists and<br/>degree/experience/Staff rules"]
+    C -->|Yes| SI["Separate career-transition profile:<br/>zero assumed sales employment;<br/>classify B2B/B2C and compensation"]
+    SI --> I2["Reward no-experience entry, training,<br/>mentoring, technical/startup fit;<br/>flag commission/MLM/advisory risk"]
+    I2 --> J
     I --> J{"Any hard blocker?"}
     J -->|Yes| K["INELIGIBLE: persist evidence, no alert"]
     J -->|No| L["6. Record uncertainties and weighted score"]
@@ -164,7 +172,8 @@ areas, reply endpoints, and application submission are never accessed.
     R --> S["Telegram and optional e-mail digest"]
     H --> I1
     H --> T["Idempotent Notion mirror when configured"]
-    I1["Extract structured requirements"] -. evidence .-> I`}
+    I1["Extract structured requirements"] -. evidence .-> I
+    I1 -. evidence .-> I2`}
 />
 
 ## Collection contract
@@ -233,6 +242,36 @@ IČO, B2B, contractor, freelance, and contract arrangements receive the
 conditions preference, so remote IČO-compatible roles sort ahead of otherwise
 similar Czech employment vacancies.
 
+### Sales & Business Development
+
+Sales & Business Development is an additive, independently persisted category.
+Use `/jobs_category` to inspect it and `/jobs_category sales on|off` to change
+it without changing the technical profile. `JOBS_SALES_CATEGORY_ENABLED=true`
+sets the initial state for a new or migrated profile. Collection, normalization,
+deduplication, schedules, Notion synchronization, link checks, and idempotent
+notifications remain shared.
+
+The category recognizes Relationship/Client Relationship Manager,
+Account/Junior Account Manager, BDR, SDR, Business Development Specialist,
+Sales Representative/Consultant, Obchodní konzultant/zástupce, Klientský
+poradce, and Financial/Investment Consultant roles. Its separate profile has
+zero professional sales, account-management, and financial-advisory employment
+experience. Revizio co-founding/product validation and software, SaaS,
+automation, and AI knowledge are factual advantages, but never become invented
+sales achievements, quotas, revenue, or a managed client portfolio.
+
+Scoring rewards explicit no-experience acceptance, junior/graduate/trainee
+entry, onboarding, mentoring, training, growth, B2B/SaaS/technology/startup
+context, and client acquisition or relationship building. Brno and remote
+within Czechia are the allowed geography. Mandatory prior professional sales
+experience and senior sales titles are blockers; mid-level roles may remain
+eligible when prior sales experience is not mandatory. Each explanation names
+available B2B/B2C evidence and fixed salary, commission, performance bonus,
+commission-only, unclear compensation, or unusually wide salary-range signals.
+Financial services are classified rather than automatically rejected;
+MLM-like recruiting is blocked and other advisory-model uncertainty is shown
+for human review.
+
 `/jobs_filter` provides persistent title, country, technology, keyword, and
 mandatory-language allowlists and blocklists. The current role, location,
 technology, English-only, five-year, degree, and Staff rules form the default.
@@ -259,6 +298,11 @@ requirement or whether a role is still open, so LinkedIn records remain
 matching is not cryptographic authentication; mailbox-provider filtering is
 part of the trust boundary. The bot never logs in to LinkedIn, fetches its Jobs
 pages, or submits applications.
+
+Create a separate Czechia LinkedIn alert for the supported Sales, Business
+Development, Account Management, and Relationship Management titles when this
+category is enabled. Those messages reuse the same IMAP adapter and category
+router.
 
 The first import is baseline-only. Later runs reserve one immutable initial
 digest key per canonical job, so neither a second source nor a changed listing

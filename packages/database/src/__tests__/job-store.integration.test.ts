@@ -12,6 +12,8 @@ const profile: CandidateProfile = {
   name: 'Integration test candidate',
   professionalTitle: 'Full-Stack Developer',
   yearsExperience: 5,
+  evaluationMode: 'TECHNICAL',
+  searchCategories: { salesBusinessDevelopment: false },
   educationLevel: 'Secondary technical school',
   languages: { Czech: 'native', English: 'B2' },
   preferredRoles: ['Full-Stack Developer'],

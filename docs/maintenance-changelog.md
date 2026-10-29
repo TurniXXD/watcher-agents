@@ -2,6 +2,13 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-29 — Additive Sales & Business Development job category
+
+- Added an independently persisted Sales & Business Development category without changing the established technical profile, sources, schedules, deduplication, link checks, Notion mirror, or notification workflow.
+- Added `/jobs_category sales on|off`, an initial `JOBS_SALES_CATEGORY_ENABLED` setting, and immediate stored-job re-evaluation after category changes.
+- Added a separate zero-sales-experience career-transition evaluator that rewards entry-level training and technical/startup relevance, classifies B2B/B2C and compensation evidence, and flags commission-only, MLM-like, unclear-pay, wide-range, and financial-advisory risks without inventing sales achievements.
+- Extended the existing Jobs.cz, Prace.cz, and Práce za rohem public discovery pages with verified Czech sales searches while retaining every technical discovery page.
+
 ## 2026-10-28 — Editable job filters, LinkedIn alert inbox, and source diagnostics
 
 - Added persistent title, country, technology, keyword, and language allowlists/blocklists to Jobs Bot, plus editable experience-year, mandatory-degree, and Staff-engineering rules. Existing candidate preferences remain the defaults.

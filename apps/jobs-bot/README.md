@@ -19,6 +19,8 @@ Jobs Bot is the persistent worker and private Telegram surface for personal job 
 - `/jobs_note JOB_ID NOTE` — append a private application note.
 - `/jobs_followup JOB_ID YYYY-MM-DD|clear` — set or clear a follow-up date.
 - `/jobs_profile [COMPLETE_JSON]` — show or replace the validated candidate profile.
+- `/jobs_category [list]` — show the independently configurable search categories.
+- `/jobs_category sales on|off` — persistently enable or disable the additive Sales & Business Development category; the existing technical search stays enabled.
 - `/jobs_filter [list|CATEGORY allow|block add|remove|clear VALUE]` — edit persisted title, country, technology, keyword, and language allowlists/blacklists; for example `/jobs_filter country block add India`.
 - `/jobs_filter max_years NUMBER`, `/jobs_filter degree on|off`, `/jobs_filter staff on|off` — edit experience, degree, and Staff-engineering blockers.
 - `/jobs_reevaluate` — immediately re-score stale stored jobs.
@@ -53,9 +55,9 @@ Live health such as `HEALTHY`, `DEGRADED`, or `RATE_LIMITED` is reported by
 | `working-nomads`           | Working Nomads                    | `ACTIVE`             | Public exposed-jobs JSON API.                                                                                                                       |
 | `remote-ok`                | Remote OK                         | `ACTIVE`             | Public JSON API; missing region eligibility remains unknown.                                                                                        |
 | `cooljobs-eu`              | CoolJobs.eu                       | `ACTIVE`             | Public active-position listing plus rate-limited public detail metadata.                                                                            |
-| `prace-za-rohem`           | Práce za rohem                    | `ACTIVE`             | Public IT category pages and validated server-rendered listing/detail data.                                                                         |
-| `jobs-cz`                  | Jobs.cz                           | `ACTIVE`             | Public IT category cards and rate-limited public detail pages; blocked internal APIs are not used.                                                  |
-| `prace-cz`                 | Prace.cz                          | `ACTIVE`             | Public IT category pages plus rate-limited `schema.org/JobPosting` detail data.                                                                     |
+| `prace-za-rohem`           | Práce za rohem                    | `ACTIVE`             | Public IT pages plus the public Brno `prodej-a-obchod` page and validated server-rendered listing/detail data.                                      |
+| `jobs-cz`                  | Jobs.cz                           | `ACTIVE`             | Public IT pages plus verified Account Manager/Obchodní zástupce searches and rate-limited public details; blocked internal APIs are not used.       |
+| `prace-cz`                 | Prace.cz                          | `ACTIVE`             | Public IT, Obchodní zástupce, and Account Manager pages plus rate-limited `schema.org/JobPosting` detail data.                                      |
 | `jobstack-it`              | Jobstack.it                       | `ACTIVE`             | Public sitemap plus rate-limited semantic job detail pages.                                                                                         |
 | `jobsi-cz`                 | Jobsi.cz                          | `ACTIVE`             | Public sitemap plus rate-limited public job detail pages.                                                                                           |
 | `jenprace-cz`              | JenPrace.cz                       | `ACTIVE`             | Official offers sitemap plus rate-limited `schema.org/JobPosting` detail data.                                                                      |
@@ -88,11 +90,21 @@ The validated initial profile contains the supplied Jakub Vantuch CV facts, link
 
 Weights are technology 30, experience 20, role 15, location 15, language 10, career direction 5, and conditions 5. Defaults: excellent 85, strong 70, possible 55, notification 70. A profile version plus job content hash caches evaluations.
 
+### Sales & Business Development category
+
+The additive Sales & Business Development category is independently persisted and can be inspected or changed with `/jobs_category [list]` and `/jobs_category sales on|off`. `JOBS_SALES_CATEGORY_ENABLED` sets its initial state for a new or migrated profile and defaults to `true`; it never disables or rewrites the established technical profile. The same sources, normalization, canonical deduplication, schedules, application-link checks, Notion mirror, and notification reservation are reused.
+
+Recognized role families include Relationship/Client Relationship Manager, Account/Junior Account Manager, BDR, SDR, Business Development Specialist, Sales Representative/Consultant, Obchodní konzultant/zástupce, Klientský poradce, and Financial/Investment Consultant. These jobs use a separate deterministic profile with **zero assumed professional sales, account-management, or financial-advisory employment experience**. The candidate's Revizio co-founding, product-validation, technical software, SaaS, automation, and AI background may count as relevant context, but is never rewritten as sales employment, revenue achievement, quota attainment, or a managed client portfolio.
+
+The category prefers Brno or remote work within Czechia, entry-level/junior/graduate/trainee roles, explicit no-experience acceptance, structured onboarding, mentoring, training, growth, B2B/SaaS/technology/startup/financial-services context, and client acquisition or relationship building. A mandatory prior professional sales background and senior sales titles are blockers. Mid-level roles can remain eligible when prior sales employment is not mandatory. The result explicitly classifies B2B/B2C evidence, fixed salary, commission, performance bonuses, commission-only risk, unclear compensation, unusually wide advertised ranges, and financial-advisory business models. Financial services are not rejected merely for being financial services; MLM-like recruiting is blocked, while other compensation/model ambiguity is surfaced for human review.
+
 `/jobs_filter` exposes persistent allowlists and blocklists for title, country, technology, keyword, and mandatory language. Lists start from the existing role, location, and technology preferences; English is the default allowed mandatory language. A blocklist overrides an allowlist; clearing an allowlist removes that category's requirement. Maximum required years (default five), mandatory-degree blocking, and Staff-engineering blocking are editable. `/jobs_profile` remains available for complete profile settings, including work modes, scoring weights, and thresholds. Filter changes re-evaluate stored jobs and survive restarts in PostgreSQL.
 
 ### LinkedIn Job Alerts setup
 
 LinkedIn does not provide this bot a permitted public job-search API. In your own LinkedIn account, create a **daily email job alert** for [Full Stack Developer in Czechia](https://www.linkedin.com/jobs/search/?keywords=Full%20Stack%20Developer&location=Czechia), choosing Czechia as the location rather than the broad Europe search. Optionally add a second alert for remote roles in Europe. Route these emails to a dedicated TLS IMAP inbox and set `JOBS_LINKEDIN_IMAP_HOST`, `JOBS_LINKEDIN_IMAP_USER`, and `JOBS_LINKEDIN_IMAP_PASSWORD` together in VPS runtime secrets. The bot reads at most 100 recent messages in read-only mode, accepts `@linkedin.com` senders with recognizable job links, and deduplicates by LinkedIn job ID. It never logs in to LinkedIn or fetches its Jobs pages. Email summaries may omit degree, language, or expiry information: these records are always `UNCERTAIN`, their links stay `LISTED_UNVERIFIED`, and a human must review the full listing before applying. Sender authentication relies on the mailbox provider; a matching From address alone is not cryptographic proof.
+
+For the sales category, add a separate LinkedIn alert covering the supported Sales, Business Development, Account Management, or Relationship Management titles in Czechia. It enters the same mailbox adapter and category router; no second LinkedIn connector is created.
 
 Optional AI nuance scoring uses an OpenAI-compatible chat-completions endpoint, including local Ollama. The Zod-validated AI assessment contributes 25% of the final score and cannot remove deterministic hard blockers. Provider/model/prompt/token metadata is stored with the cached evaluation. Any timeout, HTTP failure, or malformed output falls back to deterministic scoring for that job.
 
@@ -113,6 +125,7 @@ Optional:
 - `JOBS_LINKEDIN_IMAP_HOST`, `JOBS_LINKEDIN_IMAP_USER`, `JOBS_LINKEDIN_IMAP_PASSWORD` — optional all-or-none TLS IMAP group for received LinkedIn Job Alert emails. `JOBS_LINKEDIN_IMAP_PORT` defaults to `993`, `JOBS_LINKEDIN_IMAP_MAILBOX` to `INBOX`, and `JOBS_LINKEDIN_IMAP_LOOKBACK_DAYS` to `14` (maximum `30`).
 - `JOBS_CANDIDATE_NAME`
 - `JOBS_CANDIDATE_PROFILE_JSON`
+- `JOBS_SALES_CATEGORY_ENABLED` (default `true`; initial state, later editable with `/jobs_category sales on|off`)
 - `JOBS_AI_ENABLED` (default `false`)
 - `JOBS_AI_BASE_URL` (default `http://host.docker.internal:11434`), `JOBS_AI_MODEL` (default `qwen3:8b`), `JOBS_AI_API_KEY` (optional), and `JOBS_AI_TIMEOUT_MS` (default `45000`)
 - `JOBS_EMAIL_WEBHOOK_URL`, `JOBS_EMAIL_WEBHOOK_API_KEY`, `JOBS_EMAIL_RECIPIENT` — optional e-mail gateway accepting `{to, subject, text, html}` JSON.

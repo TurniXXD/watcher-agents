@@ -7,6 +7,11 @@ import {
 } from '@watcher/telegram';
 import { Bot } from 'grammy';
 import {
+  jobsCategoryUsage,
+  renderJobsCategories,
+  updateJobsCategory,
+} from './categories.js';
+import {
   jobsFilterUsage,
   renderJobsFilters,
   updateJobsFilter,
@@ -41,6 +46,10 @@ export const jobsBotCommands = [
   { command: 'jobs_note', description: 'Add a private note to a job' },
   { command: 'jobs_followup', description: 'Set or clear a follow-up date' },
   { command: 'jobs_profile', description: 'Show or replace candidate profile' },
+  {
+    command: 'jobs_category',
+    description: 'Configure additive search categories',
+  },
   { command: 'jobs_filter', description: 'Edit job allowlists and blocklists' },
   { command: 'jobs_reevaluate', description: 'Re-score stored jobs' },
 ] as const;
@@ -72,6 +81,8 @@ export const jobsHelp = [
   '/jobs_followup JOB_ID 2026-11-03 – set a follow-up date; use clear to remove it',
   '/jobs_profile – show the active profile',
   '/jobs_profile {"name":"Candidate",...} – replace the complete profile after validation',
+  '/jobs_category – show independently configurable search categories',
+  '/jobs_category sales on|off – enable or disable Sales & Business Development; technical search stays enabled',
   '/jobs_filter – show title/country/technology/keyword/language allowlists and blocklists',
   '/jobs_filter title allow add Full-Stack Developer – add a title whitelist phrase',
   '/jobs_filter country block add India – exclude a country',
@@ -89,7 +100,7 @@ export const jobsAbout = [
   'ℹ️ About Personal Job Discovery',
   '',
   'This private bot is for one authorized operator. PostgreSQL is the authoritative store for candidate settings, source checkpoints, jobs, evaluations, schedules, delivery state, and application notes.',
-  'It automatically reads configured permitted public sources and optional operator-delivered LinkedIn job-alert e-mails, normalizes and deduplicates listings, applies deterministic eligibility/scoring rules, revalidates supported application links before new alerts and during scheduled runs, mirrors evaluated vacancies to Notion when configured, and sends new qualifying matches through Telegram or an optional operator-owned e-mail webhook. Optional local/OpenAI-compatible AI nuance scoring is validated and cannot remove deterministic blockers.',
+  'It automatically reads configured permitted public sources and optional operator-delivered LinkedIn job-alert e-mails, normalizes and deduplicates listings, and routes technical roles through the established technical profile. The optional Sales & Business Development category uses a separate career-transition profile and never treats software engineering as professional sales experience. Supported application links are revalidated before alerts and during scheduled runs; evaluated vacancies can be mirrored to Notion. Optional local/OpenAI-compatible AI nuance scoring is validated and cannot remove deterministic blockers.',
   'You must explicitly decide whether to save, dismiss, apply, contact anyone, or change an application status. The bot never submits applications, contacts employers, bypasses access controls, or claims that an aggregator listing is still open.',
   'All Telegram updates require an allowed user ID. Secrets remain server-side. Scores can be uncertain and must be checked against the original listing; unsupported sources stay disabled.',
   'Use /help next, or /jobs_run all dry for a no-write source preview.',
@@ -467,6 +478,30 @@ export const createJobsBot = (input: {
     } catch (error) {
       await context.reply(
         `Profile update failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  });
+  bot.command('jobs_category', async (context) => {
+    const argument = commandArgument(context.message?.text).trim();
+    const active = await input.store.getActiveProfile();
+    if (!active) throw new Error('Candidate profile is not initialized');
+    if (!argument || argument === 'list') {
+      await context.reply(renderJobsCategories(active.profile));
+      return;
+    }
+    try {
+      const profile = updateJobsCategory(active.profile, argument);
+      await input.store.updateProfile(active.row.id, profile);
+      await context.reply(
+        '✅ Search category saved. Re-evaluating stored jobs…',
+      );
+      const result = await input.runner.reevaluateExisting();
+      await context.reply(
+        `Re-evaluated ${result.evaluated} of ${result.scanned} stored jobs.`,
+      );
+    } catch (error) {
+      await context.reply(
+        `Category update failed: ${error instanceof Error ? error.message : jobsCategoryUsage}`,
       );
     }
   });

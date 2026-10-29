@@ -35,7 +35,7 @@ const createHarness = () => {
     getActiveProfile: vi.fn(),
     updateProfile: vi.fn(),
   };
-  const runner = { run: vi.fn() };
+  const runner = { run: vi.fn(), reevaluateExisting: vi.fn() };
   const onRunComplete = vi.fn();
   const bot = createJobsBot({
     token: 'test-token',
@@ -193,6 +193,75 @@ describe('jobs bot informational commands', () => {
     await harness.bot.handleUpdate(
       update('/jobs_filter country block add Czechia', 10, 999),
     );
+    expect(harness.messages).toEqual(['Unauthorized.']);
+    expect(harness.store.getActiveProfile).not.toHaveBeenCalled();
+    expect(harness.store.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('persists the additive sales category and re-evaluates stored jobs', async () => {
+    const harness = createHarness();
+    harness.store.getActiveProfile.mockResolvedValue({
+      row: { id: 'profile-1' },
+      profile: {
+        name: 'Candidate',
+        professionalTitle: 'Full-Stack Developer',
+        yearsExperience: 5,
+        evaluationMode: 'TECHNICAL',
+        searchCategories: { salesBusinessDevelopment: false },
+        educationLevel: 'Secondary technical school',
+        languages: { Czech: 'native', English: 'B2' },
+        preferredRoles: ['Full-Stack Developer'],
+        avoidedRoles: [],
+        requiredTechnologies: ['TypeScript'],
+        excludedTechnologies: [],
+        adjacentRoles: [],
+        preferredContractTypes: ['employment'],
+        preferredLocations: {
+          countries: ['Czechia'],
+          regions: [],
+          cities: ['Brno'],
+          remote: true,
+          hybrid: false,
+          onsite: true,
+        },
+        skills: [{ name: 'TypeScript', proficiency: 'ADVANCED' }],
+        experience: [],
+        weights: {
+          technology: 30,
+          experience: 20,
+          role: 15,
+          location: 15,
+          language: 10,
+          career: 5,
+          conditions: 5,
+        },
+        thresholds: { excellent: 85, strong: 70, possible: 55, notify: 70 },
+      },
+    });
+    harness.runner.reevaluateExisting.mockResolvedValue({
+      scanned: 4,
+      evaluated: 4,
+    });
+
+    await harness.bot.handleUpdate(update('/jobs_category sales on', 11));
+
+    expect(harness.store.updateProfile).toHaveBeenCalledWith(
+      'profile-1',
+      expect.objectContaining({
+        searchCategories: { salesBusinessDevelopment: true },
+        professionalTitle: 'Full-Stack Developer',
+      }),
+    );
+    expect(harness.runner.reevaluateExisting).toHaveBeenCalledOnce();
+    expect(harness.messages).toEqual([
+      '✅ Search category saved. Re-evaluating stored jobs…',
+      'Re-evaluated 4 of 4 stored jobs.',
+    ]);
+  });
+
+  it('does not let an unauthorized user edit search categories', async () => {
+    const harness = createHarness();
+    await harness.bot.handleUpdate(update('/jobs_category sales off', 12, 999));
     expect(harness.messages).toEqual(['Unauthorized.']);
     expect(harness.store.getActiveProfile).not.toHaveBeenCalled();
     expect(harness.store.updateProfile).not.toHaveBeenCalled();

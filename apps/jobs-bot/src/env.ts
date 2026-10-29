@@ -28,6 +28,9 @@ const defaultProfile = {
   github: 'https://github.com/TurniXXD',
   linkedin: 'https://linkedin.com/in/jakub-vantuch',
   yearsExperience: 5,
+  searchCategories: {
+    salesBusinessDevelopment: true,
+  },
   educationLevel: 'Secondary technical school, Information Technology',
   languages: { Czech: 'native', English: 'B2', Spanish: 'A1' },
   preferredRoles: [
@@ -252,6 +255,10 @@ const schema = z
       .default(14),
     JOBS_CANDIDATE_NAME: z.string().trim().min(1).default('Jakub Vantuch'),
     JOBS_CANDIDATE_PROFILE_JSON: optionalText,
+    JOBS_SALES_CATEGORY_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
     JOBS_AI_ENABLED: z
       .enum(['true', 'false'])
       .default('false')
@@ -316,11 +323,22 @@ const schema = z
 
 const parsed = schema.parse(process.env);
 
+const configuredProfileInput: unknown = parsed.JOBS_CANDIDATE_PROFILE_JSON
+  ? JSON.parse(parsed.JOBS_CANDIDATE_PROFILE_JSON)
+  : { ...defaultProfile, name: parsed.JOBS_CANDIDATE_NAME };
+
+const configuredProfileRecord = z
+  .record(z.string(), z.unknown())
+  .parse(configuredProfileInput);
+
+const configuredProfile = candidateProfileSchema.parse({
+  ...configuredProfileRecord,
+  searchCategories:
+    configuredProfileRecord.searchCategories ??
+    ({ salesBusinessDevelopment: parsed.JOBS_SALES_CATEGORY_ENABLED } as const),
+});
+
 export const env = {
   ...parsed,
-  CANDIDATE_PROFILE: candidateProfileSchema.parse(
-    parsed.JOBS_CANDIDATE_PROFILE_JSON
-      ? JSON.parse(parsed.JOBS_CANDIDATE_PROFILE_JSON)
-      : { ...defaultProfile, name: parsed.JOBS_CANDIDATE_NAME },
-  ),
+  CANDIDATE_PROFILE: configuredProfile,
 };

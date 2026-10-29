@@ -7,6 +7,7 @@ import type {
 } from './types.js';
 
 export const JOB_AI_PROMPT_VERSION = 'jobs-v1';
+export const JOB_SALES_AI_PROMPT_VERSION = 'jobs-sales-v1';
 
 const aiAssessmentSchema = z.object({
   score: z.number().int().min(0).max(100),
@@ -92,6 +93,10 @@ export class OpenAiCompatibleJobEvaluator implements JobAiEvaluator {
     profile: CandidateProfile,
     deterministic: JobEvaluationResult,
   ): Promise<JobAiEvaluation> {
+    const promptVersion =
+      profile.evaluationMode === 'SALES_BUSINESS'
+        ? JOB_SALES_AI_PROMPT_VERSION
+        : JOB_AI_PROMPT_VERSION;
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
@@ -117,12 +122,14 @@ export class OpenAiCompatibleJobEvaluator implements JobAiEvaluator {
               {
                 role: 'system',
                 content:
-                  'Evaluate a job only from the supplied candidate and vacancy facts. Never invent experience. Distinguish mandatory, preferred, and uncertain requirements. Return JSON only with score, eligibility, matchingSkills, missingSkills, hardBlockers, uncertainties, and reasoning.',
+                  profile.evaluationMode === 'SALES_BUSINESS'
+                    ? 'Evaluate this Sales & Business Development career-transition job only from the supplied facts. The candidate has startup/product-validation and technical SaaS/automation/AI experience but zero professional sales, account-management, financial-advisory, revenue-target, or client-portfolio experience. Never convert software engineering into professional sales experience or invent achievements. Identify B2B/B2C, training, fixed salary, commission, bonuses, commission-only risk, MLM-like structures, unclear or misleading compensation, and the financial-advisory business model. Explain the fit clearly. Return JSON only with score, eligibility, matchingSkills, missingSkills, hardBlockers, uncertainties, and reasoning.'
+                    : 'Evaluate a job only from the supplied candidate and vacancy facts. Never invent experience. Distinguish mandatory, preferred, and uncertain requirements. Return JSON only with score, eligibility, matchingSkills, missingSkills, hardBlockers, uncertainties, and reasoning.',
               },
               {
                 role: 'user',
                 content: JSON.stringify({
-                  promptVersion: JOB_AI_PROMPT_VERSION,
+                  promptVersion,
                   candidate: profile,
                   vacancy: {
                     title: job.title,
@@ -187,7 +194,10 @@ export class OpenAiCompatibleJobEvaluator implements JobAiEvaluator {
           ]),
           hardBlockers,
           uncertainties,
-          reasoning: assessment.reasoning,
+          reasoning:
+            profile.evaluationMode === 'SALES_BUSINESS'
+              ? `${deterministic.reasoning} AI assessment: ${assessment.reasoning}`
+              : assessment.reasoning,
           scoreBreakdown: {
             ...deterministic.scoreBreakdown,
             deterministicScore: deterministic.score,
@@ -197,7 +207,7 @@ export class OpenAiCompatibleJobEvaluator implements JobAiEvaluator {
         metadata: {
           provider: this.options.provider ?? 'openai-compatible',
           model: this.options.model,
-          promptVersion: JOB_AI_PROMPT_VERSION,
+          promptVersion,
           aiScore: assessment.score,
           ...(tokenUsage ? { tokenUsage } : {}),
         },

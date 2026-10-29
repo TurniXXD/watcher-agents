@@ -174,10 +174,27 @@ const categoryAdapter = (input: {
   fetchDetail: rateLimitedDetail(input.detail),
 });
 
-const almaCategories = [
-  'is-it-vyvoj-aplikaci-a-systemu',
-  'is-it-konzultace-analyzy-a-projektove-rizeni',
-  'is-it-sprava-systemu-a-hw',
+export const jobsCzDiscoveryUrls = [
+  'https://www.jobs.cz/prace/is-it-vyvoj-aplikaci-a-systemu/',
+  'https://www.jobs.cz/prace/is-it-konzultace-analyzy-a-projektove-rizeni/',
+  'https://www.jobs.cz/prace/is-it-sprava-systemu-a-hw/',
+  'https://www.jobs.cz/prace/brno/account-manager/',
+  'https://www.jobs.cz/prace/obchodni-zastupce/',
+] as const;
+
+export const praceCzDiscoveryUrls = [
+  'programator',
+  'tester',
+  'projektovy-manazer',
+  'obchodni-zastupce',
+  'account-manager',
+].map((profession) => `https://www.prace.cz/nabidky/${profession}/`);
+
+export const praceZaRohemDiscoveryUrls = [
+  'https://www.pracezarohem.cz/nabidky/is-it-vyvoj-aplikaci-a-systemu',
+  'https://www.pracezarohem.cz/nabidky/is-it-konzultace-analyzy-a-projektove-rizeni',
+  'https://www.pracezarohem.cz/nabidky/is-it-sprava-systemu-a-hw',
+  'https://www.pracezarohem.cz/nabidky/jihomoravsky/brno-mesto/prodej-a-obchod',
 ] as const;
 
 export const parseJobsCzListings = (html: string): NormalizedJob[] => {
@@ -241,9 +258,7 @@ export const createJobsCzAdapter = (): JobSourceAdapter =>
     id: 'jobs-cz',
     name: 'Jobs.cz',
     baseUrl: 'https://www.jobs.cz',
-    urls: almaCategories.map(
-      (category) => `https://www.jobs.cz/prace/${category}/`,
-    ),
+    urls: [...jobsCzDiscoveryUrls],
     parse: parseJobsCzListings,
     detail: parseJobsCzDetail,
   });
@@ -291,9 +306,7 @@ export const createPraceCzAdapter = (): JobSourceAdapter =>
     id: 'prace-cz',
     name: 'Prace.cz',
     baseUrl: 'https://www.prace.cz',
-    urls: ['programator', 'tester', 'projektovy-manazer'].map(
-      (profession) => `https://www.prace.cz/nabidky/${profession}/`,
-    ),
+    urls: praceCzDiscoveryUrls,
     parse: parsePraceCzListings,
     detail: (html, listing) =>
       parseSchemaJobPostingPage({ html, listing, sourceId: 'prace-cz' }),
@@ -456,9 +469,7 @@ export const createPraceZaRohemAdapter = (): JobSourceAdapter =>
     id: 'prace-za-rohem',
     name: 'Práce za rohem',
     baseUrl: 'https://www.pracezarohem.cz',
-    urls: almaCategories.map(
-      (category) => `https://www.pracezarohem.cz/nabidky/${category}`,
-    ),
+    urls: [...praceZaRohemDiscoveryUrls],
     parse: parsePraceZaRohemListings,
     detail: parsePraceZaRohemDetail,
   });

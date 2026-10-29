@@ -326,6 +326,7 @@ export const evaluateJob = (
       `Requires ${requiredYears} years of experience; filter maximum is ${filters.maxRequiredExperienceYears}`,
     );
   if (
+    profile.evaluationMode !== 'SALES_BUSINESS' &&
     /\b(?:graduate programme|graduate program|new grad(?:uate)?|internship|intern)\b/iu.test(
       body,
     )

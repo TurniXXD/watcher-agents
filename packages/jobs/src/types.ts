@@ -34,6 +34,14 @@ export const candidateProfileSchema = z
     github: z.url().optional(),
     linkedin: z.url().optional(),
     yearsExperience: z.number().int().nonnegative(),
+    evaluationMode: z
+      .enum(['TECHNICAL', 'SALES_BUSINESS'])
+      .default('TECHNICAL'),
+    searchCategories: z
+      .object({
+        salesBusinessDevelopment: z.boolean().default(false),
+      })
+      .default({ salesBusinessDevelopment: false }),
     educationLevel: z.string().trim().min(1),
     languages: z.record(z.string(), z.string()),
     preferredRoles: z.array(z.string()).min(1),

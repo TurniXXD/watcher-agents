@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { OpenAiCompatibleJobEvaluator } from '../ai.js';
+import {
+  JOB_SALES_AI_PROMPT_VERSION,
+  OpenAiCompatibleJobEvaluator,
+} from '../ai.js';
+import { buildSalesBusinessProfile } from '../sales-evaluation.js';
 import { candidateProfileSchema } from '../types.js';
 
 const profile = candidateProfileSchema.parse({
@@ -132,5 +136,79 @@ describe('OpenAiCompatibleJobEvaluator', () => {
         },
       ),
     ).rejects.toThrow();
+  });
+
+  it('uses the sales career-transition prompt without inventing professional sales experience', async () => {
+    let requestBody: BodyInit | null | undefined;
+    const fetch = vi.fn(
+      async (url: string | URL | Request, init?: RequestInit) => {
+        void url;
+        requestBody = init?.body;
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    score: 80,
+                    eligibility: 'ELIGIBLE',
+                    matchingSkills: ['SaaS products'],
+                    missingSkills: [],
+                    hardBlockers: [],
+                    uncertainties: [],
+                    reasoning: 'Entry-level B2B role with training.',
+                  }),
+                },
+              },
+            ],
+          }),
+        );
+      },
+    );
+    const evaluator = new OpenAiCompatibleJobEvaluator({
+      baseUrl: 'https://ai.example',
+      model: 'test',
+      fetch,
+    });
+    const salesProfile = buildSalesBusinessProfile(profile);
+    const deterministic = {
+      score: 75,
+      eligibility: 'ELIGIBLE' as const,
+      recommendation: 'STRONG' as const,
+      matchingSkills: ['SaaS products'],
+      missingSkills: [],
+      hardBlockers: [],
+      uncertainties: [],
+      reasoning:
+        'No professional sales achievements, revenue targets, or managed client portfolio were assumed.',
+      scoreBreakdown: { salesCategoryAdjustments: 10 },
+    };
+
+    const result = await evaluator.evaluate(
+      {
+        sourceId: 'test',
+        externalId: 'sales-1',
+        title: 'Business Development Representative',
+        company: 'Example SaaS',
+        description: 'Entry-level B2B role with training and fixed salary.',
+        workMode: 'REMOTE',
+        remoteRegions: ['Czechia'],
+        technologyStack: [],
+        originalUrl: 'https://example.com/sales-job',
+        raw: {},
+      },
+      salesProfile,
+      deterministic,
+    );
+
+    if (typeof requestBody !== 'string')
+      throw new Error('Expected a JSON request body');
+    const request = JSON.parse(requestBody) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(request.messages[0]?.content).toContain('zero professional sales');
+    expect(request.messages[1]?.content).toContain(JOB_SALES_AI_PROMPT_VERSION);
+    expect(result.metadata.promptVersion).toBe(JOB_SALES_AI_PROMPT_VERSION);
+    expect(result.result.reasoning).toContain(deterministic.reasoning);
   });
 });

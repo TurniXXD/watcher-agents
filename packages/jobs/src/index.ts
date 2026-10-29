@@ -1,4 +1,5 @@
 export * from './evaluation.js';
+export * from './sales-evaluation.js';
 export * from './http.js';
 export * from './normalization.js';
 export * from './requirements.js';
