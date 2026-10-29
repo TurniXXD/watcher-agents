@@ -2,6 +2,11 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-29 — Trading 212 report after market close
+
+- Changed the opt-in Stocks Bot Trading 212 schedule from pre/open snapshots to one read-only positions report after every NYSE core-session close.
+- Added New York daylight-saving handling, NYSE weekend and holiday suppression, 13:00 ET shortened-session closes, and durable per-session delivery deduplication.
+
 ## 2026-10-29 — Inbound lead mailbox automation
 
 - Added optional read-only TLS IMAP polling for a dedicated Sales lead mailbox, with bounded lookback, message count, size, and non-overlapping execution.

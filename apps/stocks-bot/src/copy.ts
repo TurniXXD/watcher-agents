@@ -55,7 +55,7 @@ export const stocksHelp = `/about — český průvodce používáním a strateg
 /thesis SYMBOL — refresh live sources for one ticker, then show its updated persistent thesis and scores
 /trading212 — read-only Trading 212 account summary and every open position
 /trading212_report — read-only Trading 212 allocation and P/L report
-/trading212_schedule [on|off|status] — timed positions
+/trading212_schedule [on|off|status] — positions after each NYSE close
 /trading212_setup — show your Telegram ID and setup guidance for Trading 212
 /validate — backtest stored theses, alerts, and signals against stored prices
 /valuation SYMBOL — refresh Nasdaq price and market cap, plus stored forward P/E and earnings consensus`;
@@ -104,7 +104,7 @@ Novinky pro sledované akcie se běžně kontrolují po 5 minutách; plán urču
 \`/paper_open MU --amount-czk 10000\` zaznamená modelovou pozici bez odeslání pokynu. \`/paper_portfolio\` ukáže vývoj podle uložených cen; \`/portfolio_risk\` upozorní na koncentraci a stará data. Například \`/risk_profile balanced\` (nebo \`conservative\` či \`aggressive\`) mění jen hranice těchto varování, nikoli strategii teze nebo skutečný účet. \`/validate\` a \`/backtest\` porovnají starší výstupy s dostupnými výsledky.
 
 *Skutečné pozice Trading 212 (volitelné)*
-Po bezpečném nastavení read-only API klíče ukáže \`/trading212\` otevřené pozice a hodnoty účtu, \`/trading212_report\` souhrn podílů a zisku či ztráty. \`/trading212_schedule on\` zapne stejné pozice v pracovní dny před otevřením (09:25) a po otevření (09:35) trhu v New Yorku; \`off\` je vypne. \`/trading212_setup\` zobrazí vaše Telegram ID pro nastavení přístupu. Funguje jen vlastníkovi v soukromém chatu; nejde o papírové portfolio a bot nikdy neposílá obchodní příkazy.
+Po bezpečném nastavení read-only API klíče ukáže \`/trading212\` otevřené pozice a hodnoty účtu, \`/trading212_report\` souhrn podílů a zisku či ztráty. \`/trading212_schedule on\` zapne stejný výpis pozic po každém zavření hlavní seance NYSE. Víkendy a burzovní svátky se vynechají; zkrácené seance respektují dřívější close. \`off\` automatické odesílání vypne. \`/trading212_setup\` zobrazí vaše Telegram ID pro nastavení přístupu. Funguje jen vlastníkovi v soukromém chatu; nejde o papírové portfolio a bot nikdy neposílá obchodní příkazy.
 
 _Výstupy jsou podklady k vlastnímu rozhodnutí, nikoli investiční doporučení. Žádný z těchto příkazů neposílá obchod._ Další příkazy: \`/help\`.`,
 ] as const;

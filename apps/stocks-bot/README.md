@@ -10,6 +10,8 @@ Primary sources include SEC EDGAR, issuer feeds, TradingView, FINVIZ, Zacks, Ear
 
 Use `/start` or `/help` for the authoritative complete command list. Important commands include `/stocks`, `/add_stock`, `/remove_stock`, `/run`, `/sources`, `/schedule`, `/thesis`, `/valuation`, `/earnings`, `/catalysts`, `/dashboard`, `/opportunities`, `/alerts`, `/health`, `/discovery`, `/reconcile`, `/backtest`, `/calibration`, `/replay`, and the paper/portfolio commands.
 
+`/trading212_schedule on` sends the same read-only position view as `/trading212` after every NYSE core-session close. It skips weekends and exchange holidays, respects the 13:00 ET close on shortened sessions, and uses the durable Telegram outbox to prevent duplicate delivery. `/trading212_schedule off` disables future scheduled reports.
+
 ## Configuration
 
 Start from [the stocks preset](../../deploy/presets/stocks-bot.env.example). Required values include the database, Telegram token/allowlist, Ollama connection, and an identifiable `SEC_USER_AGENT`. Alpha Vantage, Quiver, Alpaca Paper, and Trading 212 credentials are optional and activate only their owning integration.

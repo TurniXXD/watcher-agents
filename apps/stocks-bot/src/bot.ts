@@ -1027,7 +1027,7 @@ export const createStocksBot = (
     }
     const enabled = await trading212Schedule.enabled(BigInt(ctx.chat.id));
     await ctx.reply(
-      `Trading 212 automatické pozice: ${enabled ? 'zapnuto' : 'vypnuto'}.\nPracovní dny v 09:25 a 09:35 času New Yorku (před a po běžném otevření trhu). Příkaz /trading212_schedule off další odesílání vypne.`,
+      `Trading 212 automatické pozice: ${enabled ? 'zapnuto' : 'vypnuto'}.\nPo každém zavření hlavní seance NYSE; víkendy a burzovní svátky se vynechají a zkrácené seance respektují dřívější close. Příkaz /trading212_schedule off další odesílání vypne.`,
     );
   });
   bot.command('paper_close', async (ctx) => {

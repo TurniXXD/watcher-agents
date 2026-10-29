@@ -101,6 +101,11 @@ pnpm exec vitest run apps/stocks-bot/src/__tests__
 schedule plus bounded high-resolution and event-mode windows. Manual runs use the
 same source and analysis pipeline.
 
+When enabled with `/trading212_schedule on`, the Trading 212 position view is
+queued after every NYSE core-session close. The calendar skips weekends and
+exchange holidays and uses the 13:00 ET close for shortened sessions. Durable
+outbox keys prevent duplicate delivery after scheduler retries or restarts.
+
 ## Integrations
 
 | Source/service                             | Role                                                                          |
