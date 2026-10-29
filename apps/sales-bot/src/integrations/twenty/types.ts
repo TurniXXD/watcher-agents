@@ -26,6 +26,7 @@ export type TwentyPersonInput = {
   firstName: string;
   lastName?: string;
   email?: string;
+  jobTitle?: string;
   companyId?: string;
   source: string;
   sourceUrl?: string;

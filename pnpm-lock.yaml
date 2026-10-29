@@ -435,10 +435,22 @@ importers:
       grammy:
         specifier: 1.46.0
         version: 1.46.0
+      imapflow:
+        specifier: 2.9.1
+        version: 2.9.1
+      mailparser:
+        specifier: 3.12.4
+        version: 3.12.4
       zod:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
+      '@types/mailparser':
+        specifier: 3.9.0
+        version: 3.9.0
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
       typescript:
         specifier: 6.0.3
         version: 6.0.3

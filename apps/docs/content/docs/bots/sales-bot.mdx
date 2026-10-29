@@ -73,6 +73,12 @@ Bot.
     Q -->|No| R["Ignore manual and ordinary imports"]
     Q -->|Yes| S["Authenticated Sales webhook"]
     S --> T["Idempotent Telegram notification"]
+    W --> V["Read-only inbound lead IMAP mailbox"]
+    V --> X["Bounded parsing and deterministic/AI classification"]
+    X --> Y{"Clear non-lead?"}
+    Y -->|Yes| Z["Record idempotent ignore decision"]
+    Y -->|No| AA["Upsert Twenty Person and analysis Note"]
+    AA --> T
     U["Networking contact commands"] -. shared compatibility surface .-> C`}
 />
 
@@ -109,28 +115,51 @@ queues an idempotent Telegram notification for every authorized operator.
 Manual records and ordinary Sales imports through ARES, Geoapify, Google Places,
 or `/sales_prospects` do not produce this notification.
 
+### Dedicated inbound lead mailbox
+
+An optional TLS IMAP connector polls a dedicated lead mailbox in read-only mode.
+It accepts the visitor's external `Reply-To` from contact-form envelopes,
+ignores and never stores attachments, bounds message size and count, and never changes mailbox
+state or sends a reply. Automated/bulk/transactional messages are rejected by
+deterministic rules. Other mail receives a structured, schema-validated Ollama
+classification when Ollama is configured, with deterministic fallback.
+
+Relevant messages and uncertain human enquiries are idempotently upserted as a
+Twenty Person with a linked analysis Note and the descriptive source marker
+`MAILBOX_EMAIL` or `MAILBOX_CONTACT_FORM`. Those markers intentionally do not
+match the Twenty app's contact-form aliases, because this mailbox pipeline owns
+the single durable Telegram notification. Telegram receives only the compact
+classification, source, intent, requested services, factual summary, and CRM
+link. Message-ID or a stable fallback hash is persisted with the durable
+outbox, so repeated lookback polls and restarts do not duplicate the lead or
+alert.
+
 ## Configuration
 
-| Variable                                                                                             | Required/default              | Purpose                                                               |
-| ---------------------------------------------------------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------- |
-| `DATABASE_URL`                                                                                       | Required                      | PostgreSQL campaigns, evidence, searches, decisions, and idempotency. |
-| `SALES_TELEGRAM_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`                                                  | Required                      | Dedicated private Telegram surface.                                   |
-| `SALES_API_TOKEN`, `SALES_WEBHOOK_TOKEN`                                                             | Required, distinct, 32+ chars | REST API plus Quickly/Twenty webhook authentication.                  |
-| `SALES_PORT`                                                                                         | `4050`                        | Private HTTP/readiness port.                                          |
-| `SALES_INTERVAL_MINUTES`                                                                             | `30`                          | Periodic discovery interval.                                          |
-| `SALES_FOLLOWUP_TIME`, `SALES_TIMEZONE`                                                              | `20:00`, `Europe/Prague`      | Manual call-list reporting schedule.                                  |
-| `SALES_INTELLIGENCE_TIME`, `SALES_CRM_PUBLIC_URL`                                                    | `09:00`, optional             | Working-day five-lead reports and optional clickable CRM base URL.    |
-| `GEOAPIFY_API_KEY`                                                                                   | Optional                      | Primary place/business discovery beyond ARES.                         |
-| `GOOGLE_PLACES_API_KEY`                                                                              | Optional                      | Fallback discovery only.                                              |
-| `OLLAMA_URL`, `OLLAMA_MODEL`                                                                         | Optional pair                 | Category mapping and validated draft generation.                      |
-| `OLLAMA_KEEP_ALIVE`, `OLLAMA_NUM_CTX`, `OLLAMA_RETRIES`, `OLLAMA_THINK`, `OLLAMA_TIMEOUT_MS`         | Bounded defaults              | Model execution controls.                                             |
-| `QUICKLY_BASE_URL`, `QUICKLY_API_KEY`                                                                | Optional pair                 | Consent-gated campaign enrollment.                                    |
-| `TWENTY_BASE_URL`, `TWENTY_API_KEY`                                                                  | Optional pair                 | CRM Company/Note synchronization; required by `/sales_prospects`.     |
-| `TWENTY_APP_FIELDS_ENABLED`                                                                          | `false`                       | Enables fields installed by Twenty Sales App.                         |
-| `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Optional complete group       | Shared personal-contact sheet.                                        |
-| `GOOGLE_SHEETS_NETWORK_RANGE`                                                                        | `'Contact list'!A:K`          | Contact range.                                                        |
-| `NETWORK_OLLAMA_VISION_MODEL`                                                                        | Optional; requires Ollama     | Business-card image extraction.                                       |
-| `LOG_LEVEL`                                                                                          | `info`                        | Structured log level.                                                 |
+| Variable                                                                                                           | Required/default              | Purpose                                                                |
+| ------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ---------------------------------------------------------------------- |
+| `DATABASE_URL`                                                                                                     | Required                      | PostgreSQL campaigns, evidence, searches, decisions, and idempotency.  |
+| `SALES_TELEGRAM_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`                                                                | Required                      | Dedicated private Telegram surface.                                    |
+| `SALES_API_TOKEN`, `SALES_WEBHOOK_TOKEN`                                                                           | Required, distinct, 32+ chars | REST API plus Quickly/Twenty webhook authentication.                   |
+| `SALES_PORT`                                                                                                       | `4050`                        | Private HTTP/readiness port.                                           |
+| `SALES_INTERVAL_MINUTES`                                                                                           | `30`                          | Periodic discovery interval.                                           |
+| `SALES_FOLLOWUP_TIME`, `SALES_TIMEZONE`                                                                            | `20:00`, `Europe/Prague`      | Manual call-list reporting schedule.                                   |
+| `SALES_INTELLIGENCE_TIME`, `SALES_CRM_PUBLIC_URL`                                                                  | `09:00`, optional             | Working-day five-lead reports and optional clickable CRM base URL.     |
+| `SALES_INBOUND_EMAIL_ADDRESS`, `SALES_INBOUND_IMAP_HOST`, `SALES_INBOUND_IMAP_USER`, `SALES_INBOUND_IMAP_PASSWORD` | Optional complete group       | Dedicated address and read-only TLS IMAP credentials; requires Twenty. |
+| `SALES_INBOUND_IMAP_PORT`, `SALES_INBOUND_IMAP_MAILBOX`                                                            | `993`, `INBOX`                | TLS endpoint and mailbox folder.                                       |
+| `SALES_INBOUND_IMAP_LOOKBACK_DAYS`, `SALES_INBOUND_IMAP_MAX_MESSAGES`                                              | `7`, `100`                    | Bounded read-only lookback and messages per poll.                      |
+| `SALES_INBOUND_IMAP_INTERVAL_MINUTES`                                                                              | `5`                           | Non-overlapping mailbox polling interval.                              |
+| `GEOAPIFY_API_KEY`                                                                                                 | Optional                      | Primary place/business discovery beyond ARES.                          |
+| `GOOGLE_PLACES_API_KEY`                                                                                            | Optional                      | Fallback discovery only.                                               |
+| `OLLAMA_URL`, `OLLAMA_MODEL`                                                                                       | Optional pair                 | Category mapping and validated draft generation.                       |
+| `OLLAMA_KEEP_ALIVE`, `OLLAMA_NUM_CTX`, `OLLAMA_RETRIES`, `OLLAMA_THINK`, `OLLAMA_TIMEOUT_MS`                       | Bounded defaults              | Model execution controls.                                              |
+| `QUICKLY_BASE_URL`, `QUICKLY_API_KEY`                                                                              | Optional pair                 | Consent-gated campaign enrollment.                                     |
+| `TWENTY_BASE_URL`, `TWENTY_API_KEY`                                                                                | Optional pair                 | CRM Company/Note synchronization; required by `/sales_prospects`.      |
+| `TWENTY_APP_FIELDS_ENABLED`                                                                                        | `false`                       | Enables fields installed by Twenty Sales App.                          |
+| `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`               | Optional complete group       | Shared personal-contact sheet.                                         |
+| `GOOGLE_SHEETS_NETWORK_RANGE`                                                                                      | `'Contact list'!A:K`          | Contact range.                                                         |
+| `NETWORK_OLLAMA_VISION_MODEL`                                                                                      | Optional; requires Ollama     | Business-card image extraction.                                        |
+| `LOG_LEVEL`                                                                                                        | `info`                        | Structured log level.                                                  |
 
 ## Execution and scheduling
 
@@ -140,7 +169,8 @@ pnpm --filter @watcher/sales-bot typecheck
 pnpm exec vitest run apps/sales-bot/src/__tests__
 ```
 
-Periodic work defaults to 30-minute intervals; follow-up reporting defaults to
+Periodic work defaults to 30-minute intervals; inbound mailbox polling defaults
+to 5 minutes; follow-up reporting defaults to
 20:00 in `Europe/Prague`. Manual and scheduled discovery use the same persisted
 search and lead pipeline. The campaign-free prospect import is one-shot and must
 be invoked explicitly. Twenty inbound-lead alerts are event driven rather than
@@ -155,7 +185,8 @@ restarts.
 | Geoapify/OpenStreetMap               | Primary place discovery and available public contact metadata.                  |
 | Google Places                        | Optional fallback when primary sources lack enough contacts.                    |
 | Public company websites              | Contact-page, explicit e-mail, and `tel:` evidence with source URLs.            |
-| Twenty CRM                           | Idempotent Company/Note state plus filtered Person-created inbound alerts.      |
+| Inbound TLS IMAP mailbox             | Read-only contact-form/e-mail ingestion, analysis, and stable message identity. |
+| Twenty CRM                           | Idempotent Company/Person/Note state plus filtered inbound alerts.              |
 | Quickly                              | Explicitly authorized campaign sequences after every eligibility gate passes.   |
 | Ollama                               | Optional category mapping and schema-validated draft generation.                |
 | Google Sheets/contact-network        | Backward-compatible personal-contact workflow shared with Networking Bot.       |

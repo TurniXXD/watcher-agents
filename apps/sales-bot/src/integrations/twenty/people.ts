@@ -54,6 +54,7 @@ export const upsertPerson = async (
           },
         }
       : {}),
+    ...(input.jobTitle ? { jobTitle: input.jobTitle } : {}),
     ...(input.companyId ? { companyId: input.companyId } : {}),
     ...(useAppFields
       ? {

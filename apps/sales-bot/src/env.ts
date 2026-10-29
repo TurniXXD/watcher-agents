@@ -34,6 +34,35 @@ export const env = z
       .regex(/^([01]\d|2[0-3]):[0-5]\d$/u)
       .default('09:00'),
     SALES_CRM_PUBLIC_URL: optionalUrl,
+    SALES_INBOUND_EMAIL_ADDRESS: optionalString.pipe(z.email().optional()),
+    SALES_INBOUND_IMAP_HOST: optionalString,
+    SALES_INBOUND_IMAP_PORT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(993),
+    SALES_INBOUND_IMAP_USER: optionalString,
+    SALES_INBOUND_IMAP_PASSWORD: optionalString,
+    SALES_INBOUND_IMAP_MAILBOX: z.string().trim().min(1).default('INBOX'),
+    SALES_INBOUND_IMAP_LOOKBACK_DAYS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(30)
+      .default(7),
+    SALES_INBOUND_IMAP_MAX_MESSAGES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(200)
+      .default(100),
+    SALES_INBOUND_IMAP_INTERVAL_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1_440)
+      .default(5),
     SALES_TIMEZONE: z
       .string()
       .refine((value) => {
@@ -119,6 +148,32 @@ export const env = z
         code: 'custom',
         message: 'NETWORK_OLLAMA_VISION_MODEL requires OLLAMA_URL',
         path: ['NETWORK_OLLAMA_VISION_MODEL'],
+      });
+    }
+    const inboundMailbox = [
+      value.SALES_INBOUND_EMAIL_ADDRESS,
+      value.SALES_INBOUND_IMAP_HOST,
+      value.SALES_INBOUND_IMAP_USER,
+      value.SALES_INBOUND_IMAP_PASSWORD,
+    ];
+    const inboundConfigured = inboundMailbox.filter(Boolean).length;
+    if (inboundConfigured > 0 && inboundConfigured < inboundMailbox.length) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'SALES_INBOUND_EMAIL_ADDRESS, SALES_INBOUND_IMAP_HOST, SALES_INBOUND_IMAP_USER and SALES_INBOUND_IMAP_PASSWORD must be configured together',
+        path: ['SALES_INBOUND_IMAP_HOST'],
+      });
+    }
+    if (
+      inboundConfigured === inboundMailbox.length &&
+      (!value.TWENTY_BASE_URL || !value.TWENTY_API_KEY)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'The inbound sales mailbox requires TWENTY_BASE_URL and TWENTY_API_KEY',
+        path: ['TWENTY_API_KEY'],
       });
     }
   })

@@ -22,7 +22,7 @@ Personal contacts and business-card reading are also available in the separate [
 
 ## Configuration
 
-Start from [sales](../../deploy/presets/sales-bot.env.example), [Quickly](../../deploy/presets/quickly.env.example), and [Twenty](../../deploy/presets/twenty.env.example) presets. Keep populated copies only in private runtime configuration. API/webhook tokens must be distinct. Twenty is required only for `/sales_prospects`; Quickly and the Google Sheets contact group remain optional until those integrations are enabled.
+Start from [sales](../../deploy/presets/sales-bot.env.example), [Quickly](../../deploy/presets/quickly.env.example), and [Twenty](../../deploy/presets/twenty.env.example) presets. Keep populated copies only in private runtime configuration. API/webhook tokens must be distinct. Twenty is required for `/sales_prospects` and inbound-mailbox ingestion; Quickly and the Google Sheets contact group remain optional until those integrations are enabled.
 
 Apply the [Twenty Sales App](../twenty-sales-app/README.md) before enabling custom Twenty fields.
 
@@ -47,3 +47,39 @@ After applying the Twenty app, set its secret
 `http://sales-bot:4050/v1/webhooks/twenty/inbound-lead`, which is reachable from
 the production Twenty worker on the private Compose network. Override it only
 when Twenty and Sales Bot do not share that network.
+
+## Dedicated inbound lead mailbox
+
+Sales Bot can poll a dedicated TLS IMAP mailbox such as `hello@vantuch.dev` in
+read-only mode. Configure the following values together only in the private
+`deploy/runtime/sales-bot.env` source and rerender/redeploy:
+
+```dotenv
+SALES_INBOUND_EMAIL_ADDRESS=hello@vantuch.dev
+SALES_INBOUND_IMAP_HOST=imap.example.com
+SALES_INBOUND_IMAP_PORT=993
+SALES_INBOUND_IMAP_USER=hello@vantuch.dev
+SALES_INBOUND_IMAP_PASSWORD=<mailbox-app-password>
+SALES_INBOUND_IMAP_MAILBOX=INBOX
+SALES_INBOUND_IMAP_LOOKBACK_DAYS=7
+SALES_INBOUND_IMAP_MAX_MESSAGES=100
+SALES_INBOUND_IMAP_INTERVAL_MINUTES=5
+```
+
+The mailbox requires `TWENTY_BASE_URL` and `TWENTY_API_KEY`. Enable
+`TWENTY_APP_FIELDS_ENABLED` after applying the Twenty Sales App so the Person is
+explicitly typed as a lead. The mailbox writes the descriptive source marker
+`MAILBOX_EMAIL` or `MAILBOX_CONTACT_FORM`; those markers intentionally do not
+trigger the Twenty `person.created` webhook because the mailbox pipeline owns
+the single durable Telegram notification. Ollama is optional: when configured,
+it returns a validated structured classification; otherwise deterministic
+contact-form, automation, and intent rules are used.
+
+Messages are bounded by size/count, attachments are not processed, and the bot
+never marks mail read or sends a reply. It respects an external `Reply-To`, so a
+contact-form envelope from the website still creates the visitor as the CRM
+Person. Clear automated/bulk mail is ignored and recorded idempotently.
+Relevant messages and uncertain human enquiries are upserted by grounded e-mail
+address, receive an analysis Note, and queue one durable Telegram notification
+per authorized operator. Message-ID (or a stable content hash) plus PostgreSQL
+constraints prevent duplicate CRM alerts across polls and restarts.

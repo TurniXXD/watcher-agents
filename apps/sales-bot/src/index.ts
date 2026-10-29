@@ -15,6 +15,8 @@ import {
 } from './crm-inbound-lead.js';
 import { GooglePlacesDiscoveryClient } from './discovery.js';
 import { GeoapifyDiscoveryClient } from './geoapify.js';
+import { InboundEmailAnalyzer } from './inbound-email-analysis.js';
+import { InboundEmailAutomation } from './inbound-email-service.js';
 import { ColdEmailGenerator } from './cold-email-generator.js';
 import { env } from './env.js';
 import {
@@ -95,6 +97,9 @@ const service = new SalesService(
   ollamaProvider,
 );
 const allowed = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
+const enqueueInboundLead = (
+  payload: Parameters<typeof enqueueCrmInboundLead>[0],
+) => enqueueCrmInboundLead(payload, allowed, outbox);
 const intelligence = new SalesIntelligenceService(
   store,
   coldEmailGenerator,
@@ -153,7 +158,7 @@ const api = new SalesApi(
       }
     }
   },
-  (payload) => enqueueCrmInboundLead(payload, allowed, outbox),
+  enqueueInboundLead,
 );
 
 await api.start(env.SALES_PORT);
@@ -311,10 +316,46 @@ const salesSearchScheduler = new PersistentScheduler(
   30_000,
   logger,
 );
+const inboundEmailAutomation =
+  env.SALES_INBOUND_EMAIL_ADDRESS &&
+  env.SALES_INBOUND_IMAP_HOST &&
+  env.SALES_INBOUND_IMAP_USER &&
+  env.SALES_INBOUND_IMAP_PASSWORD &&
+  twenty
+    ? new InboundEmailAutomation(
+        {
+          address: env.SALES_INBOUND_EMAIL_ADDRESS,
+          host: env.SALES_INBOUND_IMAP_HOST,
+          port: env.SALES_INBOUND_IMAP_PORT,
+          user: env.SALES_INBOUND_IMAP_USER,
+          password: env.SALES_INBOUND_IMAP_PASSWORD,
+          mailbox: env.SALES_INBOUND_IMAP_MAILBOX,
+          lookbackDays: env.SALES_INBOUND_IMAP_LOOKBACK_DAYS,
+          maxMessages: env.SALES_INBOUND_IMAP_MAX_MESSAGES,
+        },
+        new InboundEmailAnalyzer(ollamaProvider),
+        store,
+        twenty,
+        enqueueInboundLead,
+        logger,
+        env.SALES_CRM_PUBLIC_URL,
+      )
+    : undefined;
+const inboundEmailScheduler = inboundEmailAutomation
+  ? new PersistentScheduler(
+      () => Promise.resolve([{ id: 'inbound-sales-mailbox' }]),
+      async () => {
+        await inboundEmailAutomation.poll();
+      },
+      env.SALES_INBOUND_IMAP_INTERVAL_MINUTES * 60_000,
+      logger,
+    )
+  : undefined;
 followupScheduler.start();
 outboxScheduler.start();
 salesSearchScheduler.start();
 intelligenceScheduler.start();
+inboundEmailScheduler?.start();
 const interval = setInterval(() => {
   void service
     .run()
@@ -329,6 +370,7 @@ const shutdown = async (signal: string) => {
   await outboxScheduler.stop();
   await salesSearchScheduler.stop();
   await intelligenceScheduler.stop();
+  await inboundEmailScheduler?.stop();
   await bot.stop();
   await api.stop();
   await database.$disconnect();

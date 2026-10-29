@@ -1,4 +1,4 @@
-import type { SalesStore, TelegramOutboxStore } from '@watcher/database';
+import type { TelegramOutboxStore } from '@watcher/database';
 import { z } from 'zod';
 
 export const salesInboundLeadKind = 'SALES_INBOUND_CRM_LEAD';
@@ -16,6 +16,17 @@ export const crmInboundLeadSchema = z
         phone: z.string().trim().min(1).max(80).optional(),
         companyName: z.string().trim().min(1).max(300).optional(),
         jobTitle: z.string().trim().min(1).max(300).optional(),
+        subject: z.string().trim().min(1).max(500).optional(),
+        summary: z.string().trim().min(1).max(1_000).optional(),
+        intent: z.string().trim().min(1).max(500).optional(),
+        requestedServices: z
+          .array(z.string().trim().min(1).max(200))
+          .max(10)
+          .optional(),
+        classification: z.enum(['LEAD', 'UNCERTAIN']).optional(),
+        confidence: z.number().min(0).max(1).optional(),
+        analysisMethod: z.enum(['AI', 'DETERMINISTIC']).optional(),
+        crmUrl: z.url().optional(),
       })
       .strict(),
   })
@@ -23,7 +34,16 @@ export const crmInboundLeadSchema = z
 
 export type CrmInboundLead = z.infer<typeof crmInboundLeadSchema>;
 
-type WebhookStore = Pick<SalesStore, 'hasWebhook' | 'recordWebhook'>;
+type WebhookStore = {
+  hasWebhook: (id: string) => PromiseLike<{ id: string } | null>;
+  recordWebhook: (
+    id: string,
+    event: string,
+    payload: unknown,
+    occurredAt: Date,
+    leadId?: string,
+  ) => PromiseLike<unknown>;
+};
 type OutboxStore = Pick<TelegramOutboxStore, 'enqueueMany'>;
 
 const safeLine = (value: string, max = 300): string =>
@@ -54,7 +74,27 @@ export const renderCrmInboundLead = (payload: CrmInboundLead): string => {
     ...(payload.record.jobTitle
       ? [`Pozice: ${safeLine(payload.record.jobTitle)}`]
       : []),
+    ...(payload.record.subject
+      ? [`Předmět: ${safeLine(payload.record.subject, 500)}`]
+      : []),
+    ...(payload.record.classification
+      ? [
+          `Klasifikace: ${payload.record.classification === 'LEAD' ? 'lead' : 'nejistý potenciální lead'}${payload.record.confidence === undefined ? '' : ` (${Math.round(payload.record.confidence * 100)} %, ${payload.record.analysisMethod === 'AI' ? 'AI' : 'pravidla'})`}`,
+        ]
+      : []),
+    ...(payload.record.intent
+      ? [`Záměr: ${safeLine(payload.record.intent, 500)}`]
+      : []),
+    ...(payload.record.requestedServices?.length
+      ? [
+          `Poptávané služby: ${payload.record.requestedServices.map((item) => safeLine(item, 200)).join(', ')}`,
+        ]
+      : []),
+    ...(payload.record.summary
+      ? [`Shrnutí: ${safeLine(payload.record.summary, 1_000)}`]
+      : []),
     `CRM ID: ${safeLine(payload.record.id)}`,
+    ...(payload.record.crmUrl ? [`CRM: ${payload.record.crmUrl}`] : []),
   ].join('\n');
 };
 

@@ -339,6 +339,20 @@ Sales Bot stores event identity and Telegram delivery in PostgreSQL, so retries
 are idempotent. Do not put either token in Compose labels, logs, screenshots, or
 committed files.
 
+For a dedicated inbound lead mailbox, set `SALES_INBOUND_EMAIL_ADDRESS`,
+`SALES_INBOUND_IMAP_HOST`, `SALES_INBOUND_IMAP_USER`, and
+`SALES_INBOUND_IMAP_PASSWORD` together in the private Sales Bot runtime source.
+`SALES_INBOUND_IMAP_PORT=993`, `SALES_INBOUND_IMAP_MAILBOX=INBOX`,
+`SALES_INBOUND_IMAP_LOOKBACK_DAYS=7`, `SALES_INBOUND_IMAP_MAX_MESSAGES=100`,
+and `SALES_INBOUND_IMAP_INTERVAL_MINUTES=5` are bounded defaults. The connector
+uses TLS and read-only mailbox locks, requires configured Twenty credentials,
+does not process attachments or send replies, and persists Message-ID/content
+identity before repeated polls can produce duplicate Telegram alerts. Use a
+mailbox-specific app password where the provider supports one; never put it in
+GitHub, Telegram, logs, or the committed preset. Mailbox-created People use
+`MAILBOX_EMAIL` or `MAILBOX_CONTACT_FORM` as their Twenty source marker so the
+separate Twenty `person.created` integration cannot enqueue a second alert.
+
 The sales bot reuses the shared optional `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_KEEP_ALIVE`, `OLLAMA_NUM_CTX`, `OLLAMA_RETRIES`, `OLLAMA_THINK`, and `OLLAMA_TIMEOUT_MS` settings for structured cold-email drafts. `OLLAMA_URL` and `OLLAMA_MODEL` must either both be set or both be empty. With neither configured, the existing deterministic campaign template remains the draft fallback. Apply `apps/twenty-sales-app` to the workspace before setting `TWENTY_APP_FIELDS_ENABLED=true`; leaving it `false` restricts synchronization to native Twenty fields and Notes.
 
 The standard release also starts Quickly and Twenty. The VPS renderer writes `deploy/runtime/quickly.env` and `deploy/runtime/twenty.env` from required `QUICKLY_POSTGRES_PASSWORD`, `QUICKLY_SECRET_KEY`, `TWENTY_POSTGRES_PASSWORD`, `TWENTY_ENCRYPTION_KEY`, and `TWENTY_PUBLIC_URL`, plus optional `QUICKLY_PUBLIC_URL`, `QUICKLY_GOOGLE_CLIENT_ID`/`QUICKLY_GOOGLE_CLIENT_SECRET`, or Office 365 OAuth values. Twenty's URL must be an HTTPS origin and match the Cloudflare Access-protected hostname; the renderer keeps Twenty in single-workspace mode and restricts workspace creation to server admins. It writes the Quickly and Twenty bind addresses and host ports to `deploy/runtime/compose.env`. Unless a Quickly public URL is set, its reachable bind address and port form the browser URL (loopback and wildcard binds use `localhost`); Quickly's CORS origin defaults to the same derived URL. PostgreSQL passwords must use only URL-safe letters, numbers, `_`, and `-`; generate distinct values with `openssl rand -hex 32`. Generate the signing and encryption keys separately. For manual setup, use `deploy/presets/quickly.env.example` and `deploy/presets/twenty.env.example`; the password embedded in each database URL must exactly match its `POSTGRES_PASSWORD`. Do not deploy with empty sample secrets. The release backs up both private PostgreSQL databases before starting their application services; back up Twenty's local-data volume separately.

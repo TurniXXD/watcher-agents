@@ -2,6 +2,12 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-29 — Inbound lead mailbox automation
+
+- Added optional read-only TLS IMAP polling for a dedicated Sales lead mailbox, with bounded lookback, message count, size, and non-overlapping execution.
+- Added grounded contact-form/Reply-To handling plus deterministic and optional schema-validated Ollama classification without processing attachments or sending replies.
+- Relevant and uncertain human enquiries now idempotently upsert a Twenty Person and analysis Note, then use the durable PostgreSQL outbox to notify every authorized Telegram operator; clear automated and bulk mail is ignored with persisted deduplication.
+
 ## 2026-10-29 — Additive Sales & Business Development job category
 
 - Added an independently persisted Sales & Business Development category without changing the established technical profile, sources, schedules, deduplication, link checks, Notion mirror, or notification workflow.

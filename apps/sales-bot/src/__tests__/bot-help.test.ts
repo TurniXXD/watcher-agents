@@ -152,6 +152,7 @@ describe('sales bot help', () => {
     }
     expect(salesHelp).toContain('does not establish consent');
     expect(salesHelp).toContain('/about or /sales_about');
+    expect(salesHelp).toContain('read-only inbound mailbox');
   });
 
   it('publishes the detailed about command in the Telegram menu', () => {
@@ -164,6 +165,8 @@ describe('sales bot help', () => {
     expect(salesAbout).toContain('GOOGLE_PLACES_API_KEY');
     expect(salesAbout).toContain('GEOAPIFY_API_KEY');
     expect(salesAbout).toContain('Firmy.cz');
+    expect(salesAbout).toContain('Inbound IMAP');
+    expect(salesAbout).toContain('Nikdy na e-mail automaticky neodpovídá');
     expect(salesBotCommands).toContainEqual(
       expect.objectContaining({ command: 'sales_prospects' }),
     );
