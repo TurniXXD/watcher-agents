@@ -39,6 +39,14 @@ export type CreateStudyJobInput = {
   sourceObjectKey: string;
 };
 
+export type CreateStudyBookDraftInput = {
+  chatId: bigint;
+  userId: bigint;
+  title: string;
+  payload: Prisma.InputJsonValue;
+  expiresAt: Date;
+};
+
 export class StudyStore {
   public constructor(private readonly db: DatabaseClient) {}
 
@@ -204,5 +212,95 @@ export class StudyStore {
       where: { jobId },
       data: input,
     });
+  }
+
+  public async createBookDraft(input: CreateStudyBookDraftInput) {
+    return this.db.$transaction(async (transaction) => {
+      await transaction.studyBookDraft.updateMany({
+        where: {
+          chatId: input.chatId,
+          userId: input.userId,
+          status: { in: ['PENDING', 'SAVING'] },
+        },
+        data: { status: 'CANCELLED' },
+      });
+      return transaction.studyBookDraft.create({ data: input });
+    });
+  }
+
+  public getPendingBookDraft(input: {
+    id: string;
+    chatId: bigint;
+    userId: bigint;
+    now?: Date;
+  }) {
+    return this.db.studyBookDraft.findFirst({
+      where: {
+        id: input.id,
+        chatId: input.chatId,
+        userId: input.userId,
+        status: 'PENDING',
+        expiresAt: { gt: input.now ?? new Date() },
+      },
+    });
+  }
+
+  public async claimBookDraft(input: {
+    id: string;
+    chatId: bigint;
+    userId: bigint;
+    now?: Date;
+  }): Promise<boolean> {
+    const updated = await this.db.studyBookDraft.updateMany({
+      where: {
+        id: input.id,
+        chatId: input.chatId,
+        userId: input.userId,
+        status: 'PENDING',
+        expiresAt: { gt: input.now ?? new Date() },
+      },
+      data: { status: 'SAVING', lastError: null },
+    });
+    return updated.count === 1;
+  }
+
+  public completeBookDraft(
+    id: string,
+    input: { notionPageId: string; notionPageUrl?: string },
+  ) {
+    return this.db.studyBookDraft.update({
+      where: { id },
+      data: {
+        status: 'SAVED',
+        notionPageId: input.notionPageId,
+        notionPageUrl: input.notionPageUrl ?? null,
+        lastError: null,
+      },
+    });
+  }
+
+  public releaseBookDraft(id: string, error: unknown) {
+    return this.db.studyBookDraft.update({
+      where: { id },
+      data: {
+        status: 'PENDING',
+        lastError: (error instanceof Error
+          ? error.message
+          : String(error)
+        ).slice(0, 2_000),
+      },
+    });
+  }
+
+  public async cancelBookDraft(input: {
+    id: string;
+    chatId: bigint;
+    userId: bigint;
+  }): Promise<boolean> {
+    const updated = await this.db.studyBookDraft.updateMany({
+      where: { ...input, status: 'PENDING' },
+      data: { status: 'CANCELLED' },
+    });
+    return updated.count === 1;
   }
 }

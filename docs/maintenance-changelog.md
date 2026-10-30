@@ -303,3 +303,10 @@ Each code update that changes runtime behavior must add a concise entry here. Th
 - Added the visible `/link_to_lead URL` Sales Bot command with `/lead` as a backward-compatible alias.
 - The bot now sends the sourced research preview first and writes the Company and research Note to Twenty only after the initiating operator confirms within 15 minutes.
 - Cancelled, expired, cross-user, or restart-lost confirmations leave Twenty unchanged.
+
+## 2026-10-30 — Study Bot Notion book library
+
+- Added confirmed `/book_add TITLE` imports backed by validated Open Library metadata and restart-safe, owner-bound PostgreSQL drafts.
+- Added Notion library listing by all books, category, author, `Next to read`, and favorites, plus category and author inventories.
+- Registered the Study Bot command menu and documented the optional Notion configuration, provider limits, duplicate protection, and confirmation boundary.
+- Updated `Learning/Books` to use boolean `Priorita`, one `Přečteno` state, and boolean `Next to read`.

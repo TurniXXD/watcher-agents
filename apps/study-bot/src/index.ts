@@ -5,8 +5,11 @@ import {
   ResourceLeaseStore,
   StudyStore,
 } from '@watcher/database';
+import { NotionClient } from '@watcher/notion';
 import { parseAllowedUserIds } from '@watcher/telegram';
-import { createStudyBot, createStudyTransport } from './bot.js';
+import { createStudyBot, createStudyTransport, studyCommands } from './bot.js';
+import { StudyBookLibrary } from './book-library.js';
+import { OpenLibraryBookClient } from './book-metadata.js';
 import { env } from './config/env.js';
 import { PdfJsExtractor } from './ingestion/pdf-extractor.js';
 import { OllamaStudyLlm } from './llm/study-llm.js';
@@ -38,6 +41,18 @@ const tts = new PiperStudyTtsProvider({
   dataDirectory: env.PIPER_DATA_DIR,
   voice: env.STUDY_TTS_VOICE,
 });
+const bookLibrary =
+  env.NOTION_API_KEY && env.STUDY_NOTION_BOOKS_DATA_SOURCE_ID
+    ? new StudyBookLibrary(
+        store,
+        new NotionClient({
+          apiKey: env.NOTION_API_KEY,
+          apiVersion: env.NOTION_API_VERSION,
+        }),
+        env.STUDY_NOTION_BOOKS_DATA_SOURCE_ID,
+        new OpenLibraryBookClient(),
+      )
+    : undefined;
 const bot = createStudyBot({
   token: env.STUDY_TELEGRAM_TOKEN,
   allowedIds: parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS),
@@ -62,6 +77,7 @@ const bot = createStudyBot({
   },
   reportError: (error) =>
     logger.error({ err: error }, 'Study Telegram update failed'),
+  ...(bookLibrary ? { books: bookLibrary } : {}),
 });
 const service = new StudyService({
   store,
@@ -101,6 +117,7 @@ const shutdown = async (signal: string): Promise<void> => {
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
 process.once('SIGINT', () => void shutdown('SIGINT'));
 await readiness.start();
+await bot.api.setMyCommands([...studyCommands]);
 await bot.start({
   onStart: () => {
     readiness.markApplicationReady();

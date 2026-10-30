@@ -12,6 +12,7 @@
     "@aws-sdk/client-s3": "3.940.0",
     "@watcher/core": "workspace:*",
     "@watcher/database": "workspace:*",
+    "@watcher/notion": "workspace:*",
     "@watcher/observability": "workspace:*",
     "@watcher/telegram": "workspace:*",
     "grammy": "1.46.0",

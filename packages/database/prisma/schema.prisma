@@ -570,6 +570,13 @@ enum StudyJobStatus {
   CANCELLED
 }
 
+enum StudyBookDraftStatus {
+  PENDING
+  SAVING
+  SAVED
+  CANCELLED
+}
+
 model BriefingEvent {
   id                 String                      @id
   watcherBot         BriefingWatcherBot
@@ -2361,6 +2368,25 @@ model StudyFlashcardDeck {
   job           StudyProcessingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@map("study_flashcard_decks")
+}
+
+model StudyBookDraft {
+  id            String               @id @default(uuid())
+  chatId        BigInt
+  userId        BigInt
+  title         String
+  payload       Json
+  status        StudyBookDraftStatus @default(PENDING)
+  notionPageId  String?
+  notionPageUrl String?
+  lastError     String?
+  expiresAt     DateTime
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([chatId, userId, status, createdAt])
+  @@index([status, expiresAt])
+  @@map("study_book_drafts")
 }
 
 model TransportUser {

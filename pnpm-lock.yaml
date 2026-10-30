@@ -534,6 +534,9 @@ importers:
       '@watcher/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@watcher/notion':
+        specifier: workspace:*
+        version: link:../../packages/notion
       '@watcher/observability':
         specifier: workspace:*
         version: link:../../packages/observability

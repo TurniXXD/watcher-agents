@@ -1,6 +1,6 @@
 ---
 title: Study Bot
-description: PDF-grounded lectures, audio, summaries, quizzes, and Anki exports.
+description: PDF-grounded study output and a confirmed Notion book-library workflow.
 ---
 
 ## Overview
@@ -9,19 +9,29 @@ Study Bot accepts text-based university PDFs, stores the source in S3-compatible
 storage, extracts page text, creates cited facts through the shared Ollama queue,
 writes a spoken lecture, synthesizes OGG/Opus audio with Piper, and returns a
 Telegram voice message. Completion actions can resend audio, summarize, quiz, or
-export an Anki-compatible UTF-8 TSV deck.
+export an Anki-compatible UTF-8 TSV deck. Optional book commands read the
+operator's Notion `Learning/Books` data source and create a book only after an
+owner-bound Telegram confirmation.
 
 ## Commands and actions
 
-| Command/action     | What it does                                                    |
-| ------------------ | --------------------------------------------------------------- |
-| Upload a PDF       | Validates and starts a source-grounded study job.               |
-| `/start`           | Initializes the bot and shows the guide.                        |
-| `/help`            | Shows all commands and upload instructions.                     |
-| `/about`           | Explains storage, grounding, processing, and safety boundaries. |
-| `/status`          | Reports the latest document job and error, if any.              |
-| `/cancel`          | Cancels the latest active job at the next safe stage boundary.  |
-| Completion buttons | Resend the lecture, create a summary/quiz, or export Anki TSV.  |
+| Command/action             | What it does                                                    |
+| -------------------------- | --------------------------------------------------------------- |
+| Upload a PDF               | Validates and starts a source-grounded study job.               |
+| `/start`                   | Initializes the bot and shows the guide.                        |
+| `/help`                    | Shows all commands and upload instructions.                     |
+| `/about`                   | Explains storage, grounding, processing, and safety boundaries. |
+| `/status`                  | Reports the latest document job and error, if any.              |
+| `/cancel`                  | Cancels the latest active job at the next safe stage boundary.  |
+| `/book_add TITLE`          | Looks up metadata and asks before writing the book to Notion.   |
+| `/books`                   | Lists the current Notion book library.                          |
+| `/books_category CATEGORY` | Lists books in one current category.                            |
+| `/books_author AUTHOR`     | Lists books matching an author name.                            |
+| `/books_next`              | Lists books whose `Next to read` checkbox is enabled.           |
+| `/books_favorites`         | Lists books whose `Oblíbená` checkbox is enabled.               |
+| `/books_categories`        | Lists supported Notion category options.                        |
+| `/books_authors`           | Lists author values currently used by books.                    |
+| Completion buttons         | Resend the lecture, create a summary/quiz, or export Anki TSV.  |
 
 ## Architecture and flow
 
@@ -46,6 +56,14 @@ scanned/near-empty documents, chunks evidence, coordinates Ollama work, creates
 cited output, synthesizes media, persists progress, and delivers through
 Telegram. Generated questions and cards retain page citations.
 
+For `/book_add`, Study Bot queries structured Open Library search metadata,
+validates it, maps categories and genre to the existing Notion options, and
+stores a 30-minute confirmation draft in PostgreSQL. The confirmation callback
+re-checks both the Telegram user and chat, claims the draft atomically, checks
+for an exact-title duplicate, and only then writes the page. A Notion failure
+returns the draft to a retryable state. Notion remains authoritative for saved
+books.
+
 ## Configuration
 
 | Variable                                                                      | Required/default                | Purpose                                         |
@@ -63,6 +81,9 @@ Telegram. Generated questions and cards retain page citations.
 | `STUDY_MAX_PDF_SIZE_MB`, `STUDY_MAX_DOCUMENT_PAGES`                           | Bounded defaults                | Upload and document limits.                     |
 | `STUDY_TTS_PROVIDER`, `STUDY_TTS_VOICE`                                       | `piper`, configured Czech voice | Speech provider and voice.                      |
 | `PIPER_DATA_DIR`                                                              | `/data/piper`                   | Piper models and runtime data.                  |
+| `NOTION_API_KEY`                                                              | Optional with books data source | Shared internal-integration secret.             |
+| `STUDY_NOTION_BOOKS_DATA_SOURCE_ID`                                           | Optional with API key           | `Learning/Books` data-source ID.                |
+| `NOTION_API_VERSION`                                                          | `2026-03-11`                    | Notion REST version header.                     |
 | `LOG_LEVEL`                                                                   | `info`                          | Structured log level.                           |
 
 ## Execution and scheduling
@@ -80,7 +101,14 @@ safe stage boundaries.
 
 Telegram receives uploads and returns output. S3-compatible storage keeps source
 documents and media. pdf.js extracts text. Ollama and the shared queue generate
-grounded study content. Piper provides speech.
+grounded study content. Piper provides speech. Open Library provides public,
+structured book metadata with a bounded timeout; Notion stores the confirmed
+book library. Neither integration is used for replacement PDF facts.
+
+The book data source must expose `Kniha`, `Autor`, `Kategorie`, `Žánr`, `Stran`,
+`Složitost`, `Poznámka`, `Přidáno`, plus boolean `Priorita`, `Přečteno`,
+`Next to read`, and `Oblíbená`. New imports leave all boolean flags disabled so
+the operator retains control in Notion.
 
 ## Troubleshooting
 
@@ -91,3 +119,9 @@ grounded study content. Piper provides speech.
 - A cancelled job may finish its current atomic stage before stopping.
 - Missing audio usually points to Piper voice/runtime configuration after the
   text stages have succeeded.
+- Book commands report unavailable when both Notion variables are empty; a
+  partial Notion configuration fails environment validation at startup.
+- Open Library can return incomplete metadata. Review the confirmation preview
+  and correct category, genre, or page count in Notion after saving if needed.
+- Expired, cancelled, already-used, or cross-user confirmation callbacks cannot
+  write a book.
