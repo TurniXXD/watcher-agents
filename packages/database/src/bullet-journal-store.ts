@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { DatabaseClient } from './client.js';
 import { journalReminderInstant } from './journal-session-store.js';
-import { Prisma } from './generated/prisma/client.js';
+import type { Prisma } from './generated/prisma/client.js';
 
 export const planningDateSchema = z.iso.date();
 export const briefingPrioritySchema = z.enum([
@@ -604,7 +604,7 @@ export class BulletJournalStore {
       weekday: 'short',
     }).format(instant);
     const [year, month, day] = date.split('-').map(Number);
-    const lastDay = new Date(Date.UTC(year!, month!, 0)).getUTCDate();
+    const lastDay = new Date(Date.UTC(year ?? 0, month ?? 0, 0)).getUTCDate();
     const morningAt = journalReminderInstant(date, morningTime, timezone);
     const eveningAt = journalReminderInstant(date, eveningTime, timezone);
     const weekDay = instant.getUTCDay() || 7;

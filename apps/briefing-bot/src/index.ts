@@ -189,7 +189,7 @@ const scriptModel = new OllamaProvider({
   priority: 'high',
   coordinator: ollamaCoordinator,
 });
-let planning: PlanningController | undefined;
+const planningReference: { current?: PlanningController } = {};
 const journal = env.JOURNAL_ENABLED
   ? new JournalController({
       store: journalSessions,
@@ -210,11 +210,14 @@ const journal = env.JOURNAL_ENABLED
         : {}),
       logger,
       onConfirmed: async (session, context) => {
-        await planning?.completeDailyAlignment(session, context);
+        await planningReference.current?.completeDailyAlignment(
+          session,
+          context,
+        );
       },
     })
   : undefined;
-planning = env.PLANNING_ENABLED
+const planning = env.PLANNING_ENABLED
   ? new PlanningController({
       store: bulletJournal,
       goals,
@@ -228,6 +231,7 @@ planning = env.PLANNING_ENABLED
       },
     })
   : undefined;
+if (planning) planningReference.current = planning;
 const planningNotionRepository =
   env.NOTION_API_KEY &&
   env.NOTION_GOALS_DATA_SOURCE_ID &&

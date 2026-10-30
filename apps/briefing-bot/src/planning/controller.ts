@@ -44,7 +44,9 @@ const monthRange = (date: string): { start: string; end: string } => {
   const [year, month] = date.split('-').map(Number);
   return {
     start: `${year}-${String(month).padStart(2, '0')}-01`,
-    end: new Date(Date.UTC(year!, month!, 0)).toISOString().slice(0, 10),
+    end: new Date(Date.UTC(year ?? 0, month ?? 0, 0))
+      .toISOString()
+      .slice(0, 10),
   };
 };
 

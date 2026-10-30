@@ -150,7 +150,7 @@ export const reviewOrderForDate = (
     weekday: 'short',
   }).format(instant);
   const [year, month, day] = date.split('-').map(Number);
-  const lastDay = new Date(Date.UTC(year!, month!, 0)).getUTCDate();
+  const lastDay = new Date(Date.UTC(year ?? 0, month ?? 0, 0)).getUTCDate();
   return [
     'DAILY',
     'JOURNAL',

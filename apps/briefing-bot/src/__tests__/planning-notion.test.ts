@@ -35,9 +35,12 @@ describe('planning Notion projection', () => {
         has_more: false,
         next_cursor: null,
       });
-    const createPage = vi.fn().mockResolvedValue({
-      id: 'task-page',
-      url: 'https://notion.test/task-page',
+    const createPage = vi.fn(async (input: unknown) => {
+      expect(input).toBeDefined();
+      return {
+        id: 'task-page',
+        url: 'https://notion.test/task-page',
+      };
     });
     const repository = new PlanningNotionRepository({
       client: {
@@ -54,19 +57,22 @@ describe('planning Notion projection', () => {
       pageId: 'task-page',
       pageUrl: 'https://notion.test/task-page',
     });
-    expect(createPage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        properties: expect.objectContaining({
-          'Stable ID': expect.any(Object),
-          'Linked goal': { relation: [{ id: 'goal-page' }] },
-        }),
-      }),
-      undefined,
-    );
+    const created = createPage.mock.calls[0]?.[0] as {
+      properties: Record<string, unknown>;
+    };
+    expect(created.properties['Stable ID']).toBeDefined();
+    expect(created.properties['Linked goal']).toEqual({
+      relation: [{ id: 'goal-page' }],
+    });
   });
 
   it('projects monthly principles and the weekly daily practice separately', async () => {
-    const updatePage = vi.fn().mockResolvedValue({ id: 'review-page' });
+    const updatePage = vi.fn(
+      async (_id: string, input: { properties: Record<string, unknown> }) => ({
+        id: 'review-page',
+        input,
+      }),
+    );
     const repository = new PlanningNotionRepository({
       client: {
         queryDataSource: vi.fn().mockResolvedValue({
@@ -98,20 +104,18 @@ describe('planning Notion projection', () => {
 
     await repository.saveReview(review);
 
-    expect(updatePage).toHaveBeenCalledWith(
-      'review-page',
-      expect.objectContaining({
-        properties: expect.objectContaining({
-          'Monthly principles': expect.any(Object),
-          'Daily practice': expect.any(Object),
-        }),
-      }),
-      undefined,
-    );
+    const updatedReview = updatePage.mock.calls[0]?.[1];
+    expect(updatedReview?.properties['Monthly principles']).toBeDefined();
+    expect(updatedReview?.properties['Daily practice']).toBeDefined();
   });
 
   it('does not erase an evening review when only tasks are resynchronized', async () => {
-    const updatePage = vi.fn().mockResolvedValue({ id: 'journal-page' });
+    const updatePage = vi.fn(
+      async (_id: string, input: { properties: Record<string, unknown> }) => ({
+        id: 'journal-page',
+        input,
+      }),
+    );
     const repository = new PlanningNotionRepository({
       client: {
         queryDataSource: vi.fn().mockResolvedValue({
@@ -130,7 +134,7 @@ describe('planning Notion projection', () => {
 
     await repository.updateDailyJournal('2026-11-02', [task()]);
 
-    const properties = updatePage.mock.calls[0]?.[1]?.properties;
+    const properties = updatePage.mock.calls[0]?.[1].properties;
     expect(properties).toHaveProperty('Morning intentions');
     expect(properties).not.toHaveProperty('Evening goal review');
     expect(properties).not.toHaveProperty('Daily alignment analysis');

@@ -4,7 +4,7 @@ import type {
   PlanningGoalSyncRecord,
 } from '@watcher/database';
 import { z } from 'zod';
-import type { NotionClient, NotionObject } from '../notion-client.js';
+import type { NotionClient } from '../notion-client.js';
 
 const pageSchema = z
   .object({ id: z.string().min(1), url: z.string().optional() })
@@ -229,7 +229,7 @@ export class PlanningNotionRepository {
     if (response.results.length > 1) {
       throw new Error(`Duplicate Notion page for stable ID ${stableId}`);
     }
-    const candidate = response.results[0] as NotionObject | undefined;
+    const candidate = response.results[0];
     return candidate ? pageSchema.parse(candidate).id : undefined;
   }
 }
