@@ -41,7 +41,7 @@ integration('briefing persistent state', () => {
     await database.$disconnect();
   });
 
-  it('creates safe defaults and every real watcher subscription', async () => {
+  it('creates safe defaults and every supported briefing subscription', async () => {
     const first = await configuration.ensure(101n);
     const second = await configuration.ensure(101n);
 
@@ -61,13 +61,12 @@ integration('briefing persistent state', () => {
     });
     expect(first.subscriptions).toMatchObject([
       { watcherBot: 'brno-events', enabled: true },
-      { watcherBot: 'medical', enabled: true },
       { watcherBot: 'mu-clubs', enabled: true },
       { watcherBot: 'news', enabled: true },
       { watcherBot: 'stocks', enabled: true },
     ]);
     expect(second.settings.id).toBe(first.settings.id);
-    expect(await database.briefingSubscription.count()).toBe(5);
+    expect(await database.briefingSubscription.count()).toBe(4);
   });
 
   it('keeps personal goals private to a chat and persists the goals delivery channel', async () => {
@@ -160,7 +159,7 @@ integration('briefing persistent state', () => {
     expect(
       repeated.subscriptions.find(({ watcherBot }) => watcherBot === 'stocks'),
     ).toMatchObject({ enabled: false });
-    expect(await database.briefingSubscription.count()).toBe(5);
+    expect(await database.briefingSubscription.count()).toBe(4);
     await expect(
       configuration.setSubscription(103n, 'weather', true),
     ).rejects.toThrow();
