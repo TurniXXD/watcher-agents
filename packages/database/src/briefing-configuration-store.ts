@@ -18,6 +18,10 @@ import {
   toDatabaseWatcher,
 } from './utils/briefing-mappers.js';
 
+export const briefingSubscriptionBots = registeredWatcherBots.filter(
+  (watcherBot) => watcherBot !== 'medical',
+);
+
 export const briefingVoiceIdSchema = z.enum(['amy', 'hfc_female', 'hfc_male']);
 export type BriefingVoiceId = z.infer<typeof briefingVoiceIdSchema>;
 
@@ -221,6 +225,7 @@ const toConfiguration = (row: ConfigurationRow): BriefingConfiguration => ({
     updatedAt: row.updatedAt.toISOString(),
   },
   subscriptions: row.subscriptions
+    .filter((subscription) => subscription.watcherBot !== 'MEDICAL')
     .map((subscription) => ({
       id: subscription.id,
       watcherBot: fromDatabaseWatcher(subscription.watcherBot),
@@ -264,7 +269,7 @@ export class BriefingConfigurationStore {
     });
     await this.db.$transaction([
       this.db.briefingSubscription.createMany({
-        data: registeredWatcherBots.map((watcherBot) => ({
+        data: briefingSubscriptionBots.map((watcherBot) => ({
           settingsId: settings.id,
           watcherBot: toDatabaseWatcher(watcherBot),
           enabled: true,
@@ -338,6 +343,9 @@ export class BriefingConfigurationStore {
     enabled: boolean,
   ): Promise<BriefingConfiguration> {
     const watcherBot = watcherBotIdSchema.parse(rawWatcherBot);
+    if (watcherBot === 'medical') {
+      throw new Error('Medical watcher is disabled for Briefing Bot');
+    }
     const configuration = await this.ensure(telegramChatId);
     await this.db.briefingSubscription.upsert({
       where: {
@@ -362,7 +370,12 @@ export class BriefingConfigurationStore {
   ): Promise<BriefingConfiguration> {
     const configuration = await this.ensure(telegramChatId);
     await this.db.briefingSubscription.updateMany({
-      where: { settingsId: configuration.settings.id },
+      where: {
+        settingsId: configuration.settings.id,
+        watcherBot: {
+          in: briefingSubscriptionBots.map(toDatabaseWatcher),
+        },
+      },
       data: { enabled },
     });
     return this.getRequired(telegramChatId);

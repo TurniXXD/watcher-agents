@@ -194,12 +194,6 @@ describe('AgentScheduleStore', () => {
     );
     expect(overview.watchers).toMatchObject([
       { id: 'stocks', configured: true, health: 'HEALTHY' },
-      {
-        id: 'medical',
-        configured: true,
-        runInProgress: true,
-        health: 'DEGRADED',
-      },
       { id: 'news', configured: false },
     ]);
     expect(overview.muClubs).toMatchObject({ lastRunStatus: 'SUCCESS' });

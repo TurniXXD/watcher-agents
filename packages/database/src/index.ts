@@ -1,5 +1,6 @@
 export * from './briefing-configuration-store.js';
 export * from './briefing-goal-store.js';
+export * from './bullet-journal-store.js';
 export * from './briefing-cluster-store.js';
 export * from './briefing-delivery-store.js';
 export * from './briefing-event-store.js';

@@ -166,6 +166,13 @@ export const loadBriefingCalendar = async (
       ),
     };
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'Google Calendar is not connected'
+    ) {
+      logger?.info('Calendar is not connected; optional context is disabled');
+      return { status: 'DISABLED', value: [] };
+    }
     logger?.warn({ err: error }, 'CALENDAR = DEGRADED');
     return { status: 'UNAVAILABLE', value: [] };
   }

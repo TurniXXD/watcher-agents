@@ -6,6 +6,7 @@ import {
   nextOnboardingStep,
   renderConfiguration,
 } from '../onboarding.js';
+import { briefingCommands } from '../bot.js';
 
 const configuration: BriefingConfiguration = {
   settings: {
@@ -82,6 +83,12 @@ describe('briefing onboarding copy and transitions', () => {
       .map((line) => line.split(' ')[0] ?? '');
     expect(commands).toEqual([...commands].sort());
     expect(commands.every((command) => !command.includes('-'))).toBe(true);
+    expect(briefingCommands.map(({ command }) => command)).toEqual(
+      expect.arrayContaining(['start', 'help', 'about']),
+    );
+    for (const { command } of briefingCommands) {
+      expect(briefingHelp).toContain(`/${command}`);
+    }
   });
 
   it('documents the briefing purpose and primary workflow', () => {

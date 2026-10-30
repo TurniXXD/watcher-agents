@@ -113,6 +113,10 @@ export type JournalControllerOptions = {
   logger?: WatcherLogger;
   now?: () => Date;
   fetch?: typeof fetch;
+  onConfirmed?: (
+    session: JournalSessionRecord,
+    context?: Context,
+  ) => Promise<void>;
 };
 
 export class JournalController {
@@ -340,6 +344,17 @@ export class JournalController {
     } else if (action === 'save') {
       const confirmed = await this.options.store.confirm(id);
       await context.reply('✅ Reflexe je potvrzená. Ukládám ji do Notion.');
+      try {
+        await this.options.onConfirmed?.(confirmed, context);
+      } catch (error) {
+        this.options.logger?.warn(
+          { err: error, journalSessionId: confirmed.id },
+          'Post-journal analysis failed; journal synchronization continues',
+        );
+        await context.reply(
+          '⚠️ Denní alignment se teď nepodařilo doplnit; potvrzený journal tím není dotčený.',
+        );
+      }
       await this.synchronize(confirmed, context);
     } else if (action === 'edit') {
       await context.reply('Kterou odpověď chceš upravit?', {

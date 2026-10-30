@@ -10,7 +10,6 @@ export type AgentScheduleReader = {
 
 const labels = {
   stocks: 'Stocks bot',
-  medical: 'Publications bot',
   news: 'News bot',
 } as const;
 

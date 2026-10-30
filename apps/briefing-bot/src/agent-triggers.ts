@@ -40,8 +40,6 @@ const muResponseSchema = z.object({
 const agentAliases = {
   stocks: 'stocks',
   stock: 'stocks',
-  medical: 'medical',
-  publications: 'medical',
   news: 'news',
   'mu-clubs': 'mu-clubs',
   mu: 'mu-clubs',
@@ -49,8 +47,7 @@ const agentAliases = {
   brno: 'brno-events',
 } as const;
 
-export type TriggerableAgentId =
-  'stocks' | 'medical' | 'news' | 'mu-clubs' | 'brno-events';
+export type TriggerableAgentId = 'stocks' | 'news' | 'mu-clubs' | 'brno-events';
 export type AgentTriggerOutcome = {
   status: 'QUEUED' | 'BUSY' | 'SUCCESS' | 'PARTIAL' | 'FAILED';
   message: string;
@@ -58,7 +55,7 @@ export type AgentTriggerOutcome = {
 export type WatcherRunRequester = {
   requestWatcherRun: (
     telegramChatId: bigint,
-    watcherId: 'stocks' | 'medical' | 'news',
+    watcherId: 'stocks' | 'news',
   ) => Promise<
     | { status: 'QUEUED' }
     | { status: 'BUSY' }
@@ -119,7 +116,6 @@ export class AgentTriggerService implements AgentTriggerRunner {
       'Available producer triggers:',
       '',
       '• stocks — queue Stocks Bot now',
-      '• medical — queue Publications Bot now',
       '• news — queue News Bot now',
       `• mu-clubs — run MU Clubs Monitor now${this.#muClubs ? '' : ' (API not configured)'}`,
       `• brno-events [SOURCE] — run all enabled Brno sources or one source${this.#brnoEvents ? '' : ' (API not configured)'}`,
@@ -150,7 +146,7 @@ export class AgentTriggerService implements AgentTriggerRunner {
 
   async #triggerWatcher(
     telegramChatId: bigint,
-    agent: 'stocks' | 'medical' | 'news',
+    agent: 'stocks' | 'news',
   ): Promise<AgentTriggerOutcome> {
     const result = await this.#watchers.requestWatcherRun(
       telegramChatId,

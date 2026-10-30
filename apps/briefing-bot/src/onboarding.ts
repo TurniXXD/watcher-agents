@@ -57,7 +57,7 @@ export const briefingAbout = `*Personal Morning Briefing*
 Personal Morning Briefing is a private, self-hosted Telegram assistant that turns the information collected by your Watcher bots into one prioritized spoken briefing.
 
 *What it does*
-• Combines new stock, medical-publication, news, and club events from the watchers you subscribe to.
+• Combines new stock, news, and club events from the watchers you subscribe to.
 • With Stocks subscribed, shows only highly relevant stock news and known exact watchlist earnings dates over the next 14 days in every briefing.
 • Adds optional weather and Google Calendar context for the day ahead.
 • On Monday mornings, calls out birthdays and personal name days from Calendar one and two weeks ahead.
@@ -65,6 +65,8 @@ Personal Morning Briefing is a private, self-hosted Telegram assistant that turn
 • Prioritizes urgent and personally relevant items while respecting priority and muted topics.
 • Generates an audio briefing with Piper and can optionally send a text transcript.
 • Sends a separate bulleted list of your 10 nearest goal deadlines after morning and evening briefings, with day/year countdowns, your age at each deadline when configured, and no administrative IDs.
+• Runs a restart-safe morning plan, daily task tracking, an evening goal review before the existing six-question journal, and weekly/monthly reviews.
+• Keeps PostgreSQL authoritative and projects confirmed goals, tasks, journal content, and reviews to configured Notion databases; Notion edits are not imported automatically.
 • Uses feedback on delivered stories to improve later briefings.
 
 *Key advantages*
@@ -81,8 +83,9 @@ Personal Morning Briefing is a private, self-hosted Telegram assistant that turn
 5. Generate an immediate briefing with \`/briefing\`, or a short verification with \`/briefing_test\`.
 6. Use \`/settings\` to review the current configuration and \`/help\` for every command.
 7. Add a personal deadline with \`/goal_add YYYY-MM-DD Goal title\`, review it with \`/goals\`, and remove it with \`/goal_remove ID\`.
+8. Start daily planning with \`/plan\`; use \`/tasks\` during the day and \`/journal\` for the ordered goal review plus existing journal.
 
-_Important:_ The briefing summarizes available data and may be incomplete. Review linked primary sources before making medical, financial, or other consequential decisions.`;
+_Privacy and limits:_ Every update is restricted to configured Telegram users. Journal text is sensitive and is not intentionally logged. The bot records only what you explicitly provide; it cannot detect whether your laptop is open, infer unrecorded work, or change long-term goals without an explicit command. Briefing and LLM interpretations may be incomplete, so review primary sources before consequential decisions. Best next command: \`/help\`.`;
 
 export const briefingHelp = [
   '/about — what the briefing bot does and how to use it',
@@ -99,7 +102,10 @@ export const briefingHelp = [
   '/calendar_disconnect — disconnect Google Calendar',
   '/calendar_refresh — refresh Calendar status',
   '/calendar_status — show Calendar status',
-  '/goal_add YYYY-MM-DD Goal title — add a personal deadline',
+  '/daily_review — review today’s tasks, then continue to the existing journal',
+  '/goal_add [long|monthly|weekly] YYYY-MM-DD [parent:ID] Goal title — add a goal',
+  '/goal_archive ID — explicitly archive an irrelevant goal',
+  '/goal_progress ID 0-100 — update verified goal progress',
   '/goal_remove ID — remove one of your goals',
   '/goals — show all goals, deadlines, countdowns, and deadline ages',
   '/help — show commands',
@@ -111,21 +117,32 @@ export const briefingHelp = [
   '/location_clear — disable location',
   '/location_set — location setup instructions',
   '/location_status — show saved location',
+  '/monthly_review — start or resume the calendar-month review',
   '/mute_add TOPIC — reduce non-urgent coverage of a topic',
   '/mute_remove TOPIC — remove a muted topic',
+  '/plan — start or resume today’s interactive morning plan',
+  '/priorities — show today’s 1–3 primary tasks',
   '/priority_add TOPIC — boost a topic, company, ticker, or subject',
   '/priority_remove TOPIC — remove a priority topic',
   '/schedules — show producer schedules and whether they run before the next briefing',
   '/settings — show briefing configuration',
   '/start — start or resume onboarding',
-  '/subscribe WATCHER — enable stocks, medical, or news',
+  '/subscribe WATCHER — enable stocks, news, mu-clubs, or brno-events',
   '/subscribe_all — enable all watchers',
   '/subscriptions — show watcher subscriptions',
+  '/task_add TITLE [DURATION] — add a task; example: /task_add Reading 30m',
+  '/task_cancel ID|TITLE — cancel a matching task',
+  '/task_done ID|TITLE [ACTUAL] — complete a task without assuming actual time',
+  '/task_estimate ID|TITLE DURATION — update an estimate',
+  '/task_goal GOAL_ID ID|TITLE — link a task to an active goal',
+  '/task_move ID|TITLE YYYY-MM-DD — reschedule with migration history',
+  '/tasks — show today’s tasks and short IDs',
   '/trigger AGENT [SOURCE] — run a producer now; Brno Events accepts an optional source',
-  '/unsubscribe WATCHER — disable stocks, medical, or news',
+  '/unsubscribe WATCHER — disable stocks, news, mu-clubs, or brno-events',
   '/unsubscribe_all — disable all watchers',
   '/voice — show selected voice',
   '/voice_list — list supported voices',
   '/voice_preview VOICE — preview a voice',
   '/voice_set VOICE — select a voice',
+  '/weekly_review — start or resume the Monday–Sunday review',
 ].join('\n');

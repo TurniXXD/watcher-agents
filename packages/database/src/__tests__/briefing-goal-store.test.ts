@@ -36,11 +36,65 @@ describe('BriefingGoalStore', () => {
     expect(await store.remove(123n, 5)).toBe(true);
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { settings: { telegramChatId: 123n } },
+        where: {
+          settings: { telegramChatId: 123n },
+          status: 'ACTIVE',
+        },
       }),
     );
     expect(deleteMany).toHaveBeenCalledWith({
       where: { id: 5, settings: { telegramChatId: 123n } },
     });
+  });
+
+  it('requires a parent with a longer horizon in the same chat', async () => {
+    const findFirst = vi
+      .fn()
+      .mockResolvedValueOnce({ horizon: 'LONG_TERM' })
+      .mockResolvedValueOnce({ horizon: 'WEEKLY' });
+    const create = vi.fn(
+      async ({
+        data,
+      }: {
+        data: {
+          title: string;
+          horizon: 'LONG_TERM' | 'MONTHLY' | 'WEEKLY';
+          priority: 'LOW' | 'NORMAL' | 'HIGH' | 'PRIMARY';
+          dueOn: Date;
+        };
+      }) => ({
+        id: 6,
+        publicId: 'goal-6',
+        title: data.title,
+        description: null,
+        horizon: data.horizon,
+        status: 'ACTIVE',
+        priority: data.priority,
+        progress: 0,
+        parentGoalId: 5,
+        startOn: null,
+        dueOn: data.dueOn,
+      }),
+    );
+    const store = new BriefingGoalStore({
+      briefingGoal: { findFirst, create },
+    } as unknown as DatabaseClient);
+
+    await expect(
+      store.add(123n, {
+        title: 'November outcome',
+        dueOn: '2026-11-30',
+        horizon: 'MONTHLY',
+        parentGoalId: 5,
+      }),
+    ).resolves.toMatchObject({ horizon: 'MONTHLY', parentGoalId: 5 });
+    await expect(
+      store.add(123n, {
+        title: 'Invalid monthly parent',
+        dueOn: '2026-11-30',
+        horizon: 'MONTHLY',
+        parentGoalId: 8,
+      }),
+    ).rejects.toThrow('longer planning horizon');
   });
 });

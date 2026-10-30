@@ -1,8 +1,4 @@
-import {
-  getWatcherRegistration,
-  registeredWatcherBots,
-  type WatcherLogger,
-} from '@watcher/core';
+import { getWatcherRegistration, type WatcherLogger } from '@watcher/core';
 import type {
   BriefingConfiguration,
   BriefingConfigurationStore,
@@ -21,6 +17,7 @@ import {
   splitTelegramMessage,
 } from '@watcher/telegram';
 import { Bot, InlineKeyboard, Keyboard, type Context } from 'grammy';
+import { z } from 'zod';
 import {
   briefingAbout,
   briefingHelp,
@@ -41,6 +38,29 @@ import {
 } from './agent-triggers.js';
 import { renderGoalsMessage } from './goals.js';
 import type { JournalController } from './journal-controller.js';
+import type { PlanningController } from './planning/controller.js';
+import { briefingSubscriptionBots } from '@watcher/database';
+
+export const briefingCommands = [
+  { command: 'start', description: 'Start or resume setup' },
+  { command: 'help', description: 'Show commands and examples' },
+  { command: 'about', description: 'Purpose, data flow and limitations' },
+  { command: 'briefing', description: 'Generate a briefing now' },
+  { command: 'plan', description: 'Start or resume morning planning' },
+  { command: 'tasks', description: "Show today's tasks" },
+  { command: 'priorities', description: "Show today's primary priorities" },
+  { command: 'task_add', description: 'Add a task with optional duration' },
+  { command: 'task_done', description: 'Complete a task by title or ID' },
+  { command: 'task_goal', description: 'Link a task to an active goal' },
+  { command: 'daily_review', description: 'Review goals, then journal' },
+  { command: 'journal', description: 'Run evening goal review and journal' },
+  { command: 'weekly_review', description: 'Start or resume weekly review' },
+  { command: 'monthly_review', description: 'Start or resume monthly review' },
+  { command: 'goals', description: 'Show active goals' },
+  { command: 'goal_add', description: 'Add a long, monthly or weekly goal' },
+  { command: 'goal_progress', description: 'Update goal progress' },
+  { command: 'goal_archive', description: 'Archive an irrelevant goal' },
+] as const;
 
 type VoicePreview = (context: Context, voice: BriefingVoiceId) => Promise<void>;
 export type BriefingCommandRunner = (
@@ -158,9 +178,10 @@ export const createBriefingBot = (
   logger?: WatcherLogger,
   scheduleReader?: AgentScheduleReader,
   agentTriggers?: AgentTriggerRunner,
-  goals?: Pick<BriefingGoalStore, 'add' | 'list' | 'remove'>,
+  goals?: Pick<BriefingGoalStore, 'add' | 'list' | 'remove' | 'update'>,
   journal?: JournalController,
   birthDate?: string,
+  planning?: PlanningController,
 ): Bot => {
   const bot = new Bot(token);
   bot.use(authorizationMiddleware(allowedIds));
@@ -247,9 +268,86 @@ export const createBriefingBot = (
   });
   bot.command('help', async (context) => context.reply(briefingHelp));
   bot.command('journal', async (context) => {
-    if (journal) await journal.commandStart(context);
+    if (planning) await planning.commandDailyReview(context);
+    else if (journal) await journal.commandStart(context);
     else await context.reply('Večerní reflexe není na tomto serveru zapnutá.');
   });
+  bot.command('daily_review', async (context) => {
+    if (planning) await planning.commandDailyReview(context);
+    else
+      await context.reply('Denní goal review není na tomto serveru zapnuté.');
+  });
+  bot.command('plan', async (context) => {
+    if (planning) await planning.commandMorning(context);
+    else await context.reply('Denní plánování není na tomto serveru zapnuté.');
+  });
+  bot.command('tasks', async (context) => planning?.commandTasks(context));
+  bot.command('priorities', async (context) =>
+    planning?.commandPriorities(context),
+  );
+  bot.command('task_add', async (context) => {
+    if (!planning) return;
+    const value = commandArgument(context.message?.text);
+    if (!value) {
+      await context.reply('Použití: /task_add NÁZEV [15m|1h|1h15m]');
+      return;
+    }
+    await planning.commandAdd(context, value);
+  });
+  bot.command('task_done', async (context) => {
+    if (!planning) return;
+    const value = commandArgument(context.message?.text);
+    if (!value) {
+      await context.reply('Použití: /task_done ID|NÁZEV [SKUTEČNÁ_DÉLKA]');
+      return;
+    }
+    await planning.commandComplete(context, value);
+  });
+  bot.command('task_move', async (context) => {
+    if (!planning) return;
+    const value = commandArgument(context.message?.text);
+    const match = /^(.*?)\s+(\d{4}-\d{2}-\d{2})$/u.exec(value);
+    if (!match) {
+      await context.reply('Použití: /task_move ID|NÁZEV YYYY-MM-DD');
+      return;
+    }
+    await planning.commandMove(context, match[1]!, match[2]!);
+  });
+  bot.command('task_cancel', async (context) => {
+    if (!planning) return;
+    const value = commandArgument(context.message?.text);
+    if (!value) {
+      await context.reply('Použití: /task_cancel ID|NÁZEV');
+      return;
+    }
+    await planning.commandCancel(context, value);
+  });
+  bot.command('task_estimate', async (context) => {
+    if (!planning) return;
+    const value = commandArgument(context.message?.text);
+    const match = /^(.*?)\s+(\d{1,3}h(?:\d{1,2}m)?|\d{1,3}m)$/iu.exec(value);
+    if (!match) {
+      await context.reply('Použití: /task_estimate ID|NÁZEV 15m|1h|1h15m');
+      return;
+    }
+    await planning.commandEstimate(context, match[1]!, match[2]!);
+  });
+  bot.command('task_goal', async (context) => {
+    if (!planning) return;
+    const value = commandArgument(context.message?.text);
+    const match = /^(\d+)\s+(.+)$/u.exec(value);
+    if (!match) {
+      await context.reply('Použití: /task_goal GOAL_ID ID|NÁZEV');
+      return;
+    }
+    await planning.commandLinkGoal(context, match[2]!, Number(match[1]));
+  });
+  bot.command('weekly_review', async (context) =>
+    planning?.commandWeeklyReview(context),
+  );
+  bot.command('monthly_review', async (context) =>
+    planning?.commandMonthlyReview(context),
+  );
   bot.command('journal_status', async (context) => {
     if (journal) await journal.commandStatus(context);
     else await context.reply('Večerní reflexe není na tomto serveru zapnutá.');
@@ -263,7 +361,6 @@ export const createBriefingBot = (
     else await context.reply('Večerní reflexe není na tomto serveru zapnutá.');
   });
   bot.command('about', async (context) => {
-    await store.ensure(BigInt(context.chat.id));
     await context.reply(briefingAbout, {
       parse_mode: 'Markdown',
       link_preview_options: { is_disabled: true },
@@ -358,14 +455,24 @@ export const createBriefingBot = (
       return;
     }
     const argument = commandArgument(context.message?.text).trim();
-    const match = /^(\d{4}-\d{2}-\d{2})\s+(.+)$/su.exec(argument);
+    const match =
+      /^(?:(long|monthly|weekly)\s+)?(\d{4}-\d{2}-\d{2})\s+(?:parent:(\d+)\s+)?(.+)$/isu.exec(
+        argument,
+      );
+    const horizon = {
+      long: 'LONG_TERM',
+      monthly: 'MONTHLY',
+      weekly: 'WEEKLY',
+    }[match?.[1]?.toLowerCase() ?? 'long'];
     const parsed = briefingGoalInputSchema.safeParse({
-      dueOn: match?.[1],
-      title: match?.[2],
+      dueOn: match?.[2],
+      title: match?.[4],
+      horizon,
+      ...(match?.[3] ? { parentGoalId: Number(match[3]) } : {}),
     });
     if (!parsed.success) {
       await context.reply(
-        'Usage: /goal_add YYYY-MM-DD Goal title\nExample: /goal_add 2027-06-30 Finish my degree',
+        'Použití: /goal_add [long|monthly|weekly] YYYY-MM-DD [parent:ID] Název\nPříklad: /goal_add monthly 2026-11-30 parent:7 Dokončit první verzi',
       );
       return;
     }
@@ -374,6 +481,48 @@ export const createBriefingBot = (
     const goal = await goals.add(chatId, parsed.data);
     await context.reply(
       `✅ Goal #${goal.id} saved: ${goal.title} · ${goal.dueOn}. Remove it with /goal_remove ${goal.id}.`,
+    );
+  });
+  bot.command('goal_progress', async (context) => {
+    if (!goals || context.chat.type !== 'private') {
+      await context.reply('Spravuj osobní cíle v soukromém chatu.');
+      return;
+    }
+    const match = /^(\d+)\s+(\d{1,3})$/u.exec(
+      commandArgument(context.message?.text).trim(),
+    );
+    const id = Number(match?.[1]);
+    const progress = Number(match?.[2]);
+    if (!match || progress < 0 || progress > 100) {
+      await context.reply('Použití: /goal_progress ID 0-100');
+      return;
+    }
+    const updated = await goals.update(BigInt(context.chat.id), id, {
+      progress,
+      ...(progress === 100 ? { status: 'COMPLETED' } : {}),
+    });
+    await context.reply(
+      updated
+        ? `🎯 ${updated.title}: ${progress} %${progress === 100 ? ' · dokončeno' : ''}`
+        : `Cíl #${id} nebyl nalezen.`,
+    );
+  });
+  bot.command('goal_archive', async (context) => {
+    if (!goals || context.chat.type !== 'private') {
+      await context.reply('Spravuj osobní cíle v soukromém chatu.');
+      return;
+    }
+    const raw = commandArgument(context.message?.text).trim();
+    const id = Number(raw);
+    if (!/^\d+$/u.test(raw) || id < 1) {
+      await context.reply('Použití: /goal_archive ID');
+      return;
+    }
+    const updated = await goals.update(BigInt(context.chat.id), id, {
+      status: 'ARCHIVED',
+    });
+    await context.reply(
+      updated ? `📦 Cíl #${id} archivován.` : `Cíl #${id} nebyl nalezen.`,
     );
   });
   bot.command('goal_remove', async (context) => {
@@ -431,7 +580,7 @@ export const createBriefingBot = (
     const watcher = commandArgument(context.message?.text);
     if (!watcher) {
       await context.reply(
-        `Available watchers: ${registeredWatcherBots.join(', ')}\nUsage: /subscribe mu-clubs`,
+        `Available watchers: ${briefingSubscriptionBots.join(', ')}\nUsage: /subscribe mu-clubs`,
       );
       return;
     }
@@ -781,7 +930,7 @@ export const createBriefingBot = (
     await prompt(context, configuration);
   });
   bot.callbackQuery(
-    /^onb:subscription:(stocks|medical|news|mu-clubs|brno-events)$/,
+    /^onb:subscription:(stocks|news|mu-clubs|brno-events)$/,
     async (context) => {
       const current = await store.ensure(BigInt(context.chat!.id));
       const watcher = context.match[1];
@@ -826,20 +975,58 @@ export const createBriefingBot = (
       await context.answerCallbackQuery('Večerní reflexe není zapnutá.');
       return;
     }
+    if (planning && !(await planning.ensureDailyReviewBeforeJournal(context))) {
+      await context.answerCallbackQuery();
+      return;
+    }
     await journal.handleCallback(context, context.match[1]!, context.match[2]!);
   });
+
+  bot.callbackQuery(
+    /^plan:([0-9a-f-]{36}):(laptop|mirror|confirm|edit)$/u,
+    async (context) => {
+      if (!planning) {
+        await context.answerCallbackQuery('Plánování není zapnuté.');
+        return;
+      }
+      await planning.handleCallback(
+        context,
+        context.match[1]!,
+        context.match[2]!,
+      );
+    },
+  );
+  bot.callbackQuery(
+    /^plan:rv:([0-9a-f]{8}):(done|tomorrow|backlog|cancel)$/u,
+    async (context) => {
+      if (!planning) {
+        await context.answerCallbackQuery('Denní review není zapnuté.');
+        return;
+      }
+      await planning.handleReviewCallback(
+        context,
+        context.match[1]!,
+        context.match[2]!,
+      );
+    },
+  );
 
   bot.on('message:voice', async (context) => {
     await journal?.handleVoice(context);
   });
   bot.on('message:text', async (context) => {
+    if (await planning?.handleText(context)) return;
     await journal?.handleText(context);
   });
 
   bot.catch(async (error) => {
     reportError(error.error);
     try {
-      await error.ctx.reply('Request failed. Check the bot logs for details.');
+      await error.ctx.reply(
+        error.error instanceof z.ZodError
+          ? `Neplatný vstup: ${error.error.issues[0]?.message ?? 'zkontroluj formát příkazu.'}`
+          : 'Request failed. Check the bot logs for details.',
+      );
     } catch {
       // Reporting must not create another unhandled Telegram error.
     }

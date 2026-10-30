@@ -310,3 +310,11 @@ Each code update that changes runtime behavior must add a concise entry here. Th
 - Added Notion library listing by all books, category, author, `Next to read`, and favorites, plus category and author inventories.
 - Registered the Study Bot command menu and documented the optional Notion configuration, provider limits, duplicate protection, and confirmation boundary.
 - Updated `Learning/Books` to use boolean `Priorita`, one `Přečteno` state, and boolean `Next to read`.
+
+## 2026-10-30 — Briefing Bot Bullet Journal and review ordering
+
+- Added restart-safe morning planning, rapid task capture, conscious migration, deterministic execution metrics, and ordered daily, weekly, and monthly reviews.
+- Preserved the existing six-question journal behind the daily goal review and added monthly principles plus one weekly principle for daily practice.
+- Added idempotent PostgreSQL-to-Notion projections for goals, tasks, reviews, and Daily Journal planning fields; PostgreSQL remains authoritative.
+- Removed the medical/publications watcher from Briefing controls and disabled its existing persisted schedules during migration.
+- Treats an unconnected optional Google Calendar as disabled instead of reporting a false availability failure.

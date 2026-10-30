@@ -469,6 +469,77 @@ enum JournalSyncStatus {
   CONFLICT
 }
 
+enum BriefingGoalHorizon {
+  LONG_TERM
+  MONTHLY
+  WEEKLY
+}
+
+enum BriefingGoalStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+  CANCELLED
+}
+
+enum BriefingTaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  MIGRATED
+  CANCELLED
+  BACKLOG
+}
+
+enum BriefingPriority {
+  LOW
+  NORMAL
+  HIGH
+  PRIMARY
+}
+
+enum BriefingTaskSource {
+  PLANNED
+  UNPLANNED
+}
+
+enum PlanningSessionKind {
+  MORNING
+  DAILY_REVIEW
+  WEEKLY_REVIEW
+  MONTHLY_REVIEW
+}
+
+enum PlanningSessionStatus {
+  PENDING
+  IN_PROGRESS
+  AWAITING_CONFIRMATION
+  COMPLETED
+  POSTPONED
+  CANCELLED
+}
+
+enum BriefingReviewType {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum PlanningSyncStatus {
+  NOT_READY
+  PENDING
+  SYNCED
+  FAILED
+  CONFLICT
+}
+
+enum BriefingTaskMigrationDecision {
+  MIGRATED
+  RESCHEDULED
+  BACKLOG
+  CANCELLED
+}
+
 enum AgentRunStatus {
   SUCCESS
   PARTIAL
@@ -679,6 +750,9 @@ model BriefingSettings {
   calendarIntegration    CalendarIntegrationState?
   feedback               BriefingFeedback[]
   goals                  BriefingGoal[]
+  tasks                  BriefingTask[]
+  planningSessions       PlanningSession[]
+  reviews                BriefingReview[]
   journalSessions        JournalSession[]
 
   @@index([onboardingComplete, nextBriefingAt])
@@ -733,16 +807,140 @@ model BriefingSubscription {
 }
 
 model BriefingGoal {
-  id         Int              @id @default(autoincrement())
-  settingsId String
-  title      String           @db.VarChar(160)
-  dueOn      DateTime         @db.Date
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
-  settings   BriefingSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  id              Int                   @id @default(autoincrement())
+  publicId        String                @unique @default(uuid())
+  settingsId      String
+  title           String                @db.VarChar(160)
+  description     String?
+  horizon         BriefingGoalHorizon   @default(LONG_TERM)
+  status          BriefingGoalStatus    @default(ACTIVE)
+  priority        BriefingPriority      @default(NORMAL)
+  progress        Int                   @default(0)
+  parentGoalId    Int?
+  startOn         DateTime?             @db.Date
+  dueOn           DateTime              @db.Date
+  notionPageId    String?               @unique
+  notionPageUrl   String?
+  syncStatus      PlanningSyncStatus    @default(PENDING)
+  syncAttempts    Int                   @default(0)
+  syncNextAttemptAt DateTime?
+  syncError       String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  settings        BriefingSettings      @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  parentGoal      BriefingGoal?         @relation("BriefingGoalHierarchy", fields: [parentGoalId], references: [id], onDelete: SetNull)
+  childGoals      BriefingGoal[]         @relation("BriefingGoalHierarchy")
+  tasks           BriefingTask[]
 
-  @@index([settingsId, dueOn, id])
+  @@index([settingsId, horizon, status, dueOn, id])
+  @@index([parentGoalId])
+  @@index([syncStatus, syncNextAttemptAt])
   @@map("briefing_goals")
+}
+
+model BriefingTask {
+  id                String                 @id @default(uuid())
+  settingsId        String
+  title             String                 @db.VarChar(240)
+  description       String?
+  planningDate      String                 @db.VarChar(10)
+  status            BriefingTaskStatus     @default(TODO)
+  priority          BriefingPriority       @default(NORMAL)
+  estimatedMinutes  Int?
+  actualMinutes     Int?
+  scheduledAt       DateTime?
+  deadlineAt        DateTime?
+  goalId            Int?
+  planningSessionId String?
+  tags              String[]               @default([])
+  source            BriefingTaskSource     @default(PLANNED)
+  completedAt       DateTime?
+  notionPageId      String?                @unique
+  notionPageUrl     String?
+  syncStatus        PlanningSyncStatus     @default(PENDING)
+  syncAttempts      Int                    @default(0)
+  syncNextAttemptAt DateTime?
+  syncError         String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  settings          BriefingSettings       @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  goal              BriefingGoal?          @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  planningSession   PlanningSession?        @relation(fields: [planningSessionId], references: [id], onDelete: SetNull)
+  migrations        BriefingTaskMigration[]
+
+  @@index([settingsId, planningDate, status])
+  @@index([goalId])
+  @@index([planningSessionId])
+  @@index([syncStatus, syncNextAttemptAt])
+  @@map("briefing_tasks")
+}
+
+model BriefingTaskMigration {
+  id        String                         @id @default(uuid())
+  taskId    String
+  fromDate  String                         @db.VarChar(10)
+  toDate    String?                        @db.VarChar(10)
+  decision  BriefingTaskMigrationDecision
+  createdAt DateTime                       @default(now())
+  task      BriefingTask                   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@map("briefing_task_migrations")
+}
+
+model PlanningSession {
+  id                   String                @id @default(uuid())
+  settingsId           String
+  telegramUserId       BigInt
+  kind                 PlanningSessionKind
+  periodStart          String                @db.VarChar(10)
+  periodEnd            String                @db.VarChar(10)
+  status               PlanningSessionStatus @default(PENDING)
+  currentStep          Int                   @default(0)
+  draft                Json                  @default("{}")
+  reminderAt           DateTime?
+  reminderSentAt       DateTime?
+  reminderLeaseUntil   DateTime?
+  followUpSentAt       DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  settings             BriefingSettings      @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  tasks                BriefingTask[]
+
+  @@unique([settingsId, telegramUserId, kind, periodStart])
+  @@index([status, reminderAt])
+  @@index([settingsId, telegramUserId, updatedAt])
+  @@map("planning_sessions")
+}
+
+model BriefingReview {
+  id                   String             @id @default(uuid())
+  settingsId           String
+  type                 BriefingReviewType
+  periodStart          String             @db.VarChar(10)
+  periodEnd            String             @db.VarChar(10)
+  answers              Json               @default("{}")
+  metrics              Json               @default("{}")
+  summary              String?
+  alignment            String?
+  nextPriorities       String[]           @default([])
+  monthlyPrinciples    String[]           @default([])
+  dailyPractice        String?
+  notionPageId         String?            @unique
+  notionPageUrl        String?
+  syncStatus           PlanningSyncStatus @default(PENDING)
+  syncAttempts         Int                @default(0)
+  syncNextAttemptAt    DateTime?
+  syncError            String?
+  completedAt          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  settings             BriefingSettings   @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@unique([settingsId, type, periodStart, periodEnd])
+  @@index([syncStatus, syncNextAttemptAt])
+  @@map("briefing_reviews")
 }
 
 model BriefingLocation {

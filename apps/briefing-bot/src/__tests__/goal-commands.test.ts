@@ -20,7 +20,20 @@ const makeBot = () => {
     { id: 7, title: 'Finish my degree', dueOn: '2027-06-30' },
   ]);
   const remove = vi.fn(async () => true);
-  const goals = { add, list, remove } as unknown as BriefingGoalStore;
+  const updateGoal = vi.fn(
+    async (_chatId: bigint, id: number, change: object) => ({
+      id,
+      title: 'Finish my degree',
+      dueOn: '2027-06-30',
+      ...change,
+    }),
+  );
+  const goals = {
+    add,
+    list,
+    remove,
+    update: updateGoal,
+  } as unknown as BriefingGoalStore;
   const bot = createBriefingBot(
     'test-token',
     new Set([123]),
@@ -56,7 +69,7 @@ const makeBot = () => {
     send(payload);
     return { ok: true, result: { message_id: 1 } } as never;
   });
-  return { bot, add, list, remove, send };
+  return { bot, add, list, remove, updateGoal, send };
 };
 
 const update = (
@@ -94,6 +107,8 @@ describe('briefing goal commands', () => {
 
     expect(add).toHaveBeenCalledWith(123n, {
       dueOn: '2027-06-30',
+      horizon: 'LONG_TERM',
+      priority: 'NORMAL',
       title: 'Finish my degree',
     });
     expect(list).toHaveBeenCalledWith(123n);
@@ -110,5 +125,26 @@ describe('briefing goal commands', () => {
     expect(add).not.toHaveBeenCalled();
     expect(list).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('accepts hierarchy syntax and only changes progress explicitly', async () => {
+    const { bot, add, updateGoal } = makeBot();
+
+    await bot.handleUpdate(
+      update('/goal_add monthly 2026-11-30 parent:7 First version'),
+    );
+    await bot.handleUpdate(update('/goal_progress 7 100'));
+
+    expect(add).toHaveBeenLastCalledWith(123n, {
+      dueOn: '2026-11-30',
+      horizon: 'MONTHLY',
+      parentGoalId: 7,
+      priority: 'NORMAL',
+      title: 'First version',
+    });
+    expect(updateGoal).toHaveBeenCalledWith(123n, 7, {
+      progress: 100,
+      status: 'COMPLETED',
+    });
   });
 });

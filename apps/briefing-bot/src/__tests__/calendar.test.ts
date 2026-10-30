@@ -10,6 +10,7 @@ import {
   GoogleCalendarProvider,
   renderCalendarSummary,
 } from '../calendar.js';
+import { loadBriefingCalendar } from '../briefing-context.js';
 import { oauthCallbackPathFromRedirectUri } from '../oauth-callback-server.js';
 
 const jsonResponse = (value: unknown): Response =>
@@ -21,6 +22,23 @@ const jsonResponse = (value: unknown): Response =>
 const encryptionKey = Buffer.alloc(32, 7).toString('base64');
 
 describe('Google Calendar integration', () => {
+  it('treats a disconnected optional Calendar as disabled, not degraded', async () => {
+    const configuration = {
+      settings: {
+        calendarEnabled: true,
+        timezone: 'Europe/Prague',
+      },
+    } as never;
+    const calendar = {
+      listEvents: vi
+        .fn()
+        .mockRejectedValue(new Error('Google Calendar is not connected')),
+    };
+
+    await expect(
+      loadBriefingCalendar(123n, configuration, calendar),
+    ).resolves.toEqual({ status: 'DISABLED', value: [] });
+  });
   it('isolates the callback at the bot-specific path from the redirect URI', () => {
     expect(
       oauthCallbackPathFromRedirectUri(

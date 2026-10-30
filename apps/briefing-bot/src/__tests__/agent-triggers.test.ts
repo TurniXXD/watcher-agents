@@ -18,15 +18,14 @@ const requester = (
 });
 
 describe('AgentTriggerService', () => {
-  it('queues watcher bots through their persisted scheduler', async () => {
+  it('does not expose the removed publications producer', async () => {
     const watchers = requester();
     const service = new AgentTriggerService({ watchers });
 
-    await expect(service.trigger(42n, 'publications')).resolves.toEqual({
-      status: 'QUEUED',
-      message: '✅ medical is queued to run on its next scheduler tick.',
-    });
-    expect(watchers.requestWatcherRun).toHaveBeenCalledWith(42n, 'medical');
+    await expect(service.trigger(42n, 'publications')).rejects.toThrow(
+      'Unknown producer',
+    );
+    expect(watchers.requestWatcherRun).not.toHaveBeenCalled();
   });
 
   it('reports paused watcher bots instead of silently queuing them', async () => {

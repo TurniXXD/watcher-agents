@@ -1,7 +1,7 @@
 import type { DatabaseClient } from './client.js';
 
 export type WatcherScheduleOverview = {
-  id: 'stocks' | 'medical' | 'news';
+  id: 'stocks' | 'news';
   configured: boolean;
   enabled: boolean;
   schedule?: string;
@@ -47,7 +47,6 @@ export type WatcherRunRequestResult =
 
 const watcherDefinitions = [
   { id: 'stocks', kind: 'STOCKS', healthKind: 'STOCKS' },
-  { id: 'medical', kind: 'PUBLICATIONS', healthKind: 'MEDICAL' },
   { id: 'news', kind: 'NEWS', healthKind: 'NEWS' },
 ] as const;
 

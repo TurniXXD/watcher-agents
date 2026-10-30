@@ -26,18 +26,12 @@ describe('agent schedule overview', () => {
             healthLastRunAt: new Date('2026-09-08T04:31:00Z'),
           },
           {
-            id: 'medical',
+            id: 'news',
             configured: true,
             enabled: true,
             schedule: '30 8 * * *',
             timezone: 'Europe/Prague',
             nextRunAt: new Date('2026-09-09T06:30:00Z'),
-            runInProgress: false,
-          },
-          {
-            id: 'news',
-            configured: false,
-            enabled: false,
             runInProgress: false,
           },
         ],
@@ -53,8 +47,7 @@ describe('agent schedule overview', () => {
     expect(rendered).toContain(
       'Next scheduled run is after the next briefing; Briefing requests one if data is stale',
     );
-    expect(rendered).toContain('⚪ News bot');
-    expect(rendered).toContain('Producer is not configured for this chat');
+    expect(rendered).not.toContain('Publications bot');
     expect(rendered).toContain('⚪ MU Clubs monitor');
     expect(rendered).toContain('⚪ Brno Events agent');
   });

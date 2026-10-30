@@ -10,6 +10,7 @@ import {
   BriefingStoryClusterStore,
   BriefingStoryStore,
   BriefingWatcherHealthStore,
+  BulletJournalStore,
   JournalSessionStore,
   CalendarIntegrationStore,
   PostgresBriefingEventRepository,
@@ -22,7 +23,11 @@ import {
 import { OllamaEmbeddingProvider, OllamaProvider } from '@watcher/llm';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { InputFile } from 'grammy';
-import { createBriefingBot, type CalendarCommands } from './bot.js';
+import {
+  briefingCommands,
+  createBriefingBot,
+  type CalendarCommands,
+} from './bot.js';
 import { AgentTriggerService } from './agent-triggers.js';
 import {
   CalendarCredentialCipher,
@@ -50,6 +55,10 @@ import {
 import { JournalDraftGenerator } from './journal-draft.js';
 import { JournalScheduler } from './journal-scheduler.js';
 import { OpenAiCompatibleJournalTranscriber } from './journal-transcriber.js';
+import { PlanningController } from './planning/controller.js';
+import { PlanningScheduler } from './planning/scheduler.js';
+import { PlanningNotionRepository } from './planning/notion-repository.js';
+import { PlanningSyncService } from './planning/sync-service.js';
 import {
   OpenMeteoGeocodingProvider,
   OpenMeteoWeatherProvider,
@@ -86,6 +95,7 @@ const newsConfiguration = new NewsConfigurationStore(database, logger);
 const briefingDeliveries = new BriefingDeliveryStore(database);
 const agentSchedules = new AgentScheduleStore(database);
 const journalSessions = new JournalSessionStore(database);
+const bulletJournal = new BulletJournalStore(database);
 const agentTriggers = new AgentTriggerService({
   watchers: agentSchedules,
   ...(env.BRNO_EVENTS_API_TOKEN
@@ -179,6 +189,7 @@ const scriptModel = new OllamaProvider({
   priority: 'high',
   coordinator: ollamaCoordinator,
 });
+let planning: PlanningController | undefined;
 const journal = env.JOURNAL_ENABLED
   ? new JournalController({
       store: journalSessions,
@@ -198,7 +209,45 @@ const journal = env.JOURNAL_ENABLED
           }
         : {}),
       logger,
+      onConfirmed: async (session, context) => {
+        await planning?.completeDailyAlignment(session, context);
+      },
     })
+  : undefined;
+planning = env.PLANNING_ENABLED
+  ? new PlanningController({
+      store: bulletJournal,
+      goals,
+      timezone: env.JOURNAL_TIMEZONE,
+      laptopReminderEnabled: env.PLANNING_LAPTOP_REMINDER_ENABLED,
+      mirrorReminderEnabled: env.PLANNING_MIRROR_REMINDER_ENABLED,
+      startJournal: async (context) => {
+        if (journal) await journal.commandStart(context);
+        else
+          await context.reply('Večerní journal není na tomto serveru zapnutý.');
+      },
+    })
+  : undefined;
+const planningNotionRepository =
+  env.NOTION_API_KEY &&
+  env.NOTION_GOALS_DATA_SOURCE_ID &&
+  env.NOTION_TASKS_DATA_SOURCE_ID &&
+  env.NOTION_REVIEWS_DATA_SOURCE_ID
+    ? new PlanningNotionRepository({
+        client: new NotionClient({
+          apiKey: env.NOTION_API_KEY,
+          apiVersion: env.NOTION_API_VERSION,
+        }),
+        goalsDataSourceId: env.NOTION_GOALS_DATA_SOURCE_ID,
+        tasksDataSourceId: env.NOTION_TASKS_DATA_SOURCE_ID,
+        reviewsDataSourceId: env.NOTION_REVIEWS_DATA_SOURCE_ID,
+        ...(env.NOTION_JOURNAL_DATA_SOURCE_ID
+          ? { journalDataSourceId: env.NOTION_JOURNAL_DATA_SOURCE_ID }
+          : {}),
+      })
+    : undefined;
+const planningSync = planningNotionRepository
+  ? new PlanningSyncService(bulletJournal, planningNotionRepository, logger)
   : undefined;
 const runtime: { coordinator?: BriefingCoordinator } = {};
 const bot = createBriefingBot(
@@ -234,6 +283,7 @@ const bot = createBriefingBot(
   goals,
   journal,
   env.BRIEFING_BIRTH_DATE,
+  planning,
 );
 const semanticMatcher = env.BRIEFING_EMBEDDING_MODEL
   ? new SemanticStoryMatcher(
@@ -339,6 +389,7 @@ const scheduler = new BriefingScheduler(
 const journalScheduler = new JournalScheduler(
   journalSessions,
   async (session) => {
+    if (env.PLANNING_ENABLED) return;
     await bot.api.sendMessage(
       session.telegramChatId.toString(),
       journalReminderText,
@@ -362,6 +413,42 @@ const journalScheduler = new JournalScheduler(
     enabled: env.JOURNAL_ENABLED,
     reminderTime: env.JOURNAL_REMINDER_TIME,
     timezone: env.JOURNAL_TIMEZONE,
+    intervalMs: env.BRIEFING_SCHEDULER_INTERVAL_MS,
+    logger,
+  },
+);
+const planningScheduler = new PlanningScheduler(
+  bulletJournal,
+  async (session) => {
+    const message = {
+      MORNING: [
+        ...(env.PLANNING_LAPTOP_REMINDER_ENABLED
+          ? [
+              '☀️ Neotvírej notebook ani nezačínej pracovat, dokud nemáš definované dnešní cíle.',
+            ]
+          : ['☀️ Je čas připravit dnešní plán.']),
+        ...(env.PLANNING_MIRROR_REMINDER_ENABLED
+          ? ['🪞 Jsi spokojený se směrem, kterým se tvůj život ubírá?']
+          : []),
+        'Začni nebo pokračuj: /plan',
+      ].join('\n\n'),
+      DAILY_REVIEW:
+        '🌙 Je čas nejdřív zkontrolovat dnešní cíle. Po goal review automaticky naváže stávající journal.\n\n/journal',
+      WEEKLY_REVIEW:
+        '📅 Denní review a journal jsou uzavřené. Můžeš pokračovat týdenním review: /weekly_review',
+      MONTHLY_REVIEW:
+        '🗓️ Předchozí večerní fáze jsou uzavřené. Můžeš pokračovat měsíčním review: /monthly_review',
+    }[session.kind];
+    await bot.api.sendMessage(session.telegramChatId.toString(), message);
+  },
+  planningSync ? () => planningSync.synchronizePending() : undefined,
+  {
+    enabled: env.PLANNING_ENABLED,
+    timezone: env.JOURNAL_TIMEZONE,
+    morningTime: env.PLANNING_MORNING_TIME,
+    eveningTime: env.PLANNING_EVENING_TIME,
+    followUpDelayMs: env.PLANNING_FOLLOW_UP_MINUTES * 60_000,
+    followUpEnabled: env.PLANNING_FOLLOW_UP_ENABLED,
     intervalMs: env.BRIEFING_SCHEDULER_INTERVAL_MS,
     logger,
   },
@@ -394,6 +481,7 @@ const shutdown = async (signal: string): Promise<void> => {
   readiness.markApplicationStopping();
   await scheduler.stop();
   await journalScheduler.stop();
+  await planningScheduler.stop();
   await oauthServer?.stop();
   await bot.stop();
   await readiness.stop();
@@ -408,7 +496,9 @@ await oauthServer?.start(
 );
 scheduler.start();
 journalScheduler.start();
+planningScheduler.start();
 await readiness.start();
+await bot.api.setMyCommands([...briefingCommands]);
 await bot.start({
   onStart: () => {
     readiness.markApplicationReady();

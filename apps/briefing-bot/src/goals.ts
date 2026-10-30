@@ -86,7 +86,7 @@ const renderGoals = (
       ? ` · age at deadline: ${ageAtGoal(options.birthDate, goal.dueOn)}`
       : '';
     lines.push(
-      `${prefix}${id}${goal.title} — ${day}.${month}.${year} (${countdownLabel(days)} · ${yearsLabel(days)}${age})`,
+      `${prefix}${id}${goal.title}${goal.horizon ? ` [${goal.horizon.toLowerCase()}]` : ''}${goal.progress === undefined ? '' : ` · ${goal.progress} %`} — ${day}.${month}.${year} (${countdownLabel(days)} · ${yearsLabel(days)}${age})`,
     );
   }
   if (shown.length < ordered.length) {

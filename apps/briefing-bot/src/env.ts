@@ -53,6 +53,9 @@ const schema = z
       .default(300_000),
     NOTION_API_KEY: optionalString,
     NOTION_JOURNAL_DATA_SOURCE_ID: optionalString,
+    NOTION_GOALS_DATA_SOURCE_ID: optionalString,
+    NOTION_TASKS_DATA_SOURCE_ID: optionalString,
+    NOTION_REVIEWS_DATA_SOURCE_ID: optionalString,
     NOTION_API_VERSION: z.string().min(1).default('2026-03-11'),
     JOURNAL_ENABLED: z
       .enum(['true', 'false'])
@@ -63,6 +66,36 @@ const schema = z
       .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u)
       .default('21:00'),
     JOURNAL_TIMEZONE: z.string().min(1).default('Europe/Prague'),
+    PLANNING_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+    PLANNING_MORNING_TIME: z
+      .string()
+      .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u)
+      .default('07:00'),
+    PLANNING_EVENING_TIME: z
+      .string()
+      .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u)
+      .default('21:00'),
+    PLANNING_FOLLOW_UP_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(15)
+      .max(360)
+      .default(60),
+    PLANNING_FOLLOW_UP_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+    PLANNING_LAPTOP_REMINDER_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+    PLANNING_MIRROR_REMINDER_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
     JOURNAL_TRANSCRIPTION_URL: z.preprocess(
       (value) => (value === '' ? undefined : value),
       z.url().optional(),
@@ -159,6 +192,23 @@ const schema = z
         code: 'custom',
         message:
           'NOTION_API_KEY and NOTION_JOURNAL_DATA_SOURCE_ID must be configured together',
+      });
+    }
+    const planningNotion = [
+      value.NOTION_GOALS_DATA_SOURCE_ID,
+      value.NOTION_TASKS_DATA_SOURCE_ID,
+      value.NOTION_REVIEWS_DATA_SOURCE_ID,
+    ];
+    const configuredPlanningNotion = planningNotion.filter(Boolean).length;
+    if (
+      configuredPlanningNotion !== 0 &&
+      (configuredPlanningNotion !== planningNotion.length ||
+        !value.NOTION_API_KEY)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Planning Notion data-source IDs must be configured together with NOTION_API_KEY',
       });
     }
   });

@@ -24,7 +24,7 @@ a compact Telegram index.
 | `/briefing_max_duration MINUTES`                | Sets the hard maximum length.                                                           |
 | `/briefing_transcript on\|off`                  | Enables or disables the Telegram text transcript.                                       |
 | `/subscriptions`                                | Shows watcher subscriptions.                                                            |
-| `/subscribe WATCHER`, `/unsubscribe WATCHER`    | Enables or disables `stocks`, `medical`, or `news`.                                     |
+| `/subscribe WATCHER`, `/unsubscribe WATCHER`    | Enables or disables `stocks`, `news`, `mu-clubs`, or `brno-events`.                     |
 | `/subscribe_all`, `/unsubscribe_all`            | Enables or disables every watcher.                                                      |
 | `/location`, `/location_status`                 | Shows the saved briefing location.                                                      |
 | `/location_set`, `/location_clear`              | Starts location setup or disables location context.                                     |
@@ -32,8 +32,15 @@ a compact Telegram index.
 | `/voice_set VOICE`, `/voice_preview VOICE`      | Selects or previews a Piper voice.                                                      |
 | `/calendar_connect`, `/calendar_disconnect`     | Connects or removes Google Calendar OAuth.                                              |
 | `/calendar_status`, `/calendar_refresh`         | Shows or refreshes Calendar state.                                                      |
-| `/goal_add YYYY-MM-DD TITLE`                    | Adds a personal deadline.                                                               |
-| `/goal_remove ID`, `/goals`                     | Removes a goal or lists goals/countdowns.                                               |
+| `/goal_add [LEVEL] DATE [parent:ID] TITLE`      | Adds a long-term, monthly, or weekly goal with an optional parent.                      |
+| `/goal_progress ID 0-100`                       | Records explicit progress; 100 marks the goal completed.                                |
+| `/goal_archive ID`, `/goal_remove ID`, `/goals` | Explicitly archives/removes a goal or lists active goals.                               |
+| `/plan`, `/tasks`, `/priorities`                | Runs the resumable morning plan or shows today's task focus.                            |
+| `/task_add`, `/task_done`, `/task_move`         | Captures, completes, or consciously migrates a task.                                    |
+| `/task_cancel`, `/task_estimate`                | Cancels a task or changes its optional estimate.                                        |
+| `/task_goal GOAL_ID ID\|TITLE`                  | Links a task to an active goal after explicit selection.                                |
+| `/daily_review`, `/journal`                     | Runs daily goal review, then the preserved six-question journal.                        |
+| `/weekly_review`, `/monthly_review`             | Runs the persisted calendar-week or calendar-month review.                              |
 | `/priority_add TOPIC`, `/priority_remove TOPIC` | Boosts or removes a preferred topic/company/ticker.                                     |
 | `/mute_add TOPIC`, `/mute_remove TOPIC`         | Reduces or restores non-urgent topic coverage.                                          |
 | `/journal`                                      | Starts or resumes today's evening reflection.                                           |
@@ -92,6 +99,8 @@ never logged or persisted by the briefing path.
 | Calendar callback     | `CALENDAR_OAUTH_LISTEN_HOST`, `CALENDAR_OAUTH_LISTEN_PORT`.                                                                                                                                               |
 | Notion journal        | `NOTION_API_KEY`, `NOTION_JOURNAL_DATA_SOURCE_ID` (paired), `NOTION_API_VERSION`.                                                                                                                         |
 | Journal               | `JOURNAL_ENABLED`, `JOURNAL_REMINDER_TIME`, `JOURNAL_TIMEZONE`.                                                                                                                                           |
+| Planning              | `PLANNING_ENABLED`, morning/evening times, follow-up switch/minutes, and independent laptop/mirror reminder switches.                                                                                     |
+| Notion planning       | `NOTION_GOALS_DATA_SOURCE_ID`, `NOTION_TASKS_DATA_SOURCE_ID`, `NOTION_REVIEWS_DATA_SOURCE_ID`; all three plus `NOTION_API_KEY` are required.                                                              |
 | Transcription         | `JOURNAL_TRANSCRIPTION_URL`, `JOURNAL_TRANSCRIPTION_MODEL`, `JOURNAL_TRANSCRIPTION_API_KEY`.                                                                                                              |
 | Speech/media          | `PIPER_DATA_DIR`, `PIPER_PYTHON_PATH`, `PIPER_KEEP_TEMP`, `FFMPEG_PATH`, `FFPROBE_PATH`, `BRIEFING_TTS_ATTEMPTS`.                                                                                         |
 | Telegram delivery     | `BRIEFING_TELEGRAM_ATTEMPTS`, `BRIEFING_TELEGRAM_RETRY_BASE_MS`.                                                                                                                                          |
@@ -108,29 +117,32 @@ pnpm exec vitest run apps/briefing-bot/src/__tests__
 ```
 
 The scheduler polls persisted configuration, enforces a maximum delay window,
-and uses the same coordinator as manual commands. Evening journaling defaults to
-21:00 in `Europe/Prague`; the operator can change reminder and briefing settings
-through Telegram-backed persisted configuration.
+and uses the same coordinator as manual commands. Evening planning and journaling
+default to 21:00 in `Europe/Prague`. The daily goal review always precedes the
+existing journal; weekly review waits for both, and a same-day monthly review
+also waits for the weekly review.
 
 ## Sources and integrations
 
-| Source/service                      | Role                                                                               |
-| ----------------------------------- | ---------------------------------------------------------------------------------- |
-| Stocks, Publications, and News bots | Publish durable watcher events selected through briefing subscriptions.            |
-| Brno Events Agent                   | Authenticated local event context and explicit source triggers.                    |
-| MU Clubs Monitor                    | Authenticated university-club activity context.                                    |
-| Open-Meteo geocoding/weather        | Current and forecast location context.                                             |
-| Google Calendar                     | Optional read-only daily calendar context.                                         |
-| Notion Daily Journal                | Optional journal persistence/readback when its data source is shared.              |
-| PostgreSQL                          | Authoritative settings, schedules, goals, journal state, and delivery idempotency. |
-| Ollama                              | Grounded structured script generation.                                             |
-| Piper and FFmpeg/FFprobe            | Speech synthesis and media validation/conversion.                                  |
-| Telegram                            | Private onboarding, configuration, delivery, and manual execution.                 |
+| Source/service               | Role                                                                               |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| Stocks and News bots         | Publish durable watcher events selected through briefing subscriptions.            |
+| Brno Events Agent            | Authenticated local event context and explicit source triggers.                    |
+| MU Clubs Monitor             | Authenticated university-club activity context.                                    |
+| Open-Meteo geocoding/weather | Current and forecast location context.                                             |
+| Google Calendar              | Optional read-only daily calendar context.                                         |
+| Notion Daily Journal         | Optional journal persistence/readback when its data source is shared.              |
+| PostgreSQL                   | Authoritative settings, schedules, goals, journal state, and delivery idempotency. |
+| Ollama                       | Grounded structured script generation.                                             |
+| Piper and FFmpeg/FFprobe     | Speech synthesis and media validation/conversion.                                  |
+| Telegram                     | Private onboarding, configuration, delivery, and manual execution.                 |
 
 ## Troubleshooting
 
 - A startup credential-group error means all values in that optional group must
   be set together or removed together.
+- Calendar is optional. No connected token is shown as disabled; only an actual
+  provider error is shown as unavailable.
 - A missing journal row is omitted; duplicate dates are rejected as ambiguous.
 - If voice journaling is unavailable, set an OpenAI-compatible transcription URL
   or use text input.

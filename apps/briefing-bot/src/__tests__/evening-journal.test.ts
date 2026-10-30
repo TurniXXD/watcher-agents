@@ -283,6 +283,46 @@ describe('journal conversation state', () => {
     );
   });
 
+  it('runs post-journal alignment after confirmation without changing the journal flow', async () => {
+    const confirmed = {
+      ...session(),
+      status: 'COMPLETED' as const,
+      syncStatus: 'PENDING' as const,
+    };
+    const onConfirmed = vi.fn().mockResolvedValue(undefined);
+    const markSynced = vi.fn().mockResolvedValue(undefined);
+    const store = {
+      getById: vi.fn(async () => ({
+        ...session(),
+        status: 'AWAITING_CONFIRMATION' as const,
+      })),
+      confirm: vi.fn().mockResolvedValue(confirmed),
+      markSynced,
+    } as unknown as JournalSessionStore;
+    const repository = {
+      saveConfirmed: vi.fn().mockResolvedValue({ pageId: 'journal-page' }),
+    } as unknown as NotionJournalRepository;
+    const context = {
+      chat: { id: 123 },
+      from: { id: 123 },
+      answerCallbackQuery: vi.fn(),
+      reply: vi.fn(),
+    } as unknown as Context;
+    const controller = new JournalController({
+      store,
+      timezone: 'Europe/Prague',
+      token: 'token',
+      drafts: {} as JournalDraftGenerator,
+      repository,
+      onConfirmed,
+    });
+
+    await controller.handleCallback(context, confirmed.id, 'save');
+
+    expect(onConfirmed).toHaveBeenCalledWith(confirmed, context);
+    expect(markSynced).toHaveBeenCalled();
+  });
+
   it('persists a 30-minute postponement and a skipped day', async () => {
     const latest = session();
     const postpone = vi.fn();
