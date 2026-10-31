@@ -1,5 +1,5 @@
 export const monthEndAction =
-  'Zaplať zálohy OSVČ a zhodnoť své měkké dovednosti, finance a pokrok u všech cílů.';
+  'Zaplať zálohy OSVČ a zhodnoť své soft skills, finance a pokrok u všech cílů.';
 
 export const monthEndSpokenReminder = `Měsíční připomínka. ${monthEndAction}`;
 

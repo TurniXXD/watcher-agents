@@ -55,7 +55,7 @@ Notion has no native unique constraint. Check that today's row does not exist be
 
 ## Bullet Journal planning and reviews
 
-The morning `/plan` flow is persisted and restart-safe. It shows active goals, monthly principles, the current weekly daily-practice principle, and unfinished tasks; accepts multiple natural task messages with optional durations; requires 1–3 primary priorities; warns above ten estimated hours; and commits the plan atomically only after confirmation. Task commands keep migration history and never infer actual duration from completion.
+The morning `/plan` flow is persisted and restart-safe. It shows active monthly and weekly goals without repeating the long-term goal inventory, monthly principles, the current weekly daily-practice principle, and unfinished tasks. Its opening prompt explains both `/task_add TITLE [DURATION]` and the natural-language task capture available after continuing. The flow accepts multiple natural task messages with optional durations, requires 1–3 primary priorities, warns above ten estimated hours, and commits the plan atomically only after confirmation. Task commands keep migration history and never infer actual duration from completion.
 
 At night `/journal` always runs the daily goal review first. Every unfinished task must be completed, moved to tomorrow, placed in backlog, or cancelled; unplanned accomplishments and blockers are recorded separately. Only then does the unchanged six-question journal start. Sunday and month-end reviews are ordered after the daily review and journal; on an overlapping month-end Sunday the weekly review precedes the monthly review. Monthly reviews persist the thoughts to stand behind next month, while weekly reviews persist one principle or goal to apply each day.
 

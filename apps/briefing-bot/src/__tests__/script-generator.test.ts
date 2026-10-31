@@ -108,7 +108,8 @@ describe('BriefingScriptGenerator', () => {
     const result = fallbackBriefingScript(monthEnd);
 
     expect(result.displayScript).toContain('Zaplať zálohy OSVČ');
-    expect(result.displayScript).toContain('měkké dovednosti, finance');
+    expect(result.displayScript).toContain('soft skills, finance');
+    expect(result.displayScript).not.toContain('měkké dovednosti');
     expect(result.displayScript.match(/Zaplať zálohy OSVČ/gu)).toHaveLength(1);
     expect(
       result.displayScript.endsWith('That is your morning briefing.'),

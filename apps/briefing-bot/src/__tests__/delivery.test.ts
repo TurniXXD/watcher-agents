@@ -349,6 +349,8 @@ describe('renderBriefingIndex', () => {
 
     expect(rendered).toContain('📅 Konec měsíce');
     expect(rendered).toContain('Zaplať zálohy OSVČ');
+    expect(rendered).toContain('soft skills, finance');
+    expect(rendered).not.toContain('měkké dovednosti');
     expect(rendered).toContain('finance a pokrok u všech cílů');
     expect(rendered).toContain('Všechny cíle: /goals');
   });

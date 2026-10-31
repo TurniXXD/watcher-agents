@@ -187,6 +187,7 @@ export class PlanningController {
       draft: morningDraftSchema.parse(session.draft),
     });
     const goalLines = goals
+      .filter((goal) => goal.horizon === 'MONTHLY' || goal.horizon === 'WEEKLY')
       .slice(0, 10)
       .map(
         (goal) =>
@@ -218,9 +219,9 @@ export class PlanningController {
               '„Vedou dnešní plány k člověku, kterým se chci stát?“',
             ]
           : []),
-        '',
-        'Aktivní cíle:',
-        ...(goalLines.length ? goalLines : ['• žádné aktivní cíle']),
+        ...(goalLines.length
+          ? ['', 'Aktivní měsíční a týdenní cíle:', ...goalLines]
+          : []),
         ...(focus.monthly?.monthlyPrinciples.length
           ? [
               '',
@@ -244,6 +245,7 @@ export class PlanningController {
           : ['• žádné nedokončené úkoly']),
         '',
         'Starší úkol můžeš přesunout pomocí /task_move ID YYYY-MM-DD, zrušit přes /task_cancel ID nebo nechat v backlogu během večerního review.',
+        'Nový úkol přidáš přes /task_add NÁZEV [15m|1h|1h15m]. Po „pokračovat“ můžeš dnešní úkoly zadat také přirozeným textem.',
         'Až je seznam vyřešený, napiš „pokračovat“.',
       ].join('\n'),
       reminderKeyboard.inline_keyboard.length
