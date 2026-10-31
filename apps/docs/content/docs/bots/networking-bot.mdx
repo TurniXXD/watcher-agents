@@ -79,6 +79,16 @@ The Google Sheet contract has exactly eleven columns, from `Jméno` through
 sent to the configured Ollama image model, validated, checked for duplicates,
 and shown as a preview. No row is written before the operator selects Save.
 
+Every active row with a valid `Datum potkání` receives private operator
+reminders at 09:00 in `NETWORKING_TIMEZONE`, two days, seven days, and one
+calendar month after the meeting. ISO `YYYY-MM-DD` and Czech `D. M. YYYY` are
+accepted. Future, invalid, and inactive rows are ignored. Reminders more than
+36 hours overdue are not backfilled when the feature is first enabled. The
+Sheet is read at most every 15 minutes; durable PostgreSQL jobs prevent repeat
+delivery after a restart, and a Sheets outage does not block other reminder
+types. These messages prompt the operator to reach out but never contact the
+person automatically.
+
 ## Events and reminders
 
 `/networking`, `/network_events`, and `/network_events_free` import normalized
@@ -89,9 +99,9 @@ requires source-grounded complimentary food or refreshments. `/network_sources`
 shows the operational registry, including Objev Brno, Impact Hub Brno, Velvet
 Innovation Meetups, SideQuesty, the Base48 public calendar, and official ČSOB
 Start it @UNI Validation Camp listings. Attendance is explicit; opening a URL
-never implies registration or attendance. Monday,
-pre-event, post-event, and approved follow-up reminders are durable database
-jobs claimed only by Networking Bot.
+never implies registration or attendance. Monday, contact-age, pre-event,
+post-event, and approved follow-up reminders are durable database jobs claimed
+only by Networking Bot.
 
 Every event result includes a `🥭 Přidat do kalendáře` callback. After the
 operator explicitly connects Google Calendar through

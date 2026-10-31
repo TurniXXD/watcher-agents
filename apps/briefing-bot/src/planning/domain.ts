@@ -51,6 +51,38 @@ export const taskCaptureSchema = z.object({
 
 export type TaskCapture = z.infer<typeof taskCaptureSchema>;
 
+const normalizedDurationToken = (value: string): string =>
+  value.replace(/min$/iu, 'm');
+
+const taskDurationSuffix = (
+  value: string,
+): { index: number; estimatedMinutes: number } | undefined => {
+  const match =
+    /(?:\s+|\s+(?:for|na)\s+)(?:\[(\d{1,3}h(?:\d{1,2}(?:m|min))?|\d{1,3}(?:m|min))\]|(\d{1,3}h(?:\d{1,2}m)?|\d{1,3}m))$/iu.exec(
+      value,
+    );
+  const token = match?.[1] ?? match?.[2];
+  return match && token
+    ? {
+        index: match.index,
+        estimatedMinutes: parseDurationMinutes(normalizedDurationToken(token)),
+      }
+    : undefined;
+};
+
+export const taskEstimateFromTitle = (title: string): number | undefined => {
+  const match =
+    /\[(\d{1,3}h(?:\d{1,2}(?:m|min))?|\d{1,3}(?:m|min))\]\s*$/iu.exec(title);
+  if (!match?.[1]) return undefined;
+  const parsed = durationSchema.safeParse(normalizedDurationToken(match[1]));
+  if (!parsed.success) return undefined;
+  try {
+    return parseDurationMinutes(parsed.data);
+  } catch {
+    return undefined;
+  }
+};
+
 const stripTaskLead = (value: string): string =>
   value
     .trim()
@@ -67,17 +99,14 @@ export const parseTaskCaptures = (input: string): TaskCapture[] => {
     .map((part) => part.trim())
     .filter(Boolean);
   return parts.map((part) => {
-    const duration =
-      /(?:\s+|\s+for\s+)(\d{1,3}h(?:\d{1,2}m)?|\d{1,3}m)$/iu.exec(part);
+    const duration = taskDurationSuffix(part);
     const title = part
       .slice(0, duration?.index ?? part.length)
       .replace(/\s+(?:for|na)$/iu, '')
       .trim();
     return taskCaptureSchema.parse({
       title,
-      ...(duration
-        ? { estimatedMinutes: parseDurationMinutes(duration[1]!) }
-        : {}),
+      ...(duration ? { estimatedMinutes: duration.estimatedMinutes } : {}),
     });
   });
 };

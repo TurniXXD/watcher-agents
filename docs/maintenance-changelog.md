@@ -2,11 +2,17 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-31 — Google Sheet contact reach-out reminders
+
+- Networking Bot now reminds the authorized operator two days, seven days, and one calendar month after an active contact's `Datum potkání`, without ever messaging the contact automatically.
+- Contact reminders run at 09:00 in the configured timezone, are durably deduplicated across restarts, ignore invalid/inactive/future rows, avoid historical notification floods, and isolate Google Sheets failures from existing reminders.
+
 ## 2026-10-31 — Clearer Briefing Bot planning and task controls
 
 - The opening `/plan` message now keeps long-term goals out of the repeated morning inventory while retaining active monthly and weekly goals.
 - Added explicit `/task_add` syntax and natural-language task-entry guidance to the opening prompt.
 - `/tasks` now shows the combined known estimate, identifies tasks without estimates, strikes through completed work, and provides one inline completion button per active task.
+- Existing task titles ending in estimates such as `[3h]` or `[30min]` now count toward the total, and new bracketed estimates are persisted as structured durations.
 - `/task_add` now accepts `--priority` and `--do-first`; marked tasks are ordered and labelled accordingly.
 - Kept the month-end review wording as the English term `soft skills` instead of translating it.
 

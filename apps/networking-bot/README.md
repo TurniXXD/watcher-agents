@@ -8,6 +8,8 @@ The contact repository is an existing private Google Sheet with exactly eleven c
 
 Send a business-card photo directly to the bot. The configured Ollama vision model extracts only visible fields, the bot checks e-mail/phone/LinkedIn/name duplicates, displays a preview, and writes only after explicit confirmation. Without a vision model, manual contact entry and search still work when Google Sheets is configured.
 
+For every active row with a valid `Datum potkání`, the bot creates durable reach-out reminders for 09:00 in `NETWORKING_TIMEZONE`: two days, seven days, and one calendar month after the meeting date. It accepts ISO `YYYY-MM-DD` and Czech `D. M. YYYY` dates. Invalid or future dates and rows marked inactive are ignored. A newly enabled deployment does not send a historical backlog: reminders more than 36 hours overdue are skipped. The Sheet is checked at most once every 15 minutes, PostgreSQL prevents duplicate delivery across restarts, and a temporary Sheets failure does not block event or manually approved follow-up reminders.
+
 ## Events
 
 `Brno Events Agent` supplies normalized events from Meetup, GoOut, VisitBrno/TIC, MUNI, VUT, JIC, CEITEC, Velvet Innovation Meetups, SideQuesty, Objev Brno's free-event catalogue, Impact Hub Brno, the public Base48 Nextcloud calendar, and official ČSOB Start it @UNI Validation Camp listings. Provider runs are isolated and event identity is deduplicated before the Networking Bot imports recommendations. Purely online events are excluded from Networking Bot results. A source not explicitly marking an event free never becomes free by assumption.
@@ -41,4 +43,4 @@ pnpm exec vitest run apps/networking-bot/src packages/contact-network/src
 pnpm --filter @watcher/networking-bot build
 ```
 
-The bot authorizes every command, callback, photo, and text message through `TELEGRAM_ALLOWED_USER_IDS`. It never messages contacts automatically and never invents missing card or event data.
+The bot authorizes every command, callback, photo, and text message through `TELEGRAM_ALLOWED_USER_IDS`. Contact-age reminders are sent only to the authorized operator; the bot never messages contacts automatically and never invents missing card or event data.

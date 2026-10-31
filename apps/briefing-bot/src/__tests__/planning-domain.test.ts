@@ -5,6 +5,7 @@ import {
   parseDurationMinutes,
   parseTaskCaptures,
   reviewOrderForDate,
+  taskEstimateFromTitle,
 } from '../planning/domain.js';
 
 describe('Bullet Journal planning domain', () => {
@@ -40,6 +41,24 @@ describe('Bullet Journal planning domain', () => {
     expect(parseTaskCaptures('Přidej zavolat rodičům')).toEqual([
       { title: 'zavolat rodičům' },
     ]);
+  });
+
+  it('captures bracketed estimates and reads them from legacy task titles', () => {
+    expect(
+      parseTaskCaptures(
+        'Rozvinout konverzaci s 5 lidmi [3h]; připojit calendar [30min]',
+      ),
+    ).toEqual([
+      {
+        title: 'Rozvinout konverzaci s 5 lidmi',
+        estimatedMinutes: 180,
+      },
+      { title: 'připojit calendar', estimatedMinutes: 30 },
+    ]);
+    expect(taskEstimateFromTitle('Rozjet contact formy [2h]')).toBe(120);
+    expect(taskEstimateFromTitle('Zapsat kontakty [15min]')).toBe(15);
+    expect(taskEstimateFromTitle('Bez odhadu')).toBeUndefined();
+    expect(taskEstimateFromTitle('Neplatný odhad [25h]')).toBeUndefined();
   });
 
   it('calculates factual execution metrics without a productivity score', () => {

@@ -116,6 +116,7 @@ const scheduler = new NetworkingScheduler({
   store,
   intervalMs: env.NETWORKING_SCHEDULER_INTERVAL_MS,
   defaultTimezone: env.NETWORKING_TIMEZONE,
+  ...(contacts ? { contacts: contacts.repository } : {}),
   transport: {
     send: async (chatId, text) => {
       await bot.api.sendMessage(chatId.toString(), text, {

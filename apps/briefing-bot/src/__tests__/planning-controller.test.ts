@@ -100,11 +100,10 @@ describe('PlanningController morning prompt', () => {
       .fn<(text: string, options?: TaskMessageOptions) => Promise<undefined>>()
       .mockResolvedValue(undefined);
     const tasks = [
-      task({ estimatedMinutes: 180, priority: 'HIGH' }),
+      task({ title: 'Připravit pondělní cally [3h]', priority: 'HIGH' }),
       task({
         id: '22222222-2222-4222-8222-222222222222',
-        title: 'Rozjet contact formy',
-        estimatedMinutes: 60,
+        title: 'Rozjet contact formy [1h]',
         priority: 'PRIMARY',
         tags: ['do-first'],
       }),
@@ -123,8 +122,8 @@ describe('PlanningController morning prompt', () => {
     const message = String(reply.mock.calls[0]?.[0]);
     expect(message).toContain('⏱ Odhad celkem: nejméně 4h');
     expect(message).toContain('1 úkol bez odhadu');
-    expect(message).toContain('⭐ Připravit pondělní cally');
-    expect(message).toContain('🚀 Rozjet contact formy');
+    expect(message).toContain('⭐ Připravit pondělní cally [3h]');
+    expect(message).toContain('🚀 Rozjet contact formy [1h]');
     expect(message).toContain('✓ Naučit se nové pickup lines &amp; navázat');
     expect(message).toContain('<s>');
     const options = reply.mock.calls[0]?.[1];

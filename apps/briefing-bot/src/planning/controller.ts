@@ -12,6 +12,7 @@ import {
   formatDurationMinutes,
   parseDurationMinutes,
   parseTaskCaptures,
+  taskEstimateFromTitle,
 } from './domain.js';
 import { todayDateInTimezone } from '../notion-journal.js';
 
@@ -118,11 +119,14 @@ const renderTask = (
 
 const estimatedTimeSummary = (tasks: readonly BriefingTaskRecord[]): string => {
   const estimatedMinutes = tasks.reduce(
-    (total, task) => total + (task.estimatedMinutes ?? 0),
+    (total, task) =>
+      total + (task.estimatedMinutes ?? taskEstimateFromTitle(task.title) ?? 0),
     0,
   );
   const missingEstimates = tasks.filter(
-    ({ estimatedMinutes }) => estimatedMinutes === undefined,
+    (task) =>
+      task.estimatedMinutes === undefined &&
+      taskEstimateFromTitle(task.title) === undefined,
   ).length;
   const missingLabel =
     missingEstimates === 1

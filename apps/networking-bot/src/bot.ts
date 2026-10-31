@@ -42,7 +42,9 @@ Samostatně spravuje osobní kontakty, čtení vizitek, doporučení akcí, úč
 /network_followups — vypsat další domluvené kroky
 /about — účel, datové toky, soukromí a omezení bota
 
-Fotografii vizitky bot přečte pomocí nakonfigurovaného Ollama vision modelu. Před uložením vždy zobrazí návrh, zkontroluje duplicity a vyžádá potvrzení.`;
+Fotografii vizitky bot přečte pomocí nakonfigurovaného Ollama vision modelu. Před uložením vždy zobrazí návrh, zkontroluje duplicity a vyžádá potvrzení.
+
+U aktivních kontaktů s vyplněným Datem potkání připomene reach-out po 2 dnech, týdnu a měsíci. Notifikaci dostane pouze operátor; kontakt bot sám neosloví.`;
 
 export const networkingAbout = `🤝 O Networking Botu
 
@@ -50,7 +52,7 @@ Networking Bot je soukromý pracovní prostor pro profesní kontakty a osobní �
 
 Po výslovném propojení může vybranou akci zapsat do primárního Google Calendaru s mangovou barvou. Opakované stisknutí nevytváří duplicitu. Registraci za operátora nikdy neodesílá; u akcí s doloženou povinnou registrací pouze ukazuje registrační odkaz.
 
-Kontakty ukládá do nakonfigurovaného Google Sheetu. Fotografii vizitky může přečíst lokálním Ollama vision modelem, ale před zápisem vždy zobrazí návrh, zkontroluje možné duplicity a čeká na potvrzení operátora.
+Kontakty ukládá do nakonfigurovaného Google Sheetu. U aktivních kontaktů s platným „Datem potkání“ připomene po 2 dnech, týdnu a kalendářním měsíci, že je čas se ozvat. Fotografii vizitky může přečíst lokálním Ollama vision modelem, ale před zápisem vždy zobrazí návrh, zkontroluje možné duplicity a čeká na potvrzení operátora.
 
 Bot automaticky nekontaktuje jiné lidi, nepotvrzuje registraci ani účast, nevymýšlí chybějící údaje a nepovažuje neznámou cenu za vstup zdarma. Telegram je soukromé ovládání chráněné allowlistem.
 

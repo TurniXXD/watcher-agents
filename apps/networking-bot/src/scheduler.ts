@@ -1,5 +1,16 @@
 import { computeNextRun, errorMessage } from '@watcher/core';
 import type { SocialsStore } from '@watcher/database';
+import type {
+  NetworkContact,
+  NetworkRepository,
+} from '@watcher/contact-network';
+import {
+  buildContactReminderJobs,
+  canonicalContactMetDate,
+  contactReminderJobPrefix,
+  contactReminderLead,
+  contactReminderPayloadSchema,
+} from './contact-reminders.js';
 import { formatLocalDateTime } from './time.js';
 
 type SchedulerTransport = {
@@ -20,6 +31,7 @@ const networkingJobKinds = [
 export class NetworkingScheduler {
   #timer: NodeJS.Timeout | undefined;
   #active: Promise<void> | undefined;
+  #nextContactSyncAt = 0;
 
   public constructor(
     private readonly options: {
@@ -27,6 +39,8 @@ export class NetworkingScheduler {
       transport: SchedulerTransport;
       intervalMs: number;
       defaultTimezone: string;
+      contacts?: Pick<NetworkRepository, 'getContacts'>;
+      contactSyncIntervalMs?: number;
       logger?: {
         error(data: unknown, message: string): void;
       };
@@ -62,8 +76,32 @@ export class NetworkingScheduler {
     return active;
   }
 
-  private async seed(now: Date): Promise<void> {
-    for (const setting of await this.options.store.listSettings()) {
+  private async loadContactSnapshot(
+    now: Date,
+  ): Promise<Map<string, NetworkContact> | undefined> {
+    if (!this.options.contacts || now.getTime() < this.#nextContactSyncAt)
+      return undefined;
+    this.#nextContactSyncAt =
+      now.getTime() + (this.options.contactSyncIntervalMs ?? 15 * 60_000);
+    try {
+      const contacts = await this.options.contacts.getContacts();
+      return new Map(contacts.map((contact) => [contact.id, contact]));
+    } catch (error) {
+      this.options.logger?.error(
+        { err: error },
+        'Networking contact reminder sync failed',
+      );
+      return undefined;
+    }
+  }
+
+  private async seed(
+    now: Date,
+  ): Promise<Map<string, NetworkContact> | undefined> {
+    const settings = await this.options.store.listSettings();
+    const contactSnapshot =
+      settings.length > 0 ? await this.loadContactSnapshot(now) : undefined;
+    for (const setting of settings) {
       const timezone = setting.timezone || this.options.defaultTimezone;
       if (setting.mondayNetworkingReminder) {
         await this.options.store.upsertScheduledJob({
@@ -112,19 +150,40 @@ export class NetworkingScheduler {
           });
         }
       }
+      for (const contact of contactSnapshot?.values() ?? []) {
+        for (const reminder of buildContactReminderJobs({
+          contact,
+          now,
+          timezone,
+        })) {
+          await this.options.store.upsertScheduledJob({
+            ownerUserId: setting.ownerUserId,
+            chatId: setting.chatId,
+            ...reminder,
+          });
+        }
+      }
     }
+    return contactSnapshot;
   }
 
   private async run(now: Date): Promise<void> {
-    await this.seed(now);
+    const contactSnapshot = await this.seed(now);
     const jobs = await this.options.store.claimDueJobs(
       now,
       networkingJobKinds,
       ['FOLLOW_UP:'],
     );
+    if (contactSnapshot) {
+      jobs.push(
+        ...(await this.options.store.claimDueJobs(now, undefined, [
+          contactReminderJobPrefix,
+        ])),
+      );
+    }
     for (const job of jobs) {
       try {
-        await this.execute(job, now);
+        await this.execute(job, now, contactSnapshot);
         await this.options.store.completeScheduledJob(job.id);
       } catch (error) {
         await this.options.store.failScheduledJob(job.id, errorMessage(error));
@@ -139,7 +198,23 @@ export class NetworkingScheduler {
   private async execute(
     job: Awaited<ReturnType<SocialsStore['claimDueJobs']>>[number],
     now: Date,
+    contactSnapshot: Map<string, NetworkContact> | undefined,
   ): Promise<void> {
+    if (job.kind.startsWith(contactReminderJobPrefix)) {
+      const payload = contactReminderPayloadSchema.safeParse(job.payload);
+      if (!payload.success || !contactSnapshot) return;
+      const contact = contactSnapshot.get(payload.data.contactId);
+      if (
+        !contact?.active ||
+        canonicalContactMetDate(contact.metDate) !== payload.data.metDate
+      )
+        return;
+      await this.options.transport.send(
+        job.chatId,
+        `🤝 Připomeň se kontaktu\n${contactReminderLead(payload.data.milestone)} jsi poznal kontakt ${contact.name}${contact.metAt ? ` · ${contact.metAt}` : ''}.\n\nJe čas se ozvat a navázat na vaše setkání.`,
+      );
+      return;
+    }
     if (job.kind.startsWith('FOLLOW_UP:')) {
       const followUpId = payloadRecord(job.payload).followUpId;
       if (typeof followUpId !== 'string') return;

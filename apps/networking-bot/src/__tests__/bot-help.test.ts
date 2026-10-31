@@ -93,5 +93,6 @@ describe('networking bot help', () => {
       expect.objectContaining({ command: 'networking_calendar_connect' }),
     );
     expect(networkingAbout).toContain('automaticky nekontaktuje');
+    expect(networkingAbout).toContain('po 2 dnech, týdnu a kalendářním měsíci');
   });
 });
