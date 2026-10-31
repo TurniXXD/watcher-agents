@@ -304,6 +304,9 @@ services:
       - 'host.docker.internal:host-gateway'
     ports:
       - '127.0.0.1:8789:8789'
+    networks:
+      - default
+      - vantuch
     volumes:
       - ./deploy/piper-voices:/data/piper:ro
     depends_on:
