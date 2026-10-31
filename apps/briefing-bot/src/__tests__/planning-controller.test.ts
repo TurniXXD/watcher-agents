@@ -29,6 +29,13 @@ const controllerWith = (store: object): PlanningController =>
     now: () => new Date('2026-10-31T08:00:00.000Z'),
   });
 
+type TaskMessageOptions = {
+  parse_mode?: string;
+  reply_markup: {
+    inline_keyboard: { text: string; callback_data?: string }[][];
+  };
+};
+
 describe('PlanningController morning prompt', () => {
   it('omits long-term goals and explains both ways to add a task', async () => {
     const reply = vi.fn().mockResolvedValue(undefined);
@@ -89,7 +96,9 @@ describe('PlanningController morning prompt', () => {
   });
 
   it('shows the known total and one inline completion button per active task', async () => {
-    const reply = vi.fn().mockResolvedValue(undefined);
+    const reply = vi
+      .fn<(text: string, options?: TaskMessageOptions) => Promise<undefined>>()
+      .mockResolvedValue(undefined);
     const tasks = [
       task({ estimatedMinutes: 180, priority: 'HIGH' }),
       task({
@@ -118,8 +127,11 @@ describe('PlanningController morning prompt', () => {
     expect(message).toContain('🚀 Rozjet contact formy');
     expect(message).toContain('✓ Naučit se nové pickup lines &amp; navázat');
     expect(message).toContain('<s>');
-    expect(reply.mock.calls[0]?.[1]?.parse_mode).toBe('HTML');
-    const keyboard = reply.mock.calls[0]?.[1]?.reply_markup;
+    const options = reply.mock.calls[0]?.[1];
+    expect(options?.parse_mode).toBe('HTML');
+    const keyboard = options?.reply_markup;
+    expect(keyboard).toBeDefined();
+    if (!keyboard) throw new Error('Expected the task completion keyboard');
     expect(keyboard.inline_keyboard.flat()).toEqual([
       expect.objectContaining({
         callback_data: 'plan:task:11111111-1111-4111-8111-111111111111:done',
@@ -171,10 +183,13 @@ describe('PlanningController morning prompt', () => {
       listTasks: vi.fn().mockResolvedValue([completed]),
     };
     const controller = controllerWith(store);
+    const editMessageText = vi
+      .fn<(text: string, options: TaskMessageOptions) => Promise<undefined>>()
+      .mockResolvedValue(undefined);
     const context = {
       chat: { id: 12 },
       answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
-      editMessageText: vi.fn().mockResolvedValue(undefined),
+      editMessageText,
     };
 
     await controller.handleTaskCallback(context as never, active.id);
@@ -190,13 +205,10 @@ describe('PlanningController morning prompt', () => {
     expect(context.answerCallbackQuery).toHaveBeenCalledWith(
       `Hotovo: ${active.title}`,
     );
-    expect(context.editMessageText).toHaveBeenCalledWith(
-      expect.stringContaining(`<s>✓ ${active.title}`),
-      expect.objectContaining({
-        parse_mode: 'HTML',
-        reply_markup: expect.anything(),
-      }),
-    );
+    const edited = editMessageText.mock.calls[0];
+    expect(edited?.[0]).toContain(`<s>✓ ${active.title}`);
+    expect(edited?.[1].parse_mode).toBe('HTML');
+    expect(edited?.[1].reply_markup.inline_keyboard).toEqual([]);
   });
 
   it('does not mutate a task that is not owned by the callback chat', async () => {

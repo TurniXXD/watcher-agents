@@ -138,18 +138,23 @@ const estimatedTimeSummary = (tasks: readonly BriefingTaskRecord[]): string => {
 
 const taskDoneKeyboard = (
   tasks: readonly BriefingTaskRecord[],
-): InlineKeyboard => {
-  const keyboard = new InlineKeyboard();
-  tasks.forEach((task, index) => {
-    if (task.status !== 'TODO' && task.status !== 'IN_PROGRESS') return;
+): {
+  inline_keyboard: { text: string; callback_data: string }[][];
+} => ({
+  inline_keyboard: tasks.flatMap((task, index) => {
+    if (task.status !== 'TODO' && task.status !== 'IN_PROGRESS') return [];
     const title =
       task.title.length > 34 ? `${task.title.slice(0, 33)}…` : task.title;
-    keyboard
-      .text(`✅ ${index + 1}. ${title}`, `plan:task:${task.id}:done`)
-      .row();
-  });
-  return keyboard;
-};
+    return [
+      [
+        {
+          text: `✅ ${index + 1}. ${title}`,
+          callback_data: `plan:task:${task.id}:done`,
+        },
+      ],
+    ];
+  }),
+});
 
 const renderTasksMessage = (tasks: readonly BriefingTaskRecord[]): string =>
   [
