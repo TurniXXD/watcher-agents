@@ -67,4 +67,36 @@ describe('link-to-lead Twenty synchronization', () => {
       'Twenty CRM is not configured',
     );
   });
+
+  it('reports the live Twenty authentication state', async () => {
+    const warn = vi.fn();
+    const connected = new SalesService(
+      {} as SalesStore,
+      { warn } as unknown as WatcherLogger,
+      undefined,
+      {
+        checkConnection: vi.fn().mockResolvedValue(undefined),
+      } as unknown as TwentyIntegration,
+    );
+    await expect(connected.twentyConnectionStatus()).resolves.toBe('connected');
+
+    const authenticationError = new Error(
+      'Twenty CRM odmítlo TWENTY_API_KEY (HTTP 401).',
+    );
+    const rejected = new SalesService(
+      {} as SalesStore,
+      { warn } as unknown as WatcherLogger,
+      undefined,
+      {
+        checkConnection: vi.fn().mockRejectedValue(authenticationError),
+      } as unknown as TwentyIntegration,
+    );
+    await expect(rejected.twentyConnectionStatus()).resolves.toBe(
+      'authentication failed',
+    );
+    expect(warn).toHaveBeenCalledWith(
+      { err: authenticationError },
+      'Twenty connection check failed',
+    );
+  });
 });

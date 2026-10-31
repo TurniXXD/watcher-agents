@@ -15,6 +15,29 @@ const requestUrl = (request: RequestInfo | URL): string =>
       : request.url;
 
 describe('TwentyIntegration idempotence', () => {
+  it('turns a rejected API key into an actionable configuration error', async () => {
+    const twenty = new TwentyIntegration(
+      'https://twenty.example',
+      'expired-key',
+      false,
+      async () =>
+        new Response(
+          JSON.stringify({ statusCode: 401, messages: ['Token invalid.'] }),
+          { status: 401 },
+        ),
+    );
+
+    await expect(
+      twenty.upsertCompany({
+        name: 'Internesto',
+        websiteUrl: 'https://internesto.com',
+        domain: 'internesto.com',
+        source: 'TEST',
+        lastResearchedAt: new Date('2026-10-31T09:00:00.000Z'),
+      }),
+    ).rejects.toThrow('Twenty CRM odmítlo TWENTY_API_KEY (HTTP 401)');
+  });
+
   it('creates a company once and updates the same domain on the next upsert', async () => {
     let companyId: string | undefined;
     let creates = 0;

@@ -2,6 +2,12 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-10-31 — Complete Twenty lead and Note notifications
+
+- Twenty Sales App now notifies Sales Bot for every new CRM Person and every ordinary new Note, so a repeated contact-form message produces its own Telegram alert even when the Person already exists.
+- Watcher-managed mailbox/discovery records and `[sales-*]` Notes keep their existing single owning notification path, while stable Person/Note event IDs prevent webhook redelivery duplicates.
+- Twenty REST 401 responses now explain that the deployed workspace API key must be regenerated and replaced instead of exposing the raw provider error as the only guidance.
+
 ## 2026-10-31 — Google Sheet contact reach-out reminders
 
 - Networking Bot now reminds the authorized operator two days, seven days, and one calendar month after an active contact's `Datum potkání`, without ever messaging the contact automatically.

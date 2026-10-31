@@ -35,11 +35,20 @@ export class TwentyRestClient {
         .replaceAll(/\s+/gu, ' ')
         .trim()
         .slice(0, 300);
+      if (response.status === 401) {
+        throw new Error(
+          'Twenty CRM odmítlo TWENTY_API_KEY (HTTP 401). Vytvoř nový workspace API klíč v Twenty, nahraď ho v privátním sales-bot.env a znovu vyrenderuj a nasaď Sales Bot.',
+        );
+      }
       throw new Error(
         `Twenty REST ${init.method ?? 'GET'} ${path} returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
       );
     }
     return response.status === 204 ? {} : response.json();
+  }
+
+  public async checkAuthentication(): Promise<void> {
+    await this.request('companies?limit=1');
   }
 
   public async find(

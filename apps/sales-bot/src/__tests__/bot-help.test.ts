@@ -167,6 +167,7 @@ describe('sales bot help', () => {
     expect(salesAbout).toContain('Firmy.cz');
     expect(salesAbout).toContain('Inbound IMAP');
     expect(salesAbout).toContain('Nikdy na e-mail automaticky neodpovídá');
+    expect(salesAbout).toContain('každou novou běžnou Note');
     expect(salesBotCommands).toContainEqual(
       expect.objectContaining({ command: 'sales_prospects' }),
     );

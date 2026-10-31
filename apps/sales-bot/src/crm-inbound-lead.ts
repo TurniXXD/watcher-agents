@@ -7,7 +7,8 @@ export const crmInboundLeadSchema = z
   .object({
     eventId: z.string().trim().min(1).max(300),
     occurredAt: z.iso.datetime({ offset: true }),
-    source: z.enum(['CONTACT_FORM', 'EMAIL']),
+    eventType: z.enum(['PERSON_CREATED', 'NOTE_CREATED']).optional(),
+    source: z.enum(['CONTACT_FORM', 'EMAIL', 'CRM']),
     record: z
       .object({
         id: z.string().trim().min(1).max(300),
@@ -57,9 +58,14 @@ export const renderCrmInboundLead = (payload: CrmInboundLead): string => {
   const source =
     payload.source === 'CONTACT_FORM'
       ? 'kontaktní formulář'
-      : 'příchozí e-mail';
+      : payload.source === 'EMAIL'
+        ? 'příchozí e-mail'
+        : 'Twenty CRM';
+  const isNote = payload.eventType === 'NOTE_CREATED';
   return [
-    '🔔 Nový příchozí lead v CRM',
+    isNote
+      ? '🔔 Nová zpráva nebo poznámka u leadu v CRM'
+      : '🔔 Nový lead v CRM',
     `Zdroj: ${source}`,
     `Kontakt: ${safeLine(payload.record.name ?? 'neuveden')}`,
     ...(payload.record.email
@@ -93,7 +99,7 @@ export const renderCrmInboundLead = (payload: CrmInboundLead): string => {
     ...(payload.record.summary
       ? [`Shrnutí: ${safeLine(payload.record.summary, 1_000)}`]
       : []),
-    `CRM ID: ${safeLine(payload.record.id)}`,
+    `${isNote ? 'CRM Note ID' : 'CRM ID'}: ${safeLine(payload.record.id)}`,
     ...(payload.record.crmUrl ? [`CRM: ${payload.record.crmUrl}`] : []),
   ].join('\n');
 };

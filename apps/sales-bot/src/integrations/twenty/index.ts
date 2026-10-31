@@ -26,6 +26,7 @@ export class TwentyIntegration {
 
   public findCompany = (input: Parameters<typeof findCompany>[1]) =>
     findCompany(this.client, input, this.useAppFields);
+  public checkConnection = () => this.client.checkAuthentication();
   public upsertCompany = (input: Parameters<typeof upsertCompany>[1]) =>
     upsertCompany(this.client, input, this.useAppFields);
   public findPerson = (input: Parameters<typeof findPerson>[1]) =>

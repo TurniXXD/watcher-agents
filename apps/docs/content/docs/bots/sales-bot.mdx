@@ -68,10 +68,10 @@ Bot.
     L --> M["Find public e-mail and explicit tel link"]
     M --> N["Upsert Twenty Company and sourced Note"]
     N --> O["No campaign, draft, approval, or outreach"]
-    W --> P["Twenty person.created"]
-    P --> Q{"Creator EMAIL or source CONTACT_FORM?"}
-    Q -->|No| R["Ignore manual and ordinary imports"]
-    Q -->|Yes| S["Authenticated Sales webhook"]
+    W --> P["Twenty person.created or note.created"]
+    P --> Q{"Watcher-managed event already owns an alert?"}
+    Q -->|Yes| R["Suppress duplicate bot-originated alert"]
+    Q -->|No| S["Authenticated Sales webhook"]
     S --> T["Idempotent Telegram notification"]
     W --> V["Read-only inbound lead IMAP mailbox"]
     V --> X["Bounded parsing and deterministic/AI classification"]
@@ -108,12 +108,12 @@ Quickly enrollment fails closed unless a qualified approved lead has explicit
 campaign, and available capacity. Public contact data or Telegram approval alone
 is not consent.
 
-The Twenty Sales App also forwards a new `Person` to Sales Bot when Twenty marks
-its creator as `EMAIL`, or when an external contact-form integration explicitly
-sets `leadSource=CONTACT_FORM` (or a documented contact-form alias). Sales Bot
-queues an idempotent Telegram notification for every authorized operator.
-Manual records and ordinary Sales imports through ARES, Geoapify, Google Places,
-or `/sales_prospects` do not produce this notification.
+The Twenty Sales App forwards every new CRM `Person` and every ordinary new
+`Note` to Sales Bot. A repeated contact-form submission therefore produces a
+new alert even when it updates an existing person by adding a Note. Sales Bot
+queues one durable, idempotent Telegram notification per authorized operator.
+Watcher-managed mailbox/discovery records and technical `[sales-*]` Notes are
+excluded because those workflows already own their single notification path.
 
 ### Dedicated inbound lead mailbox
 
@@ -126,9 +126,9 @@ classification when Ollama is configured, with deterministic fallback.
 
 Relevant messages and uncertain human enquiries are idempotently upserted as a
 Twenty Person with a linked analysis Note and the descriptive source marker
-`MAILBOX_EMAIL` or `MAILBOX_CONTACT_FORM`. Those markers intentionally do not
-match the Twenty app's contact-form aliases, because this mailbox pipeline owns
-the single durable Telegram notification. Telegram receives only the compact
+`MAILBOX_EMAIL` or `MAILBOX_CONTACT_FORM`. Those markers are intentionally
+excluded by the Twenty App because this mailbox pipeline owns the single
+durable Telegram notification. Telegram receives only the compact
 classification, source, intent, requested services, factual summary, and CRM
 link. Message-ID or a stable fallback hash is persisted with the durable
 outbox, so repeated lookback polls and restarts do not duplicate the lead or
@@ -186,7 +186,7 @@ restarts.
 | Google Places                        | Optional fallback when primary sources lack enough contacts.                    |
 | Public company websites              | Contact-page, explicit e-mail, and `tel:` evidence with source URLs.            |
 | Inbound TLS IMAP mailbox             | Read-only contact-form/e-mail ingestion, analysis, and stable message identity. |
-| Twenty CRM                           | Idempotent Company/Person/Note state plus filtered inbound alerts.              |
+| Twenty CRM                           | Idempotent Company/Person/Note state plus new Person and Note alerts.           |
 | Quickly                              | Explicitly authorized campaign sequences after every eligibility gate passes.   |
 | Ollama                               | Optional category mapping and schema-validated draft generation.                |
 | Google Sheets/contact-network        | Backward-compatible personal-contact workflow shared with Networking Bot.       |
@@ -202,6 +202,9 @@ restarts.
   `geo:` or `nace:` for an explicit override.
 - Quickly refusal is expected when consent, suppression, campaign, or capacity
   requirements are not satisfied.
-- If an inbound Person produces no alert, verify the app logic function is
-  applied, its secret token matches `SALES_WEBHOOK_TOKEN`, and the record is
-  either created by the `EMAIL` actor or explicitly tagged as a contact form.
+- If a new Person or ordinary Note produces no alert, apply the current Twenty
+  App and verify its secret token exactly matches `SALES_WEBHOOK_TOKEN`.
+- Twenty HTTP 401 `Token invalid` means `TWENTY_API_KEY` must be regenerated in
+  the target workspace and replaced in the private Sales Bot runtime before a
+  rerender/redeploy. Do not use a browser session token. `/sales_status` checks
+  the key read-only and reports the live Twenty connection state.

@@ -132,6 +132,24 @@ export class SalesService {
     return Boolean(this.twenty);
   }
 
+  public async twentyConnectionStatus(): Promise<
+    | 'missing configuration'
+    | 'connected'
+    | 'authentication failed'
+    | 'unavailable'
+  > {
+    if (!this.twenty) return 'missing configuration';
+    try {
+      await this.twenty.checkConnection();
+      return 'connected';
+    } catch (error) {
+      this.logger.warn({ err: error }, 'Twenty connection check failed');
+      return error instanceof Error && error.message.includes('HTTP 401')
+        ? 'authentication failed'
+        : 'unavailable';
+    }
+  }
+
   public async syncLinkedLeadToTwenty(leadId: string): Promise<{
     companyId: string;
   }> {

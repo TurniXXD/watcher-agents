@@ -142,8 +142,8 @@ export const processInboundEmail = async (input: {
 
   const name = personName(analysis.contactName, analysis.contactEmail);
   // The mailbox pipeline owns Telegram delivery. Use source markers that remain
-  // descriptive in Twenty without matching the Twenty app's person.created
-  // contact-form aliases, which would emit the same lead a second time.
+  // descriptive in Twenty while remaining in the Twenty app's managed-source
+  // exclusion set, which prevents a second alert for the same mailbox event.
   const crmLeadSource =
     analysis.source === 'CONTACT_FORM'
       ? 'MAILBOX_CONTACT_FORM'

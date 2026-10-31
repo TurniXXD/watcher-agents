@@ -26,20 +26,22 @@ Start from [sales](../../deploy/presets/sales-bot.env.example), [Quickly](../../
 
 Apply the [Twenty Sales App](../twenty-sales-app/README.md) before enabling custom Twenty fields.
 
-## New inbound CRM lead notifications
+## CRM lead and activity notifications
 
-The applied Twenty Sales App listens for `person.created` and calls the private
-Sales Bot webhook. Sales Bot sends a durable Telegram notification to every
-authorized operator only when the new Person has one of these verified origins:
+The applied Twenty Sales App listens for both `person.created` and
+`note.created` and calls the private Sales Bot webhook. Sales Bot sends a
+durable Telegram notification to every authorized operator for every new Person
+and every ordinary Note. A repeat contact-form submission stored as a Note
+therefore produces a new alert even when the Person already exists.
 
-- Twenty actor source `EMAIL` (a Person created from synchronized incoming mail);
-- explicit Person `leadSource=CONTACT_FORM` or a documented contact-form alias.
+Watcher-managed mailbox People and Notes plus technical `[sales-*]` Notes are
+excluded because their owning Sales Bot workflow already queues the alert. This
+prevents a single mailbox message or bot action from being announced twice.
+Other manual or API-created CRM People and ordinary Notes are included.
 
-Manual Person creation is ignored. API-created Sales imports such as ARES,
-Geoapify, Google Places, and `/sales_prospects` are also ignored unless an
-external contact-form integration explicitly tags the Person as a contact-form
-lead. The webhook event and per-chat outbox rows are idempotent, survive a bot
-restart, and retry bounded Telegram delivery without sending duplicate alerts.
+The webhook event uses the stable workspace and Person or Note ID. Per-chat
+outbox rows are idempotent, survive a bot restart, and retry bounded Telegram
+delivery without sending the same event twice.
 
 After applying the Twenty app, set its secret
 `SALES_INBOUND_WEBHOOK_TOKEN` to exactly the Sales Bot
@@ -69,9 +71,9 @@ SALES_INBOUND_IMAP_INTERVAL_MINUTES=5
 The mailbox requires `TWENTY_BASE_URL` and `TWENTY_API_KEY`. Enable
 `TWENTY_APP_FIELDS_ENABLED` after applying the Twenty Sales App so the Person is
 explicitly typed as a lead. The mailbox writes the descriptive source marker
-`MAILBOX_EMAIL` or `MAILBOX_CONTACT_FORM`; those markers intentionally do not
-trigger the Twenty `person.created` webhook because the mailbox pipeline owns
-the single durable Telegram notification. Ollama is optional: when configured,
+`MAILBOX_EMAIL` or `MAILBOX_CONTACT_FORM`; those markers are intentionally
+excluded by the Twenty App because the mailbox pipeline owns the single durable
+Telegram notification. Ollama is optional: when configured,
 it returns a validated structured classification; otherwise deterministic
 contact-form, automation, and intent rules are used.
 
@@ -83,3 +85,12 @@ Relevant messages and uncertain human enquiries are upserted by grounded e-mail
 address, receive an analysis Note, and queue one durable Telegram notification
 per authorized operator. Message-ID (or a stable content hash) plus PostgreSQL
 constraints prevent duplicate CRM alerts across polls and restarts.
+
+An HTTP 401 with `Token invalid` means the deployed `TWENTY_API_KEY` is no
+longer accepted by the target Twenty workspace. Create a new workspace API key
+in Twenty, replace only the private runtime value, rerender/redeploy Sales Bot,
+and never use a browser session token as the API key. CRM webhook delivery also
+requires the Twenty App's `SALES_INBOUND_WEBHOOK_TOKEN` to exactly match Sales
+Bot's `SALES_WEBHOOK_TOKEN`. `/sales_status` performs a read-only authentication
+check and reports `connected`, `authentication failed`, or `unavailable` rather
+than treating every non-empty key as healthy.

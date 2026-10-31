@@ -21,7 +21,7 @@ import {
 
 export const salesHelp = `💼 Sales assistant
 
-This private bot reviews discovered companies, prepares outreach drafts, and—when configured—syncs eligible, approved leads to Quickly and Twenty. A configured read-only inbound mailbox classifies new enquiries, stores relevant or uncertain human contacts in Twenty, and queues durable Telegram alerts without replying to the sender.
+This private bot reviews discovered companies, prepares outreach drafts, and—when configured—syncs eligible, approved leads to Quickly and Twenty. It queues durable Telegram alerts for new Twenty People and ordinary Notes, while a configured read-only inbound mailbox classifies enquiries and owns one alert per received message without replying to the sender.
 
 Getting started
 1. Run /sales_status to check the current pipeline counts.
@@ -84,6 +84,7 @@ Jak data procházejí systémem
 12. Schválený lead se odešle do Quickly pouze tehdy, když projde všemi kontrolami způsobilosti.
 13. Twenty uchovává idempotentně dohledanou nebo vytvořenou Company a návrh jako nativní Note. Quickly řídí e-mailovou kampaň, odesílací schránku, sekvence a reakce.
 14. Je-li nakonfigurovaná příchozí IMAP schránka, Sales Bot ji čte pouze read-only. Zprávu vyhodnotí podle automatických/bulk hlaviček, kontaktního formuláře a obchodního záměru; nakonfigurovaná Ollama doplní validovanou strukturovanou klasifikaci. Automatické a zjevně nerelevantní zprávy pouze idempotentně označí jako zpracované. Relevantní i nejisté lidské poptávky uloží jako Person typu lead a připojenou Note v Twenty a pro každého povoleného operátora zařadí trvalou Telegram notifikaci. Nikdy na e-mail automaticky neodpovídá, přílohy ignoruje a neukládá a nevymýšlí chybějící kontaktní údaje.
+15. Nainstalovaná Twenty Sales App hlásí každou novou Person a každou novou běžnou Note. Opakovaný formulář uložený jako Note proto vytvoří samostatnou trvalou Telegram notifikaci i u již existující osoby. Technické poznámky s prefixem [sales-*] a mailboxové záznamy přeskočí, protože jejich notifikaci už vlastní přímo Sales Bot.
 
 První nastavení discovery
 1. ARES nevyžaduje API key a zůstává aktivní vždy. Pro známé obory bot mapuje běžný text slovníkem; například „farmy“ znamenají Geoapify commercial.food_and_drink.farm a CZ-NACE 01. Ostatní přirozené popisy mapuje nakonfigurovaná Ollama do omezeného katalogu platných Geoapify kategorií. Přesný ARES filtr lze stále zadat jako nace:95310. Pokud překlad nenajde CZ-NACE, ARES hledá původní text v obchodním názvu.
@@ -100,7 +101,7 @@ Zdroje a hranice discovery
 ARES poskytuje registrované subjekty a sídla, nikoli spolehlivý katalog provozoven nebo kontaktů. Přesný filtr ARES funguje nejlépe pro obec; při zadání celého kraje může být ARES část prázdná a provozovny dodá Geoapify přes hranici daného kraje. Geoapify používá komunitní OpenStreetMap data, která mohou být neúplná nebo zastaralá; výsledky musí uvádět atribuci. Google Places je pouze volitelný fallback. ARES shoda názvu sama nedokazuje vlastnictví webu a sídlo nemusí být provozovna. Webový audit pracuje s oficiálním webem kandidáta. Firmy.cz se automaticky nescrapuje; bot neobchází roboty, přihlášení ani placené databáze.
 
 Integrace
-• Twenty CRM: Company se hledá v pořadí doména → registrační ID/IČO → externí ID → jméno+země a pak se aktualizuje nebo vytvoří. Návrh e-mailu je nativní Note navázaná na Company; stejný lead poznámku aktualizuje místo vytváření duplikátu. Reusable integrace podporuje také Person, Opportunity, Task, Relationship a Referral, ale pipeline nevymýšlí osobu ani automaticky nevytváří obchodní příležitost. Vlastní pole fungují po instalaci Twenty Sales app a zapnutí TWENTY_APP_FIELDS_ENABLED. Twenty samo v tomto workflow e-mail neodesílá.
+• Twenty CRM: Company se hledá v pořadí doména → registrační ID/IČO → externí ID → jméno+země a pak se aktualizuje nebo vytvoří. Návrh e-mailu je nativní Note navázaná na Company; stejný lead poznámku aktualizuje místo vytváření duplikátu. Reusable integrace podporuje také Person, Opportunity, Task, Relationship a Referral, ale pipeline nevymýšlí osobu ani automaticky nevytváří obchodní příležitost. Twenty Sales App posílá restart-safe alert pro novou Person a každou novou běžnou Note, včetně opakovaného formuláře u existující osoby. Vlastní pole fungují po instalaci aplikace a zapnutí TWENTY_APP_FIELDS_ENABLED. Twenty samo v tomto workflow e-mail neodesílá.
 • Inbound IMAP: volitelně čte vyhrazenou lead schránku přes TLS v read-only režimu, respektuje Reply-To z kontaktního formuláře, omezuje velikost a počet zpráv a deduplikuje Message-ID nebo stabilní hash v PostgreSQL. Tělo relevantní zprávy ukládá pouze do CRM Note; Telegram dostane stručnou analýzu a odkaz do CRM. Přihlašovací údaje zůstávají jen v privátním sales-bot.env.
 • Ollama: volitelně generuje pouze draft přes sdílený provider. Dynamický obsah je oddělen od instrukcí, výstup je validovaný a při nedostatku podkladů musí model personalizaci přiznaně vynechat. Chyba modelu neznamená, že se smí odeslat neověřený text.
 • Quickly: přijímá e-mail, jméno a vygenerované hodnoty subject/body. Finální sekvence, časování, limity a odesílací schránka se spravují v Quickly.
@@ -243,14 +244,16 @@ export const createSalesBot = (
   bot.command(['start', 'help', 'sales_help'], (ctx) => send(ctx, salesHelp));
   bot.command(['about', 'sales_about'], (ctx) => send(ctx, salesAbout));
   bot.command('sales_status', async (ctx) => {
-    const [campaigns, leads, searches, prospects] = await Promise.all([
-      store.listCampaigns(),
-      store.listLeads(undefined, 100),
-      store.listSearchSubscriptions(BigInt(ctx.chat.id)),
-      store.countProspects(),
-    ]);
+    const [campaigns, leads, searches, prospects, twentyStatus] =
+      await Promise.all([
+        store.listCampaigns(),
+        store.listLeads(undefined, 100),
+        store.listSearchSubscriptions(BigInt(ctx.chat.id)),
+        store.countProspects(),
+        service.twentyConnectionStatus(),
+      ]);
     await ctx.reply(
-      `Campaigns: ${campaigns.length}; CRM prospects: ${prospects}; periodic searches: ${searches.length}; recent leads: ${leads.length}; qualified: ${leads.filter((lead) => lead.stage === 'QUALIFIED').length}; Quickly enrolled: ${leads.filter((lead) => lead.stage === 'SYNCED_TO_QUICKLY').length}; Twenty: ${service.twentyConfigured ? 'configured' : 'missing configuration'}; Discovery: ARES active, Geoapify ${service.geoapifyConfigured ? 'configured' : 'missing GEOAPIFY_API_KEY'}, Google fallback ${service.googlePlacesConfigured ? 'configured' : 'disabled'}.`,
+      `Campaigns: ${campaigns.length}; CRM prospects: ${prospects}; periodic searches: ${searches.length}; recent leads: ${leads.length}; qualified: ${leads.filter((lead) => lead.stage === 'QUALIFIED').length}; Quickly enrolled: ${leads.filter((lead) => lead.stage === 'SYNCED_TO_QUICKLY').length}; Twenty: ${twentyStatus}; Discovery: ARES active, Geoapify ${service.geoapifyConfigured ? 'configured' : 'missing GEOAPIFY_API_KEY'}, Google fallback ${service.googlePlacesConfigured ? 'configured' : 'disabled'}.`,
     );
   });
   bot.command('sales_campaigns', async (ctx) => {

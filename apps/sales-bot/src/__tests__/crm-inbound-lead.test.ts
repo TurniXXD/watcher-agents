@@ -26,7 +26,7 @@ describe('CRM inbound lead notifications', () => {
   it('renders a compact Czech notification with the source and CRM identity', () => {
     expect(renderCrmInboundLead(payload)).toBe(
       [
-        '🔔 Nový příchozí lead v CRM',
+        '🔔 Nový lead v CRM',
         'Zdroj: kontaktní formulář',
         'Kontakt: Ada Lovelace',
         'E-mail: ada@example.com',
@@ -38,13 +38,41 @@ describe('CRM inbound lead notifications', () => {
     );
   });
 
-  it('accepts only explicit contact-form and email origins', () => {
+  it('accepts contact-form, e-mail, and general CRM origins', () => {
     expect(() =>
       crmInboundLeadSchema.parse({ ...payload, source: 'MANUAL' }),
     ).toThrow();
     expect(
       crmInboundLeadSchema.parse({ ...payload, source: 'EMAIL' }).source,
     ).toBe('EMAIL');
+    expect(
+      crmInboundLeadSchema.parse({ ...payload, source: 'CRM' }).source,
+    ).toBe('CRM');
+  });
+
+  it('renders every CRM note as a separate lead activity alert', () => {
+    expect(
+      renderCrmInboundLead({
+        eventId: 'twenty:note.created:workspace:note-1',
+        occurredAt: '2026-10-31T09:30:00.000Z',
+        eventType: 'NOTE_CREATED',
+        source: 'CRM',
+        record: {
+          id: 'note-1',
+          subject: 'Contact form: another enquiry',
+          summary: 'The existing person sent a new project request.',
+        },
+      }),
+    ).toBe(
+      [
+        '🔔 Nová zpráva nebo poznámka u leadu v CRM',
+        'Zdroj: Twenty CRM',
+        'Kontakt: neuveden',
+        'Předmět: Contact form: another enquiry',
+        'Shrnutí: The existing person sent a new project request.',
+        'CRM Note ID: note-1',
+      ].join('\n'),
+    );
   });
 
   it('queues one durable idempotent message per authorized operator', async () => {
