@@ -49,7 +49,7 @@ export const briefingCommands = [
   { command: 'plan', description: 'Start or resume morning planning' },
   { command: 'tasks', description: "Show today's tasks" },
   { command: 'priorities', description: "Show today's primary priorities" },
-  { command: 'task_add', description: 'Add a task with optional duration' },
+  { command: 'task_add', description: 'Add a task with flags and duration' },
   { command: 'task_done', description: 'Complete a task by title or ID' },
   { command: 'task_goal', description: 'Link a task to an active goal' },
   { command: 'daily_review', description: 'Review goals, then journal' },
@@ -289,7 +289,9 @@ export const createBriefingBot = (
     if (!planning) return;
     const value = commandArgument(context.message?.text);
     if (!value) {
-      await context.reply('Použití: /task_add NÁZEV [15m|1h|1h15m]');
+      await context.reply(
+        'Použití: /task_add [--priority|--do-first] NÁZEV [15m|1h|1h15m]',
+      );
       return;
     }
     await planning.commandAdd(context, value);
@@ -982,6 +984,13 @@ export const createBriefingBot = (
     await journal.handleCallback(context, context.match[1]!, context.match[2]!);
   });
 
+  bot.callbackQuery(/^plan:task:([0-9a-f-]{36}):done$/u, async (context) => {
+    if (!planning) {
+      await context.answerCallbackQuery('Plánování není zapnuté.');
+      return;
+    }
+    await planning.handleTaskCallback(context, context.match[1]!);
+  });
   bot.callbackQuery(
     /^plan:([0-9a-f-]{36}):(laptop|mirror|confirm|edit)$/u,
     async (context) => {

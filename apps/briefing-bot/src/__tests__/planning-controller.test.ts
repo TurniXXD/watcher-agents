@@ -1,5 +1,33 @@
+import type { BriefingTaskRecord } from '@watcher/database';
 import { describe, expect, it, vi } from 'vitest';
 import { PlanningController } from '../planning/controller.js';
+
+const task = (
+  overrides: Partial<BriefingTaskRecord> = {},
+): BriefingTaskRecord => ({
+  id: '11111111-1111-4111-8111-111111111111',
+  telegramChatId: 12n,
+  title: 'Připravit pondělní cally',
+  planningDate: '2026-10-31',
+  status: 'TODO',
+  priority: 'NORMAL',
+  tags: [],
+  source: 'PLANNED',
+  syncStatus: 'PENDING',
+  migrationCount: 0,
+  ...overrides,
+});
+
+const controllerWith = (store: object): PlanningController =>
+  new PlanningController({
+    store: store as never,
+    goals: { list: vi.fn().mockResolvedValue([]) },
+    timezone: 'Europe/Prague',
+    laptopReminderEnabled: false,
+    mirrorReminderEnabled: false,
+    startJournal: vi.fn(),
+    now: () => new Date('2026-10-31T08:00:00.000Z'),
+  });
 
 describe('PlanningController morning prompt', () => {
   it('omits long-term goals and explains both ways to add a task', async () => {
@@ -52,9 +80,144 @@ describe('PlanningController morning prompt', () => {
     );
     expect(message).toContain('Aktivní měsíční a týdenní cíle:');
     expect(message).toContain('Monthly focus [monthly]');
-    expect(message).toContain('/task_add NÁZEV [15m|1h|1h15m]');
+    expect(message).toContain(
+      '/task_add [--priority|--do-first] NÁZEV [15m|1h|1h15m]',
+    );
     expect(message).toContain(
       'můžeš dnešní úkoly zadat také přirozeným textem',
     );
+  });
+
+  it('shows the known total and one inline completion button per active task', async () => {
+    const reply = vi.fn().mockResolvedValue(undefined);
+    const tasks = [
+      task({ estimatedMinutes: 180, priority: 'HIGH' }),
+      task({
+        id: '22222222-2222-4222-8222-222222222222',
+        title: 'Rozjet contact formy',
+        estimatedMinutes: 60,
+        priority: 'PRIMARY',
+        tags: ['do-first'],
+      }),
+      task({
+        id: '33333333-3333-4333-8333-333333333333',
+        title: 'Naučit se nové pickup lines & navázat',
+        status: 'COMPLETED',
+      }),
+    ];
+    const controller = controllerWith({
+      listTasks: vi.fn().mockResolvedValue(tasks),
+    });
+
+    await controller.commandTasks({ chat: { id: 12 }, reply } as never);
+
+    const message = String(reply.mock.calls[0]?.[0]);
+    expect(message).toContain('⏱ Odhad celkem: nejméně 4h');
+    expect(message).toContain('1 úkol bez odhadu');
+    expect(message).toContain('⭐ Připravit pondělní cally');
+    expect(message).toContain('🚀 Rozjet contact formy');
+    expect(message).toContain('✓ Naučit se nové pickup lines &amp; navázat');
+    expect(message).toContain('<s>');
+    expect(reply.mock.calls[0]?.[1]?.parse_mode).toBe('HTML');
+    const keyboard = reply.mock.calls[0]?.[1]?.reply_markup;
+    expect(keyboard.inline_keyboard.flat()).toEqual([
+      expect.objectContaining({
+        callback_data: 'plan:task:11111111-1111-4111-8111-111111111111:done',
+      }),
+      expect.objectContaining({
+        callback_data: 'plan:task:22222222-2222-4222-8222-222222222222:done',
+      }),
+    ]);
+  });
+
+  it('maps task_add priority flags to ordered persisted tasks', async () => {
+    const createTask = vi.fn(async (_chatId: bigint, input: object) =>
+      task(input as Partial<BriefingTaskRecord>),
+    );
+    const controller = controllerWith({ createTask });
+    const context = {
+      chat: { id: 12 },
+      reply: vi.fn().mockResolvedValue(undefined),
+    } as never;
+
+    await controller.commandAdd(
+      context,
+      '--priority Připravit pondělní cally 1h',
+    );
+    await controller.commandAdd(context, 'Rozjet contact formy 2h --do-first');
+
+    expect(createTask).toHaveBeenNthCalledWith(1, 12n, {
+      title: 'Připravit pondělní cally',
+      estimatedMinutes: 60,
+      planningDate: '2026-10-31',
+      priority: 'HIGH',
+      tags: [],
+    });
+    expect(createTask).toHaveBeenNthCalledWith(2, 12n, {
+      title: 'Rozjet contact formy',
+      estimatedMinutes: 120,
+      planningDate: '2026-10-31',
+      priority: 'PRIMARY',
+      tags: ['do-first'],
+    });
+  });
+
+  it('completes only an owned task from its inline callback and refreshes the list', async () => {
+    const active = task();
+    const completed = task({ status: 'COMPLETED' });
+    const store = {
+      resolveTask: vi.fn().mockResolvedValue([active]),
+      updateTask: vi.fn().mockResolvedValue(completed),
+      listTasks: vi.fn().mockResolvedValue([completed]),
+    };
+    const controller = controllerWith(store);
+    const context = {
+      chat: { id: 12 },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      editMessageText: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await controller.handleTaskCallback(context as never, active.id);
+
+    expect(store.resolveTask).toHaveBeenCalledWith(
+      12n,
+      active.id,
+      '2026-10-31',
+    );
+    expect(store.updateTask).toHaveBeenCalledWith(12n, active.id, {
+      status: 'COMPLETED',
+    });
+    expect(context.answerCallbackQuery).toHaveBeenCalledWith(
+      `Hotovo: ${active.title}`,
+    );
+    expect(context.editMessageText).toHaveBeenCalledWith(
+      expect.stringContaining(`<s>✓ ${active.title}`),
+      expect.objectContaining({
+        parse_mode: 'HTML',
+        reply_markup: expect.anything(),
+      }),
+    );
+  });
+
+  it('does not mutate a task that is not owned by the callback chat', async () => {
+    const store = {
+      resolveTask: vi.fn().mockResolvedValue([]),
+      updateTask: vi.fn(),
+    };
+    const controller = controllerWith(store);
+    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+
+    await controller.handleTaskCallback(
+      { chat: { id: 99 }, answerCallbackQuery } as never,
+      '11111111-1111-4111-8111-111111111111',
+    );
+
+    expect(store.resolveTask).toHaveBeenCalledWith(
+      99n,
+      '11111111-1111-4111-8111-111111111111',
+      '2026-10-31',
+    );
+    expect(store.updateTask).not.toHaveBeenCalled();
+    expect(answerCallbackQuery).toHaveBeenCalledWith('Úkol nebyl nalezen.');
   });
 });

@@ -80,7 +80,20 @@ const reviewDraftSchema = z.object({
 
 const shortId = (id: string): string => id.slice(0, 8);
 
-const renderTask = (task: BriefingTaskRecord, index?: number): string => {
+const escapeTelegramHtml = (value: string): string =>
+  value.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;');
+
+const taskPriorityMarker = (task: BriefingTaskRecord): string => {
+  if (task.tags.includes('do-first')) return '🚀 ';
+  if (task.priority === 'HIGH' || task.priority === 'PRIMARY') return '⭐ ';
+  return '';
+};
+
+const renderTask = (
+  task: BriefingTaskRecord,
+  index?: number,
+  html = false,
+): string => {
   const status = {
     TODO: '○',
     IN_PROGRESS: '◐',
@@ -89,13 +102,86 @@ const renderTask = (task: BriefingTaskRecord, index?: number): string => {
     CANCELLED: '×',
     BACKLOG: '□',
   }[task.status];
-  return `${index === undefined ? '' : `${index + 1}. `}${status} ${task.title}${
+  const details = `${status} ${taskPriorityMarker(task)}${html ? escapeTelegramHtml(task.title) : task.title}${
     task.estimatedMinutes
       ? ` · odhad ${formatDurationMinutes(task.estimatedMinutes)}`
       : ''
   }${task.actualMinutes ? ` · skutečnost ${formatDurationMinutes(task.actualMinutes)}` : ''}${
-    task.goalTitle ? ` · ${task.goalTitle}` : ''
+    task.goalTitle
+      ? ` · ${html ? escapeTelegramHtml(task.goalTitle) : task.goalTitle}`
+      : ''
   } · #${shortId(task.id)}`;
+  const rendered =
+    html && task.status === 'COMPLETED' ? `<s>${details}</s>` : details;
+  return `${index === undefined ? '' : `${index + 1}. `}${rendered}`;
+};
+
+const estimatedTimeSummary = (tasks: readonly BriefingTaskRecord[]): string => {
+  const estimatedMinutes = tasks.reduce(
+    (total, task) => total + (task.estimatedMinutes ?? 0),
+    0,
+  );
+  const missingEstimates = tasks.filter(
+    ({ estimatedMinutes }) => estimatedMinutes === undefined,
+  ).length;
+  const missingLabel =
+    missingEstimates === 1
+      ? '1 úkol bez odhadu'
+      : missingEstimates >= 2 && missingEstimates <= 4
+        ? `${missingEstimates} úkoly bez odhadu`
+        : `${missingEstimates} úkolů bez odhadu`;
+  if (!estimatedMinutes) {
+    return `⏱ Odhad celkem: nezadaný${missingEstimates ? ` · ${missingLabel}` : ''}`;
+  }
+  return `⏱ Odhad celkem: ${missingEstimates ? 'nejméně ' : ''}${formatDurationMinutes(estimatedMinutes)}${missingEstimates ? ` · ${missingLabel}` : ''}`;
+};
+
+const taskDoneKeyboard = (
+  tasks: readonly BriefingTaskRecord[],
+): InlineKeyboard => {
+  const keyboard = new InlineKeyboard();
+  tasks.forEach((task, index) => {
+    if (task.status !== 'TODO' && task.status !== 'IN_PROGRESS') return;
+    const title =
+      task.title.length > 34 ? `${task.title.slice(0, 33)}…` : task.title;
+    keyboard
+      .text(`✅ ${index + 1}. ${title}`, `plan:task:${task.id}:done`)
+      .row();
+  });
+  return keyboard;
+};
+
+const renderTasksMessage = (tasks: readonly BriefingTaskRecord[]): string =>
+  [
+    '📋 Dnešní úkoly',
+    '',
+    ...tasks.map((task, index) => renderTask(task, index, true)),
+    '',
+    estimatedTimeSummary(tasks),
+  ].join('\n');
+
+const parseTaskAddFlags = (
+  raw: string,
+): {
+  value: string;
+  priority: BriefingTaskRecord['priority'];
+  tags: string[];
+} => {
+  let priority: BriefingTaskRecord['priority'] = 'NORMAL';
+  const tags: string[] = [];
+  const value = raw
+    .replace(/(?:^|\s)--(priority|do-first)(?=\s|$)/giu, (_flag, name) => {
+      if (String(name).toLowerCase() === 'do-first') {
+        priority = 'PRIMARY';
+        if (!tags.includes('do-first')) tags.push('do-first');
+      } else if (priority !== 'PRIMARY') {
+        priority = 'HIGH';
+      }
+      return ' ';
+    })
+    .replace(/\s+/gu, ' ')
+    .trim();
+  return { value, priority, tags };
 };
 
 const morningSummary = (tasks: readonly MorningDraftTask[]): string => {
@@ -245,7 +331,7 @@ export class PlanningController {
           : ['• žádné nedokončené úkoly']),
         '',
         'Starší úkol můžeš přesunout pomocí /task_move ID YYYY-MM-DD, zrušit přes /task_cancel ID nebo nechat v backlogu během večerního review.',
-        'Nový úkol přidáš přes /task_add NÁZEV [15m|1h|1h15m]. Po „pokračovat“ můžeš dnešní úkoly zadat také přirozeným textem.',
+        'Nový úkol přidáš přes /task_add [--priority|--do-first] NÁZEV [15m|1h|1h15m]. Po „pokračovat“ můžeš dnešní úkoly zadat také přirozeným textem.',
         'Až je seznam vyřešený, napiš „pokračovat“.',
       ].join('\n'),
       reminderKeyboard.inline_keyboard.length
@@ -261,12 +347,11 @@ export class PlanningController {
     });
     await context.reply(
       tasks.length
-        ? [
-            '📋 Dnešní úkoly',
-            '',
-            ...tasks.map((task, index) => renderTask(task, index)),
-          ].join('\n')
-        : 'Dnes zatím nemáš žádné úkoly. Přidej je přes /task_add NÁZEV [DÉLKA] nebo /plan.',
+        ? renderTasksMessage(tasks)
+        : 'Dnes zatím nemáš žádné úkoly. Přidej je přes /task_add [--priority|--do-first] NÁZEV [DÉLKA] nebo /plan.',
+      tasks.length
+        ? { parse_mode: 'HTML' as const, reply_markup: taskDoneKeyboard(tasks) }
+        : undefined,
     );
   }
 
@@ -275,7 +360,9 @@ export class PlanningController {
       fromDate: this.today(),
       toDate: this.today(),
     });
-    const priorities = tasks.filter(({ priority }) => priority === 'PRIMARY');
+    const priorities = tasks.filter(
+      ({ priority }) => priority === 'HIGH' || priority === 'PRIMARY',
+    );
     await context.reply(
       priorities.length
         ? [
@@ -288,19 +375,59 @@ export class PlanningController {
   }
 
   public async commandAdd(context: Context, raw: string): Promise<void> {
-    const captures = parseTaskCaptures(raw);
+    const flags = parseTaskAddFlags(raw);
+    const captures = parseTaskCaptures(flags.value);
     const created: BriefingTaskRecord[] = [];
     for (const capture of captures) {
       created.push(
         await this.options.store.createTask(BigInt(context.chat!.id), {
           ...capture,
           planningDate: this.today(),
+          priority: flags.priority,
+          tags: flags.tags,
         }),
       );
     }
     await context.reply(
       `Přidáno:\n${created.map((task) => renderTask(task)).join('\n')}`,
     );
+  }
+
+  public async handleTaskCallback(
+    context: Context,
+    taskId: string,
+  ): Promise<void> {
+    const parsedId = z.uuid().safeParse(taskId);
+    if (!parsedId.success) {
+      await context.answerCallbackQuery('Neplatný úkol.');
+      return;
+    }
+    const matches = await this.options.store.resolveTask(
+      BigInt(context.chat!.id),
+      parsedId.data,
+      this.today(),
+    );
+    const task = matches.find(({ id }) => id === parsedId.data);
+    if (!task) {
+      await context.answerCallbackQuery('Úkol nebyl nalezen.');
+      return;
+    }
+    if (task.status !== 'TODO' && task.status !== 'IN_PROGRESS') {
+      await context.answerCallbackQuery('Tento úkol už není aktivní.');
+      return;
+    }
+    await this.options.store.updateTask(BigInt(context.chat!.id), task.id, {
+      status: 'COMPLETED',
+    });
+    await context.answerCallbackQuery(`Hotovo: ${task.title.slice(0, 180)}`);
+    const tasks = await this.options.store.listTasks(BigInt(context.chat!.id), {
+      fromDate: this.today(),
+      toDate: this.today(),
+    });
+    await context.editMessageText(renderTasksMessage(tasks), {
+      parse_mode: 'HTML',
+      reply_markup: taskDoneKeyboard(tasks),
+    });
   }
 
   public async commandComplete(context: Context, raw: string): Promise<void> {

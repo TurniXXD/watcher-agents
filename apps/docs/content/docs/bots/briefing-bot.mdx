@@ -12,44 +12,45 @@ a compact Telegram index.
 
 ## Commands
 
-| Command                                                  | What it does                                                                                    |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `/start`                                                 | Starts or safely resumes onboarding.                                                            |
-| `/help`                                                  | Shows every command and syntax.                                                                 |
-| `/about`                                                 | Explains purpose, data flow, automation, and limits.                                            |
-| `/briefing` / `/briefing_test`                           | Generates a normal or short test briefing through the same coordinator.                         |
-| `/settings`, `/briefing_settings`                        | Shows the complete persisted configuration.                                                     |
-| `/briefing_time HH:mm[;…]`                               | Sets one or more daily/weekly delivery times; `default` restores the standard schedule.         |
-| `/briefing_duration MINUTES`                             | Sets the target spoken length.                                                                  |
-| `/briefing_max_duration MINUTES`                         | Sets the hard maximum length.                                                                   |
-| `/briefing_transcript on\|off`                           | Enables or disables the Telegram text transcript.                                               |
-| `/subscriptions`                                         | Shows watcher subscriptions.                                                                    |
-| `/subscribe WATCHER`, `/unsubscribe WATCHER`             | Enables or disables `stocks`, `news`, `mu-clubs`, or `brno-events`.                             |
-| `/subscribe_all`, `/unsubscribe_all`                     | Enables or disables every watcher.                                                              |
-| `/location`, `/location_status`                          | Shows the saved briefing location.                                                              |
-| `/location_set`, `/location_clear`                       | Starts location setup or disables location context.                                             |
-| `/voice`, `/voice_list`                                  | Shows the selected voice or all supported voices.                                               |
-| `/voice_set VOICE`, `/voice_preview VOICE`               | Selects or previews a Piper voice.                                                              |
-| `/calendar_connect`, `/calendar_disconnect`              | Connects or removes Google Calendar OAuth.                                                      |
-| `/calendar_status`, `/calendar_refresh`                  | Shows or refreshes Calendar state.                                                              |
-| `/goal_add [LEVEL] DATE [parent:ID] TITLE`               | Adds a long-term, monthly, or weekly goal with an optional parent.                              |
-| `/goal_progress ID 0-100`                                | Records explicit progress; 100 marks the goal completed.                                        |
-| `/goal_archive ID`, `/goal_remove ID`, `/goals`          | Explicitly archives/removes a goal or lists active goals.                                       |
-| `/plan`, `/tasks`, `/priorities`                         | Runs the resumable morning plan without repeating long-term goals, or shows today's task focus. |
-| `/task_add TITLE [DURATION]`, `/task_done`, `/task_move` | Captures a task with an optional duration, completes it, or consciously migrates it.            |
-| `/task_cancel`, `/task_estimate`                         | Cancels a task or changes its optional estimate.                                                |
-| `/task_goal GOAL_ID ID\|TITLE`                           | Links a task to an active goal after explicit selection.                                        |
-| `/daily_review`, `/journal`                              | Runs daily goal review, then the preserved six-question journal.                                |
-| `/weekly_review`, `/monthly_review`                      | Runs the persisted calendar-week or calendar-month review.                                      |
-| `/priority_add TOPIC`, `/priority_remove TOPIC`          | Boosts or removes a preferred topic/company/ticker.                                             |
-| `/mute_add TOPIC`, `/mute_remove TOPIC`                  | Reduces or restores non-urgent topic coverage.                                                  |
-| `/journal`                                               | Starts or resumes today's evening reflection.                                                   |
-| `/journal_status`                                        | Shows progress and Notion synchronization state.                                                |
-| `/journal_cancel`                                        | Cancels the interaction while preserving saved progress.                                        |
-| `/journal_reminder_test`                                 | Sends today's reminder immediately.                                                             |
-| `/agents [on\|off]`                                      | Lists producers or enables/pauses all scheduled producers.                                      |
-| `/schedules`                                             | Shows producer schedules relative to the next briefing.                                         |
-| `/trigger AGENT [SOURCE]`                                | Runs one producer now; Brno Events accepts an optional source.                                  |
+| Command                                               | What it does                                                                                   |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `/start`                                              | Starts or safely resumes onboarding.                                                           |
+| `/help`                                               | Shows every command and syntax.                                                                |
+| `/about`                                              | Explains purpose, data flow, automation, and limits.                                           |
+| `/briefing` / `/briefing_test`                        | Generates a normal or short test briefing through the same coordinator.                        |
+| `/settings`, `/briefing_settings`                     | Shows the complete persisted configuration.                                                    |
+| `/briefing_time HH:mm[;…]`                            | Sets one or more daily/weekly delivery times; `default` restores the standard schedule.        |
+| `/briefing_duration MINUTES`                          | Sets the target spoken length.                                                                 |
+| `/briefing_max_duration MINUTES`                      | Sets the hard maximum length.                                                                  |
+| `/briefing_transcript on\|off`                        | Enables or disables the Telegram text transcript.                                              |
+| `/subscriptions`                                      | Shows watcher subscriptions.                                                                   |
+| `/subscribe WATCHER`, `/unsubscribe WATCHER`          | Enables or disables `stocks`, `news`, `mu-clubs`, or `brno-events`.                            |
+| `/subscribe_all`, `/unsubscribe_all`                  | Enables or disables every watcher.                                                             |
+| `/location`, `/location_status`                       | Shows the saved briefing location.                                                             |
+| `/location_set`, `/location_clear`                    | Starts location setup or disables location context.                                            |
+| `/voice`, `/voice_list`                               | Shows the selected voice or all supported voices.                                              |
+| `/voice_set VOICE`, `/voice_preview VOICE`            | Selects or previews a Piper voice.                                                             |
+| `/calendar_connect`, `/calendar_disconnect`           | Connects or removes Google Calendar OAuth.                                                     |
+| `/calendar_status`, `/calendar_refresh`               | Shows or refreshes Calendar state.                                                             |
+| `/goal_add [LEVEL] DATE [parent:ID] TITLE`            | Adds a long-term, monthly, or weekly goal with an optional parent.                             |
+| `/goal_progress ID 0-100`                             | Records explicit progress; 100 marks the goal completed.                                       |
+| `/goal_archive ID`, `/goal_remove ID`, `/goals`       | Explicitly archives/removes a goal or lists active goals.                                      |
+| `/plan`, `/tasks`, `/priorities`                      | Runs planning or shows ordered tasks, total estimate, struck-through completions, and buttons. |
+| `/task_add [--priority\|--do-first] TITLE [DURATION]` | Captures a normally ordered, priority, or do-first task with an optional duration.             |
+| `/task_done`, `/task_move`                            | Completes a task by reference or consciously migrates it.                                      |
+| `/task_cancel`, `/task_estimate`                      | Cancels a task or changes its optional estimate.                                               |
+| `/task_goal GOAL_ID ID\|TITLE`                        | Links a task to an active goal after explicit selection.                                       |
+| `/daily_review`, `/journal`                           | Runs daily goal review, then the preserved six-question journal.                               |
+| `/weekly_review`, `/monthly_review`                   | Runs the persisted calendar-week or calendar-month review.                                     |
+| `/priority_add TOPIC`, `/priority_remove TOPIC`       | Boosts or removes a preferred topic/company/ticker.                                            |
+| `/mute_add TOPIC`, `/mute_remove TOPIC`               | Reduces or restores non-urgent topic coverage.                                                 |
+| `/journal`                                            | Starts or resumes today's evening reflection.                                                  |
+| `/journal_status`                                     | Shows progress and Notion synchronization state.                                               |
+| `/journal_cancel`                                     | Cancels the interaction while preserving saved progress.                                       |
+| `/journal_reminder_test`                              | Sends today's reminder immediately.                                                            |
+| `/agents [on\|off]`                                   | Lists producers or enables/pauses all scheduled producers.                                     |
+| `/schedules`                                          | Shows producer schedules relative to the next briefing.                                        |
+| `/trigger AGENT [SOURCE]`                             | Runs one producer now; Brno Events accepts an optional source.                                 |
 
 ## Architecture and flow
 
