@@ -3,6 +3,7 @@ import {
   calculateExecutionMetrics,
   formatDurationMinutes,
   parseDurationMinutes,
+  parseSingleTaskCapture,
   parseTaskCaptures,
   reviewOrderForDate,
   taskEstimateFromTitle,
@@ -41,6 +42,31 @@ describe('Bullet Journal planning domain', () => {
     expect(parseTaskCaptures('Přidej zavolat rodičům')).toEqual([
       { title: 'zavolat rodičům' },
     ]);
+  });
+
+  it('keeps conjunctions inside a single task title', () => {
+    expect(
+      parseTaskCaptures('naplánovat socials content a vytvořit jej [2h]'),
+    ).toEqual([
+      {
+        title: 'naplánovat socials content a vytvořit jej',
+        estimatedMinutes: 120,
+      },
+    ]);
+    expect(parseTaskCaptures('research and write the report 1h')).toEqual([
+      { title: 'research and write the report', estimatedMinutes: 60 },
+    ]);
+  });
+
+  it('parses one command as one task regardless of list-like punctuation', () => {
+    expect(
+      parseSingleTaskCapture(
+        'naplánovat content, vytvořit jej; publikovat a pak vyhodnotit [2h]',
+      ),
+    ).toEqual({
+      title: 'naplánovat content, vytvořit jej; publikovat a pak vyhodnotit',
+      estimatedMinutes: 120,
+    });
   });
 
   it('captures bracketed estimates and reads them from legacy task titles', () => {

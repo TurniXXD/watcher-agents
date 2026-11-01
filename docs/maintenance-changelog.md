@@ -2,6 +2,15 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-11-01 — Backlog recovery in morning planning
+
+- Briefing Bot now shows backlog tasks in the opening `/plan` message and in a new `/backlog` command, with inline buttons that restore selected tasks to today.
+- Backlog restoration preserves migration history, rechecks Telegram ownership and backlog status, and atomically prevents duplicate tasks from repeated or concurrent button clicks.
+
+## 2026-11-01 — Keep each task command atomic
+
+- Every `/task_add` invocation now creates exactly one task, preserving conjunctions, commas, semicolons, and `a pak` inside its title; only the interactive `/plan` input retains multi-task parsing.
+
 ## 2026-10-31 — Complete Twenty lead and Note notifications
 
 - Twenty Sales App now notifies Sales Bot for every new CRM Person and every ordinary new Note, so a repeated contact-form message produces its own Telegram alert even when the Person already exists.

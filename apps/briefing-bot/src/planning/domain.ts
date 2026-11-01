@@ -92,23 +92,35 @@ const stripTaskLead = (value: string): string =>
     )
     .trim();
 
+const parseTaskCapturePart = (part: string): TaskCapture => {
+  const duration = taskDurationSuffix(part);
+  const title = part
+    .slice(0, duration?.index ?? part.length)
+    .replace(/\s+(?:for|na)$/iu, '')
+    .trim();
+  return taskCaptureSchema.parse({
+    title,
+    ...(duration ? { estimatedMinutes: duration.estimatedMinutes } : {}),
+  });
+};
+
+export const parseSingleTaskCapture = (input: string): TaskCapture =>
+  parseTaskCapturePart(stripTaskLead(input).replace(/[.!]+$/u, ''));
+
 export const parseTaskCaptures = (input: string): TaskCapture[] => {
   const normalized = stripTaskLead(input).replace(/[.!]+$/u, '');
   const parts = normalized
-    .split(/\s*(?:,|;|\band\b|\ba\s+pak\b|\ba\b)\s*/iu)
-    .map((part) => part.trim())
+    .split(/\s*(?:,|;|\ba\s+pak\b)\s*/iu)
+    .map((part, index) =>
+      index === 0
+        ? part.trim()
+        : part
+            .trim()
+            .replace(/^(?:and|a)\s+/iu, '')
+            .trim(),
+    )
     .filter(Boolean);
-  return parts.map((part) => {
-    const duration = taskDurationSuffix(part);
-    const title = part
-      .slice(0, duration?.index ?? part.length)
-      .replace(/\s+(?:for|na)$/iu, '')
-      .trim();
-    return taskCaptureSchema.parse({
-      title,
-      ...(duration ? { estimatedMinutes: duration.estimatedMinutes } : {}),
-    });
-  });
+  return parts.map(parseTaskCapturePart);
 };
 
 export type AnalyticsTask = {

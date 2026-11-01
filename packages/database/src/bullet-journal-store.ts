@@ -489,13 +489,37 @@ export class BulletJournalStore {
     id: string,
     toDate: string | undefined,
     decision: 'MIGRATED' | 'RESCHEDULED' | 'BACKLOG' | 'CANCELLED',
+    expectedStatus?: BriefingTaskRecord['status'],
   ): Promise<BriefingTaskRecord | undefined> {
     if (toDate) planningDateSchema.parse(toDate);
     return this.db.$transaction(async (transaction) => {
       const original = await transaction.briefingTask.findFirst({
         where: { id, settings: { telegramChatId } },
       });
-      if (!original) return undefined;
+      if (!original || (expectedStatus && original.status !== expectedStatus))
+        return undefined;
+      const terminalStatus =
+        decision === 'CANCELLED'
+          ? 'CANCELLED'
+          : decision === 'BACKLOG'
+            ? 'BACKLOG'
+            : 'MIGRATED';
+      if (expectedStatus) {
+        const claimed = await transaction.briefingTask.updateMany({
+          where: {
+            id,
+            status: expectedStatus,
+            settings: { telegramChatId },
+          },
+          data: { status: terminalStatus, syncStatus: 'PENDING' },
+        });
+        if (claimed.count !== 1) return undefined;
+      } else {
+        await transaction.briefingTask.update({
+          where: { id },
+          data: { status: terminalStatus, syncStatus: 'PENDING' },
+        });
+      }
       await transaction.briefingTaskMigration.create({
         data: {
           taskId: id,
@@ -503,16 +527,6 @@ export class BulletJournalStore {
           ...(toDate ? { toDate } : {}),
           decision,
         },
-      });
-      const terminalStatus =
-        decision === 'CANCELLED'
-          ? 'CANCELLED'
-          : decision === 'BACKLOG'
-            ? 'BACKLOG'
-            : 'MIGRATED';
-      await transaction.briefingTask.update({
-        where: { id },
-        data: { status: terminalStatus, syncStatus: 'PENDING' },
       });
       if (decision === 'CANCELLED' || decision === 'BACKLOG') {
         return toTask(

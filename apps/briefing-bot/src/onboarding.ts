@@ -90,6 +90,7 @@ _Privacy and limits:_ Every update is restricted to configured Telegram users. J
 export const briefingHelp = [
   '/about — what the briefing bot does and how to use it',
   '/agents [on|off] — list producers or enable/pause all scheduled producers',
+  '/backlog — show backlog tasks and add them to today with inline buttons',
   '/briefing — generate a briefing now',
   '/briefing_duration MINUTES — set target length',
   '/briefing_max_duration MINUTES — set hard maximum length',

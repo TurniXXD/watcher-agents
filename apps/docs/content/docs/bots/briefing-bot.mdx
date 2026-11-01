@@ -17,6 +17,7 @@ a compact Telegram index.
 | `/start`                                              | Starts or safely resumes onboarding.                                                           |
 | `/help`                                               | Shows every command and syntax.                                                                |
 | `/about`                                              | Explains purpose, data flow, automation, and limits.                                           |
+| `/backlog`                                            | Shows backlog tasks with buttons that restore each selected task to today.                     |
 | `/briefing` / `/briefing_test`                        | Generates a normal or short test briefing through the same coordinator.                        |
 | `/settings`, `/briefing_settings`                     | Shows the complete persisted configuration.                                                    |
 | `/briefing_time HH:mm[;…]`                            | Sets one or more daily/weekly delivery times; `default` restores the standard schedule.        |
@@ -36,7 +37,7 @@ a compact Telegram index.
 | `/goal_progress ID 0-100`                             | Records explicit progress; 100 marks the goal completed.                                       |
 | `/goal_archive ID`, `/goal_remove ID`, `/goals`       | Explicitly archives/removes a goal or lists active goals.                                      |
 | `/plan`, `/tasks`, `/priorities`                      | Runs planning or shows ordered tasks, total estimate, struck-through completions, and buttons. |
-| `/task_add [--priority\|--do-first] TITLE [DURATION]` | Captures a normally ordered, priority, or do-first task with an optional duration.             |
+| `/task_add [--priority\|--do-first] TITLE [DURATION]` | Creates exactly one task; punctuation stays in its title.                                      |
 | `/task_done`, `/task_move`                            | Completes a task by reference or consciously migrates it.                                      |
 | `/task_cancel`, `/task_estimate`                      | Cancels a task or changes its optional estimate.                                               |
 | `/task_goal GOAL_ID ID\|TITLE`                        | Links a task to an active goal after explicit selection.                                       |

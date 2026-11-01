@@ -95,6 +95,122 @@ describe('PlanningController morning prompt', () => {
     );
   });
 
+  it('shows backlog tasks in the morning prompt with add-today buttons', async () => {
+    const backlogTask = task({
+      title: 'Dodělat odložený návrh',
+      planningDate: '2026-10-30',
+      status: 'BACKLOG',
+      estimatedMinutes: 45,
+    });
+    const reply = vi
+      .fn<(text: string, options?: TaskMessageOptions) => Promise<undefined>>()
+      .mockResolvedValue(undefined);
+    const store = {
+      ensureSession: vi.fn().mockResolvedValue({
+        id: 'morning-session',
+        status: 'PENDING',
+        draft: {},
+      }),
+      listTasks: vi.fn(
+        async (
+          _chatId: bigint,
+          options: { statuses?: BriefingTaskRecord['status'][] },
+        ) => (options.statuses?.includes('BACKLOG') ? [backlogTask] : []),
+      ),
+      latestCompletedReviews: vi.fn().mockResolvedValue({}),
+      updateSession: vi.fn().mockResolvedValue(undefined),
+    };
+    const controller = controllerWith(store);
+
+    await controller.commandMorning({
+      chat: { id: 12 },
+      from: { id: 34 },
+      reply,
+    } as never);
+
+    expect(reply.mock.calls[0]?.[0]).toContain('Backlog:');
+    expect(reply.mock.calls[0]?.[0]).toContain(
+      'Dodělat odložený návrh · odhad 45m',
+    );
+    expect(
+      reply.mock.calls[0]?.[1]?.reply_markup.inline_keyboard.flat(),
+    ).toContainEqual({
+      text: '➕ Dnes: Dodělat odložený návrh',
+      callback_data: 'plan:backlog:11111111-1111-4111-8111-111111111111:today',
+    });
+  });
+
+  it('lists the backlog and restores an owned task to today once', async () => {
+    const backlogTask = task({
+      title: 'Odložený úkol & poznámky',
+      planningDate: '2026-10-30',
+      status: 'BACKLOG',
+    });
+    const movedTask = task({
+      id: '22222222-2222-4222-8222-222222222222',
+      title: backlogTask.title,
+      planningDate: '2026-10-31',
+    });
+    const store = {
+      listTasks: vi.fn().mockResolvedValue([backlogTask]),
+      migrateTask: vi.fn().mockResolvedValue(movedTask),
+    };
+    const controller = controllerWith(store);
+    const reply = vi
+      .fn<(text: string, options?: TaskMessageOptions) => Promise<undefined>>()
+      .mockResolvedValue(undefined);
+
+    await controller.commandBacklog({ chat: { id: 12 }, reply } as never);
+
+    expect(reply.mock.calls[0]?.[0]).toContain('Odložený úkol &amp; poznámky');
+    expect(reply.mock.calls[0]?.[1]?.parse_mode).toBe('HTML');
+    expect(
+      reply.mock.calls[0]?.[1]?.reply_markup.inline_keyboard.flat(),
+    ).toContainEqual({
+      text: '➕ Dnes: Odložený úkol & poznámky',
+      callback_data: 'plan:backlog:11111111-1111-4111-8111-111111111111:today',
+    });
+
+    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+    await controller.handleBacklogTodayCallback(
+      { chat: { id: 12 }, answerCallbackQuery } as never,
+      backlogTask.id,
+    );
+
+    expect(store.migrateTask).toHaveBeenCalledWith(
+      12n,
+      backlogTask.id,
+      '2026-10-31',
+      'RESCHEDULED',
+      'BACKLOG',
+    );
+    expect(answerCallbackQuery).toHaveBeenCalledWith(
+      'Přidáno na dnešek: Odložený úkol & poznámky',
+    );
+  });
+
+  it('does not restore a backlog task outside the callback chat', async () => {
+    const migrateTask = vi.fn().mockResolvedValue(undefined);
+    const controller = controllerWith({ migrateTask });
+    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+
+    await controller.handleBacklogTodayCallback(
+      { chat: { id: 99 }, answerCallbackQuery } as never,
+      '11111111-1111-4111-8111-111111111111',
+    );
+
+    expect(migrateTask).toHaveBeenCalledWith(
+      99n,
+      '11111111-1111-4111-8111-111111111111',
+      '2026-10-31',
+      'RESCHEDULED',
+      'BACKLOG',
+    );
+    expect(answerCallbackQuery).toHaveBeenCalledWith(
+      'Úkol už není v backlogu nebo ti nepatří.',
+    );
+  });
+
   it('shows the known total and one inline completion button per active task', async () => {
     const reply = vi
       .fn<(text: string, options?: TaskMessageOptions) => Promise<undefined>>()
@@ -171,6 +287,31 @@ describe('PlanningController morning prompt', () => {
       priority: 'PRIMARY',
       tags: ['do-first'],
     });
+  });
+
+  it('keeps a conjunction inside one task_add task', async () => {
+    const createTask = vi.fn(async (_chatId: bigint, input: object) =>
+      task(input as Partial<BriefingTaskRecord>),
+    );
+    const controller = controllerWith({ createTask });
+    const reply = vi.fn().mockResolvedValue(undefined);
+
+    await controller.commandAdd(
+      { chat: { id: 12 }, reply } as never,
+      'naplánovat socials content a vytvořit jej [2h]',
+    );
+
+    expect(createTask).toHaveBeenCalledTimes(1);
+    expect(createTask).toHaveBeenCalledWith(12n, {
+      title: 'naplánovat socials content a vytvořit jej',
+      estimatedMinutes: 120,
+      planningDate: '2026-10-31',
+      priority: 'NORMAL',
+      tags: [],
+    });
+    expect(reply).toHaveBeenCalledWith(
+      'Přidáno:\n○ naplánovat socials content a vytvořit jej · odhad 2h · #11111111',
+    );
   });
 
   it('completes only an owned task from its inline callback and refreshes the list', async () => {

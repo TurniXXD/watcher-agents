@@ -45,6 +45,7 @@ export const briefingCommands = [
   { command: 'start', description: 'Start or resume setup' },
   { command: 'help', description: 'Show commands and examples' },
   { command: 'about', description: 'Purpose, data flow and limitations' },
+  { command: 'backlog', description: 'Show backlog and add tasks today' },
   { command: 'briefing', description: 'Generate a briefing now' },
   { command: 'plan', description: 'Start or resume morning planning' },
   { command: 'tasks', description: "Show today's tasks" },
@@ -279,6 +280,10 @@ export const createBriefingBot = (
   });
   bot.command('plan', async (context) => {
     if (planning) await planning.commandMorning(context);
+    else await context.reply('Denní plánování není na tomto serveru zapnuté.');
+  });
+  bot.command('backlog', async (context) => {
+    if (planning) await planning.commandBacklog(context);
     else await context.reply('Denní plánování není na tomto serveru zapnuté.');
   });
   bot.command('tasks', async (context) => planning?.commandTasks(context));
@@ -991,6 +996,16 @@ export const createBriefingBot = (
     }
     await planning.handleTaskCallback(context, context.match[1]!);
   });
+  bot.callbackQuery(
+    /^plan:backlog:([0-9a-f-]{36}):today$/u,
+    async (context) => {
+      if (!planning) {
+        await context.answerCallbackQuery('Plánování není zapnuté.');
+        return;
+      }
+      await planning.handleBacklogTodayCallback(context, context.match[1]!);
+    },
+  );
   bot.callbackQuery(
     /^plan:([0-9a-f-]{36}):(laptop|mirror|confirm|edit)$/u,
     async (context) => {

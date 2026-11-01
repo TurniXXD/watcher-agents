@@ -11,6 +11,7 @@ import {
   calculateExecutionMetrics,
   formatDurationMinutes,
   parseDurationMinutes,
+  parseSingleTaskCapture,
   parseTaskCaptures,
   taskEstimateFromTitle,
 } from './domain.js';
@@ -160,6 +161,32 @@ const taskDoneKeyboard = (
   }),
 });
 
+const backlogKeyboard = (
+  tasks: readonly BriefingTaskRecord[],
+): {
+  inline_keyboard: { text: string; callback_data: string }[][];
+} => ({
+  inline_keyboard: tasks.map((task) => [
+    {
+      text: `➕ Dnes: ${task.title.length > 32 ? `${task.title.slice(0, 31)}…` : task.title}`,
+      callback_data: `plan:backlog:${task.id}:today`,
+    },
+  ]),
+});
+
+const renderBacklogMessage = (
+  tasks: readonly BriefingTaskRecord[],
+  page: number,
+  pages: number,
+): string =>
+  [
+    `📥 Backlog${pages > 1 ? ` — ${page}/${pages}` : ''}`,
+    '',
+    ...tasks.map((task, index) => renderTask(task, index, true)),
+    '',
+    'Tlačítkem přesuň vybraný úkol na dnešek.',
+  ].join('\n');
+
 const renderTasksMessage = (tasks: readonly BriefingTaskRecord[]): string =>
   [
     '📋 Dnešní úkoly',
@@ -272,6 +299,10 @@ export class PlanningController {
         statuses: ['TODO', 'IN_PROGRESS'],
       },
     );
+    const backlog = await this.options.store.listTasks(
+      BigInt(context.chat!.id),
+      { statuses: ['BACKLOG'] },
+    );
     const goals = await this.options.goals.list(BigInt(context.chat!.id));
     const focus = await this.options.store.latestCompletedReviews(
       BigInt(context.chat!.id),
@@ -298,6 +329,13 @@ export class PlanningController {
     if (this.options.mirrorReminderEnabled) {
       if (this.options.laptopReminderEnabled) reminderKeyboard.row();
       reminderKeyboard.text('🪞 Reflexe hotová', `plan:${session.id}:mirror`);
+    }
+    for (const task of backlog.slice(0, 15)) {
+      if (reminderKeyboard.inline_keyboard.length) reminderKeyboard.row();
+      reminderKeyboard.text(
+        `➕ Dnes: ${task.title.length > 32 ? `${task.title.slice(0, 31)}…` : task.title}`,
+        `plan:backlog:${task.id}:today`,
+      );
     }
     await context.reply(
       [
@@ -339,7 +377,12 @@ export class PlanningController {
           ? unfinishedLines
           : ['• žádné nedokončené úkoly']),
         '',
-        'Starší úkol můžeš přesunout pomocí /task_move ID YYYY-MM-DD, zrušit přes /task_cancel ID nebo nechat v backlogu během večerního review.',
+        'Backlog:',
+        ...(backlog.length
+          ? backlog.slice(0, 15).map((task) => renderTask(task))
+          : ['• backlog je prázdný']),
+        '',
+        'Úkol z backlogu přidáš na dnešek tlačítkem nebo přes /backlog. Starší úkol můžeš přesunout pomocí /task_move ID YYYY-MM-DD nebo zrušit přes /task_cancel ID.',
         'Nový úkol přidáš přes /task_add [--priority|--do-first] NÁZEV [15m|1h|1h15m]. Po „pokračovat“ můžeš dnešní úkoly zadat také přirozeným textem.',
         'Až je seznam vyřešený, napiš „pokračovat“.',
       ].join('\n'),
@@ -364,6 +407,53 @@ export class PlanningController {
     );
   }
 
+  public async commandBacklog(context: Context): Promise<void> {
+    const tasks = await this.options.store.listTasks(BigInt(context.chat!.id), {
+      statuses: ['BACKLOG'],
+    });
+    if (!tasks.length) {
+      await context.reply('Backlog je prázdný.');
+      return;
+    }
+    const pageSize = 10;
+    const pages = Math.ceil(tasks.length / pageSize);
+    for (let index = 0; index < pages; index += 1) {
+      const page = tasks.slice(index * pageSize, (index + 1) * pageSize);
+      await context.reply(renderBacklogMessage(page, index + 1, pages), {
+        parse_mode: 'HTML',
+        reply_markup: backlogKeyboard(page),
+      });
+    }
+  }
+
+  public async handleBacklogTodayCallback(
+    context: Context,
+    taskId: string,
+  ): Promise<void> {
+    const parsedId = z.uuid().safeParse(taskId);
+    if (!parsedId.success) {
+      await context.answerCallbackQuery('Neplatný úkol.');
+      return;
+    }
+    const moved = await this.options.store.migrateTask(
+      BigInt(context.chat!.id),
+      parsedId.data,
+      this.today(),
+      'RESCHEDULED',
+      'BACKLOG',
+    );
+    const callbackTitle = moved
+      ? moved.title.length > 150
+        ? `${moved.title.slice(0, 149)}…`
+        : moved.title
+      : undefined;
+    await context.answerCallbackQuery(
+      callbackTitle
+        ? `Přidáno na dnešek: ${callbackTitle}`
+        : 'Úkol už není v backlogu nebo ti nepatří.',
+    );
+  }
+
   public async commandPriorities(context: Context): Promise<void> {
     const tasks = await this.options.store.listTasks(BigInt(context.chat!.id), {
       fromDate: this.today(),
@@ -385,21 +475,16 @@ export class PlanningController {
 
   public async commandAdd(context: Context, raw: string): Promise<void> {
     const flags = parseTaskAddFlags(raw);
-    const captures = parseTaskCaptures(flags.value);
-    const created: BriefingTaskRecord[] = [];
-    for (const capture of captures) {
-      created.push(
-        await this.options.store.createTask(BigInt(context.chat!.id), {
-          ...capture,
-          planningDate: this.today(),
-          priority: flags.priority,
-          tags: flags.tags,
-        }),
-      );
-    }
-    await context.reply(
-      `Přidáno:\n${created.map((task) => renderTask(task)).join('\n')}`,
+    const created = await this.options.store.createTask(
+      BigInt(context.chat!.id),
+      {
+        ...parseSingleTaskCapture(flags.value),
+        planningDate: this.today(),
+        priority: flags.priority,
+        tags: flags.tags,
+      },
     );
+    await context.reply(`Přidáno:\n${renderTask(created)}`);
   }
 
   public async handleTaskCallback(
