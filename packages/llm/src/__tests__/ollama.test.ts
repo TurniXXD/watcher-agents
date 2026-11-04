@@ -1,5 +1,7 @@
 import type { WatchItem } from '@watcher/core';
 import type {
+  AiSpan,
+  AiTracer,
   OllamaRequestContext,
   OllamaRequestCoordinator,
 } from '@watcher/observability';
@@ -22,6 +24,53 @@ const item: WatchItem = {
 };
 
 describe('OllamaProvider', () => {
+  it('emits a content-free AI span with model, caller, correlation, and token usage', async () => {
+    const attributes: Record<string, unknown> = {};
+    const end = vi.fn();
+    const span: AiSpan = {
+      setAttributes: (values) => Object.assign(attributes, values),
+      setStatus: vi.fn(),
+      recordException: vi.fn(),
+      end,
+    };
+    const tracer: AiTracer = {
+      startActiveSpan: async (_name, callback) => callback(span),
+    };
+    const provider = new OllamaProvider({
+      url: 'http://ollama',
+      model: 'qwen3',
+      caller: 'briefing-bot',
+      correlationId: 'run-123',
+      jobId: 'job-456',
+      tracer,
+      fetch: vi.fn(async () =>
+        Response.json({
+          message: { content: '{"ok":true}' },
+          prompt_eval_count: 10,
+          eval_count: 4,
+        }),
+      ),
+    });
+
+    await provider.generateStructured(
+      'private prompt',
+      { type: 'object' },
+      z.object({ ok: z.boolean() }),
+    );
+
+    expect(attributes).toMatchObject({
+      'gen_ai.system': 'ollama',
+      'gen_ai.request.model': 'qwen3',
+      'watcher.caller': 'briefing-bot',
+      'watcher.correlation_id': 'run-123',
+      'watcher.job_id': 'job-456',
+      'gen_ai.usage.input_tokens': 10,
+      'gen_ai.usage.output_tokens': 4,
+    });
+    expect(Object.values(attributes)).not.toContain('private prompt');
+    expect(end).toHaveBeenCalledOnce();
+  });
+
   it('queues each chat attempt with its caller, priority, model, and timeout', async () => {
     const contexts: OllamaRequestContext[] = [];
     const coordinator: OllamaRequestCoordinator = {

@@ -14,8 +14,16 @@ import {
 } from './detectors.js';
 import { calculateSourceHealth } from './source-health.js';
 import type { Finding, RunObservation } from './types.js';
+import type { SecurityReportItem } from '../security/reporting.js';
 
 export type EvaluationType = 'HEALTH' | 'DAILY' | 'WEEKLY' | 'MANUAL';
+
+export type SecurityEvaluation = {
+  run(now: Date): Promise<{
+    reportItems: SecurityReportItem[];
+    failures: Array<{ technologyId: string; error: string }>;
+  }>;
+};
 
 const errorObject = (value: unknown): unknown => value ?? undefined;
 
@@ -23,7 +31,14 @@ export class MaintenanceEngine {
   readonly #store: MaintenanceStore;
   readonly #importer: LegacyTelemetryImporter;
   readonly #telemetry: AgentTelemetryStore;
-  #active: Promise<{ findings: Finding[]; runId: string }> | undefined;
+  #active:
+    | Promise<{
+        findings: Finding[];
+        securityReportItems: SecurityReportItem[];
+        runId: string;
+      }>
+    | undefined;
+  #securityEvaluation: SecurityEvaluation | undefined;
 
   public constructor(
     database: DatabaseClient,
@@ -37,6 +52,10 @@ export class MaintenanceEngine {
 
   public store(): MaintenanceStore {
     return this.#store;
+  }
+
+  public setSecurityEvaluation(evaluation: SecurityEvaluation): void {
+    this.#securityEvaluation = evaluation;
   }
 
   public run(type: EvaluationType, lookbackHours: number, now = new Date()) {
@@ -174,11 +193,28 @@ export class MaintenanceEngine {
         });
         recommendationCount++;
       }
+      let securityReportItems: SecurityReportItem[] = [];
+      let securitySourceFailures = 0;
+      if (type !== 'HEALTH' && this.#securityEvaluation) {
+        try {
+          const security = await this.#securityEvaluation.run(now);
+          securityReportItems = security.reportItems;
+          securitySourceFailures = security.failures.length;
+        } catch (error) {
+          securitySourceFailures = 1;
+          this.logger.error(
+            { err: error, type, maintenanceRunId: maintenanceRun.id },
+            'Security intelligence evaluation failed without cancelling maintenance evaluation',
+          );
+        }
+      }
       const finishedAt = new Date();
       const metrics = {
         importedRuns,
         analyzedRuns: runs.length,
         sourceCount: sourceHealth.length,
+        securityFindingCount: securityReportItems.length,
+        securitySourceFailures,
         latencyMs: finishedAt.getTime() - startedAt.getTime(),
       };
       await this.#store.finishRun(maintenanceRun.id, {
@@ -214,7 +250,11 @@ export class MaintenanceEngine {
         },
         'Maintenance evaluation completed',
       );
-      return { findings, runId: maintenanceRun.id };
+      return {
+        findings,
+        securityReportItems,
+        runId: maintenanceRun.id,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await this.#store.finishRun(maintenanceRun.id, {

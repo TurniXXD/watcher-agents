@@ -2,6 +2,12 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-11-04 — Security intelligence and content-free AI tracing
+
+- Maintenance Agent now ingests least-privilege Trivy scans of immutable images and dependency manifests, tracks confirmed security finding lifecycles, and keeps upstream technology advisories explicitly separate from verified deployment impact.
+- Daily/weekly reports and deduplicated immediate alerts now include sourced CVSS, FIRST EPSS, CISA KEV, fix availability, and structured OSV/NVD watch evidence without applying updates or restarting services.
+- AI-enabled Watcher processes can export sampled, content-free OpenLIT/OpenTelemetry spans for Ollama latency, failures, model/caller identity, correlation metadata, and provider-reported token usage to an operator-managed OTLP backend.
+
 ## 2026-11-01 — Backlog recovery in morning planning
 
 - Briefing Bot now shows backlog tasks in the opening `/plan` message and in a new `/backlog` command, with inline buttons that restore selected tasks to today.

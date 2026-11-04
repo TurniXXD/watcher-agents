@@ -70,6 +70,8 @@ jobs:
           test -f docker-compose.nvidia.yml
           test -x deploy/deploy.sh
           test -x deploy/normalize-database-url-host.sh
+          test -x deploy/security-scan.sh
+          test -x deploy/ingest-security-report.sh
           echo "deploy-ready=true" >> "$GITHUB_OUTPUT"
 
   publish-image:
@@ -217,6 +219,12 @@ jobs:
             deploy/normalize-database-url-host.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/normalize-database-url-host.sh.next"
           scp -P "$DEPLOY_PORT" \
+            deploy/security-scan.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/security-scan.sh.next"
+          scp -P "$DEPLOY_PORT" \
+            deploy/ingest-security-report.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/ingest-security-report.sh.next"
+          scp -P "$DEPLOY_PORT" \
             release-announcement.txt \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy/release/next.txt"
 
@@ -304,8 +312,12 @@ jobs:
             mv docker-compose.nvidia.yml.next docker-compose.nvidia.yml
             mv deploy.sh.next deploy/deploy.sh
             mv normalize-database-url-host.sh.next deploy/normalize-database-url-host.sh
+            mv security-scan.sh.next deploy/security-scan.sh
+            mv ingest-security-report.sh.next deploy/ingest-security-report.sh
             chmod 700 deploy/deploy.sh
             chmod 700 deploy/normalize-database-url-host.sh
+            chmod 700 deploy/security-scan.sh
+            chmod 700 deploy/ingest-security-report.sh
             test -f '$DEPLOY_ENV_FILE'
             printf '%s' '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin
             IMAGE_REGISTRY=ghcr.io \

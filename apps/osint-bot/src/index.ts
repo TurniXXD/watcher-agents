@@ -1,6 +1,7 @@
 import { createLogger, ProviderRequestLimiter } from '@watcher/core';
 import { createDatabaseClient, OsintStore } from '@watcher/database';
 import { OllamaProvider } from '@watcher/llm';
+import { initializeOpenLitFromEnvironment } from '@watcher/observability';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { createOsintBot, osintBotCommands } from './bot.js';
 import {
@@ -46,6 +47,7 @@ import { env } from './env.js';
 import { createOsintHealthServer } from './health.js';
 import { OsintService } from './service.js';
 
+initializeOpenLitFromEnvironment('osint-bot');
 const logger = createLogger('osint-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
 const store = new OsintStore(database);
@@ -109,6 +111,7 @@ const llm =
         model: env.OLLAMA_MODEL,
         retries: 1,
         timeoutMs: 45_000,
+        caller: 'osint-bot',
       })
     : undefined;
 const bot = createOsintBot(

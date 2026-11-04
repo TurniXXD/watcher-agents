@@ -4,6 +4,7 @@ import type { MaintenanceStore } from '@watcher/database';
 import Fastify from 'fastify';
 import { z } from 'zod';
 import type { MaintenanceEngine } from './evaluation/engine.js';
+import type { SecurityIntelligenceService } from './security/service.js';
 
 const authorized = (header: string | undefined, token: string): boolean => {
   const supplied = header?.match(/^Bearer\s+(.+)$/iu)?.[1];
@@ -28,6 +29,10 @@ const findingQuery = z.object({
       'SOURCE_DEGRADATION',
       'SCHEDULE_ISSUE',
       'CONFIGURATION_ISSUE',
+      'SECURITY_VULNERABILITY',
+      'SECURITY_MISCONFIGURATION',
+      'TECHNOLOGY_ADVISORY',
+      'AI_OBSERVABILITY',
       'OTHER',
     ])
     .optional(),
@@ -67,6 +72,19 @@ const manualRunSchema = z.object({
     .max(24 * 365)
     .default(24 * 7),
 });
+const trivyIngestionSchema = z.object({
+  project: z.string().trim().min(1).max(100),
+  service: z.string().trim().min(1).max(100),
+  scanKey: z.string().trim().min(1).max(500),
+  scannedAt: z.iso.datetime({ offset: true }),
+  report: z.unknown(),
+});
+const trivyIngestionHeadersSchema = z.object({
+  project: z.string().trim().min(1).max(100),
+  service: z.string().trim().min(1).max(100),
+  scanKey: z.string().trim().min(1).max(500),
+  scannedAt: z.iso.datetime({ offset: true }),
+});
 
 const healthForSeverity = (severity: string | undefined) =>
   severity === 'CRITICAL' || severity === 'HIGH'
@@ -81,8 +99,9 @@ export const createMaintenanceApi = (
   token: string,
   readiness: () => Promise<void>,
   logger: WatcherLogger,
+  security: Pick<SecurityIntelligenceService, 'ingestTrivy'>,
 ) => {
-  const app = Fastify();
+  const app = Fastify({ bodyLimit: 10 * 1024 * 1024 });
   app.get('/health', async (_request, reply) => {
     try {
       await readiness();
@@ -179,6 +198,37 @@ export const createMaintenanceApi = (
         .code(400)
         .send({ error: 'Invalid body', issues: parsed.error.issues });
     return engine.run('MANUAL', parsed.data.lookbackHours);
+  });
+  app.post('/maintenance/security/trivy', async (request, reply) => {
+    const envelope = trivyIngestionSchema.safeParse(request.body);
+    const headers = trivyIngestionHeadersSchema.safeParse({
+      project: request.headers['x-watcher-project'],
+      service: request.headers['x-watcher-service'],
+      scanKey: request.headers['x-watcher-scan-key'],
+      scannedAt: request.headers['x-watcher-scanned-at'],
+    });
+    if (!envelope.success && !headers.success)
+      return reply.code(400).send({
+        error: 'Invalid ingestion metadata',
+        issues: envelope.error.issues,
+      });
+    const metadata = envelope.success ? envelope.data : headers.data!;
+    const report = envelope.success ? envelope.data.report : request.body;
+    try {
+      return await security.ingestTrivy(report, {
+        project: metadata.project,
+        service: metadata.service,
+        scanKey: metadata.scanKey,
+        scannedAt: new Date(metadata.scannedAt),
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply
+          .code(400)
+          .send({ error: 'Invalid Trivy report', issues: error.issues });
+      }
+      throw error;
+    }
   });
   for (const [path, status] of [
     ['/maintenance/recommendations/:id/acknowledge', 'APPROVED'],

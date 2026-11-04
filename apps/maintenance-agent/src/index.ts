@@ -1,11 +1,16 @@
-import { createLogger, errorMessage, PersistentScheduler } from '@watcher/core';
+import {
+  createLogger,
+  errorMessage,
+  PersistentScheduler,
+  ProviderRequestLimiter,
+} from '@watcher/core';
 import {
   PostgresOllamaCoordinator,
   ResourceLeaseStore,
   TelegramOutboxStore,
   createDatabaseClient,
 } from '@watcher/database';
-import { parseAllowedUserIds } from '@watcher/telegram';
+import { parseAllowedUserIds, splitTelegramMessage } from '@watcher/telegram';
 import { createMaintenanceApi } from './api.js';
 import { AgentStatusService } from './agent-status.js';
 import { env } from './env.js';
@@ -18,6 +23,21 @@ import {
   MaintenanceRuntimeMonitor,
   SystemMetricsSampler,
 } from './runtime-monitor.js';
+import { SecurityIntelligenceService } from './security/service.js';
+import { SecurityEnricher } from './security/enrichment.js';
+import { defaultTechnologyWatchlist } from './security/default-watchlist.js';
+import { NvdClient } from './security/nvd.js';
+import { OsvClient } from './security/osv.js';
+import {
+  renderCriticalSecurityAlert,
+  renderDailySecurityDigest,
+  renderWeeklySecurityReport,
+  securityAlertDeduplicationKey,
+} from './security/reporting.js';
+import { TechnologyAdvisorySource } from './security/source.js';
+import { TechnologyWatchService } from './security/technology-watch.js';
+import { parseTechnologyWatchlist } from './security/watchlist.js';
+import { SecurityWatchRunner } from './security/watch-runner.js';
 import {
   announceChangelog,
   announceRelease,
@@ -37,6 +57,48 @@ const engine = new MaintenanceEngine(
 );
 const store = engine.store();
 const allowedIds = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
+const securityEnricher = new SecurityEnricher();
+const security = new SecurityIntelligenceService(store, {
+  enricher: securityEnricher,
+  immediateAlertMinimumScore: env.MAINTENANCE_SECURITY_ALERT_MIN_SCORE,
+  onImmediateAlert: async (item) => {
+    const body = renderCriticalSecurityAlert(item);
+    await telegramOutbox.enqueueMany(
+      [...allowedIds].map((chatId) => ({
+        kind: 'maintenance-report',
+        deduplicationKey: securityAlertDeduplicationKey(item, chatId),
+        chatId: BigInt(chatId),
+        body,
+      })),
+    );
+  },
+});
+if (env.MAINTENANCE_SECURITY_INTELLIGENCE_ENABLED) {
+  const watchlist = env.MAINTENANCE_TECHNOLOGY_WATCHLIST_JSON
+    ? parseTechnologyWatchlist(
+        JSON.parse(env.MAINTENANCE_TECHNOLOGY_WATCHLIST_JSON) as unknown,
+      )
+    : defaultTechnologyWatchlist;
+  const nvdLimiter = new ProviderRequestLimiter({
+    providerKey: 'nvd',
+    maxConcurrency: 1,
+    minimumSpacingMs: env.NVD_API_KEY ? 750 : 6_500,
+    sharedRateLimitBackoff: true,
+  });
+  const advisorySource = new TechnologyAdvisorySource(
+    new OsvClient(),
+    new NvdClient(fetch, env.NVD_API_KEY, () => new Date(), 7, nvdLimiter),
+  );
+  engine.setSecurityEvaluation(
+    new SecurityWatchRunner(
+      watchlist,
+      new TechnologyWatchService(advisorySource),
+      securityEnricher,
+      security,
+      logger,
+    ),
+  );
+}
 const systemMetrics = new SystemMetricsSampler(env.MAINTENANCE_NVIDIA_SMI_PATH);
 const agentStatus = new AgentStatusService(
   store,
@@ -61,6 +123,7 @@ const api = createMaintenanceApi(
     await database.$queryRaw`SELECT 1`;
   },
   logger,
+  security,
 );
 const scheduler = new MaintenanceScheduler(
   engine,
@@ -75,19 +138,46 @@ const scheduler = new MaintenanceScheduler(
     weeklyMinutes: env.MAINTENANCE_WEEKLY_INTERVAL_MINUTES,
     jitterMaxSeconds: env.MAINTENANCE_JITTER_MAX_SECONDS,
   },
-  async (type, findings, runId) => {
+  async (type, findings, runId, securityReportItems) => {
     const important = findings.filter((finding) =>
       ['CRITICAL', 'HIGH', 'MEDIUM'].includes(finding.severity),
     );
-    if (important.length === 0) return;
-    const body = renderReport(`${type} maintenance report`, important);
+    if (important.length === 0 && securityReportItems.length === 0) return;
+    const maintenanceBody = important.length
+      ? renderReport(`${type} maintenance report`, important)
+      : undefined;
+    const securityBodies = securityReportItems.length
+      ? splitTelegramMessage(
+          type === 'WEEKLY'
+            ? renderWeeklySecurityReport(securityReportItems, {
+                generatedAt: new Date(),
+                maxLength: Number.MAX_SAFE_INTEGER,
+              })
+            : renderDailySecurityDigest(securityReportItems, {
+                generatedAt: new Date(),
+                maxLength: Number.MAX_SAFE_INTEGER,
+              }),
+        )
+      : [];
     await telegramOutbox.enqueueMany(
-      [...allowedIds].map((chatId) => ({
-        kind: 'maintenance-report',
-        deduplicationKey: `${runId}:${chatId}`,
-        chatId: BigInt(chatId),
-        body,
-      })),
+      [...allowedIds].flatMap((chatId) => [
+        ...(maintenanceBody
+          ? [
+              {
+                kind: 'maintenance-report',
+                deduplicationKey: `${runId}:maintenance:${chatId}`,
+                chatId: BigInt(chatId),
+                body: maintenanceBody,
+              },
+            ]
+          : []),
+        ...securityBodies.map((body, page) => ({
+          kind: 'maintenance-report',
+          deduplicationKey: `${runId}:security:${page}:${chatId}`,
+          chatId: BigInt(chatId),
+          body,
+        })),
+      ]),
     );
   },
   logger,

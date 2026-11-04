@@ -21,6 +21,7 @@ import {
   WatcherStore,
 } from '@watcher/database';
 import { OllamaEmbeddingProvider, OllamaProvider } from '@watcher/llm';
+import { initializeOpenLitFromEnvironment } from '@watcher/observability';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { InputFile } from 'grammy';
 import {
@@ -64,6 +65,7 @@ import {
   OpenMeteoWeatherProvider,
 } from './weather.js';
 
+initializeOpenLitFromEnvironment('briefing-bot');
 const logger = createLogger('briefing-bot', env.LOG_LEVEL);
 const allowedUserIds = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
 logger.info(

@@ -2,11 +2,16 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { WatcherLogger } from '@watcher/core';
 import type { MaintenanceStore } from '@watcher/database';
-import { authorizationMiddleware, isAuthorized } from '@watcher/telegram';
+import {
+  authorizationMiddleware,
+  isAuthorized,
+  splitTelegramMessage,
+} from '@watcher/telegram';
 import { Bot } from 'grammy';
 import type { MaintenanceEngine } from './evaluation/engine.js';
 import type { Finding } from './evaluation/types.js';
 import type { AgentStatusService } from './agent-status.js';
+import { renderDailySecurityDigest } from './security/reporting.js';
 import {
   renderSystemSnapshot,
   type SystemMetricsSampler,
@@ -148,6 +153,18 @@ export const createMaintenanceBot = (
     await context.reply(
       renderReport('Manual maintenance report', result.findings),
     );
+    if (result.securityReportItems.length > 0) {
+      const securityDigest = renderDailySecurityDigest(
+        result.securityReportItems,
+        {
+          generatedAt: new Date(),
+          maxLength: Number.MAX_SAFE_INTEGER,
+        },
+      );
+      for (const page of splitTelegramMessage(securityDigest)) {
+        await context.reply(page);
+      }
+    }
   });
   bot.command('recommendations', async (context) => {
     const recommendations = await store.listRecommendations({

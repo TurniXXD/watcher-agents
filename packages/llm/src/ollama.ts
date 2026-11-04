@@ -10,9 +10,11 @@ import {
   type WatchItem,
 } from '@watcher/core';
 import type {
+  AiTracer,
   OllamaRequestCoordinator,
   OllamaRequestPriority,
 } from '@watcher/observability';
+import { traceAiOperation } from '@watcher/observability';
 import { z } from 'zod';
 
 const responseSchema = z.object({
@@ -301,6 +303,9 @@ export type OllamaOptions = {
   caller?: string;
   priority?: OllamaRequestPriority;
   coordinator?: OllamaRequestCoordinator;
+  tracer?: AiTracer;
+  correlationId?: string;
+  jobId?: string;
   onStructuredAttempt?: (attempt: StructuredAttemptDiagnostic) => void;
 };
 
@@ -343,6 +348,9 @@ export type OllamaEmbeddingOptions = {
   caller?: string;
   priority?: OllamaRequestPriority;
   coordinator?: OllamaRequestCoordinator;
+  tracer?: AiTracer;
+  correlationId?: string;
+  jobId?: string;
 };
 
 export class OllamaEmbeddingProvider {
@@ -359,38 +367,53 @@ export class OllamaEmbeddingProvider {
     signal?: AbortSignal,
   ): Promise<number[][]> {
     if (input.length === 0) return [];
-    const execute = async (coordinatorSignal?: AbortSignal) => {
-      const response = await this.#fetch(
-        `${this.options.url.replace(/\/$/, '')}/api/embed`,
+    const execute = async (coordinatorSignal?: AbortSignal) =>
+      traceAiOperation(
         {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            model: this.options.model,
-            input,
-            keep_alive: this.options.keepAlive ?? '5m',
-            truncate: true,
-          }),
-          signal: AbortSignal.any(
-            [
-              signal,
-              coordinatorSignal,
-              AbortSignal.timeout(this.#timeoutMs),
-            ].filter((value): value is AbortSignal => value !== undefined),
-          ),
+          provider: 'ollama',
+          model: this.options.model,
+          operation: 'embedding',
+          caller: this.options.caller ?? 'unknown',
+          ...(this.options.correlationId
+            ? { correlationId: this.options.correlationId }
+            : {}),
+          ...(this.options.jobId ? { jobId: this.options.jobId } : {}),
         },
+        async () => {
+          const response = await this.#fetch(
+            `${this.options.url.replace(/\/$/, '')}/api/embed`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                model: this.options.model,
+                input,
+                keep_alive: this.options.keepAlive ?? '5m',
+                truncate: true,
+              }),
+              signal: AbortSignal.any(
+                [
+                  signal,
+                  coordinatorSignal,
+                  AbortSignal.timeout(this.#timeoutMs),
+                ].filter((value): value is AbortSignal => value !== undefined),
+              ),
+            },
+          );
+          if (!response.ok) {
+            const detail = (await response.text())
+              .replaceAll(/\s+/g, ' ')
+              .trim()
+              .slice(0, 500);
+            throw new Error(
+              `Ollama embeddings returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+            );
+          }
+          return embeddingResponseSchema.parse(await response.json());
+        },
+        undefined,
+        this.options.tracer,
       );
-      if (!response.ok) {
-        const detail = (await response.text())
-          .replaceAll(/\s+/g, ' ')
-          .trim()
-          .slice(0, 500);
-        throw new Error(
-          `Ollama embeddings returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
-        );
-      }
-      return embeddingResponseSchema.parse(await response.json());
-    };
     const payload = this.options.coordinator
       ? await this.options.coordinator.run(
           {
@@ -434,6 +457,8 @@ type StructuredGenerationOptions = {
   diagnosticLabel?: string;
   temperature?: number;
   onAttempt?: (attempt: StructuredAttemptDiagnostic) => void;
+  correlationId?: string;
+  jobId?: string;
 };
 
 const unknownRecord = (value: unknown): Record<string, unknown> =>
@@ -681,6 +706,10 @@ export class OllamaProvider implements Analyzer {
           stockJsonSchema,
           stockAnalysisSchema,
           signal,
+          {
+            correlationId: `${kind}:${item.source}:${item.externalId}`,
+            jobId: item.externalId,
+          },
         );
         return {
           status: 'SUCCESS',
@@ -696,6 +725,8 @@ export class OllamaProvider implements Analyzer {
           signal,
           {
             normalize: (value) => normalizeNewsOutput(value, item.title),
+            correlationId: `${kind}:${item.source}:${item.externalId}`,
+            jobId: item.externalId,
           },
         );
         return {
@@ -711,6 +742,8 @@ export class OllamaProvider implements Analyzer {
         signal,
         {
           normalize: normalizePublicationOutput,
+          correlationId: `${kind}:${item.source}:${item.externalId}`,
+          jobId: item.externalId,
         },
       );
       return {
@@ -757,6 +790,9 @@ export class OllamaProvider implements Analyzer {
     let previousWasTruncated = false;
     const configuredNumPredict =
       generation.numPredict ?? this.options.numPredict ?? 768;
+    const correlationId =
+      generation.correlationId ?? this.options.correlationId;
+    const jobId = generation.jobId ?? this.options.jobId;
 
     const attempts = Math.max(
       1,
@@ -823,46 +859,68 @@ export class OllamaProvider implements Analyzer {
           (sum, message) => sum + message.content.length,
           0,
         );
-        const execute = async (coordinatorSignal?: AbortSignal) => {
-          const response = await this.#fetch(
-            `${this.options.url.replace(/\/$/, '')}/api/chat`,
+        const execute = async (coordinatorSignal?: AbortSignal) =>
+          traceAiOperation(
             {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                model: this.options.model,
-                stream: false,
-                keep_alive: this.options.keepAlive ?? '5m',
-                think: this.options.think ?? false,
-                format,
-                messages,
-                options: {
-                  temperature: generation.temperature ?? 0.1,
-                  num_ctx: this.options.numCtx ?? 4096,
-                  num_predict: numPredict,
-                },
-              }),
-              signal: AbortSignal.any(
-                [
-                  signal,
-                  coordinatorSignal,
-                  AbortSignal.timeout(this.#timeoutMs),
-                ].filter((value): value is AbortSignal => value !== undefined),
-              ),
+              provider: 'ollama',
+              model: this.options.model,
+              operation: 'chat',
+              caller: this.options.caller ?? 'unknown',
+              ...(correlationId ? { correlationId } : {}),
+              ...(jobId ? { jobId } : {}),
             },
-          );
+            async () => {
+              const response = await this.#fetch(
+                `${this.options.url.replace(/\/$/, '')}/api/chat`,
+                {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                    model: this.options.model,
+                    stream: false,
+                    keep_alive: this.options.keepAlive ?? '5m',
+                    think: this.options.think ?? false,
+                    format,
+                    messages,
+                    options: {
+                      temperature: generation.temperature ?? 0.1,
+                      num_ctx: this.options.numCtx ?? 4096,
+                      num_predict: numPredict,
+                    },
+                  }),
+                  signal: AbortSignal.any(
+                    [
+                      signal,
+                      coordinatorSignal,
+                      AbortSignal.timeout(this.#timeoutMs),
+                    ].filter(
+                      (value): value is AbortSignal => value !== undefined,
+                    ),
+                  ),
+                },
+              );
 
-          if (!response.ok) {
-            const detail = (await response.text())
-              .replaceAll(/\s+/g, ' ')
-              .trim()
-              .slice(0, 500);
-            throw new Error(
-              `Ollama returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
-            );
-          }
-          return responseSchema.parse(await response.json());
-        };
+              if (!response.ok) {
+                const detail = (await response.text())
+                  .replaceAll(/\s+/g, ' ')
+                  .trim()
+                  .slice(0, 500);
+                throw new Error(
+                  `Ollama returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+                );
+              }
+              return responseSchema.parse(await response.json());
+            },
+            (payload) => ({
+              ...(payload.prompt_eval_count === undefined
+                ? {}
+                : { inputTokens: payload.prompt_eval_count }),
+              ...(payload.eval_count === undefined
+                ? {}
+                : { outputTokens: payload.eval_count }),
+            }),
+            this.options.tracer,
+          );
         const payload = this.options.coordinator
           ? await this.options.coordinator.run(
               {

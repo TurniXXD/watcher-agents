@@ -40,6 +40,18 @@ const schema = z.object({
     .max(3600)
     .default(300),
   MAINTENANCE_SELF_REVIEW_ENABLED: z.stringbool().default(false),
+  MAINTENANCE_SECURITY_INTELLIGENCE_ENABLED: z.stringbool().default(true),
+  MAINTENANCE_SECURITY_ALERT_MIN_SCORE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(70),
+  MAINTENANCE_TECHNOLOGY_WATCHLIST_JSON: z.string().default(''),
+  NVD_API_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(1).optional(),
+  ),
   MAINTENANCE_CHANGELOG_PATH: z
     .string()
     .default('/app/docs/maintenance-changelog.md'),

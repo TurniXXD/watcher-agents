@@ -24,7 +24,11 @@ describe('MaintenanceScheduler', () => {
   it('holds the database-backed scheduler lease while checking and running', async () => {
     const now = new Date('2026-10-12T06:00:00.000Z');
     const latestRun = vi.fn().mockResolvedValue(null);
-    const run = vi.fn().mockResolvedValue({ findings: [], runId: 'run-1' });
+    const run = vi.fn().mockResolvedValue({
+      findings: [],
+      securityReportItems: [],
+      runId: 'run-1',
+    });
     const onReport = vi.fn().mockResolvedValue(undefined);
     const withExclusiveLease = vi.fn(
       async <T>(_resource: string, task: () => Promise<T>) => task(),
@@ -46,7 +50,7 @@ describe('MaintenanceScheduler', () => {
       20 * 60_000,
     );
     expect(run).toHaveBeenCalledWith('DAILY', 24 * 7, now);
-    expect(onReport).toHaveBeenCalledWith('DAILY', [], 'run-1');
+    expect(onReport).toHaveBeenCalledWith('DAILY', [], 'run-1', []);
   });
 
   it('serializes competing instances and emits one daily report', async () => {
@@ -67,7 +71,11 @@ describe('MaintenanceScheduler', () => {
     });
     const run = vi.fn(async (type: string) => {
       latestFinishedAt.set(type, now);
-      return { findings: [], runId: `${type.toLowerCase()}-run` };
+      return {
+        findings: [],
+        securityReportItems: [],
+        runId: `${type.toLowerCase()}-run`,
+      };
     });
     const onReport = vi.fn().mockResolvedValue(undefined);
     const createScheduler = () =>

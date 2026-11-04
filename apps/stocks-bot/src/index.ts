@@ -5,6 +5,7 @@ import {
   createLogger,
   errorMessage,
 } from '@watcher/core';
+import { initializeOpenLitFromEnvironment } from '@watcher/observability';
 import {
   CompanyUniverseManager,
   InProcessEventBus,
@@ -60,6 +61,7 @@ import {
   publishStockBriefingEvents,
 } from './briefing-publisher.js';
 
+initializeOpenLitFromEnvironment('stocks-bot');
 const logger = createLogger('stocks-bot', env.LOG_LEVEL);
 const allowedUserIds = parseAllowedUserIds(env.TELEGRAM_ALLOWED_USER_IDS);
 if (

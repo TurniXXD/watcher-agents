@@ -5,10 +5,11 @@ description: Deterministic health, quality, release, and host/Ollama capacity mo
 
 ## Overview
 
-Maintenance Agent evaluates source health, run quality, deployment updates, and
-host/Ollama capacity. Host inspection is read-only through `/proc` and `/sys`; it
-does not require the Docker socket or privileged mode. It sends cooldown-aware
-alerts and recovery messages.
+Maintenance Agent evaluates source health, run quality, deployment updates,
+host/Ollama capacity, confirmed Trivy findings, and upstream security
+intelligence. Host inspection is read-only through `/proc` and `/sys`; neither
+the agent nor the scanner receives the Docker socket. It sends cooldown-aware,
+deduplicated alerts and recovery messages.
 
 ## Commands
 
@@ -55,19 +56,67 @@ output finding requires direct feedback that repeated content reached a user.
 When a later evaluation no longer supports a deterministic finding, the agent
 resolves it before reopening only findings backed by current evidence.
 
+### Security intelligence flow
+
+<Mermaid
+  label="Security scanning, enrichment, and reporting flow"
+  chart={`flowchart LR
+    A["Hourly/on-deploy workflow"] --> B["Pinned Trivy container"]
+    B --> C["Read-only lockfiles/manifests"]
+    B --> D["Immutable GHCR digest"]
+    C --> E["Authenticated loopback ingestion"]
+    D --> E
+    F["Daily/manual scheduler"] --> G["OSV package + NVD CPE watch"]
+    E --> H["Confirmed environment findings"]
+    G --> I["Verification-required advisories"]
+    H --> J["EPSS + CISA KEV enrichment"]
+    I --> J
+    J --> K["Existing findings/recommendations tables"]
+    K --> L["Immediate, daily, weekly outbox delivery"]
+    L -.-> M["No update, restart, or shell execution"]`}
+/>
+
+Trivy normalizes Linux packages, npm dependencies, Go modules, Rust crates, and
+supported misconfiguration checks. A successful complete scan moves absent
+confirmed fingerprints to RESOLVED; rediscovery becomes RESURFACED. Technology
+watch uses structured OSV package identities or NVD CPEs, never keyword
+matching, and never claims deployment impact without installed-version evidence.
+Cloudflare/Vercel managed status incidents remain provider-managed rather than
+customer-patchable findings.
+
+FIRST EPSS and CISA KEV enrich CVEs independently. Missing data stays
+unavailable. Immediate alerts apply only to NEW/RESURFACED confirmed findings;
+CRITICAL and CISA KEV always alert, while other findings use the configurable
+risk threshold. Daily reports visibly separate confirmed impact from watch-only
+advisories.
+
 ## Configuration
 
-| Variable group    | Variables and purpose                                                                                                                                                                                                                                                                                                   |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Required          | `DATABASE_URL`, `MAINTENANCE_API_TOKEN`, `MAINTENANCE_TELEGRAM_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`.                                                                                                                                                                                                                     |
-| Runtime HTTP      | `MAINTENANCE_ENABLED`, `MAINTENANCE_HOST`, `MAINTENANCE_PORT`.                                                                                                                                                                                                                                                          |
-| Scheduler         | `MAINTENANCE_SCHEDULER_INTERVAL_MS`, `MAINTENANCE_HEALTH_INTERVAL_MINUTES`, `MAINTENANCE_ANALYSIS_INTERVAL_MINUTES`, `MAINTENANCE_WEEKLY_ANALYSIS_ENABLED`, `MAINTENANCE_WEEKLY_INTERVAL_MINUTES`, `MAINTENANCE_JITTER_MAX_SECONDS`.                                                                                    |
-| Review/release    | `MAINTENANCE_SELF_REVIEW_ENABLED`, `MAINTENANCE_CHANGELOG_PATH`, `MAINTENANCE_RELEASE_PATH`.                                                                                                                                                                                                                            |
-| Resource sampling | `MAINTENANCE_RESOURCE_MONITOR_ENABLED`, `MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS`, `MAINTENANCE_CPU_WARNING_PERCENT`, `MAINTENANCE_MEMORY_WARNING_PERCENT`, `MAINTENANCE_GPU_WARNING_PERCENT`, `MAINTENANCE_CAPACITY_SUSTAINED_SAMPLES`, `MAINTENANCE_CAPACITY_ALERT_COOLDOWN_MINUTES`, `MAINTENANCE_NVIDIA_SMI_PATH`. |
-| Service status    | `MAINTENANCE_AGENT_STATUS_STALE_MINUTES`, `MAINTENANCE_AGENT_STATUS_ERROR_LOOKBACK_MINUTES`.                                                                                                                                                                                                                            |
-| Ollama endpoint   | `OLLAMA_URL`, `OLLAMA_REQUEST_TIMEOUT_SECONDS`.                                                                                                                                                                                                                                                                         |
-| Ollama capacity   | `OLLAMA_CPU_ALERT_PERCENT`, `OLLAMA_HIGH_USAGE_DURATION_SECONDS`, `OLLAMA_CPU_GPU_IMBALANCE_ENABLED`, `OLLAMA_CPU_GPU_IMBALANCE_DURATION_SECONDS`, `OLLAMA_CPU_GPU_SHARE_MARGIN_PERCENT`, `OLLAMA_GPU_LOW_UTIL_PERCENT`, `OLLAMA_QUEUE_ALERT_SIZE`, `OLLAMA_QUEUE_WAIT_ALERT_SECONDS`, `OLLAMA_ALERT_COOLDOWN_SECONDS`. |
-| Logging           | `LOG_LEVEL`.                                                                                                                                                                                                                                                                                                            |
+| Variable group        | Variables and purpose                                                                                                                                                                                                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Required              | `DATABASE_URL`, `MAINTENANCE_API_TOKEN`, `MAINTENANCE_TELEGRAM_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`.                                                                                                                                                                                                                     |
+| Runtime HTTP          | `MAINTENANCE_ENABLED`, `MAINTENANCE_HOST`, `MAINTENANCE_PORT`.                                                                                                                                                                                                                                                          |
+| Scheduler             | `MAINTENANCE_SCHEDULER_INTERVAL_MS`, `MAINTENANCE_HEALTH_INTERVAL_MINUTES`, `MAINTENANCE_ANALYSIS_INTERVAL_MINUTES`, `MAINTENANCE_WEEKLY_ANALYSIS_ENABLED`, `MAINTENANCE_WEEKLY_INTERVAL_MINUTES`, `MAINTENANCE_JITTER_MAX_SECONDS`.                                                                                    |
+| Review/release        | `MAINTENANCE_SELF_REVIEW_ENABLED`, `MAINTENANCE_CHANGELOG_PATH`, `MAINTENANCE_RELEASE_PATH`.                                                                                                                                                                                                                            |
+| Security intelligence | `MAINTENANCE_SECURITY_INTELLIGENCE_ENABLED`, `MAINTENANCE_SECURITY_ALERT_MIN_SCORE`, `MAINTENANCE_TECHNOLOGY_WATCHLIST_JSON`, optional `NVD_API_KEY`.                                                                                                                                                                   |
+| Resource sampling     | `MAINTENANCE_RESOURCE_MONITOR_ENABLED`, `MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS`, `MAINTENANCE_CPU_WARNING_PERCENT`, `MAINTENANCE_MEMORY_WARNING_PERCENT`, `MAINTENANCE_GPU_WARNING_PERCENT`, `MAINTENANCE_CAPACITY_SUSTAINED_SAMPLES`, `MAINTENANCE_CAPACITY_ALERT_COOLDOWN_MINUTES`, `MAINTENANCE_NVIDIA_SMI_PATH`. |
+| Service status        | `MAINTENANCE_AGENT_STATUS_STALE_MINUTES`, `MAINTENANCE_AGENT_STATUS_ERROR_LOOKBACK_MINUTES`.                                                                                                                                                                                                                            |
+| Ollama endpoint       | `OLLAMA_URL`, `OLLAMA_REQUEST_TIMEOUT_SECONDS`.                                                                                                                                                                                                                                                                         |
+| Ollama capacity       | `OLLAMA_CPU_ALERT_PERCENT`, `OLLAMA_HIGH_USAGE_DURATION_SECONDS`, `OLLAMA_CPU_GPU_IMBALANCE_ENABLED`, `OLLAMA_CPU_GPU_IMBALANCE_DURATION_SECONDS`, `OLLAMA_CPU_GPU_SHARE_MARGIN_PERCENT`, `OLLAMA_GPU_LOW_UTIL_PERCENT`, `OLLAMA_QUEUE_ALERT_SIZE`, `OLLAMA_QUEUE_WAIT_ALERT_SECONDS`, `OLLAMA_ALERT_COOLDOWN_SECONDS`. |
+| Logging               | `LOG_LEVEL`.                                                                                                                                                                                                                                                                                                            |
+
+The scanner workflow's non-secret
+`SECURITY_SCAN_MIN_INTERVAL_MINUTES` defaults to `360`. Its hourly wakeup scans
+immediately when a lockfile hash or immutable image digest changes, otherwise it
+waits until that minimum interval. The optional watchlist JSON replaces the
+built-in list and must use `OSV_PACKAGE`, `NVD_CPE`, or provider-managed
+`OFFICIAL_PROVIDER` entries with the corresponding structured identifier.
+
+AI-enabled bots accept `OPENLIT_ENABLED`, `OPENLIT_ENVIRONMENT`,
+`OPENLIT_SAMPLING_RATIO`, `OTEL_EXPORTER_OTLP_ENDPOINT`, and optional
+`OTEL_EXPORTER_OTLP_HEADERS`. OpenLIT is disabled by default and requires an
+external endpoint when enabled. Prompts/outputs are never captured; retention
+and further metadata redaction are configured in that external backend.
 
 ## Execution and scheduling
 
@@ -88,6 +137,9 @@ hours, daily analysis to 24 hours, and weekly analysis to seven days.
 | `/proc`, `/sys`, host cgroups              | Read-only CPU, memory, process, and capacity observations.                 |
 | NVIDIA CLI/DRM sysfs                       | Optional GPU utilization and capacity data.                                |
 | Ollama API/runtime metrics                 | Queue, request, CPU/GPU balance, and availability checks.                  |
+| Trivy JSON                                 | Confirmed dependency/image vulnerabilities and misconfigurations.          |
+| OSV, NVD, FIRST EPSS, CISA KEV             | Structured watch advisories and sourced exploitation/risk enrichment.      |
+| External OTLP/OpenLIT backend              | Sampled, content-free Ollama traces; no backend is added to Compose.       |
 | Release and maintenance changelog files    | `/updates` and deployment-version context.                                 |
 | Every runnable Watcher bot/agent           | Readiness and freshness status; no cross-service mutation.                 |
 | Authenticated maintenance API and Telegram | Approval records and private operator reporting.                           |
@@ -104,3 +156,11 @@ hours, daily analysis to 24 hours, and weekly analysis to seven days.
 - A latency regression recommendation requires profiling source and LLM latency
   before increasing concurrency.
 - Verify the release/changelog mounts when update messages are missing.
+- If a Trivy target fails, inspect `watcher-security-scan`; the other target is
+  still attempted and ingested. Verify the remote report directory is mode
+  `0700`, report files are `0600`, and Maintenance listens only on loopback.
+- An NVD/OSV outage is isolated and retried on the next daily/manual evaluation;
+  it must not resolve or downgrade previously stored findings.
+- OpenLIT startup errors usually mean the enabled configuration lacks a valid
+  OTLP endpoint/header. Disable it or correct the external collector; do not
+  enable prompt capture to troubleshoot transport.

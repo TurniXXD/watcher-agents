@@ -6,6 +6,7 @@ import {
   SocialTrendStore,
 } from '@watcher/database';
 import { OllamaProvider } from '@watcher/llm';
+import { initializeOpenLitFromEnvironment } from '@watcher/observability';
 import { NotionClient } from '@watcher/notion';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { createSocialsBot } from './bot.js';
@@ -28,6 +29,7 @@ import {
 } from './trends/sources.js';
 import type { TrendSourceId } from './trends/types.js';
 
+initializeOpenLitFromEnvironment('socials-bot');
 const logger = createLogger('socials-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
 const store = new SocialsStore(database);

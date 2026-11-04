@@ -2,6 +2,7 @@ import type { WatcherLogger } from '@watcher/core';
 import type { MaintenanceStore, ResourceLeaseStore } from '@watcher/database';
 import type { MaintenanceEngine, EvaluationType } from './evaluation/engine.js';
 import type { Finding } from './evaluation/types.js';
+import type { SecurityReportItem } from './security/reporting.js';
 
 type ScheduledType = Exclude<EvaluationType, 'MANUAL'>;
 type ResourceLeases = Pick<ResourceLeaseStore, 'withExclusiveLease'>;
@@ -30,6 +31,7 @@ export class MaintenanceScheduler {
       type: ScheduledType,
       findings: Finding[],
       runId: string,
+      securityReportItems: SecurityReportItem[],
     ) => Promise<void>,
     private readonly logger: WatcherLogger,
   ) {}
@@ -102,7 +104,12 @@ export class MaintenanceScheduler {
       if (!(await this.due(type, interval, now))) continue;
       const result = await this.engine.run(type, lookbackHours, now);
       if (type !== 'HEALTH') {
-        await this.onReport(type, result.findings, result.runId);
+        await this.onReport(
+          type,
+          result.findings,
+          result.runId,
+          result.securityReportItems,
+        );
       }
       return;
     }

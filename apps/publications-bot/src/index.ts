@@ -13,12 +13,14 @@ import {
   WatcherStore,
 } from '@watcher/database';
 import { OllamaProvider } from '@watcher/llm';
+import { initializeOpenLitFromEnvironment } from '@watcher/observability';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { createPublicationsBot } from './bot.js';
 import { env } from './env.js';
 import { createPublicationsRunner } from './watcher.js';
 import { publishMedicalBriefingEvents } from './briefing-publisher.js';
 
+initializeOpenLitFromEnvironment('publications-bot');
 const logger = createLogger('publications-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
 const ollamaCoordinator = new PostgresOllamaCoordinator(database, logger);

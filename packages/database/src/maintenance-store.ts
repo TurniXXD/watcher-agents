@@ -229,6 +229,23 @@ export class MaintenanceStore {
     });
   }
 
+  public listSecurityFindings(agentName = 'maintenance-agent') {
+    return this.db.maintenanceFinding.findMany({
+      where: {
+        agentName,
+        type: {
+          in: [
+            MaintenanceFindingType.SECURITY_VULNERABILITY,
+            MaintenanceFindingType.SECURITY_MISCONFIGURATION,
+            MaintenanceFindingType.TECHNOLOGY_ADVISORY,
+            MaintenanceFindingType.AI_OBSERVABILITY,
+          ],
+        },
+      },
+      orderBy: [{ lastSeenAt: 'desc' }, { id: 'desc' }],
+    });
+  }
+
   public finding(id: string) {
     return this.db.maintenanceFinding.findUnique({
       where: { id },

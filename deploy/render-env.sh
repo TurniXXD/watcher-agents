@@ -31,10 +31,9 @@ https_origin() {
   fi
 }
 
-write_env() {
+append_env() {
   local path="$1"
   shift
-  : >"$path"
 
   while (($#)); do
     local key="$1"
@@ -51,6 +50,13 @@ write_env() {
     printf "%s='%s'\n" "$key" "$escaped" >>"$path"
     shift 2
   done
+}
+
+write_env() {
+  local path="$1"
+  shift
+  : >"$path"
+  append_env "$path" "$@"
 }
 
 for name in \
@@ -595,6 +601,10 @@ write_env "$RUNTIME_DIR/maintenance-agent.env" \
   MAINTENANCE_WEEKLY_INTERVAL_MINUTES "${MAINTENANCE_WEEKLY_INTERVAL_MINUTES:-10080}" \
   MAINTENANCE_JITTER_MAX_SECONDS "${MAINTENANCE_JITTER_MAX_SECONDS:-300}" \
   MAINTENANCE_SELF_REVIEW_ENABLED "${MAINTENANCE_SELF_REVIEW_ENABLED:-false}" \
+  MAINTENANCE_SECURITY_INTELLIGENCE_ENABLED "${MAINTENANCE_SECURITY_INTELLIGENCE_ENABLED:-true}" \
+  MAINTENANCE_SECURITY_ALERT_MIN_SCORE "${MAINTENANCE_SECURITY_ALERT_MIN_SCORE:-70}" \
+  MAINTENANCE_TECHNOLOGY_WATCHLIST_JSON "${MAINTENANCE_TECHNOLOGY_WATCHLIST_JSON:-}" \
+  NVD_API_KEY "${NVD_API_KEY:-}" \
   MAINTENANCE_CHANGELOG_PATH "${MAINTENANCE_CHANGELOG_PATH:-/app/docs/maintenance-changelog.md}" \
   MAINTENANCE_RESOURCE_MONITOR_ENABLED "${MAINTENANCE_RESOURCE_MONITOR_ENABLED:-true}" \
   MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS "${MAINTENANCE_RESOURCE_MONITOR_INTERVAL_MS:-30000}" \
@@ -607,6 +617,23 @@ write_env "$RUNTIME_DIR/maintenance-agent.env" \
   MAINTENANCE_CAPACITY_ALERT_COOLDOWN_MINUTES "${MAINTENANCE_CAPACITY_ALERT_COOLDOWN_MINUTES:-30}" \
   MAINTENANCE_NVIDIA_SMI_PATH "${MAINTENANCE_NVIDIA_SMI_PATH:-nvidia-smi}" \
   LOG_LEVEL "${LOG_LEVEL:-info}"
+
+for ai_env in \
+  stocks-bot \
+  publications-bot \
+  news-bot \
+  briefing-bot \
+  socials-bot \
+  networking-bot \
+  sales-bot \
+  osint-bot; do
+  append_env "$RUNTIME_DIR/$ai_env.env" \
+    OPENLIT_ENABLED "${OPENLIT_ENABLED:-false}" \
+    OPENLIT_ENVIRONMENT "${OPENLIT_ENVIRONMENT:-production}" \
+    OPENLIT_SAMPLING_RATIO "${OPENLIT_SAMPLING_RATIO:-0.1}" \
+    OTEL_EXPORTER_OTLP_ENDPOINT "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" \
+    OTEL_EXPORTER_OTLP_HEADERS "${OTEL_EXPORTER_OTLP_HEADERS:-}"
+done
 
 chmod 600 "$RUNTIME_DIR"/*.env
 echo "Rendered production environment files in $RUNTIME_DIR"

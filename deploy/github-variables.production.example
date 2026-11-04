@@ -4,4 +4,6 @@
 DEPLOY_PATH=/opt/watcher
 DEPLOY_ENV_FILE=/opt/watcher/deploy/runtime/compose.env
 TS_TAG=tag:ci
+# Trivy rechecks unchanged lockfiles/image digests after this interval.
+SECURITY_SCAN_MIN_INTERVAL_MINUTES=360
 

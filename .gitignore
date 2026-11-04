@@ -33,6 +33,9 @@ next-env.d.ts
 backups/
 deploy/runtime/
 deploy/piper-voices/
+deploy/security-reports/
+.security-scan-state/
+.trivy-cache/
 
 # Logs
 *.log

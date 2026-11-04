@@ -6,6 +6,7 @@ import {
   TelegramOutboxStore,
 } from '@watcher/database';
 import { OllamaProvider } from '@watcher/llm';
+import { initializeOpenLitFromEnvironment } from '@watcher/observability';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import { SalesApi } from './api.js';
 import { createSalesBot, salesBotCommands } from './bot.js';
@@ -43,6 +44,7 @@ import {
   type NetworkBotDependencies,
 } from '@watcher/contact-network';
 
+initializeOpenLitFromEnvironment('sales-bot');
 const logger = createLogger('sales-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
 const store = new SalesStore(database);

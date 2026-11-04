@@ -12,6 +12,7 @@ import {
   OAuthCallbackServer,
 } from '@watcher/google-calendar';
 import { OllamaProvider } from '@watcher/llm';
+import { initializeOpenLitFromEnvironment } from '@watcher/observability';
 import { parseAllowedUserIds } from '@watcher/telegram';
 import {
   GoogleSheetsNetworkRepository,
@@ -24,6 +25,7 @@ import { env } from './env.js';
 import { NetworkingScheduler } from './scheduler.js';
 import { NetworkingService } from './service.js';
 
+initializeOpenLitFromEnvironment('networking-bot');
 const logger = createLogger('networking-bot', env.LOG_LEVEL);
 const database = createDatabaseClient(env.DATABASE_URL);
 const store = new SocialsStore(database);

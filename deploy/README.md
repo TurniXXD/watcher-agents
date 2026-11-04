@@ -166,11 +166,12 @@ rm -f /tmp/watcher-production-secrets.env
 
 Add these non-sensitive environment variables in the GitHub UI:
 
-| Variable          | Example                                   |
-| ----------------- | ----------------------------------------- |
-| `DEPLOY_PATH`     | `/opt/watcher`                            |
-| `DEPLOY_ENV_FILE` | `/opt/watcher/deploy/runtime/compose.env` |
-| `TS_TAG`          | `tag:ci`                                  |
+| Variable                             | Example                                   |
+| ------------------------------------ | ----------------------------------------- |
+| `DEPLOY_PATH`                        | `/opt/watcher`                            |
+| `DEPLOY_ENV_FILE`                    | `/opt/watcher/deploy/runtime/compose.env` |
+| `TS_TAG`                             | `tag:ci`                                  |
+| `SECURITY_SCAN_MIN_INTERVAL_MINUTES` | `360`                                     |
 
 Add these environment secrets:
 
@@ -187,6 +188,43 @@ Add these environment secrets:
 | `TS_OAUTH_SECRET`    | Tailscale OAuth client secret            |
 
 The ready-to-copy names also live in `github-variables.production.example` and `github-secrets.production.example`.
+
+## Security scanning and ingestion
+
+`watcher-security-scan` runs hourly, after a successful production deployment,
+or on demand. It resolves the release tag to an immutable GHCR digest, then runs
+the pinned Trivy container as two independent targets: project manifests and
+lockfiles mounted read-only, and the remote registry image. The scanner has no
+Docker socket mount, drops all capabilities, and stores only Trivy cache plus
+digest/lockfile-hash state. Unchanged targets are skipped until
+`SECURITY_SCAN_MIN_INTERVAL_MINUTES` elapses; a changed digest or manifest hash
+scans immediately.
+
+Successful target reports are sent over the existing Tailscale/SSH deployment
+path to mode-`0600` files under `deploy/security-reports`. On the VPS,
+`deploy/ingest-security-report.sh` reads the Maintenance bearer token from the
+server-managed runtime file and posts to the loopback-only Maintenance API. The
+token is never uploaded to GitHub, included in a command argument, or printed.
+If one Trivy target fails, the other still runs and any successful report is
+ingested before the workflow fails. The Maintenance Agent never receives the
+Docker socket and never performs an update or restart.
+
+For private GHCR images, the workflow's repository-scoped `GITHUB_TOKEN` is
+mounted read-only into the Trivy container as Docker client configuration.
+Keep the production environment approval and restricted `tag:ci` ACL described
+above. Troubleshoot missing reports in the Action log first, then verify
+`deploy/security-reports`, the loopback `127.0.0.1:4030` listener, and the
+mode-`0600` Maintenance runtime file on the VPS.
+
+OpenLIT is SDK-only in this stack. Set `OPENLIT_ENABLED=true` together with an
+operator-managed `OTEL_EXPORTER_OTLP_ENDPOINT`; optional authentication belongs
+in `OTEL_EXPORTER_OTLP_HEADERS`. The renderer adds these values only to the eight
+AI-enabled bot env files. Prompt/output capture is disabled and only model,
+provider, caller, duration, result state, and provider-reported token counts are
+exported. Configure trace retention and any additional metadata redaction in
+the external collector/backend. Sampling defaults to 10%. No OpenLIT backend is
+added to Compose because it would add an unneeded stateful service and resource
+load to the single-server deployment.
 
 ## Server runtime configuration
 
