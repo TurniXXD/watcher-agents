@@ -157,8 +157,10 @@ hours, daily analysis to 24 hours, and weekly analysis to seven days.
   before increasing concurrency.
 - Verify the release/changelog mounts when update messages are missing.
 - If a Trivy target fails, inspect `watcher-security-scan`; the other target is
-  still attempted and ingested. Verify the remote report directory is mode
-  `0700`, report files are `0600`, and Maintenance listens only on loopback.
+  still attempted and ingested. The scanner runs as the runner UID/GID and its
+  cache state uses explicit write mode even for the `workflow_run` trigger.
+  Verify the remote report directory is mode `0700`, report files are `0600`,
+  and Maintenance listens only on loopback.
 - An NVD/OSV outage is isolated and retried on the next daily/manual evaluation;
   it must not resolve or downgrade previously stored findings.
 - OpenLIT startup errors usually mean the enabled configuration lacks a valid

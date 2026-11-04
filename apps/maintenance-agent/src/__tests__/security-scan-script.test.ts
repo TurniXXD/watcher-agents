@@ -16,8 +16,10 @@ describe('least-privilege Trivy scan script', () => {
     const output = join(root, 'output');
     const state = join(root, 'state');
     const cache = join(root, 'cache');
+    const dockerConfig = join(root, 'docker-config.json');
     await Promise.all([mkdir(bin), mkdir(output), mkdir(state), mkdir(cache)]);
     await writeFile(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
+    await writeFile(dockerConfig, '{}\n', { mode: 0o600 });
     await writeFile(
       join(bin, 'docker'),
       `#!/usr/bin/env bash
@@ -40,6 +42,7 @@ done
       SECURITY_SCAN_OUTPUT_DIR: output,
       SECURITY_SCAN_STATE_DIR: state,
       TRIVY_CACHE_DIR: cache,
+      SECURITY_SCAN_DOCKER_CONFIG: dockerConfig,
       SECURITY_SCAN_IMAGE:
         'ghcr.io/acme/watcher@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       SECURITY_SCAN_MIN_INTERVAL_MINUTES: '360',
@@ -53,6 +56,17 @@ done
     const calls = log.trim().split('\n');
     expect(calls).toHaveLength(2);
     expect(calls[0]).toContain(`${root}:/workspace:ro`);
+    expect(calls[0]!.indexOf(`${root}:/workspace:ro`)).toBeLessThan(
+      calls[0]!.indexOf(
+        'aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c',
+      ),
+    );
+    expect(log).toContain(`--user ${process.getuid!()}:${process.getgid!()}`);
+    expect(log).toContain(`${cache}:/cache`);
+    expect(log).toContain('--cache-dir /cache');
+    expect(log).toContain('-e DOCKER_CONFIG=/docker-config');
+    expect(log).toContain(`${dockerConfig}:/docker-config/config.json:ro`);
+    expect(log).not.toContain('/root/.docker/config.json');
     expect(calls[0]).toContain('fs --scanners vuln,misconfig');
     expect(calls[1]).toContain('--image-src remote');
     expect(calls[1]).toContain(environment.SECURITY_SCAN_IMAGE);

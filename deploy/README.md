@@ -195,8 +195,12 @@ The ready-to-copy names also live in `github-variables.production.example` and `
 or on demand. It resolves the release tag to an immutable GHCR digest, then runs
 the pinned Trivy container as two independent targets: project manifests and
 lockfiles mounted read-only, and the remote registry image. The scanner has no
-Docker socket mount, drops all capabilities, and stores only Trivy cache plus
-digest/lockfile-hash state. Unchanged targets are skipped until
+Docker socket mount, drops all capabilities, runs as the GitHub runner's
+UID/GID so its private output directories remain writable, and stores only
+Trivy cache plus digest/lockfile-hash state. The job explicitly grants cache
+write mode because `workflow_run` events are otherwise restore-only; it still
+checks out only the immutable release SHA recorded by the production VPS.
+Unchanged targets are skipped until
 `SECURITY_SCAN_MIN_INTERVAL_MINUTES` elapses; a changed digest or manifest hash
 scans immediately.
 

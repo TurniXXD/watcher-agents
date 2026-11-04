@@ -29,6 +29,9 @@ jobs:
         github.event.workflow_run.conclusion == 'success'
       }}
     runs-on: ubuntu-latest
+    # workflow_run is cache-read-only by default; this job checks out only the
+    # immutable release SHA already recorded by the production VPS.
+    cache-mode: write
     environment: production
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}

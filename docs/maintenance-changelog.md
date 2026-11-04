@@ -2,6 +2,10 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-11-05 — Reliable isolated Trivy execution
+
+- The security scanner now passes Docker mounts before the pinned Trivy image, runs with the GitHub runner UID/GID, uses writable non-root cache and registry-config paths, and explicitly persists successful scan state for trusted deployed-release runs.
+
 ## 2026-11-04 — Security intelligence and content-free AI tracing
 
 - Maintenance Agent now ingests least-privilege Trivy scans of immutable images and dependency manifests, tracks confirmed security finding lifecycles, and keeps upstream technology advisories explicitly separate from verified deployment impact.

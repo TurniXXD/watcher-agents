@@ -97,29 +97,32 @@ record_report() {
 }
 
 docker_mounts=(
-  -v "$TRIVY_CACHE_DIR:/root/.cache/trivy"
+  -v "$TRIVY_CACHE_DIR:/cache"
   -v "$SECURITY_SCAN_OUTPUT_DIR:/output"
 )
 if [[ -n "${SECURITY_SCAN_DOCKER_CONFIG:-}" ]]; then
   docker_mounts+=(
-    -v "$SECURITY_SCAN_DOCKER_CONFIG:/root/.docker/config.json:ro"
+    -e DOCKER_CONFIG=/docker-config
+    -v "$SECURITY_SCAN_DOCKER_CONFIG:/docker-config/config.json:ro"
   )
 fi
 
-trivy=(
+docker_run=(
   docker run --rm
   --security-opt no-new-privileges
   --cap-drop ALL
+  --user "$(id -u):$(id -g)"
   "${docker_mounts[@]}"
-  "$TRIVY_IMAGE"
 )
 
 scan_failures=0
 
 dependency_key="$(hash_dependencies)"
 if should_scan dependencies "$dependency_key"; then
-  if "${trivy[@]}" \
+  if "${docker_run[@]}" \
       -v "$WATCHER_ROOT:/workspace:ro" \
+      "$TRIVY_IMAGE" \
+      --cache-dir /cache \
       fs \
       --scanners vuln,misconfig \
       --format json \
@@ -137,7 +140,9 @@ fi
 if [[ -n "$SECURITY_SCAN_IMAGE" ]]; then
   image_key="${SECURITY_SCAN_IMAGE##*@}"
   if should_scan image "$image_key"; then
-    if "${trivy[@]}" \
+    if "${docker_run[@]}" \
+        "$TRIVY_IMAGE" \
+        --cache-dir /cache \
         image \
         --image-src remote \
         --scanners vuln,misconfig \
