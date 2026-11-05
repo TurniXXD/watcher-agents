@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   immediateSecurityAlert,
   prioritizeSecurityRisk,
+  renderCriticalSecurityDigest,
   renderDailySecurityDigest,
   renderWeeklySecurityReport,
-  securityAlertDeduplicationKey,
+  securityAlertBatchDeduplicationKey,
   type SecurityReportItem,
 } from '../security/reporting.js';
 
@@ -144,6 +145,120 @@ describe('security reporting and alert policy', () => {
     expect(digest.length).toBeLessThanOrEqual(4_096);
   });
 
+  it('groups duplicate package findings into one CVE-centric immediate report', () => {
+    const digest = renderCriticalSecurityDigest([
+      confirmed,
+      {
+        ...confirmed,
+        fingerprint: 'confirmed-2',
+        subject: 'openssl 3.5.0-r0',
+      },
+    ]);
+
+    expect(digest).toContain('1 urgent CVE');
+    expect(digest.match(/CVE-2026-1000/gu)).toHaveLength(1);
+    expect(digest).toContain('Affected: libssl3 3.5.0-r0; openssl 3.5.0-r0');
+    expect(digest.length).toBeLessThanOrEqual(4_096);
+  });
+
+  it('uses the worst evidence found across every package in a CVE group', () => {
+    const digest = renderCriticalSecurityDigest([
+      {
+        ...confirmed,
+        severity: 'HIGH',
+        cvss: [{ source: 'vendor', version: '3.1', score: 7.5 }],
+      },
+      {
+        fingerprint: 'confirmed-2',
+        category: 'CONFIRMED_ENVIRONMENT',
+        lifecycle: 'NEW',
+        severity: 'CRITICAL',
+        title: confirmed.title,
+        identifiers: confirmed.identifiers,
+        subject: 'openssl 3.5.0-r0',
+        fixedVersions: [],
+        cvss: [{ source: 'nvd', version: '3.1', score: 9.8 }],
+      },
+    ]);
+
+    expect(digest).toContain('CVE-2026-1000 · CRITICAL · CVSS 9.8');
+    expect(digest).toContain('EPSS 91.0% · CISA KEV');
+  });
+
+  it('marks omitted urgent findings instead of silently truncating a scan', () => {
+    const digest = renderCriticalSecurityDigest(
+      Array.from({ length: 12 }, (_, index) => ({
+        ...confirmed,
+        fingerprint: `confirmed-${index}`,
+        identifiers: [`CVE-2026-${1000 + index}`],
+        title: `Critical vulnerability ${index} ${'x'.repeat(120)}`,
+        subject: `package-${index} 1.0.0`,
+      })),
+      700,
+    );
+
+    expect(digest).toMatch(/Additional \d+ urgent findings omitted/u);
+    expect(digest).toContain('No update or restart was applied automatically.');
+    expect(digest.match(/^CVE-/gmu)).toHaveLength(
+      digest.match(/^Fix: .+$/gmu)?.length ?? 0,
+    );
+    expect(digest.length).toBeLessThanOrEqual(700);
+  });
+
+  it('keeps sparse critical CVEs ahead of scored high findings when compacting', () => {
+    const sparseCritical: SecurityReportItem = {
+      fingerprint: 'sparse-critical',
+      category: 'CONFIRMED_ENVIRONMENT',
+      lifecycle: 'NEW',
+      severity: 'CRITICAL',
+      title: 'Sparse critical finding',
+      identifiers: ['CVE-2026-9999'],
+      subject: 'critical-package 1.0.0',
+      fixedVersions: [],
+      cvss: [],
+    };
+    const digest = renderCriticalSecurityDigest(
+      [
+        ...Array.from({ length: 8 }, (_, index): SecurityReportItem => ({
+          fingerprint: `high-${index}`,
+          category: 'CONFIRMED_ENVIRONMENT',
+          lifecycle: 'NEW',
+          severity: 'HIGH',
+          identifiers: [`CVE-2026-${2000 + index}`],
+          title: `High scored finding ${index} ${'x'.repeat(120)}`,
+          subject: `high-package-${index} 1.0.0`,
+          fixedVersions: ['1.1.0'],
+          cvss: [{ source: 'nvd', version: '3.1', score: 8.8 }],
+          epss: { probability: 0.9, percentile: 0.99, source: 'FIRST' },
+          exposure: 'INTERNET',
+          businessCriticality: 'HIGH',
+        })),
+        sparseCritical,
+      ],
+      700,
+    );
+
+    expect(digest).toContain('CVE-2026-9999 · CRITICAL');
+    expect(digest).toMatch(/Additional \d+ urgent findings omitted/u);
+  });
+
+  it('groups duplicate package findings in the daily CVE report', () => {
+    const digest = renderDailySecurityDigest(
+      [
+        confirmed,
+        {
+          ...confirmed,
+          fingerprint: 'confirmed-2',
+          subject: 'openssl 3.5.0-r0',
+        },
+      ],
+      { generatedAt: new Date('2026-11-04T12:00:00Z'), maxLength: 4_096 },
+    );
+
+    expect(digest.match(/CVE-2026-1000/gu)).toHaveLength(1);
+    expect(digest).toContain('Affected: libssl3 3.5.0-r0; openssl 3.5.0-r0');
+  });
+
   it('keeps the highest-risk unresolved finding first when a digest is bounded', () => {
     const digest = renderDailySecurityDigest(
       [
@@ -183,12 +298,26 @@ describe('security reporting and alert policy', () => {
     );
   });
 
-  it('deduplicates unchanged alerts while allowing a later resurfaced alert', () => {
-    const first = securityAlertDeduplicationKey(confirmed, 123);
-    expect(securityAlertDeduplicationKey(confirmed, 123)).toBe(first);
+  it('deduplicates one alert batch per scan while allowing a later scan', () => {
+    const first = securityAlertBatchDeduplicationKey(
+      '["watcher","production-image","scan-1"]',
+      123,
+    );
     expect(
-      securityAlertDeduplicationKey(
-        { ...confirmed, lifecycle: 'RESURFACED' },
+      securityAlertBatchDeduplicationKey(
+        '["watcher","production-image","scan-1"]',
+        123,
+      ),
+    ).toBe(first);
+    expect(
+      securityAlertBatchDeduplicationKey(
+        '["watcher","production-image","scan-2"]',
+        123,
+      ),
+    ).not.toBe(first);
+    expect(
+      securityAlertBatchDeduplicationKey(
+        '["watcher","dependencies","scan-1"]',
         123,
       ),
     ).not.toBe(first);

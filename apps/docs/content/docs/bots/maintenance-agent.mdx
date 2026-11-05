@@ -72,7 +72,7 @@ resolves it before reopening only findings backed by current evidence.
     H --> J["EPSS + CISA KEV enrichment"]
     I --> J
     J --> K["Existing findings/recommendations tables"]
-    K --> L["Immediate, daily, weekly outbox delivery"]
+    K --> L["One scan alert, daily, or weekly outbox delivery"]
     L -.-> M["No update, restart, or shell execution"]`}
 />
 
@@ -91,8 +91,11 @@ limit.
 FIRST EPSS and CISA KEV enrich CVEs independently. Missing data stays
 unavailable. Immediate alerts apply only to NEW/RESURFACED confirmed findings;
 CRITICAL and CISA KEV always alert, while other findings use the configurable
-risk threshold. Daily reports visibly separate confirmed impact from watch-only
-advisories.
+risk threshold. All urgent findings from one scan are combined into one
+CVE-centric Telegram message, and repeated instances of the same CVE are grouped
+under up to six affected packages plus an omitted package count. The daily
+security digest is capped at one Telegram message and visibly separates
+confirmed impact from watch-only advisories.
 
 ## Configuration
 
@@ -151,7 +154,9 @@ hours, daily analysis to 24 hours, and weekly analysis to seven days.
 ## Troubleshooting
 
 - Duplicate reports indicate delivery/idempotency state, not necessarily two
-  analyses; inspect outbox keys and scheduler ownership.
+  analyses; inspect the per-scan outbox key and scheduler ownership. Multiple
+  packages carrying one CVE should appear in one grouped entry, not as separate
+  immediate messages.
 - High source duplicate counters are expected for periodic snapshot providers
   when unchanged records are filtered before analysis or delivery.
 - A stale-source finding means successful source requests have stopped relative

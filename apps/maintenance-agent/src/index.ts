@@ -10,7 +10,7 @@ import {
   TelegramOutboxStore,
   createDatabaseClient,
 } from '@watcher/database';
-import { parseAllowedUserIds, splitTelegramMessage } from '@watcher/telegram';
+import { parseAllowedUserIds } from '@watcher/telegram';
 import { createMaintenanceApi } from './api.js';
 import { AgentStatusService } from './agent-status.js';
 import { env } from './env.js';
@@ -29,10 +29,10 @@ import { defaultTechnologyWatchlist } from './security/default-watchlist.js';
 import { NvdClient } from './security/nvd.js';
 import { OsvClient } from './security/osv.js';
 import {
-  renderCriticalSecurityAlert,
+  renderCriticalSecurityDigest,
   renderDailySecurityDigest,
   renderWeeklySecurityReport,
-  securityAlertDeduplicationKey,
+  securityAlertBatchDeduplicationKey,
 } from './security/reporting.js';
 import { TechnologyAdvisorySource } from './security/source.js';
 import { TechnologyWatchService } from './security/technology-watch.js';
@@ -61,12 +61,15 @@ const securityEnricher = new SecurityEnricher();
 const security = new SecurityIntelligenceService(store, {
   enricher: securityEnricher,
   immediateAlertMinimumScore: env.MAINTENANCE_SECURITY_ALERT_MIN_SCORE,
-  onImmediateAlert: async (item) => {
-    const body = renderCriticalSecurityAlert(item);
+  onImmediateAlerts: async (items, batchIdentity) => {
+    const body = renderCriticalSecurityDigest(items);
     await telegramOutbox.enqueueMany(
       [...allowedIds].map((chatId) => ({
         kind: 'maintenance-report',
-        deduplicationKey: securityAlertDeduplicationKey(item, chatId),
+        deduplicationKey: securityAlertBatchDeduplicationKey(
+          batchIdentity,
+          chatId,
+        ),
         chatId: BigInt(chatId),
         body,
       })),
@@ -147,17 +150,17 @@ const scheduler = new MaintenanceScheduler(
       ? renderReport(`${type} maintenance report`, important)
       : undefined;
     const securityBodies = securityReportItems.length
-      ? splitTelegramMessage(
+      ? [
           type === 'WEEKLY'
             ? renderWeeklySecurityReport(securityReportItems, {
                 generatedAt: new Date(),
-                maxLength: Number.MAX_SAFE_INTEGER,
+                maxLength: 4_096,
               })
             : renderDailySecurityDigest(securityReportItems, {
                 generatedAt: new Date(),
-                maxLength: Number.MAX_SAFE_INTEGER,
+                maxLength: 4_096,
               }),
-        )
+        ]
       : [];
     await telegramOutbox.enqueueMany(
       [...allowedIds].flatMap((chatId) => [

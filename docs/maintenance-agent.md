@@ -109,10 +109,14 @@ traces for diagnosis rather than duplicating those metrics in PostgreSQL.
 
 Immediate alerts are limited to NEW or RESURFACED confirmed findings. Confirmed
 CRITICAL and CISA KEV findings always alert; other findings must reach the
-configured deterministic score. Daily reports separate confirmed findings from
-watch-only advisories. Weekly reports show lifecycle counts, severity posture,
-aging, and verified fix availability. Each immediate alert and scheduled report
-uses a scan/advisory correlation key plus chat ID for durable deduplication.
+configured deterministic score. One scan produces at most one immediate
+security message. Its entries are keyed by CVE (or the best available advisory
+identifier), so the same vulnerability in multiple packages is rendered once
+with up to six affected packages plus an omitted package count. Daily reports
+separate confirmed findings from watch-only advisories and are capped at one
+Telegram message. Weekly reports show lifecycle counts, severity posture,
+aging, and verified fix availability. Immediate batches and scheduled reports
+use scan/advisory correlation keys plus chat ID for durable deduplication.
 
 ## Telegram and code updates
 

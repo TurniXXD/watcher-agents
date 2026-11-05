@@ -2,6 +2,10 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-11-05 — Low-noise CVE reporting
+
+- A Trivy scan now produces at most one immediate security message, groups the same CVE across affected packages, and limits the daily security digest to one Telegram message.
+
 ## 2026-11-05 — Reliable isolated Trivy execution
 
 - The security scanner now passes Docker mounts before the pinned Trivy image, runs with the GitHub runner UID/GID, uses writable non-root cache and registry-config paths, and explicitly persists successful scan state for trusted deployed-release runs.

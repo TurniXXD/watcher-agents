@@ -152,7 +152,10 @@ export class SecurityIntelligenceService {
     private readonly options: {
       enricher?: Pick<SecurityEnricher, 'enrich'>;
       immediateAlertMinimumScore?: number;
-      onImmediateAlert?: (item: SecurityReportItem) => Promise<void>;
+      onImmediateAlerts?: (
+        items: readonly SecurityReportItem[],
+        batchIdentity: string,
+      ) => Promise<void>;
     } = {},
   ) {}
 
@@ -270,14 +273,7 @@ export class SecurityIntelligenceService {
       .map((finding) => finding.fingerprint);
     await this.store.resolveFindings(resolvedFingerprints);
 
-    const counts = {
-      new: 0,
-      persistent: 0,
-      resurfaced: 0,
-      resolved: resolvedFingerprints.length,
-    };
-    const reportItems: SecurityReportItem[] = [];
-    for (const finding of findings) {
+    const candidates = findings.map((finding) => {
       const prior = existingByFingerprint.get(finding.fingerprint);
       const lifecycle: SecurityLifecycle = !prior
         ? 'NEW'
@@ -289,7 +285,6 @@ export class SecurityIntelligenceService {
       ];
       const newExploitationEvidence =
         finding.kev?.listed === true && priorKev !== true;
-      counts[lifecycle.toLowerCase() as 'new' | 'persistent' | 'resurfaced']++;
       const reportItem: SecurityReportItem = {
         fingerprint: finding.fingerprint,
         category: 'CONFIRMED_ENVIRONMENT',
@@ -308,14 +303,31 @@ export class SecurityIntelligenceService {
         lastSeenAt: context.scannedAt,
         correlationKey: finding.scanKey,
       };
-      if (
-        this.options.onImmediateAlert &&
+      return { finding, lifecycle, reportItem };
+    });
+    const immediateItems = candidates
+      .map(({ reportItem }) => reportItem)
+      .filter((reportItem) =>
         immediateSecurityAlert(reportItem, {
           minimumScore: this.options.immediateAlertMinimumScore ?? 70,
-        })
-      ) {
-        await this.options.onImmediateAlert(reportItem);
-      }
+        }),
+      );
+    if (this.options.onImmediateAlerts && immediateItems.length > 0) {
+      await this.options.onImmediateAlerts(
+        immediateItems,
+        JSON.stringify([context.project, context.service, context.scanKey]),
+      );
+    }
+
+    const counts = {
+      new: 0,
+      persistent: 0,
+      resurfaced: 0,
+      resolved: resolvedFingerprints.length,
+    };
+    const reportItems: SecurityReportItem[] = [];
+    for (const { finding, lifecycle, reportItem } of candidates) {
+      counts[lifecycle.toLowerCase() as 'new' | 'persistent' | 'resurfaced']++;
       const saved = await this.store.upsertFinding({
         fingerprint: finding.fingerprint,
         agentName: 'maintenance-agent',

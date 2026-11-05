@@ -31,9 +31,13 @@ versions or different CPEs are known. Keyword-only matching is rejected.
 New/resurfaced confirmed CISA KEV or CRITICAL findings alert immediately.
 Other confirmed findings use `MAINTENANCE_SECURITY_ALERT_MIN_SCORE`, combining
 confirmed impact, exploitation evidence, EPSS, sourced CVSS, exposure/business
-context when known, and verified fix availability. Technology-watch advisories
-never trigger a confirmed-impact alert. Daily and weekly security reports reuse
-the scheduler, persistent Telegram outbox, and delivery deduplication.
+context when known, and verified fix availability. Immediate findings from one
+scan are delivered as one compact CVE-centric message; the same CVE found in
+multiple packages is grouped with up to six affected packages plus an omitted
+package count. Technology-watch advisories never trigger a confirmed-impact
+alert. The daily security digest is also capped at one Telegram message. Daily
+and weekly reports reuse the scheduler, persistent Telegram outbox, and
+delivery deduplication.
 
 ## Commands
 

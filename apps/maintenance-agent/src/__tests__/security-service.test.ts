@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FindingInput } from '@watcher/database';
+import type { SecurityReportItem } from '../security/reporting.js';
 import { SecurityIntelligenceService } from '../security/service.js';
 
 const report = (vulnerabilities: Array<Record<string, unknown>>) => ({
@@ -166,7 +167,7 @@ describe('SecurityIntelligenceService', () => {
       upsertRecommendation: vi.fn(),
     };
     const service = new SecurityIntelligenceService(store, {
-      onImmediateAlert: vi.fn(async () => {
+      onImmediateAlerts: vi.fn(async () => {
         throw new Error('outbox unavailable');
       }),
     });
@@ -186,6 +187,43 @@ describe('SecurityIntelligenceService', () => {
     ).rejects.toThrow('outbox unavailable');
     expect(store.upsertFinding).not.toHaveBeenCalled();
     expect(store.upsertRecommendation).not.toHaveBeenCalled();
+  });
+
+  it('emits one immediate alert batch for all urgent findings in a scan', async () => {
+    const onImmediateAlerts = vi.fn(
+      async (_items: readonly SecurityReportItem[], _batchIdentity: string) =>
+        undefined,
+    );
+    const store = {
+      listSecurityFindings: vi.fn(async () => []),
+      upsertFinding: vi.fn(async (input: FindingInput) => ({
+        id: input.fingerprint,
+      })),
+      resolveFindings: vi.fn(async () => ({ count: 0 })),
+      upsertRecommendation: vi.fn(async () => ({})),
+    };
+    const service = new SecurityIntelligenceService(store, {
+      onImmediateAlerts,
+    });
+
+    await service.ingestTrivy(
+      report([
+        { ...vulnerability('CVE-2026-9', 'perl'), Severity: 'CRITICAL' },
+        { ...vulnerability('CVE-2026-9', 'perl-base'), Severity: 'CRITICAL' },
+      ]),
+      {
+        project: 'watcher',
+        service: 'production-image',
+        scanKey: 'sha256:image',
+        scannedAt: new Date('2026-11-04T10:00:00Z'),
+      },
+    );
+
+    expect(onImmediateAlerts).toHaveBeenCalledOnce();
+    expect(onImmediateAlerts.mock.calls[0]?.[0]).toHaveLength(2);
+    expect(onImmediateAlerts.mock.calls[0]?.[1]).toBe(
+      '["watcher","production-image","sha256:image"]',
+    );
   });
 
   it('persists watch advisories as verification-required rather than confirmed findings', async () => {
