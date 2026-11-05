@@ -1,4 +1,4 @@
-FROM node:24.14.0-bookworm AS base
+FROM node:26.13.0-bookworm AS base
 
 ENV PNPM_HOME=/pnpm
 ENV COREPACK_HOME=/corepack

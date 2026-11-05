@@ -13,12 +13,12 @@
     "@watcher/database": "workspace:*",
     "@watcher/observability": "workspace:*",
     "@watcher/telegram": "workspace:*",
-    "fastify": "5.6.2",
+    "fastify": "5.12.7",
     "grammy": "1.46.0",
-    "zod": "4.4.3"
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@types/node": "26.4.0",
-    "typescript": "6.0.3"
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
   }
 }

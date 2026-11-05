@@ -12,11 +12,11 @@
     "@watcher/core": "workspace:*",
     "@watcher/llm": "workspace:*",
     "@watcher/telegram": "workspace:*",
-    "googleapis": "^166.0.0",
+    "googleapis": "^189.0.0",
     "grammy": "1.46.0",
-    "zod": "4.4.3"
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   }
 }
