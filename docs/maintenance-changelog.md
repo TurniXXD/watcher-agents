@@ -5,6 +5,7 @@ Each code update that changes runtime behavior must add a concise entry here. Th
 ## 2026-11-05 — Reliable isolated Trivy execution
 
 - The security scanner now passes Docker mounts before the pinned Trivy image, runs with the GitHub runner UID/GID, uses writable non-root cache and registry-config paths, and explicitly persists successful scan state for trusted deployed-release runs.
+- The authenticated loopback Trivy ingestion route now accepts bounded reports up to 64 MiB without increasing the request limit for other Maintenance API routes.
 
 ## 2026-11-04 — Security intelligence and content-free AI tracing
 

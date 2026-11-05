@@ -121,6 +121,39 @@ describe('maintenance security ingestion API', () => {
     await app.close();
   });
 
+  it('accepts a valid raw Trivy report larger than the general API body limit', async () => {
+    const ingestTrivy = vi.fn(async () => ({
+      findings: [],
+      reportItems: [],
+      counts: { new: 0, persistent: 0, resurfaced: 0, resolved: 0 },
+      alertFailures: [],
+    }));
+    const app = createApi({ ingestTrivy });
+    const report = {
+      SchemaVersion: 2,
+      Results: [],
+      Metadata: { padding: 'x'.repeat(10 * 1024 * 1024) },
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/maintenance/security/trivy',
+      headers: {
+        authorization: 'Bearer 0123456789abcdef',
+        'content-type': 'application/json',
+        'x-watcher-project': 'watcher',
+        'x-watcher-service': 'production-image',
+        'x-watcher-scan-key': 'sha256:digest',
+        'x-watcher-scanned-at': '2026-11-04T10:00:00Z',
+      },
+      payload: report,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(ingestTrivy).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
   it('rejects oversized reports before the ingestion service is called', async () => {
     const ingestTrivy = vi.fn();
     const app = createApi({ ingestTrivy });
@@ -132,7 +165,7 @@ describe('maintenance security ingestion API', () => {
         authorization: 'Bearer 0123456789abcdef',
         'content-type': 'application/json',
       },
-      payload: JSON.stringify({ report: 'x'.repeat(10 * 1024 * 1024) }),
+      payload: JSON.stringify({ report: 'x'.repeat(64 * 1024 * 1024) }),
     });
 
     expect(response.statusCode).toBe(413);

@@ -84,6 +84,10 @@ matching, and never claims deployment impact without installed-version evidence.
 Cloudflare/Vercel managed status incidents remain provider-managed rather than
 customer-patchable findings.
 
+The authenticated, loopback-only Trivy ingestion route accepts reports up to
+64 MiB while the rest of the Maintenance API retains its lower general request
+limit.
+
 FIRST EPSS and CISA KEV enrich CVEs independently. Missing data stays
 unavailable. Immediate alerts apply only to NEW/RESURFACED confirmed findings;
 CRITICAL and CISA KEV always alert, while other findings use the configurable

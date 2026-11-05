@@ -18,6 +18,9 @@ are stored separately as **technology-watch advisories** that require deployed
 version verification. CISA KEV and FIRST EPSS enrich CVE-bearing records without
 inventing unavailable values.
 
+The authenticated, loopback-only Trivy ingestion route accepts reports up to
+64 MiB. Other Maintenance API routes retain the lower general request limit.
+
 The built-in watchlist covers Linux/kernel, Docker Engine, containerd, Compose,
 nginx, Git, Node.js/npm, TypeScript, Next.js, Go, and Rust. Cloudflare and Vercel
 managed-platform status entries are deliberately excluded from patchable

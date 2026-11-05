@@ -81,9 +81,10 @@ Acknowledgement changes a proposal to approved but does not apply it. There are 
 
 The Trivy route accepts either `{project, service, scanKey, scannedAt, report}`
 or a raw Trivy JSON body with the corresponding `X-Watcher-*` headers. It is
-limited to 10 MiB and uses the same bearer authentication as the other
-maintenance routes. Normal production ingestion is performed only by the VPS
-helper; never expose this listener publicly.
+limited to 64 MiB while other Maintenance API routes retain the 10 MiB general
+limit, and it uses the same bearer authentication as the other maintenance
+routes. Normal production ingestion is performed only by the VPS helper; never
+expose this listener publicly.
 
 ## AI observability
 

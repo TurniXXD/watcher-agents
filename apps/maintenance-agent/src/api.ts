@@ -85,6 +85,7 @@ const trivyIngestionHeadersSchema = z.object({
   scanKey: z.string().trim().min(1).max(500),
   scannedAt: z.iso.datetime({ offset: true }),
 });
+const trivyReportBodyLimitBytes = 64 * 1024 * 1024;
 
 const healthForSeverity = (severity: string | undefined) =>
   severity === 'CRITICAL' || severity === 'HIGH'
@@ -199,37 +200,41 @@ export const createMaintenanceApi = (
         .send({ error: 'Invalid body', issues: parsed.error.issues });
     return engine.run('MANUAL', parsed.data.lookbackHours);
   });
-  app.post('/maintenance/security/trivy', async (request, reply) => {
-    const envelope = trivyIngestionSchema.safeParse(request.body);
-    const headers = trivyIngestionHeadersSchema.safeParse({
-      project: request.headers['x-watcher-project'],
-      service: request.headers['x-watcher-service'],
-      scanKey: request.headers['x-watcher-scan-key'],
-      scannedAt: request.headers['x-watcher-scanned-at'],
-    });
-    if (!envelope.success && !headers.success)
-      return reply.code(400).send({
-        error: 'Invalid ingestion metadata',
-        issues: envelope.error.issues,
+  app.post(
+    '/maintenance/security/trivy',
+    { bodyLimit: trivyReportBodyLimitBytes },
+    async (request, reply) => {
+      const envelope = trivyIngestionSchema.safeParse(request.body);
+      const headers = trivyIngestionHeadersSchema.safeParse({
+        project: request.headers['x-watcher-project'],
+        service: request.headers['x-watcher-service'],
+        scanKey: request.headers['x-watcher-scan-key'],
+        scannedAt: request.headers['x-watcher-scanned-at'],
       });
-    const metadata = envelope.success ? envelope.data : headers.data!;
-    const report = envelope.success ? envelope.data.report : request.body;
-    try {
-      return await security.ingestTrivy(report, {
-        project: metadata.project,
-        service: metadata.service,
-        scanKey: metadata.scanKey,
-        scannedAt: new Date(metadata.scannedAt),
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return reply
-          .code(400)
-          .send({ error: 'Invalid Trivy report', issues: error.issues });
+      if (!envelope.success && !headers.success)
+        return reply.code(400).send({
+          error: 'Invalid ingestion metadata',
+          issues: envelope.error.issues,
+        });
+      const metadata = envelope.success ? envelope.data : headers.data!;
+      const report = envelope.success ? envelope.data.report : request.body;
+      try {
+        return await security.ingestTrivy(report, {
+          project: metadata.project,
+          service: metadata.service,
+          scanKey: metadata.scanKey,
+          scannedAt: new Date(metadata.scannedAt),
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply
+            .code(400)
+            .send({ error: 'Invalid Trivy report', issues: error.issues });
+        }
+        throw error;
       }
-      throw error;
-    }
-  });
+    },
+  );
   for (const [path, status] of [
     ['/maintenance/recommendations/:id/acknowledge', 'APPROVED'],
     ['/maintenance/recommendations/:id/reject', 'REJECTED'],
