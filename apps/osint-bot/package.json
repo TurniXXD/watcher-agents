@@ -15,11 +15,11 @@
     "@watcher/observability": "workspace:*",
     "@watcher/sources": "workspace:*",
     "@watcher/telegram": "workspace:*",
-    "fast-xml-parser": "5.11.1",
+    "fast-xml-parser": "5.11.2",
     "grammy": "1.46.0",
-    "zod": "4.4.3"
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   }
 }

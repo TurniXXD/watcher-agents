@@ -31,11 +31,11 @@
   },
   "dependencies": {
     "@watcher/core": "workspace:*",
-    "fast-xml-parser": "5.11.1",
-    "zod": "4.4.3"
+    "fast-xml-parser": "5.11.2",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@types/node": "26.4.0",
-    "typescript": "6.0.3"
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
   }
 }
