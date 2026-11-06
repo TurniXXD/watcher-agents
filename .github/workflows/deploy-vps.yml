@@ -68,6 +68,8 @@ jobs:
           test -f Dockerfile
           test -f docker-compose.production.yml
           test -f docker-compose.nvidia.yml
+          test -f docker-compose.content-cms.yml
+          test -f apps/content-cms/Dockerfile
           test -x deploy/deploy.sh
           test -x deploy/normalize-database-url-host.sh
           test -x deploy/security-scan.sh
@@ -109,6 +111,20 @@ jobs:
           tags: |
             ghcr.io/${{ needs.prepare.outputs.image-namespace }}/watcher:${{ needs.prepare.outputs.sha }}
             ghcr.io/${{ needs.prepare.outputs.image-namespace }}/watcher:latest
+
+      - name: Build and publish Content CMS image
+        uses: docker/build-push-action@v7
+        with:
+          cache-from: type=gha,scope=content-cms-production
+          cache-to: type=gha,mode=max,scope=content-cms-production
+          context: .
+          file: apps/content-cms/Dockerfile
+          provenance: true
+          push: true
+          sbom: true
+          tags: |
+            ghcr.io/${{ needs.prepare.outputs.image-namespace }}/vantuch-content-cms:${{ needs.prepare.outputs.sha }}
+            ghcr.io/${{ needs.prepare.outputs.image-namespace }}/vantuch-content-cms:latest
 
   deploy:
     name: Deploy to VPS
@@ -212,6 +228,10 @@ jobs:
           scp -P "$DEPLOY_PORT" \
             docker-compose.nvidia.yml \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.nvidia.yml.next"
+          # The Content CMS is started manually; only its Compose file is delivered.
+          scp -P "$DEPLOY_PORT" \
+            docker-compose.content-cms.yml \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.content-cms.yml"
           scp -P "$DEPLOY_PORT" \
             deploy/deploy.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy.sh.next"

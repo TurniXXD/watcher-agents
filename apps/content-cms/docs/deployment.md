@@ -18,18 +18,46 @@ PostgreSQL publishes no ports. The CMS publishes only a loopback fallback
 (`127.0.0.1:${CONTENT_CMS_HOST_PORT:-3100}`). RustFS and PostgreSQL consoles must
 never be routed through cloudflared.
 
-## First deployment
+## Production server directory (`/opt/watcher`)
+
+The CMS lives in the same server directory as Watcher but is a separate Compose
+project (`vantuch-content`), so Watcher releases never restart it. The deploy
+workflow publishes `ghcr.io/<owner>/vantuch-content-cms:<release sha>` alongside
+the Watcher image and copies `docker-compose.content-cms.yml` to `/opt/watcher`.
+Starting or updating the CMS stays a manual step.
 
 ```bash
-cd /opt/watcher                                   # checkout containing apps/content-cms
+cd /opt/watcher
+install -m 600 /dev/null deploy/runtime/content-cms-postgres.env
+install -m 600 /dev/null deploy/runtime/content-cms.env
+# Fill both from deploy/presets/content-cms-postgres.env.example and
+# deploy/presets/content-cms.env.example (matching DB password,
+# PAYLOAD_SECRET=$(openssl rand -hex 32), RustFS key, origins).
+docker network inspect vantuch >/dev/null        # must already exist
+docker compose --env-file .release.env -f docker-compose.content-cms.yml up -d
+docker compose --env-file .release.env -f docker-compose.content-cms.yml ps
+```
+
+`.release.env` is written by `deploy/deploy.sh` and pins the image to the
+currently deployed release SHA. `deploy/render-env.sh` does not create or modify
+the two CMS env files.
+
+## Standalone build from a checkout
+
+`apps/content-cms/docker-compose.yml` builds the image from source and reads
+`apps/content-cms/deploy/*.env`; use it for local testing or after extracting
+the CMS into its own repository:
+
+```bash
 install -m 600 apps/content-cms/deploy/postgres.env.example apps/content-cms/deploy/postgres.env
 install -m 600 apps/content-cms/deploy/content-cms.env.example apps/content-cms/deploy/content-cms.env
-# Edit both files: matching password, PAYLOAD_SECRET=$(openssl rand -hex 32), RustFS key, origins.
-docker network inspect vantuch >/dev/null        # must already exist
-docker compose -f apps/content-cms/docker-compose.yml build
-docker compose -f apps/content-cms/docker-compose.yml up -d
-docker compose -f apps/content-cms/docker-compose.yml ps
+docker compose -f apps/content-cms/docker-compose.yml up -d --build
 ```
+
+Both variants use the same project name and volume, so switch between them only
+deliberately.
+
+## Runtime behaviour
 
 The container applies pending Payload migrations on startup, runs as the
 non-root `node` user with a read-only root filesystem, `no-new-privileges`,
@@ -44,18 +72,19 @@ editor/reviewer accounts, set **Settings**, and create bot credentials.
 
 ## Updates and rollback
 
+After a Watcher release has deployed (which published the matching CMS image):
+
 ```bash
-git pull
-docker compose -f apps/content-cms/docker-compose.yml build content-cms
-docker compose -f apps/content-cms/docker-compose.yml exec content-cms-postgres \
+cd /opt/watcher
+docker compose -f docker-compose.content-cms.yml --env-file .release.env exec content-cms-postgres \
   sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backups/content-cms-$(date +%F-%H%M).dump
-docker compose -f apps/content-cms/docker-compose.yml up -d content-cms
+docker compose --env-file .release.env -f docker-compose.content-cms.yml pull content-cms
+docker compose --env-file .release.env -f docker-compose.content-cms.yml up -d content-cms
 ```
 
-To roll back, re-tag/build the previous commit's image and `up -d` again.
-Migrations are not reverted by an image rollback, so keep them additive.
-To use a registry image instead of building on the server, set
-`CONTENT_CMS_IMAGE=ghcr.io/<owner>/vantuch-content-cms:<sha>`.
+To roll back, run the same `up -d` with `IMAGE_TAG=<previous sha>` (for example
+`--env-file .release.env.previous`). Migrations are not reverted by an image
+rollback, so keep them additive.
 
 ## Cloudflare configuration
 

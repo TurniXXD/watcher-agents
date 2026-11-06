@@ -379,6 +379,19 @@ jobs:
           test "$(jq '.services["content-cms-postgres"].ports // [] | length' <<< "$config")" -eq 0
           jq -e '.services["content-cms"].read_only == true' <<< "$config" > /dev/null
 
+          install -d -m 700 deploy/runtime
+          cp deploy/presets/content-cms.env.example deploy/runtime/content-cms.env
+          cp deploy/presets/content-cms-postgres.env.example deploy/runtime/content-cms-postgres.env
+          IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=example IMAGE_TAG=ci \
+            docker compose -f docker-compose.content-cms.yml config --quiet
+          production_config="$(IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=example IMAGE_TAG=ci \
+            docker compose -f docker-compose.content-cms.yml config --format json)"
+          jq -e '.name == "vantuch-content"' <<< "$production_config" > /dev/null
+          if jq -e '.services["content-cms-postgres"].networks | has("vantuch")' <<< "$production_config" > /dev/null; then
+            echo "content-cms-postgres must remain off the vantuch network" >&2
+            exit 1
+          fi
+
   container-build-verify:
     name: Build production image
     needs:
