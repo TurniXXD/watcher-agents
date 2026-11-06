@@ -5,6 +5,14 @@ import type { WatcherLogger } from '@watcher/core';
 import { eventCategorySchema } from '../domain/types.js';
 import type { EventRepository } from '../repositories/event-repository.js';
 import type { EventRunner } from '../services/runner.js';
+import type { CmsOutboxRepository } from '../cms/outbox-repository.js';
+import type { CmsSyncService } from '../cms/sync.js';
+
+/** Optional Vantuch Content Hub sync controls, present only when configured. */
+export type CmsApiDependencies = {
+  outbox: CmsOutboxRepository;
+  sync: CmsSyncService;
+};
 
 const querySchema = z.object({
   from: z.iso.datetime({ offset: true }).optional(),
@@ -50,6 +58,7 @@ export const createApi = (
   token: string,
   readiness: () => Promise<void>,
   logger?: WatcherLogger,
+  cms?: CmsApiDependencies,
 ) => {
   const app = Fastify();
   app.addHook('onError', (_request, _reply, error) => {
@@ -164,5 +173,20 @@ export const createApi = (
       });
     }
   });
+  app.get('/cms/status', async (_request, reply) =>
+    cms
+      ? { enabled: true, counts: await cms.outbox.counts() }
+      : reply.code(404).send({ error: 'Content CMS sync is not configured' }),
+  );
+  app.post('/cms/sync', async (_request, reply) =>
+    cms
+      ? cms.sync.flush()
+      : reply.code(404).send({ error: 'Content CMS sync is not configured' }),
+  );
+  app.post('/cms/retry-failed', async (_request, reply) =>
+    cms
+      ? { requeued: await cms.outbox.retryFailed() }
+      : reply.code(404).send({ error: 'Content CMS sync is not configured' }),
+  );
   return app;
 };

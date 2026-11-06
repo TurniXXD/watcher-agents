@@ -26,6 +26,7 @@ Watcher turns public sources, market data, documents, CRM records, and personal 
 | **Research & learning** | [OSINT](apps/osint-bot/README.md) · [Study](apps/study-bot/README.md)                                                                                     | Produce provenance-backed investigations and learning material.          |
 | **Local discovery**     | [Brno Events](apps/brno-events-agent/README.md) · [MU Clubs](apps/mu-clubs-monitor/README.md)                                                             | Monitor events and university communities without duplicating delivery.  |
 | **Platform operations** | [Maintenance](apps/maintenance-agent/README.md) · [Twenty Sales App](apps/twenty-sales-app/README.md) · [Documentation](apps/docs/README.md)              | Keep services healthy, extend CRM workflows, and publish versioned docs. |
+| **Publishing**          | [Content CMS](apps/content-cms/README.md)                                                                                                                 | Review bot content in Payload CMS and serve the public vantuch.dev API.  |
 
 ## ⟶ How Watcher works
 

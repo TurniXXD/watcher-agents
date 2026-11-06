@@ -8,6 +8,7 @@ import {
   normalizeText,
 } from '../domain/normalization.js';
 import { scoreEvent } from '../services/relevance.js';
+import type { CmsOutboxRepository } from '../cms/outbox-repository.js';
 
 const json = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(
@@ -28,7 +29,11 @@ export type EventQuery = {
 export class EventRepository {
   #saveQueue: Promise<void> = Promise.resolve();
 
-  public constructor(private readonly db: DatabaseClient) {}
+  public constructor(
+    private readonly db: DatabaseClient,
+    /** Queues events for the Vantuch Content Hub when the integration is configured. */
+    private readonly cmsOutbox?: CmsOutboxRepository,
+  ) {}
 
   public save(
     source: EventSource,
@@ -152,6 +157,10 @@ export class EventRepository {
         lastSeenAt: now,
       },
     });
+    if (this.cmsOutbox) {
+      if (!matched || changed) await this.cmsOutbox.markChanged(event.id, now);
+      else await this.cmsOutbox.markSeen(event.id, now);
+    }
     if (!matched) return 'created';
     return direct && changed ? 'updated' : 'duplicate';
   }

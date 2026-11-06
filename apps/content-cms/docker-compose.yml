@@ -1,0 +1,88 @@
+# Vantuch Content Hub: independently deployable from the Watcher stack.
+#   cp apps/content-cms/deploy/postgres.env.example apps/content-cms/deploy/postgres.env
+#   cp apps/content-cms/deploy/content-cms.env.example apps/content-cms/deploy/content-cms.env
+#   docker compose -f apps/content-cms/docker-compose.yml up -d --build
+# Requires the external `vantuch` network (shared with cloudflared and RustFS).
+name: vantuch-content
+
+services:
+  content-cms-postgres:
+    image: postgres:16-alpine
+    mem_limit: 768m
+    env_file:
+      - ./deploy/postgres.env
+    volumes:
+      - content-cms-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+
+  content-cms:
+    image: ${CONTENT_CMS_IMAGE:-vantuch-content-cms:local}
+    build:
+      context: ../..
+      dockerfile: apps/content-cms/Dockerfile
+    mem_limit: 1g
+    env_file:
+      - ./deploy/content-cms.env
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      TRUST_PROXY_HEADERS: 'true'
+    ports:
+      # Loopback-only fallback; public traffic arrives through cloudflared on `vantuch`.
+      - '127.0.0.1:${CONTENT_CMS_HOST_PORT:-3100}:3000'
+    networks:
+      default:
+      vantuch:
+        aliases:
+          - vantuch-content-cms
+    depends_on:
+      content-cms-postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+      - /app/apps/content-cms/.next/cache
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+
+volumes:
+  content-cms-postgres:
+
+networks:
+  vantuch:
+    external: true
+    name: vantuch

@@ -1,0 +1,14 @@
+# Context for apps/content-cms/Dockerfile (overrides the root .dockerignore).
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+!apps/content-cms
+apps/content-cms/node_modules
+apps/content-cms/.next
+apps/content-cms/.env
+apps/content-cms/.env.*
+apps/content-cms/deploy/*.env
+apps/content-cms/media-local
+apps/content-cms/coverage

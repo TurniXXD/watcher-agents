@@ -1,0 +1,2020 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Vantuch Content API",
+    "version": "1.0.0",
+    "description": "Read-only public content API for vantuch.dev. Only approved, published content is returned. Lists use deterministic cursor pagination: pass `nextCursor` as `cursor` until it is null. All timestamps are ISO 8601 in UTC; date-only filters are calendar days in Europe/Prague."
+  },
+  "servers": [
+    {
+      "url": "https://cms.vantuch.dev/api"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Events"
+    },
+    {
+      "name": "Articles"
+    },
+    {
+      "name": "News"
+    },
+    {
+      "name": "Publications"
+    }
+  ],
+  "paths": {
+    "/public/v1/events": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "List upcoming events",
+        "operationId": "listEvents",
+        "description": "Defaults: city=brno, nearest upcoming first (including events still running), limit 20 (max 100). `freeFood=true` returns only events whose source explicitly confirms free food.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "description": "City (case and diacritics insensitive). Use `all` for every city.",
+            "schema": {
+              "default": "brno",
+              "example": "brno",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "example": "ai",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Events starting or still running at/after this point. Dates are calendar days in Europe/Prague. Defaults to now.",
+            "schema": {
+              "example": "2026-11-20",
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T[\\d:.]+(?:Z|[+-]\\d{2}:\\d{2}))?$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Events starting before the end of this day (Europe/Prague) or before this timestamp.",
+            "schema": {
+              "example": "2026-11-30",
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T[\\d:.]+(?:Z|[+-]\\d{2}:\\d{2}))?$"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Search in title, summary, venue, and organizer.",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size (1–100).",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque cursor from `nextCursor` of the previous page. Only valid with the same sort.",
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Default: nearest upcoming first.",
+            "schema": {
+              "default": "startsAt",
+              "type": "string",
+              "enum": [
+                "startsAt",
+                "-startsAt",
+                "-updatedAt"
+              ]
+            }
+          },
+          {
+            "name": "free",
+            "in": "query",
+            "required": false,
+            "description": "`true`: free admission; `false`: explicitly paid.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "freeFood",
+            "in": "query",
+            "required": false,
+            "description": "`true`: only events whose source explicitly confirms free food (`freeFood: yes`).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Shared caches may keep the response for 300 seconds.",
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+                }
+              },
+              "ETag": {
+                "description": "Weak validator; send If-None-Match for 304 responses.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicEventList"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "0f8e2a52-7d2c-4c55-9e85-3b7f1f0a9c11",
+                      "slug": "example-ai-meetup-2026-11-20",
+                      "title": "Example AI meetup",
+                      "summary": "An example listing used in documentation.",
+                      "description": null,
+                      "startsAt": "2026-11-20T17:00:00.000Z",
+                      "endsAt": "2026-11-20T19:00:00.000Z",
+                      "timezone": "Europe/Prague",
+                      "city": "Brno",
+                      "venueName": "Example venue",
+                      "address": null,
+                      "category": "ai",
+                      "tags": [
+                        "meetup"
+                      ],
+                      "organizerName": "Example organiser",
+                      "sourceUrl": "https://example.com/events/ai-meetup",
+                      "registrationUrl": null,
+                      "imageUrl": null,
+                      "isFree": true,
+                      "price": 0,
+                      "currency": null,
+                      "freeFood": "yes",
+                      "foodDetails": "Free pizza after the talks",
+                      "status": "scheduled",
+                      "featured": false,
+                      "lastVerifiedAt": "2026-11-06T08:00:00.000Z",
+                      "updatedAt": "2026-11-06T08:00:00.000Z"
+                    }
+                  ],
+                  "nextCursor": null,
+                  "meta": {
+                    "limit": 20
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/v1/events/featured": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "List featured events",
+        "operationId": "listFeaturedEvents",
+        "description": "Same filters as /events with featured=true.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "description": "City (case and diacritics insensitive). Use `all` for every city.",
+            "schema": {
+              "default": "brno",
+              "example": "brno",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "example": "ai",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Events starting or still running at/after this point. Dates are calendar days in Europe/Prague. Defaults to now.",
+            "schema": {
+              "example": "2026-11-20",
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T[\\d:.]+(?:Z|[+-]\\d{2}:\\d{2}))?$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Events starting before the end of this day (Europe/Prague) or before this timestamp.",
+            "schema": {
+              "example": "2026-11-30",
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T[\\d:.]+(?:Z|[+-]\\d{2}:\\d{2}))?$"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Search in title, summary, venue, and organizer.",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size (1–100).",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque cursor from `nextCursor` of the previous page. Only valid with the same sort.",
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Default: nearest upcoming first.",
+            "schema": {
+              "default": "startsAt",
+              "type": "string",
+              "enum": [
+                "startsAt",
+                "-startsAt",
+                "-updatedAt"
+              ]
+            }
+          },
+          {
+            "name": "free",
+            "in": "query",
+            "required": false,
+            "description": "`true`: free admission; `false`: explicitly paid.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "freeFood",
+            "in": "query",
+            "required": false,
+            "description": "`true`: only events whose source explicitly confirms free food (`freeFood: yes`).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Shared caches may keep the response for 300 seconds.",
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+                }
+              },
+              "ETag": {
+                "description": "Weak validator; send If-None-Match for 304 responses.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicEventList"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "0f8e2a52-7d2c-4c55-9e85-3b7f1f0a9c11",
+                      "slug": "example-ai-meetup-2026-11-20",
+                      "title": "Example AI meetup",
+                      "summary": "An example listing used in documentation.",
+                      "description": null,
+                      "startsAt": "2026-11-20T17:00:00.000Z",
+                      "endsAt": "2026-11-20T19:00:00.000Z",
+                      "timezone": "Europe/Prague",
+                      "city": "Brno",
+                      "venueName": "Example venue",
+                      "address": null,
+                      "category": "ai",
+                      "tags": [
+                        "meetup"
+                      ],
+                      "organizerName": "Example organiser",
+                      "sourceUrl": "https://example.com/events/ai-meetup",
+                      "registrationUrl": null,
+                      "imageUrl": null,
+                      "isFree": true,
+                      "price": 0,
+                      "currency": null,
+                      "freeFood": "yes",
+                      "foodDetails": "Free pizza after the talks",
+                      "status": "scheduled",
+                      "featured": false,
+                      "lastVerifiedAt": "2026-11-06T08:00:00.000Z",
+                      "updatedAt": "2026-11-06T08:00:00.000Z"
+                    }
+                  ],
+                  "nextCursor": null,
+                  "meta": {
+                    "limit": 20
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/v1/events/categories": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "List categories of upcoming public events",
+        "operationId": "listEventCategories",
+        "security": [],
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "description": "City (case and diacritics insensitive). Use `all` for every city.",
+            "schema": {
+              "default": "brno",
+              "example": "brno",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Shared caches may keep the response for 3600 seconds.",
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=60, s-maxage=3600, stale-while-revalidate=7200"
+                }
+              },
+              "ETag": {
+                "description": "Weak validator; send If-None-Match for 304 responses.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventCategoriesResponse"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "slug": "ai",
+                      "label": "Ai"
+                    }
+                  ],
+                  "meta": {
+                    "city": "brno"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/v1/events/{slug}": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Get an event by slug",
+        "operationId": "getEvent",
+        "description": "Archived events remain reachable by slug but leave listings.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Shared caches may keep the response for 900 seconds.",
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=60, s-maxage=900, stale-while-revalidate=1800"
+                }
+              },
+              "ETag": {
+                "description": "Weak validator; send If-None-Match for 304 responses.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicEventDetail"
+                },
+                "example": {
+                  "data": {
+                    "id": "0f8e2a52-7d2c-4c55-9e85-3b7f1f0a9c11",
+                    "slug": "example-ai-meetup-2026-11-20",
+                    "title": "Example AI meetup",
+                    "summary": "An example listing used in documentation.",
+                    "description": null,
+                    "startsAt": "2026-11-20T17:00:00.000Z",
+                    "endsAt": "2026-11-20T19:00:00.000Z",
+                    "timezone": "Europe/Prague",
+                    "city": "Brno",
+                    "venueName": "Example venue",
+                    "address": null,
+                    "category": "ai",
+                    "tags": [
+                      "meetup"
+                    ],
+                    "organizerName": "Example organiser",
+                    "sourceUrl": "https://example.com/events/ai-meetup",
+                    "registrationUrl": null,
+                    "imageUrl": null,
+                    "isFree": true,
+                    "price": 0,
+                    "currency": null,
+                    "freeFood": "yes",
+                    "foodDetails": "Free pizza after the talks",
+                    "status": "scheduled",
+                    "featured": false,
+                    "lastVerifiedAt": "2026-11-06T08:00:00.000Z",
+                    "updatedAt": "2026-11-06T08:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (also returned for unpublished content)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/v1/articles": {
+      "get": {
+        "tags": [
+          "Articles"
+        ],
+        "summary": "List articles (newest first)",
+        "operationId": "listArticles",
+        "security": [],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size (1–100).",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque cursor from `nextCursor` of the previous page. Only valid with the same sort.",
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Shared caches may keep the response for 300 seconds.",
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+                }
+              },
+              "ETag": {
+                "description": "Weak validator; send If-None-Match for 304 responses.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicArticleList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/v1/articles/{slug}": {
+      "get": {
+        "tags": [
+          "Articles"
+        ],
+        "summary": "Get an article by slug",
+        "operationId": "getArticle",
+        "security": [],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Shared caches may keep the response for 900 seconds.",
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=60, s-maxage=900, stale-while-revalidate=1800"
+                }
+              },
+              "ETag": {
+                "description": "Weak validator; send If-None-Match for 304 responses.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicArticleDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (also returned for unpublished content)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/v1/news": {
+      "get": {
+        "tags": [
+          "News"
+        ],
+        "summary": "List news (newest first)",
+        "operationId": "listNews",
+        "security": [],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size (1–100).",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque cursor from `nextCursor` of the previous page. Only valid with the same sort.",
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Shared caches may keep the response for 300 seconds.",
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+                }
+              },
+              "ETag": {
+                "description": "Weak validator; send If-None-Match for 304 responses.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicNewsList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/v1/publications": {
+      "get": {
+        "tags": [
+          "Publications"
+        ],
+        "summary": "List publications (newest first)",
+        "operationId": "listPublications",
+        "description": "`tag` filters by research topic; `category` is ignored.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size (1–100).",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque cursor from `nextCursor` of the previous page. Only valid with the same sort.",
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Shared caches may keep the response for 300 seconds.",
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+                }
+              },
+              "ETag": {
+                "description": "Weak validator; send If-None-Match for 304 responses.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicPublicationList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PublicEventList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicEvent"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "limit"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data",
+          "nextCursor",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "PublicEvent": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "description": "Plain text; safe to render as text. Paragraphs separated by blank lines.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-11-20T17:00:00.000Z"
+          },
+          "endsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-11-20T17:00:00.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Prague"
+          },
+          "city": {
+            "type": "string"
+          },
+          "venueName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "organizerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Original organiser/source page (attribution)."
+          },
+          "registrationUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "imageUrl": {
+            "description": "Only images with publication rights; never scraped source images.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isFree": {
+            "description": "Free admission; null when unknown.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "freeFood": {
+            "type": "string",
+            "enum": [
+              "yes",
+              "no",
+              "unknown"
+            ]
+          },
+          "foodDetails": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "cancelled",
+              "postponed"
+            ]
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "lastVerifiedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-11-20T17:00:00.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-11-20T17:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "summary",
+          "description",
+          "startsAt",
+          "endsAt",
+          "timezone",
+          "city",
+          "venueName",
+          "address",
+          "category",
+          "tags",
+          "organizerName",
+          "sourceUrl",
+          "registrationUrl",
+          "imageUrl",
+          "isFree",
+          "price",
+          "currency",
+          "freeFood",
+          "foodDetails",
+          "status",
+          "featured",
+          "lastVerifiedAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "validation_failed"
+              },
+              "message": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "EventCategoriesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "slug": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slug",
+                "label"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "PublicEventDetail": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PublicEvent"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PublicArticleList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicArticle"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "limit"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data",
+          "nextCursor",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "PublicArticle": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "excerpt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coverImageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicSource"
+            }
+          },
+          "aiGenerated": {
+            "type": "boolean"
+          },
+          "publishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-11-20T17:00:00.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-11-20T17:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "excerpt",
+          "coverImageUrl",
+          "author",
+          "categories",
+          "tags",
+          "sources",
+          "aiGenerated",
+          "publishedAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "PublicSource": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "url",
+          "publisher"
+        ],
+        "additionalProperties": false
+      },
+      "PublicArticleDetailResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PublicArticleDetail"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PublicArticleDetail": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "excerpt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coverImageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicSource"
+            }
+          },
+          "aiGenerated": {
+            "type": "boolean"
+          },
+          "publishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-11-20T17:00:00.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-11-20T17:00:00.000Z"
+          },
+          "contentText": {
+            "description": "Plain-text rendering of the article.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Payload Lexical JSON. Render with @payloadcms/richtext-lexical/react."
+          },
+          "seo": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "noIndex": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "title",
+              "description",
+              "noIndex"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "excerpt",
+          "coverImageUrl",
+          "author",
+          "categories",
+          "tags",
+          "sources",
+          "aiGenerated",
+          "publishedAt",
+          "updatedAt",
+          "contentText",
+          "content",
+          "seo"
+        ],
+        "additionalProperties": false
+      },
+      "PublicNewsList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicNews"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "limit"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data",
+          "nextCursor",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "PublicNews": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "originalUrl": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "originalPublishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-11-20T17:00:00.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "aiGenerated": {
+            "type": "boolean"
+          },
+          "publishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-11-20T17:00:00.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-11-20T17:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "summary",
+          "originalUrl",
+          "publisher",
+          "originalPublishedAt",
+          "category",
+          "tags",
+          "aiGenerated",
+          "publishedAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "PublicPublicationList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicPublication"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "limit"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data",
+          "nextCursor",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "PublicPublication": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "description": "Original AI-assisted summary reviewed by an editor.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "doi": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "journal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publicationDate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-11-20T17:00:00.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "publicationUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "researchTopics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "aiGenerated": {
+            "type": "boolean"
+          },
+          "publishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-11-20T17:00:00.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-11-20T17:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "authors",
+          "summary",
+          "doi",
+          "journal",
+          "publicationDate",
+          "publicationUrl",
+          "researchTopics",
+          "aiGenerated",
+          "publishedAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

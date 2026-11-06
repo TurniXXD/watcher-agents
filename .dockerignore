@@ -12,3 +12,6 @@ coverage
 backups
 deploy/runtime
 *.log
+
+# Built separately by apps/content-cms/Dockerfile.
+apps/content-cms

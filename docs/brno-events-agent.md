@@ -43,3 +43,7 @@ curl -X POST -H "Authorization: Bearer $BRNO_EVENTS_API_TOKEN" \
 ```
 
 `GET /events/briefing` returns bounded structured sections for `today`, `tomorrow`, `thisWeekend`, `newInterestingEvents`, `registrationDeadlines`, and `topUpcoming`. Event entries include source links and explainable relevance reasons. No endpoint generates prose.
+
+## Content CMS integration
+
+Optional. With `CONTENT_CMS_URL` and `CONTENT_CMS_INGEST_TOKEN`, events are queued in the `brno_event_cms_sync` outbox and delivered to the Vantuch Content Hub ingestion API on a separate timer with bounded backoff, free-food classification, and source attribution. Briefing/Telegram delivery is unaffected. Details: `apps/content-cms/docs/bot-integration.md`.

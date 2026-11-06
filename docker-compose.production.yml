@@ -221,6 +221,10 @@ services:
       NODE_ENV: production
       BRNO_EVENTS_HOST: 0.0.0.0
       TZ: Europe/Prague
+    # `vantuch` reaches the Content CMS ingestion API (vantuch-content-cms:3000).
+    networks:
+      - default
+      - vantuch
     ports:
       - '127.0.0.1:4020:4020'
     depends_on:

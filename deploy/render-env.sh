@@ -586,6 +586,17 @@ write_env "$RUNTIME_DIR/brno-events-agent.env" \
   CSOB_VALIDATION_CAMPS_URL "${CSOB_VALIDATION_CAMPS_URL:-https://www.csob.cz/csob/spolecenska-odpovednost/filantropie/grantovy-kalendar}" \
   LOG_LEVEL "${LOG_LEVEL:-info}"
 
+# Optional Vantuch Content Hub sync: enabled only when an ingestion token is provided.
+if [[ -n "${CONTENT_CMS_INGEST_TOKEN:-}" ]]; then
+  append_env "$RUNTIME_DIR/brno-events-agent.env" \
+    CONTENT_CMS_URL "${CONTENT_CMS_URL:-http://vantuch-content-cms:3000}" \
+    CONTENT_CMS_INGEST_TOKEN "$CONTENT_CMS_INGEST_TOKEN" \
+    CONTENT_CMS_SYNC_INTERVAL_MS "${CONTENT_CMS_SYNC_INTERVAL_MS:-60000}" \
+    CONTENT_CMS_SYNC_BATCH_SIZE "${CONTENT_CMS_SYNC_BATCH_SIZE:-50}" \
+    CONTENT_CMS_SYNC_MAX_ATTEMPTS "${CONTENT_CMS_SYNC_MAX_ATTEMPTS:-10}" \
+    CONTENT_CMS_TIMEOUT_MS "${CONTENT_CMS_TIMEOUT_MS:-30000}"
+fi
+
 write_env "$RUNTIME_DIR/maintenance-agent.env" \
   DATABASE_URL "$WATCHER_DATABASE_URL" \
   MAINTENANCE_API_TOKEN "$MAINTENANCE_API_TOKEN" \

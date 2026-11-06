@@ -1,0 +1,1697 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Vantuch Content API",
+    "version": "1.0.0",
+    "description": "Authenticated bot ingestion API. Each bot uses its own credential (`Authorization: Bearer vch_<keyId>_<secret>`) with per-collection scopes. Credentials can never publish content."
+  },
+  "servers": [
+    {
+      "url": "https://cms.vantuch.dev/api"
+    }
+  ],
+  "security": [
+    {
+      "botToken": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Events"
+    },
+    {
+      "name": "Articles"
+    },
+    {
+      "name": "News"
+    },
+    {
+      "name": "Publications"
+    },
+    {
+      "name": "Social posts"
+    },
+    {
+      "name": "Runs"
+    }
+  ],
+  "paths": {
+    "/ingest/v1/events": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "operationId": "ingestEvents",
+        "summary": "Upsert events (batch)",
+        "description": "Idempotent upsert keyed by (collection, bot, externalId). New records start unpublished with review status Ingested. Changes to reviewed, published, or human-edited records become pending updates instead of overwriting them. Items are validated individually; see `results`.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Retry-safe request key (8–128 chars). Replays return the stored run with `Idempotent-Replayed: true`.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{8,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventIngestBatch"
+              },
+              "example": {
+                "items": [
+                  {
+                    "externalId": "brno-events-agent:0f8e2a52-7d2c-4c55-9e85-3b7f1f0a9c11",
+                    "title": "Example AI meetup",
+                    "summary": "Ai meetup at Example venue, organised by Example organiser.",
+                    "startsAt": "2026-11-20T18:00:00+01:00",
+                    "endsAt": "2026-11-20T20:00:00+01:00",
+                    "city": "Brno",
+                    "venueName": "Example venue",
+                    "category": "ai",
+                    "tags": [
+                      "meetup"
+                    ],
+                    "sourceUrl": "https://example.com/events/ai-meetup",
+                    "isFree": true,
+                    "freeFood": "yes",
+                    "foodDetails": "Free pizza",
+                    "foodEvidence": [
+                      {
+                        "text": "Free pizza and drinks after the talks."
+                      }
+                    ],
+                    "sourceReferences": [
+                      {
+                        "title": "Example listing",
+                        "url": "https://example.com/events/ai-meetup"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch processed (status succeeded or partial)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bot credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Credential lacks the required scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency-Key conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body or batch too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type must be application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Every item in the batch failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/v1/articles": {
+      "post": {
+        "tags": [
+          "Articles"
+        ],
+        "operationId": "ingestArticles",
+        "summary": "Upsert articles (batch)",
+        "description": "Idempotent upsert keyed by (collection, bot, externalId). New records start unpublished with review status Ingested. Changes to reviewed, published, or human-edited records become pending updates instead of overwriting them. Items are validated individually; see `results`.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Retry-safe request key (8–128 chars). Replays return the stored run with `Idempotent-Replayed: true`.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{8,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArticleIngestBatch"
+              },
+              "example": {
+                "items": [
+                  {
+                    "externalId": "article-1",
+                    "title": "Example article",
+                    "excerpt": "Short excerpt."
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch processed (status succeeded or partial)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bot credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Credential lacks the required scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency-Key conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body or batch too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type must be application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Every item in the batch failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/v1/news": {
+      "post": {
+        "tags": [
+          "News"
+        ],
+        "operationId": "ingestNews",
+        "summary": "Upsert news (batch)",
+        "description": "Idempotent upsert keyed by (collection, bot, externalId). New records start unpublished with review status Ingested. Changes to reviewed, published, or human-edited records become pending updates instead of overwriting them. Items are validated individually; see `results`.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Retry-safe request key (8–128 chars). Replays return the stored run with `Idempotent-Replayed: true`.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{8,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewsIngestBatch"
+              },
+              "example": {
+                "items": [
+                  {
+                    "externalId": "news-1",
+                    "title": "Example news",
+                    "originalUrl": "https://example.com/news/1"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch processed (status succeeded or partial)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bot credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Credential lacks the required scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency-Key conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body or batch too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type must be application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Every item in the batch failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/v1/publications": {
+      "post": {
+        "tags": [
+          "Publications"
+        ],
+        "operationId": "ingestPublications",
+        "summary": "Upsert publications (batch)",
+        "description": "Idempotent upsert keyed by (collection, bot, externalId). New records start unpublished with review status Ingested. Changes to reviewed, published, or human-edited records become pending updates instead of overwriting them. Items are validated individually; see `results`.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Retry-safe request key (8–128 chars). Replays return the stored run with `Idempotent-Replayed: true`.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{8,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicationIngestBatch"
+              },
+              "example": {
+                "items": [
+                  {
+                    "externalId": "pmid:1",
+                    "title": "Example publication",
+                    "doi": "10.1000/example"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch processed (status succeeded or partial)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bot credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Credential lacks the required scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency-Key conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body or batch too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type must be application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Every item in the batch failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/v1/social-posts": {
+      "post": {
+        "tags": [
+          "Social posts"
+        ],
+        "operationId": "ingestSocialPosts",
+        "summary": "Upsert social posts (batch)",
+        "description": "Idempotent upsert keyed by (collection, bot, externalId). New records start unpublished with review status Ingested. Changes to reviewed, published, or human-edited records become pending updates instead of overwriting them. Items are validated individually; see `results`.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Retry-safe request key (8–128 chars). Replays return the stored run with `Idempotent-Replayed: true`.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{8,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SocialPostIngestBatch"
+              },
+              "example": {
+                "items": [
+                  {
+                    "externalId": "post-1",
+                    "title": "Example post",
+                    "content": "Example",
+                    "platform": "linkedin",
+                    "postType": "post"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch processed (status succeeded or partial)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bot credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Credential lacks the required scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency-Key conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body or batch too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type must be application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Every item in the batch failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (details are never exposed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/v1/runs/{id}": {
+      "get": {
+        "tags": [
+          "Runs"
+        ],
+        "operationId": "getIngestRun",
+        "summary": "Get an ingestion run created by the calling bot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRun"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bot credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (also returned for unpublished content)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EventIngestItem": {
+        "type": "object",
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[\\x21-\\x7e]+$",
+            "description": "Stable identifier from the bot. Re-sending the same id updates the same record."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "summary": {
+            "description": "Original short summary. Do not copy organiser text.",
+            "type": "string",
+            "maxLength": 1000
+          },
+          "descriptionText": {
+            "description": "Original plain-text description. Stored as rich text for editors.",
+            "type": "string",
+            "maxLength": 5000
+          },
+          "sourceExcerpt": {
+            "description": "Internal context for editors; never published.",
+            "type": "string",
+            "maxLength": 1000
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "ISO 8601 timestamp with UTC offset",
+            "example": "2026-11-20T18:00:00+01:00"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "ISO 8601 timestamp with UTC offset",
+            "example": "2026-11-20T18:00:00+01:00"
+          },
+          "timezone": {
+            "default": "Europe/Prague",
+            "type": "string"
+          },
+          "city": {
+            "default": "Brno",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "venueName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "category": {
+            "default": "other",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "tags": {
+            "default": [],
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          "organizerName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "sourceUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri",
+            "description": "Canonical organiser or source event page."
+          },
+          "registrationUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "sourceImageUrl": {
+            "description": "Recorded for editors; never republished automatically.",
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "isFree": {
+            "description": "Free admission. Omit or null when unknown.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "example": "CZK",
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freeFood": {
+            "default": "unknown",
+            "type": "string",
+            "enum": [
+              "yes",
+              "no",
+              "unknown"
+            ]
+          },
+          "foodDetails": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "foodEvidence": {
+            "default": [],
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FoodEvidence"
+            }
+          },
+          "eventStatus": {
+            "default": "scheduled",
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "cancelled",
+              "postponed"
+            ]
+          },
+          "verifiedAt": {
+            "description": "When the bot last confirmed the event at its source.",
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "example": "2026-11-20T18:00:00+01:00"
+          },
+          "sourceReferences": {
+            "default": [],
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceReference"
+            }
+          },
+          "aiProvenance": {
+            "$ref": "#/components/schemas/AiProvenance"
+          }
+        },
+        "required": [
+          "externalId",
+          "title",
+          "startsAt",
+          "sourceUrl"
+        ]
+      },
+      "FoodEvidence": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Verbatim source snippet supporting the classification."
+          },
+          "sourceUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "SourceReference": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "publisher": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "accessedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "ISO 8601 timestamp with UTC offset",
+            "example": "2026-11-20T18:00:00+01:00"
+          }
+        },
+        "required": [
+          "title",
+          "url"
+        ]
+      },
+      "AiProvenance": {
+        "type": "object",
+        "properties": {
+          "generatedByAI": {
+            "type": "boolean"
+          },
+          "generator": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "ISO 8601 timestamp with UTC offset",
+            "example": "2026-11-20T18:00:00+01:00"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "generatedByAI"
+        ]
+      },
+      "EventIngestBatch": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventIngestItem"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "IngestRun": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "succeeded",
+              "partial",
+              "failed"
+            ]
+          },
+          "collection": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "received": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "created": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "updated": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "proposed": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "skipped": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "received",
+              "created",
+              "updated",
+              "proposed",
+              "skipped",
+              "failed"
+            ],
+            "additionalProperties": false
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IngestItemResult"
+            }
+          }
+        },
+        "required": [
+          "runId",
+          "status",
+          "collection",
+          "startedAt",
+          "completedAt",
+          "counts",
+          "results"
+        ],
+        "additionalProperties": false
+      },
+      "IngestItemResult": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "externalId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "created",
+              "updated",
+              "proposed",
+              "unchanged",
+              "skipped",
+              "failed"
+            ]
+          },
+          "slug": {
+            "type": "string"
+          },
+          "reason": {
+            "description": "Machine-readable reason for skipped or failed items.",
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "index",
+          "externalId",
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "validation_failed"
+              },
+              "message": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "ArticleIngestItem": {
+        "type": "object",
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[\\x21-\\x7e]+$",
+            "description": "Stable identifier from the bot. Re-sending the same id updates the same record."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 600
+          },
+          "contentText": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "author": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "categories": {
+            "default": [],
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          "tags": {
+            "default": [],
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          "sourceReferences": {
+            "default": [],
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceReference"
+            }
+          },
+          "aiProvenance": {
+            "$ref": "#/components/schemas/AiProvenance"
+          }
+        },
+        "required": [
+          "externalId",
+          "title"
+        ]
+      },
+      "ArticleIngestBatch": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArticleIngestItem"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "NewsIngestItem": {
+        "type": "object",
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[\\x21-\\x7e]+$",
+            "description": "Stable identifier from the bot. Re-sending the same id updates the same record."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 1500
+          },
+          "bodyText": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "originalUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "publisher": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "originalPublishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+            "description": "ISO 8601 timestamp with UTC offset",
+            "example": "2026-11-20T18:00:00+01:00"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "tags": {
+            "default": [],
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          "sourceReferences": {
+            "default": [],
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceReference"
+            }
+          },
+          "aiProvenance": {
+            "$ref": "#/components/schemas/AiProvenance"
+          }
+        },
+        "required": [
+          "externalId",
+          "title",
+          "originalUrl"
+        ]
+      },
+      "NewsIngestBatch": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewsIngestItem"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "PublicationIngestItem": {
+        "type": "object",
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[\\x21-\\x7e]+$",
+            "description": "Stable identifier from the bot. Re-sending the same id updates the same record."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "authors": {
+            "default": [],
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "abstract": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "aiSummary": {
+            "type": "string",
+            "maxLength": 3000
+          },
+          "doi": {
+            "example": "10.1000/xyz123",
+            "type": "string",
+            "pattern": "^10\\.\\d{4,9}\\/\\S+$"
+          },
+          "journal": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "publicationDate": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "example": "2026-10-01"
+          },
+          "publicationUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "researchTopics": {
+            "default": [],
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "sourceReferences": {
+            "default": [],
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceReference"
+            }
+          },
+          "aiProvenance": {
+            "$ref": "#/components/schemas/AiProvenance"
+          }
+        },
+        "required": [
+          "externalId",
+          "title"
+        ]
+      },
+      "PublicationIngestBatch": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicationIngestItem"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "SocialPostIngestItem": {
+        "type": "object",
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[\\x21-\\x7e]+$",
+            "description": "Stable identifier from the bot. Re-sending the same id updates the same record."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "instagram",
+              "linkedin",
+              "tiktok",
+              "youtube",
+              "x"
+            ]
+          },
+          "postType": {
+            "type": "string",
+            "enum": [
+              "post",
+              "carousel",
+              "story",
+              "reel",
+              "short",
+              "video"
+            ]
+          },
+          "hashtags": {
+            "default": [],
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^#?[\\p{L}\\p{N}_]{1,100}$"
+            }
+          },
+          "targetUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "aiProvenance": {
+            "$ref": "#/components/schemas/AiProvenance"
+          }
+        },
+        "required": [
+          "externalId",
+          "title",
+          "content",
+          "platform",
+          "postType"
+        ]
+      },
+      "SocialPostIngestBatch": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SocialPostIngestItem"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "botToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "vch_<keyId>_<secret>",
+        "description": "Per-bot credential created with `pnpm --filter @watcher/content-cms credentials:create`."
+      }
+    }
+  }
+}
