@@ -6,141 +6,141 @@ This is a real implementation task. Inspect the repository, design the integrati
 Do not rewrite existing bots, break Telegram notifications, or introduce unnecessary infrastructure.
 
 1. Core architecture
-Implement the following architecture:
-Existing Telegram Bots Monorepo
-│
-├── Brno Events Bot
-├── News Bot
-├── Publications Bot
-├── Other AI Agents
-│
-│ Authenticated ingestion
-▼
-Payload CMS — Vantuch Content Hub
-│
-├── Content Ingestion API
-├── PostgreSQL
-├── RustFS (S3-compatible media storage)
-├── Editorial Workflow
-├── Content Collections
-├── Admin Dashboard
-├── Public REST API
-└── OpenAPI 3.1 / Swagger UI
-│
-▼
-Next.js Website — vantuch.dev
-Payload CMS must be the single source of truth for editorial and published content.
-Bots may continue using their existing databases for operational data, crawling history, notifications, and processing state.
-Do not create a separate Fastify Events API if Payload can provide the required functionality.
-The CMS should be implemented as an independently deployable application inside the monorepo, preferably apps/content-cms, unless the repository structure suggests a better location.
-Keep its dependencies, Docker image, configuration, and deployment lifecycle isolated so it can later be extracted into a standalone vantuch-content repository.
+   Implement the following architecture:
+   Existing Telegram Bots Monorepo
+   │
+   ├── Brno Events Bot
+   ├── News Bot
+   ├── Publications Bot
+   ├── Other AI Agents
+   │
+   │ Authenticated ingestion
+   ▼
+   Payload CMS — Vantuch Content Hub
+   │
+   ├── Content Ingestion API
+   ├── PostgreSQL
+   ├── RustFS (S3-compatible media storage)
+   ├── Editorial Workflow
+   ├── Content Collections
+   ├── Admin Dashboard
+   ├── Public REST API
+   └── OpenAPI 3.1 / Swagger UI
+   │
+   ▼
+   Next.js Website — vantuch.dev
+   Payload CMS must be the single source of truth for editorial and published content.
+   Bots may continue using their existing databases for operational data, crawling history, notifications, and processing state.
+   Do not create a separate Fastify Events API if Payload can provide the required functionality.
+   The CMS should be implemented as an independently deployable application inside the monorepo, preferably apps/content-cms, unless the repository structure suggests a better location.
+   Keep its dependencies, Docker image, configuration, and deployment lifecycle isolated so it can later be extracted into a standalone vantuch-content repository.
 
 2. Inspect the repository first
-Before implementation:
-Identify the Brno Events Bot.
-Inspect how events are discovered, normalized, classified, deduplicated, stored, and sent to Telegram.
-Inspect existing TypeScript packages and shared utilities.
-Inspect PostgreSQL, Redis, RustFS, Docker Compose, migrations, CI/CD, and reverse proxy configuration.
-Identify existing event schemas and persistence mechanisms.
-Identify all existing bots that could later produce publishable content.
-Determine the most appropriate integration points.
-Provide a concise architecture assessment and implementation plan.
-Then proceed with implementation.
-Prefer existing conventions and dependencies where possible.
+   Before implementation:
+   Identify the Brno Events Bot.
+   Inspect how events are discovered, normalized, classified, deduplicated, stored, and sent to Telegram.
+   Inspect existing TypeScript packages and shared utilities.
+   Inspect PostgreSQL, Redis, RustFS, Docker Compose, migrations, CI/CD, and reverse proxy configuration.
+   Identify existing event schemas and persistence mechanisms.
+   Identify all existing bots that could later produce publishable content.
+   Determine the most appropriate integration points.
+   Provide a concise architecture assessment and implementation plan.
+   Then proceed with implementation.
+   Prefer existing conventions and dependencies where possible.
 
 3. Technology stack
-Use:
-Payload CMS 3.x, latest compatible stable version
-Next.js App Router
-TypeScript strict mode
-PostgreSQL using the official Payload adapter
-RustFS using S3-compatible storage
-Docker and Docker Compose
-Payload authentication and access control
-Payload drafts, versions, and hooks
-OpenAPI 3.1
-Swagger UI
-Zod or equivalent schema validation
-Structured logging
-Automated tests
-Use official Payload packages wherever possible.
-Do not introduce a separate ORM or duplicate database infrastructure unnecessarily.
+   Use:
+   Payload CMS 3.x, latest compatible stable version
+   Next.js App Router
+   TypeScript strict mode
+   PostgreSQL using the official Payload adapter
+   RustFS using S3-compatible storage
+   Docker and Docker Compose
+   Payload authentication and access control
+   Payload drafts, versions, and hooks
+   OpenAPI 3.1
+   Swagger UI
+   Zod or equivalent schema validation
+   Structured logging
+   Automated tests
+   Use official Payload packages wherever possible.
+   Do not introduce a separate ORM or duplicate database infrastructure unnecessarily.
 
 4. Payload CMS setup
-Create a fully functional Payload CMS application.
-Expected production URLs:
-Admin: https://cms.vantuch.dev/admin
-Public API: https://cms.vantuch.dev/api/public/v1
-Ingestion API: https://cms.vantuch.dev/api/ingest/v1
-Public Swagger: https://cms.vantuch.dev/api/public/docs
-OpenAPI specification: https://cms.vantuch.dev/api/public/openapi.json
-These are target URLs, not assumptions about already deployed services.
-Implement the required custom endpoints using Payload's supported extension mechanisms.
-Do not expose internal Payload collections or private records unintentionally through generated REST or GraphQL endpoints.
-Configure:
-Database connection
-Payload secret
-Authentication
-Admin access
-Access control
-CORS and CSRF origins
-Media storage
-Environment validation
-Health checks
-Logging
-Database migrations
-Docker deployment
-Use environment variables for all sensitive configuration.
+   Create a fully functional Payload CMS application.
+   Expected production URLs:
+   Admin: https://cms.vantuch.dev/admin
+   Public API: https://cms.vantuch.dev/api/public/v1
+   Ingestion API: https://cms.vantuch.dev/api/ingest/v1
+   Public Swagger: https://cms.vantuch.dev/api/public/docs
+   OpenAPI specification: https://cms.vantuch.dev/api/public/openapi.json
+   These are target URLs, not assumptions about already deployed services.
+   Implement the required custom endpoints using Payload's supported extension mechanisms.
+   Do not expose internal Payload collections or private records unintentionally through generated REST or GraphQL endpoints.
+   Configure:
+   Database connection
+   Payload secret
+   Authentication
+   Admin access
+   Access control
+   CORS and CSRF origins
+   Media storage
+   Environment validation
+   Health checks
+   Logging
+   Database migrations
+   Docker deployment
+   Use environment variables for all sensitive configuration.
 
 5. Content collections
-Create the following Payload collections.
-5.1 Events
-Fields:
-interface Event {
-  id: string;
-  title: string;
-  slug: string;
+   Create the following Payload collections.
+   5.1 Events
+   Fields:
+   interface Event {
+   id: string;
+   title: string;
+   slug: string;
 
-  summary: string | null;
-  description: unknown;
+summary: string | null;
+description: unknown;
 
-  startsAt: string;
-  endsAt: string | null;
-  timezone: string;
+startsAt: string;
+endsAt: string | null;
+timezone: string;
 
-  city: string;
-  venueName: string | null;
-  address: string | null;
+city: string;
+venueName: string | null;
+address: string | null;
 
-  category: string;
-  tags: string[];
+category: string;
+tags: string[];
 
-  organizerName: string | null;
-  sourceUrl: string;
-  registrationUrl: string | null;
+organizerName: string | null;
+sourceUrl: string;
+registrationUrl: string | null;
 
-  image: string | null;
+image: string | null;
 
-  isFree: boolean | null;
-  price: number | null;
-  currency: string | null;
+isFree: boolean | null;
+price: number | null;
+currency: string | null;
 
-  freeFood: "yes" | "no" | "unknown";
-  foodDetails: string | null;
+freeFood: "yes" | "no" | "unknown";
+foodDetails: string | null;
 
-  eventStatus: "scheduled" | "cancelled" | "postponed";
-  featured: boolean;
+eventStatus: "scheduled" | "cancelled" | "postponed";
+featured: boolean;
 
-  lastVerifiedAt: string | null;
+lastVerifiedAt: string | null;
 
-  reviewStatus:
-    | "ingested"
-    | "needs_review"
-    | "approved"
-    | "rejected"
-    | "archived";
+reviewStatus:
+| "ingested"
+| "needs_review"
+| "approved"
+| "rejected"
+| "archived";
 
-  updatedAt: string;
+updatedAt: string;
 }
 Adapt the implementation to Payload's native field types.
 Use Payload rich text for editable descriptions.
@@ -299,59 +299,59 @@ Failed records
 Error details
 
 6. Editorial workflow
-Implement a consistent editorial workflow across publishable collections.
-Statuses:
-Ingested
-Needs Review
-Approved
-Rejected
-Archived
-Keep editorial review status separate from Payload's native draft/published status.
-Rules:
-All bot-generated content starts unpublished.
-New content requires human approval by default.
-Only approved content may be published.
-Rejected content must never appear in the public API.
-Archived content must not appear in ordinary public listings.
-Support scheduled publication.
-Support version history.
-Support editorial previews.
-Support bulk approval where practical.
-Enforce publication restrictions server-side through Payload access control and hooks.
-Do not rely solely on the admin interface.
-Support roles:
-Admin
-Editor
-Reviewer
-Use least-privilege permissions.
+   Implement a consistent editorial workflow across publishable collections.
+   Statuses:
+   Ingested
+   Needs Review
+   Approved
+   Rejected
+   Archived
+   Keep editorial review status separate from Payload's native draft/published status.
+   Rules:
+   All bot-generated content starts unpublished.
+   New content requires human approval by default.
+   Only approved content may be published.
+   Rejected content must never appear in the public API.
+   Archived content must not appear in ordinary public listings.
+   Support scheduled publication.
+   Support version history.
+   Support editorial previews.
+   Support bulk approval where practical.
+   Enforce publication restrictions server-side through Payload access control and hooks.
+   Do not rely solely on the admin interface.
+   Support roles:
+   Admin
+   Editor
+   Reviewer
+   Use least-privilege permissions.
 
 7. Preserve human edits
-This is a critical requirement.
-Bots must never silently overwrite content edited by a human.
-Store separately:
-Latest raw bot-generated data
-Current editorial content
-Pending proposed updates
-When a bot discovers changes to an existing event:
-Match it using stable source identifiers.
-Compare incoming data with the previous bot snapshot.
-Preserve human-edited fields.
-Store proposed changes.
-Mark the record as having pending updates.
-Allow editors to review and apply selected changes.
-Repeated identical submissions must not create duplicate versions.
-For new records, initialize editorial fields from the bot output.
-For existing approved records, preserve publication status unless a verified cancellation or critical correction requires special handling.
-Implement an explicit safety policy for cancellations and date changes so materially incorrect published information is not left visible indefinitely.
+   This is a critical requirement.
+   Bots must never silently overwrite content edited by a human.
+   Store separately:
+   Latest raw bot-generated data
+   Current editorial content
+   Pending proposed updates
+   When a bot discovers changes to an existing event:
+   Match it using stable source identifiers.
+   Compare incoming data with the previous bot snapshot.
+   Preserve human-edited fields.
+   Store proposed changes.
+   Mark the record as having pending updates.
+   Allow editors to review and apply selected changes.
+   Repeated identical submissions must not create duplicate versions.
+   For new records, initialize editorial fields from the bot output.
+   For existing approved records, preserve publication status unless a verified cancellation or critical correction requires special handling.
+   Implement an explicit safety policy for cancellations and date changes so materially incorrect published information is not left visible indefinitely.
 
 8. Bot ingestion API
-Implement a secure, versioned API for all bots.
-Endpoints:
-POST /api/ingest/v1/events
-POST /api/ingest/v1/articles
-POST /api/ingest/v1/news
-POST /api/ingest/v1/publications
-POST /api/ingest/v1/social-posts
+   Implement a secure, versioned API for all bots.
+   Endpoints:
+   POST /api/ingest/v1/events
+   POST /api/ingest/v1/articles
+   POST /api/ingest/v1/news
+   POST /api/ingest/v1/publications
+   POST /api/ingest/v1/social-posts
 
 GET /api/ingest/v1/runs/:id
 Requirements:
@@ -373,45 +373,45 @@ Document authentication and request examples.
 Do not expose ingestion endpoints anonymously.
 
 9. Integrate the existing Brno Events Bot
-Modify the existing Brno Events Bot to send discovered events into Payload CMS.
-Pipeline:
-Event discovery
-    ↓
-Normalization
-    ↓
-Validation
-    ↓
-Deduplication
-    ↓
-Free food classification
-    ↓
-Payload ingestion API
-    ↓
-Editorial review
-    ↓
-Publication
-Requirements:
-Preserve existing Telegram notifications.
-Preserve existing bot scheduling.
-Preserve existing deduplication logic where appropriate.
-Do not create duplicate Telegram notifications.
-Use stable external event identifiers.
-Make ingestion retry-safe.
-Handle temporary CMS outages.
-Use bounded retries and backoff.
-Avoid losing events when the CMS is unavailable.
-Track ingestion failures.
-Avoid blocking Telegram delivery on CMS availability.
-Do not rewrite the existing bot from scratch.
-Reuse existing shared packages and infrastructure.
+   Modify the existing Brno Events Bot to send discovered events into Payload CMS.
+   Pipeline:
+   Event discovery
+   ↓
+   Normalization
+   ↓
+   Validation
+   ↓
+   Deduplication
+   ↓
+   Free food classification
+   ↓
+   Payload ingestion API
+   ↓
+   Editorial review
+   ↓
+   Publication
+   Requirements:
+   Preserve existing Telegram notifications.
+   Preserve existing bot scheduling.
+   Preserve existing deduplication logic where appropriate.
+   Do not create duplicate Telegram notifications.
+   Use stable external event identifiers.
+   Make ingestion retry-safe.
+   Handle temporary CMS outages.
+   Use bounded retries and backoff.
+   Avoid losing events when the CMS is unavailable.
+   Track ingestion failures.
+   Avoid blocking Telegram delivery on CMS availability.
+   Do not rewrite the existing bot from scratch.
+   Reuse existing shared packages and infrastructure.
 
 10. Public REST API
-Expose a stable, read-only API for website consumers.
-Implement:
-GET /api/public/v1/events
-GET /api/public/v1/events/:slug
-GET /api/public/v1/events/categories
-GET /api/public/v1/events/featured
+    Expose a stable, read-only API for website consumers.
+    Implement:
+    GET /api/public/v1/events
+    GET /api/public/v1/events/:slug
+    GET /api/public/v1/events/categories
+    GET /api/public/v1/events/featured
 
 GET /api/public/v1/articles
 GET /api/public/v1/articles/:slug
@@ -442,62 +442,62 @@ Implement database indexes for common filtering and sorting operations.
 Public event response
 Return a stable, frontend-friendly DTO:
 interface PublicEvent {
-  id: string;
-  slug: string;
-  title: string;
+id: string;
+slug: string;
+title: string;
 
-  summary: string | null;
-  description: string | null;
+summary: string | null;
+description: string | null;
 
-  startsAt: string;
-  endsAt: string | null;
-  timezone: string;
+startsAt: string;
+endsAt: string | null;
+timezone: string;
 
-  city: string;
-  venueName: string | null;
-  address: string | null;
+city: string;
+venueName: string | null;
+address: string | null;
 
-  category: string;
-  tags: string[];
+category: string;
+tags: string[];
 
-  organizerName: string | null;
-  sourceUrl: string;
-  registrationUrl: string | null;
+organizerName: string | null;
+sourceUrl: string;
+registrationUrl: string | null;
 
-  imageUrl: string | null;
+imageUrl: string | null;
 
-  isFree: boolean | null;
-  price: number | null;
-  currency: string | null;
+isFree: boolean | null;
+price: number | null;
+currency: string | null;
 
-  freeFood: "yes" | "no" | "unknown";
-  foodDetails: string | null;
+freeFood: "yes" | "no" | "unknown";
+foodDetails: string | null;
 
-  status: "scheduled" | "cancelled" | "postponed";
-  featured: boolean;
+status: "scheduled" | "cancelled" | "postponed";
+featured: boolean;
 
-  lastVerifiedAt: string | null;
-  updatedAt: string;
+lastVerifiedAt: string | null;
+updatedAt: string;
 }
 Return:
 {
-  "data": [],
-  "nextCursor": null,
-  "meta": {
-    "limit": 20
-  }
+"data": [],
+"nextCursor": null,
+"meta": {
+"limit": 20
+}
 }
 Adapt fields only where necessary and document any differences.
 Use ISO 8601 timestamps.
 Ensure all public descriptions are safe for rendering.
 
 11. Swagger and OpenAPI
-Implement OpenAPI 3.1 documentation for:
-Public REST API
-Bot ingestion API
-Expose:
-GET /api/public/docs
-GET /api/public/openapi.json
+    Implement OpenAPI 3.1 documentation for:
+    Public REST API
+    Bot ingestion API
+    Expose:
+    GET /api/public/docs
+    GET /api/public/openapi.json
 
 GET /api/ingest/docs
 GET /api/ingest/openapi.json
@@ -520,118 +520,118 @@ Provide a script to export OpenAPI specifications for TypeScript client generati
 Ensure compatibility with openapi-typescript.
 
 12. Public API security
-Requirements:
-Public GET endpoints require no authentication.
-Public API must be read-only.
-All write operations require authentication.
-Do not expose private Payload collections through native APIs.
-Restrict browser CORS to configured trusted origins.
-Do not rely on CORS for security.
-Validate all query parameters.
-Use parameterized database queries.
-Apply rate limiting.
-Add security headers.
-Prevent internal error leakage.
-Protect against excessive requests.
-Do not expose database or storage credentials.
-The public API must remain accessible without Cloudflare Access login.
-The admin and ingestion interfaces must have separate security policies.
+    Requirements:
+    Public GET endpoints require no authentication.
+    Public API must be read-only.
+    All write operations require authentication.
+    Do not expose private Payload collections through native APIs.
+    Restrict browser CORS to configured trusted origins.
+    Do not rely on CORS for security.
+    Validate all query parameters.
+    Use parameterized database queries.
+    Apply rate limiting.
+    Add security headers.
+    Prevent internal error leakage.
+    Protect against excessive requests.
+    Do not expose database or storage credentials.
+    The public API must remain accessible without Cloudflare Access login.
+    The admin and ingestion interfaces must have separate security policies.
 
 13. Copyright and source compliance
-This is important because the Brno Events Bot discovers events published by third-party organizers.
-Implement the system to minimize legal and copyright risks.
-Rules:
-Store factual event information such as title, date, time, location, and registration URL.
-Generate original short summaries instead of copying entire descriptions.
-Preserve attribution to original sources.
-Link directly to organizers.
-Do not automatically republish copyrighted event images without permission or a suitable license.
-Track image licensing information.
-Respect source website terms and applicable access restrictions.
-Avoid systematically reproducing third-party event databases.
-Provide a way to correct or remove event listings.
-Avoid collecting unnecessary personal information.
-The ingestion system must preserve source provenance and evidence.
-Do not assume that publicly accessible content is automatically free to republish.
+    This is important because the Brno Events Bot discovers events published by third-party organizers.
+    Implement the system to minimize legal and copyright risks.
+    Rules:
+    Store factual event information such as title, date, time, location, and registration URL.
+    Generate original short summaries instead of copying entire descriptions.
+    Preserve attribution to original sources.
+    Link directly to organizers.
+    Do not automatically republish copyrighted event images without permission or a suitable license.
+    Track image licensing information.
+    Respect source website terms and applicable access restrictions.
+    Avoid systematically reproducing third-party event databases.
+    Provide a way to correct or remove event listings.
+    Avoid collecting unnecessary personal information.
+    The ingestion system must preserve source provenance and evidence.
+    Do not assume that publicly accessible content is automatically free to republish.
 
 14. RustFS media storage
-Configure Payload media uploads using RustFS.
-Use the official S3-compatible Payload storage adapter where supported.
-Environment configuration should include:
-Endpoint
-Region
-Bucket
-Access key
-Secret key
-Path-style addressing
-Requirements:
-Secure uploads
-Appropriate MIME validation
-Configurable file size limits
-Public/private media separation
-Image previews
-Alt text
-Media metadata
-Storage error handling
-Reuse an existing RustFS instance if available.
-Do not create another object storage service unnecessarily.
+    Configure Payload media uploads using RustFS.
+    Use the official S3-compatible Payload storage adapter where supported.
+    Environment configuration should include:
+    Endpoint
+    Region
+    Bucket
+    Access key
+    Secret key
+    Path-style addressing
+    Requirements:
+    Secure uploads
+    Appropriate MIME validation
+    Configurable file size limits
+    Public/private media separation
+    Image previews
+    Alt text
+    Media metadata
+    Storage error handling
+    Reuse an existing RustFS instance if available.
+    Do not create another object storage service unnecessarily.
 
 15. Admin dashboard
-Customize Payload Admin UI using Vantuch branding.
-Navigation:
-Content:
-Events
-Articles
-News
-Publications
-Social Posts
-Assets:
-Media
-Sources
-Operations:
-Ingestion Runs
-Pending Updates
-Administration:
-Users
-Settings
-Provide practical editorial filters:
-Needs Review
-Published
-Scheduled
-Rejected
-Featured
-Source Bot
-Pending Updates
-For Events, include:
-Category
-Date
-City
-Free admission
-Free food
-Event status
-Make it easy to approve, edit, reject, archive, and feature events.
-Prefer native Payload components over building a custom dashboard from scratch.
+    Customize Payload Admin UI using Vantuch branding.
+    Navigation:
+    Content:
+    Events
+    Articles
+    News
+    Publications
+    Social Posts
+    Assets:
+    Media
+    Sources
+    Operations:
+    Ingestion Runs
+    Pending Updates
+    Administration:
+    Users
+    Settings
+    Provide practical editorial filters:
+    Needs Review
+    Published
+    Scheduled
+    Rejected
+    Featured
+    Source Bot
+    Pending Updates
+    For Events, include:
+    Category
+    Date
+    City
+    Free admission
+    Free food
+    Event status
+    Make it easy to approve, edit, reject, archive, and feature events.
+    Prefer native Payload components over building a custom dashboard from scratch.
 
 16. Caching and Vercel integration
-The public website is hosted on Vercel using Next.js App Router.
-Implement HTTP caching suitable for public content.
-Suggested defaults:
-Event listing: 5 minutes
-Event detail: 15 minutes
-Categories: 1 hour
-Provide an integration example:
-const response = await fetch(
-  `${process.env.CONTENT_API_BASE_URL}/api/public/v1/events`,
-  {
+    The public website is hosted on Vercel using Next.js App Router.
+    Implement HTTP caching suitable for public content.
+    Suggested defaults:
+    Event listing: 5 minutes
+    Event detail: 15 minutes
+    Categories: 1 hour
+    Provide an integration example:
+    const response = await fetch(
+    `${process.env.CONTENT_API_BASE_URL}/api/public/v1/events`,
+    {
     next: {
-      revalidate: 900,
-      tags: ["events"],
+    revalidate: 900,
+    tags: ["events"],
     },
-  }
-);
+    }
+    );
 
 if (!response.ok) {
-  throw new Error("Failed to fetch events");
+throw new Error("Failed to fetch events");
 }
 
 const { data } = await response.json();
@@ -641,127 +641,127 @@ Document how the frontend should consume the OpenAPI contract.
 Do not modify the vantuch.dev website repository in this task.
 
 17. Docker and deployment
-Prepare the CMS for self-hosted deployment.
-Requirements:
-Production Dockerfile
-Docker Compose integration
-Environment variable validation
-Health and readiness checks
-Graceful shutdown
-Structured logs
-Restart policies
-Persistent database and storage
-Database migrations
-External Docker network support
-Reverse proxy configuration
-Prefer:
-https://cms.vantuch.dev
-The CMS should work behind the existing Nginx or reverse proxy infrastructure.
-Document Cloudflare Access configuration for the admin interface.
-Ensure:
-/admin is protected.
-Public API remains publicly accessible.
-Bot ingestion endpoints use service authentication.
-Swagger public documentation remains accessible.
-Private documentation is appropriately protected.
-PostgreSQL and RustFS administrative interfaces are not exposed publicly.
-Do not deploy automatically without explicit approval.
+    Prepare the CMS for self-hosted deployment.
+    Requirements:
+    Production Dockerfile
+    Docker Compose integration
+    Environment variable validation
+    Health and readiness checks
+    Graceful shutdown
+    Structured logs
+    Restart policies
+    Persistent database and storage
+    Database migrations
+    External Docker network support
+    Reverse proxy configuration
+    Prefer:
+    https://cms.vantuch.dev
+    The CMS should work behind the existing Nginx or reverse proxy infrastructure.
+    Document Cloudflare Access configuration for the admin interface.
+    Ensure:
+    /admin is protected.
+    Public API remains publicly accessible.
+    Bot ingestion endpoints use service authentication.
+    Swagger public documentation remains accessible.
+    Private documentation is appropriately protected.
+    PostgreSQL and RustFS administrative interfaces are not exposed publicly.
+    Do not deploy automatically without explicit approval.
 
 18. Testing
-Implement automated tests for:
-Event normalization
-Deduplication
-Stable slug generation
-Date handling
-Timezones and DST
-Free food classification
-Source attribution
-Idempotent ingestion
-Retry behavior
-Human edit preservation
-Approval workflow
-Draft visibility
-Publication restrictions
-Event cancellations
-Search and filtering
-Combined filters
-Cursor pagination
-API response validation
-OpenAPI generation
-Access control
-Media storage integration
-Run:
-TypeScript typecheck
-Lint
-Unit tests
-Integration tests
-Production build
-Docker build
-Report failures honestly.
+    Implement automated tests for:
+    Event normalization
+    Deduplication
+    Stable slug generation
+    Date handling
+    Timezones and DST
+    Free food classification
+    Source attribution
+    Idempotent ingestion
+    Retry behavior
+    Human edit preservation
+    Approval workflow
+    Draft visibility
+    Publication restrictions
+    Event cancellations
+    Search and filtering
+    Combined filters
+    Cursor pagination
+    API response validation
+    OpenAPI generation
+    Access control
+    Media storage integration
+    Run:
+    TypeScript typecheck
+    Lint
+    Unit tests
+    Integration tests
+    Production build
+    Docker build
+    Report failures honestly.
 
 19. Documentation
-Create:
-README.md
-docs/architecture.md
-docs/deployment.md
-docs/cms-setup.md
-docs/ingestion-api.md
-docs/public-api.md
-docs/events-api.md
-docs/bot-integration.md
-docs/editorial-workflow.md
-Include:
-Local setup
-Environment variables
-Database migrations
-RustFS configuration
-Docker commands
-Swagger URLs
-Authentication setup
-API examples
-Frontend integration
-Deployment verification
-Backup and recovery considerations
+    Create:
+    README.md
+    docs/architecture.md
+    docs/deployment.md
+    docs/cms-setup.md
+    docs/ingestion-api.md
+    docs/public-api.md
+    docs/events-api.md
+    docs/bot-integration.md
+    docs/editorial-workflow.md
+    Include:
+    Local setup
+    Environment variables
+    Database migrations
+    RustFS configuration
+    Docker commands
+    Swagger URLs
+    Authentication setup
+    API examples
+    Frontend integration
+    Deployment verification
+    Backup and recovery considerations
 
 20. Implementation strategy
-Implement incrementally.
-Phase 1 — CMS Foundation
-Payload application
-PostgreSQL integration
-Authentication
-Collections
-RustFS
-Docker
-Phase 2 — Editorial Workflow
-Drafts
-Review statuses
-Roles
-Approval
-Version history
-Human edit preservation
-Phase 3 — Bot Integration
-Ingestion API
-Brno Events Bot integration
-Free food classification
-Deduplication
-Retry handling
-Ingestion logging
-Phase 4 — Public API
-REST endpoints
-Filtering
-Pagination
-Swagger/OpenAPI
-Public access security
-Caching
-Phase 5 — Production Readiness
-Automated tests
-Security review
-Docker build
-Deployment documentation
-Next.js integration examples
-Prioritize working vertical slices and maintainable code.
-Do not create fake production events.
-Do not automatically deploy or modify unrelated production infrastructure.
+    Implement incrementally.
+    Phase 1 — CMS Foundation
+    Payload application
+    PostgreSQL integration
+    Authentication
+    Collections
+    RustFS
+    Docker
+    Phase 2 — Editorial Workflow
+    Drafts
+    Review statuses
+    Roles
+    Approval
+    Version history
+    Human edit preservation
+    Phase 3 — Bot Integration
+    Ingestion API
+    Brno Events Bot integration
+    Free food classification
+    Deduplication
+    Retry handling
+    Ingestion logging
+    Phase 4 — Public API
+    REST endpoints
+    Filtering
+    Pagination
+    Swagger/OpenAPI
+    Public access security
+    Caching
+    Phase 5 — Production Readiness
+    Automated tests
+    Security review
+    Docker build
+    Deployment documentation
+    Next.js integration examples
+    Prioritize working vertical slices and maintainable code.
+    Do not create fake production events.
+    Do not automatically deploy or modify unrelated production infrastructure.
 
 Definition of Done
 The implementation is complete when:

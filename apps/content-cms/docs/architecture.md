@@ -11,7 +11,7 @@ Watcher monorepo bots ──(HTTPS, per-bot bearer token, vantuch network)──
    │  editorial hooks (review status, publication guard, live-row sync)
    │  public API (/api/public/v1) ─ read-only, published + approved only
    │  OpenAPI 3.1 (generated from the same Zod schemas) + Swagger UI
-   ├─▶ PostgreSQL (private, dedicated to the CMS)
+   ├─▶ PostgreSQL: dedicated content_cms database on watcher-postgres
    └─▶ RustFS (S3-compatible, existing instance on the vantuch network)
                                    ▲
 Next.js website (Vercel) ──fetch──┘  /api/public/v1/* with ISR + tag revalidation
@@ -44,10 +44,11 @@ See [editorial workflow](editorial-workflow.md) for the merge rules.
 
 ## Decisions
 
-- **Separate app and database, no shared package.** The CMS runs its own PostgreSQL
-  (like Twenty and Quickly) so Payload's Drizzle migrations never interact with the
-  Watcher Prisma schema, backups and rollbacks are independent, and the app can be
-  extracted. Bots talk to it over HTTP only; the contract is the exported OpenAPI file.
+- **Isolated app, shared server.** The CMS has its own dependencies, image,
+  Compose service, environment schema, and Payload (Drizzle) migrations, and a
+  dedicated `content_cms` database and role on the existing `watcher-postgres`
+  instance, so it never touches the Watcher Prisma schema and can be extracted
+  later. Bots talk to it over HTTP only; the contract is the exported OpenAPI file.
 - **No separate events API.** Public and ingestion APIs are Payload root endpoints.
 - **Native APIs are closed.** Content collections are readable only by signed-in staff;
   the public API queries with `overrideAccess` plus explicit published/approved filters.

@@ -5,11 +5,12 @@ published content on [vantuch.dev](https://vantuch.dev). Bots submit content
 through an authenticated ingestion API; editors review, edit, approve, and
 publish it in the Payload admin; the website reads a read-only public REST API.
 
-It has no Telegram surface and is deployed independently of the Watcher image
-(own Dockerfile, own Compose project, own PostgreSQL), so it can later move to a
-standalone `vantuch-content` repository. On the production server it runs from
-`/opt/watcher/docker-compose.content-cms.yml` with env files in
-`deploy/runtime/`; see [deployment](docs/deployment.md). It has no `workspace:*` dependencies.
+It has no Telegram surface. It keeps its own dependencies, Dockerfile, image,
+migrations, and environment schema so it can later move to a standalone
+`vantuch-content` repository. In production it is the opt-in `content-cms`
+service in `docker-compose.production.yml`, uses a dedicated `content_cms`
+database on `watcher-postgres`, and reads `deploy/runtime/content-cms.env`; see
+[deployment](docs/deployment.md). It has no `workspace:*` dependencies.
 
 | Surface          | Path (production: `https://cms.vantuch.dev`)   | Access                            |
 | ---------------- | ---------------------------------------------- | --------------------------------- |

@@ -723,6 +723,59 @@ services:
         max-file: '3'
         max-size: 10m
 
+  # Vantuch Content Hub (Payload CMS). Opt-in profile: deploy.sh never starts it.
+  #   docker compose --env-file deploy/runtime/compose.env --env-file .release.env \
+  #     -f docker-compose.production.yml --profile content-cms up -d content-cms
+  content-cms:
+    profiles: ['content-cms']
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/vantuch-content-cms:${IMAGE_TAG:?IMAGE_TAG is required}
+    mem_limit: 1g
+    env_file:
+      - path: ./deploy/runtime/content-cms.env
+        required: false
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      TRUST_PROXY_HEADERS: 'true'
+    ports:
+      # Loopback-only fallback; public traffic arrives through cloudflared on `vantuch`.
+      - '127.0.0.1:${CONTENT_CMS_HOST_PORT:-3100}:3000'
+    networks:
+      default:
+      vantuch:
+        aliases:
+          - vantuch-content-cms
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+      - /app/apps/content-cms/.next/cache
+    logging:
+      driver: json-file
+      options:
+        max-file: '3'
+        max-size: 10m
+
   quickly-postgres:
     image: postgres:15-alpine
     mem_limit: 768m

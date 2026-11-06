@@ -53,6 +53,5 @@ Thumbs.db
 .claude/settings.local.json
 
 # Content CMS runtime state
-apps/content-cms/deploy/*.env
 apps/content-cms/media-local/
 apps/content-cms/openapi/*.d.ts

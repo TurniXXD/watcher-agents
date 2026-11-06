@@ -9,6 +9,5 @@ apps/content-cms/node_modules
 apps/content-cms/.next
 apps/content-cms/.env
 apps/content-cms/.env.*
-apps/content-cms/deploy/*.env
 apps/content-cms/media-local
 apps/content-cms/coverage

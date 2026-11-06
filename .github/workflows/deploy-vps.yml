@@ -68,7 +68,6 @@ jobs:
           test -f Dockerfile
           test -f docker-compose.production.yml
           test -f docker-compose.nvidia.yml
-          test -f docker-compose.content-cms.yml
           test -f apps/content-cms/Dockerfile
           test -x deploy/deploy.sh
           test -x deploy/normalize-database-url-host.sh
@@ -228,10 +227,6 @@ jobs:
           scp -P "$DEPLOY_PORT" \
             docker-compose.nvidia.yml \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.nvidia.yml.next"
-          # The Content CMS is started manually; only its Compose file is delivered.
-          scp -P "$DEPLOY_PORT" \
-            docker-compose.content-cms.yml \
-            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.content-cms.yml"
           scp -P "$DEPLOY_PORT" \
             deploy/deploy.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy.sh.next"
