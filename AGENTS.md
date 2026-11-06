@@ -11,12 +11,13 @@ Read each applicable file completely before acting. Multiple scopes may apply.
 - Changing Docker, Compose, deployment scripts, runtime env rendering, migrations, production workflows, healthchecks, monitoring, or rollback: [`docs/agent/deployment.md`](docs/agent/deployment.md).
 - Any implementation, command-heavy diagnosis, test or bug-fix work, CI change, or final verification: [`docs/agent/testing.md`](docs/agent/testing.md).
 - Under `apps/docs`, also follow the nearer [`apps/docs/AGENTS.md`](apps/docs/AGENTS.md).
+- Creating or modifying `apps/content-cms`, its ingestion/public APIs, or any bot integration that sends content to it: [`docs/agent/content-cms.md`](docs/agent/content-cms.md).
 
 ## Project scope
 
 - Build a production-quality, self-hosted Watcher MVP for one operator on one Linux server.
 - Keep Telegram bots and internal agents in one strict TypeScript Turborepo. Each runnable app under `apps/` owns its process boundary; Telegram bots remain separate long-running Compose services while sharing PostgreSQL and workspace packages only where concrete consumers exist.
-- Telegram is the only user interface. Do not add a web UI.
+- Telegram is the only user interface for bots. Do not add a web UI, except the approved `apps/content-cms` Payload admin and its public content API (see [`docs/agent/content-cms.md`](docs/agent/content-cms.md)).
 - Ollama is external. Do not add it to Compose.
 - Prefer the simplest robust single-server design. Do not add Redis, queues, event buses, Kubernetes, host cron, systemd timers, or extra services.
 

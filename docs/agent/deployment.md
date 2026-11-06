@@ -4,6 +4,7 @@ Read this file completely before changing `Dockerfile`, Compose files, deploymen
 
 - Keep `.github/workflows/deploy-vps.yml`, `docker-compose.production.yml`, and `deploy/deploy.sh` aligned.
 - Production publishes one shared Watcher image tagged with the exact commit SHA. Never replace immutable release tags with `latest` in deployment state.
+- Exception: `apps/content-cms` builds its own image from its own Dockerfile, tagged with the same commit SHA, with its own Compose service, migrations, and CI job, so it can later be extracted into a standalone repository. Every other rule in this file still applies to it.
 - GitHub stores only SSH, GHCR, and Tailscale transport credentials. Application runtime secrets remain in mode-`0600` files under `deploy/runtime` on the VPS and are never committed or uploaded by CI.
 - Tailscale CI access uses an ephemeral tagged identity with least-privilege access to the Watcher VPS SSH port.
 - Preserve pre-deployment PostgreSQL backups, migration-before-rollout ordering, serialized production deploys, health checks, failure logs, and application-image rollback.
