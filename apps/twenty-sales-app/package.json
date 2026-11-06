@@ -16,7 +16,7 @@
     "twenty": "twenty"
   },
   "devDependencies": {
-    "twenty-sdk": "2.54.3",
+    "twenty-sdk": "2.55.0",
     "typescript": "7.0.2"
   }
 }
