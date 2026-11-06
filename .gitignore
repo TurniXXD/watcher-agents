@@ -9,12 +9,15 @@ node_modules/
 pnpm-debug.log*
 
 # Build, test, and tool output
+.cache/
 dist/
 build/
 coverage/
 .next/
+.next-dev/
 .source/
 out/
+test-results/
 .turbo/
 .twenty/
 **/.twenty/

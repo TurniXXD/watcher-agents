@@ -5,12 +5,18 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   {
     ignores: [
+      '**/.cache/**',
       '**/dist/**',
+      '**/build/**',
       '**/coverage/**',
       '**/generated/**',
       '**/.next/**',
+      '**/.next-dev/**',
       '**/.source/**',
+      '**/.turbo/**',
+      '**/test-results/**',
       '**/next-env.d.ts',
+      '**/*.tsbuildinfo',
       '**/*.config.ts',
       'deploy/runtime/**',
     ],

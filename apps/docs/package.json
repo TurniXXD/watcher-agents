@@ -8,7 +8,7 @@
     "dev": "next dev",
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
-    "lint": "eslint . --config ../../eslint.config.mjs && pnpm check:links && pnpm check:reference",
+    "lint": "eslint . --config ../../eslint.config.mjs --cache --cache-location ../../.cache/eslint/docs --cache-strategy content && pnpm check:links && pnpm check:reference",
     "check:links": "node scripts/check-links.mjs",
     "check:reference": "node scripts/check-bot-reference.mjs"
   },

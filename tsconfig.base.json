@@ -15,5 +15,13 @@
     "sourceMap": true,
     "strict": true,
     "target": "ES2024"
-  }
+  },
+  "exclude": [
+    "**/.next/**",
+    "**/.next-dev/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/dist/**",
+    "**/test-results/**"
+  ]
 }

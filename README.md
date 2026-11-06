@@ -95,6 +95,10 @@ pnpm test
 pnpm build
 ```
 
+ESLint and Prettier keep disposable, content-based local caches under the
+git-ignored `.cache/` directory. Remove that directory only when a deliberately
+cold quality-gate run is needed.
+
 Also run `pnpm db:validate` after Prisma changes and `docker compose config --quiet` after Compose changes.
 
 ## ◫ Workspace map

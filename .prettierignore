@@ -1,1 +1,12 @@
 pnpm-lock.yaml
+**/.cache/**
+**/.next/**
+**/.next-dev/**
+**/.source/**
+**/.turbo/**
+**/build/**
+**/coverage/**
+**/dist/**
+**/generated/**
+**/test-results/**
+deploy/runtime/**

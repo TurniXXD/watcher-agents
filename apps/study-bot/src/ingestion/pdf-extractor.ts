@@ -7,7 +7,8 @@ export type PdfExtractor = {
 
 export class PdfJsExtractor implements PdfExtractor {
   public async extract(pdf: Uint8Array): Promise<StudyPage[]> {
-    const document = await getDocument({ data: pdf }).promise;
+    const loadingTask = getDocument({ data: pdf });
+    const document = await loadingTask.promise;
     try {
       const pages: StudyPage[] = [];
       for (
@@ -26,7 +27,7 @@ export class PdfJsExtractor implements PdfExtractor {
       }
       return pages;
     } finally {
-      await document.destroy();
+      await loadingTask.destroy();
     }
   }
 }

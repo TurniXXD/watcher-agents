@@ -1,9 +1,4 @@
-import {
-  SpanStatusCode,
-  trace,
-  type Attributes,
-  type Span,
-} from '@opentelemetry/api';
+import { SpanStatusCode, trace, type Span } from '@opentelemetry/api';
 import { Openlit, type OpenlitOptions } from 'openlit';
 import { z } from 'zod';
 
@@ -143,7 +138,7 @@ export type AiTracer = {
 };
 
 const spanAdapter = (span: Span): AiSpan => ({
-  setAttributes: (attributes) => span.setAttributes(attributes as Attributes),
+  setAttributes: (attributes) => span.setAttributes(attributes),
   setStatus: (status) => span.setStatus(status),
   recordException: (error) => span.recordException(error),
   end: () => span.end(),

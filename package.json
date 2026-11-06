@@ -15,15 +15,16 @@
     "db:validate": "pnpm --filter @watcher/database db:validate",
     "docs:build": "pnpm --filter @watcher/docs build",
     "docs:dev": "pnpm --filter @watcher/docs dev",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "lint": "turbo run build && eslint . --ignore-pattern 'apps/docs/**' && pnpm --filter @watcher/docs lint",
+    "format": "prettier --write . --cache --cache-location .cache/prettier/write --cache-strategy content",
+    "format:check": "prettier --check . --cache --cache-location .cache/prettier/check --cache-strategy content",
+    "lint": "turbo run build --filter='./packages/*' && eslint eslint.config.mjs prettier.config.mjs --cache --cache-location .cache/eslint/root/ --cache-strategy content && for workspace_dir in packages/* apps/*; do if [ -f \"$workspace_dir/package.json\" ] && [ \"$workspace_dir\" != \"apps/docs\" ]; then eslint \"$workspace_dir\" --cache --cache-location \".cache/eslint/workspaces/$workspace_dir/\" --cache-strategy content || exit; fi; done && pnpm --filter @watcher/docs lint",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@typescript/native": "npm:typescript@7.0.2",
     "@types/node": "26.6.6",
     "@vitest/coverage-v8": "5.0.5",
     "eslint": "10.14.0",
@@ -31,7 +32,7 @@
     "prettier": "3.9.10",
     "turbo": "2.11.10",
     "tsx": "4.23.15",
-    "typescript": "7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "8.72.1",
     "vitest": "5.0.5"
   }

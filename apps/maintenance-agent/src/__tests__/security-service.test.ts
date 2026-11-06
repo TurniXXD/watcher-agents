@@ -190,10 +190,12 @@ describe('SecurityIntelligenceService', () => {
   });
 
   it('emits one immediate alert batch for all urgent findings in a scan', async () => {
-    const onImmediateAlerts = vi.fn(
-      async (_items: readonly SecurityReportItem[], _batchIdentity: string) =>
-        undefined,
-    );
+    const onImmediateAlerts = vi.fn<
+      (
+        items: readonly SecurityReportItem[],
+        batchIdentity: string,
+      ) => Promise<void>
+    >(async () => undefined);
     const store = {
       listSecurityFindings: vi.fn(async () => []),
       upsertFinding: vi.fn(async (input: FindingInput) => ({
