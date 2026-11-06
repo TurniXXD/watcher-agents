@@ -48,3 +48,6 @@ deploy/security-reports/
 Thumbs.db
 .idea/
 .vscode/
+
+# Local agent settings
+.claude/settings.local.json

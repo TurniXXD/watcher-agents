@@ -1,15 +1,13 @@
 FROM node:26.13.0-bookworm AS base
 
 ENV PNPM_HOME=/pnpm
-ENV COREPACK_HOME=/corepack
 ENV PATH=$PNPM_HOME:$PATH
 
 RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g; s|http://security.debian.org|https://security.debian.org|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates openssl \
     && rm -rf /var/lib/apt/lists/* \
-    && corepack enable \
-    && corepack prepare pnpm@11.6.0 --activate
+    && npm install --global pnpm@11.6.0
 WORKDIR /app
 
 FROM base AS manifests
