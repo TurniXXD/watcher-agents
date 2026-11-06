@@ -19,6 +19,10 @@ export default tseslint.config(
       '**/*.tsbuildinfo',
       '**/*.config.ts',
       'deploy/runtime/**',
+      // Payload-generated files.
+      'apps/content-cms/src/payload-types.ts',
+      'apps/content-cms/src/app/(payload)/admin/importMap.js',
+      'apps/content-cms/src/migrations/**',
     ],
   },
   eslint.configs.recommended,

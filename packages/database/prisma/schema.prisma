@@ -2219,6 +2219,7 @@ model BrnoEvent {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   sourceLinks          BrnoEventSourceLink[]
+  cmsSync              BrnoEventCmsSync?
 
   @@index([startAt, relevanceScore])
   @@index([firstSeenAt])
@@ -2242,6 +2243,33 @@ model BrnoEventSourceLink {
   @@index([sourceId, externalId])
   @@index([eventId])
   @@map("brno_event_source_links")
+}
+
+/// Durable outbox for publishing Brno events to the Vantuch Content Hub (Payload CMS).
+/// The payload is rebuilt from the current event at send time; this row only tracks delivery.
+model BrnoEventCmsSync {
+  eventId       String                 @id
+  status        BrnoEventCmsSyncStatus @default(PENDING)
+  attempts      Int                    @default(0)
+  nextAttemptAt DateTime               @default(now())
+  lastAttemptAt DateTime?
+  syncedHash    String?
+  syncedAt      DateTime?
+  cmsId         String?
+  lastError     String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  event         BrnoEvent              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@map("brno_event_cms_sync")
+}
+
+enum BrnoEventCmsSyncStatus {
+  PENDING
+  SYNCED
+  SKIPPED
+  FAILED
 }
 
 model BrnoEventSourceRun {

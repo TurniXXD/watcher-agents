@@ -10,3 +10,8 @@ pnpm-lock.yaml
 **/generated/**
 **/test-results/**
 deploy/runtime/**
+# Payload-generated files (regenerate instead of editing)
+apps/content-cms/src/payload-types.ts
+apps/content-cms/src/app/(payload)/admin/importMap.js
+apps/content-cms/src/migrations/
+apps/content-cms/openapi/

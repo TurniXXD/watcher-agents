@@ -2,6 +2,11 @@
 
 Each code update that changes runtime behavior must add a concise entry here. The maintenance bot announces each entry once per authorized Telegram chat; delivery state is persisted by content hash.
 
+## 2026-11-06 — Vantuch Content Hub and Brno Events CMS sync
+
+- New independently deployable Payload CMS (`apps/content-cms`) with editorial review, roles, human-edit-preserving bot ingestion, and a read-only public events/articles/news/publications API with OpenAPI 3.1 and Swagger.
+- Brno Events agent can optionally queue discovered events in a durable outbox and send them to the CMS with free-food classification, bounded retries, and no effect on Telegram briefing delivery.
+
 ## 2026-11-05 — Low-noise CVE reporting
 
 - A Trivy scan now produces at most one immediate security message, groups the same CVE across affected packages, and limits the daily security digest to one Telegram message.

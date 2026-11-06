@@ -36,23 +36,24 @@ cancel successful sources. Manual source runs reuse the scheduled pipeline.
 
 ## Configuration
 
-| Variable group        | Variables and purpose                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Required              | `DATABASE_URL`, minimum-16-character `BRNO_EVENTS_API_TOKEN`.                                                       |
-| HTTP/scheduler        | `BRNO_EVENTS_HOST`, `BRNO_EVENTS_PORT`, `BRNO_EVENTS_SCHEDULER_INTERVAL_MS`, fixed `TZ=Europe/Prague`, `LOG_LEVEL`. |
-| Meetup                | `MEETUP_ENABLED`, `MEETUP_INTERVAL_MINUTES`, optional `MEETUP_URL`.                                                 |
-| GoOut                 | `GOOUT_ENABLED`, `GOOUT_INTERVAL_MINUTES`, optional `GOOUT_URL`.                                                    |
-| VisitBrno/TIC         | `VISITBRNO_ENABLED`, `VISITBRNO_INTERVAL_MINUTES`, optional `VISITBRNO_URL`.                                        |
-| MUNI                  | `MUNI_ENABLED`, `MUNI_INTERVAL_MINUTES`, optional `MUNI_URL`.                                                       |
-| VUT                   | `VUT_ENABLED`, `VUT_INTERVAL_MINUTES`, optional `VUT_URL`.                                                          |
-| JIC                   | `JIC_ENABLED`, `JIC_INTERVAL_MINUTES`, optional `JIC_URL`.                                                          |
-| CEITEC                | `CEITEC_ENABLED`, `CEITEC_INTERVAL_MINUTES`, optional `CEITEC_URL`.                                                 |
-| Velvet Innovation     | `VELVET_INNOVATION_ENABLED`, `VELVET_INNOVATION_INTERVAL_MINUTES`, optional `VELVET_INNOVATION_URL`.                |
-| SideQuesty            | `SIDEQUESTY_ENABLED`, `SIDEQUESTY_INTERVAL_MINUTES`, optional `SIDEQUESTY_URL`.                                     |
-| Objev Brno            | `OBJEV_BRNO_ENABLED`, `OBJEV_BRNO_INTERVAL_MINUTES`, optional `OBJEV_BRNO_URL`.                                     |
-| Impact Hub Brno       | `IMPACT_HUB_BRNO_ENABLED`, `IMPACT_HUB_BRNO_INTERVAL_MINUTES`, optional `IMPACT_HUB_BRNO_URL`.                      |
-| Base48 calendar       | `BASE48_CALENDAR_ENABLED`, `BASE48_CALENDAR_INTERVAL_MINUTES`, optional `BASE48_CALENDAR_URL`.                      |
-| ČSOB Validation Camps | `CSOB_VALIDATION_CAMPS_ENABLED`, `CSOB_VALIDATION_CAMPS_INTERVAL_MINUTES`, optional `CSOB_VALIDATION_CAMPS_URL`.    |
+| Variable group        | Variables and purpose                                                                                                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Required              | `DATABASE_URL`, minimum-16-character `BRNO_EVENTS_API_TOKEN`.                                                                                                                                 |
+| HTTP/scheduler        | `BRNO_EVENTS_HOST`, `BRNO_EVENTS_PORT`, `BRNO_EVENTS_SCHEDULER_INTERVAL_MS`, fixed `TZ=Europe/Prague`, `LOG_LEVEL`.                                                                           |
+| Meetup                | `MEETUP_ENABLED`, `MEETUP_INTERVAL_MINUTES`, optional `MEETUP_URL`.                                                                                                                           |
+| GoOut                 | `GOOUT_ENABLED`, `GOOUT_INTERVAL_MINUTES`, optional `GOOUT_URL`.                                                                                                                              |
+| VisitBrno/TIC         | `VISITBRNO_ENABLED`, `VISITBRNO_INTERVAL_MINUTES`, optional `VISITBRNO_URL`.                                                                                                                  |
+| MUNI                  | `MUNI_ENABLED`, `MUNI_INTERVAL_MINUTES`, optional `MUNI_URL`.                                                                                                                                 |
+| VUT                   | `VUT_ENABLED`, `VUT_INTERVAL_MINUTES`, optional `VUT_URL`.                                                                                                                                    |
+| JIC                   | `JIC_ENABLED`, `JIC_INTERVAL_MINUTES`, optional `JIC_URL`.                                                                                                                                    |
+| CEITEC                | `CEITEC_ENABLED`, `CEITEC_INTERVAL_MINUTES`, optional `CEITEC_URL`.                                                                                                                           |
+| Velvet Innovation     | `VELVET_INNOVATION_ENABLED`, `VELVET_INNOVATION_INTERVAL_MINUTES`, optional `VELVET_INNOVATION_URL`.                                                                                          |
+| SideQuesty            | `SIDEQUESTY_ENABLED`, `SIDEQUESTY_INTERVAL_MINUTES`, optional `SIDEQUESTY_URL`.                                                                                                               |
+| Objev Brno            | `OBJEV_BRNO_ENABLED`, `OBJEV_BRNO_INTERVAL_MINUTES`, optional `OBJEV_BRNO_URL`.                                                                                                               |
+| Impact Hub Brno       | `IMPACT_HUB_BRNO_ENABLED`, `IMPACT_HUB_BRNO_INTERVAL_MINUTES`, optional `IMPACT_HUB_BRNO_URL`.                                                                                                |
+| Base48 calendar       | `BASE48_CALENDAR_ENABLED`, `BASE48_CALENDAR_INTERVAL_MINUTES`, optional `BASE48_CALENDAR_URL`.                                                                                                |
+| ČSOB Validation Camps | `CSOB_VALIDATION_CAMPS_ENABLED`, `CSOB_VALIDATION_CAMPS_INTERVAL_MINUTES`, optional `CSOB_VALIDATION_CAMPS_URL`.                                                                              |
+| Content CMS sync      | Optional `CONTENT_CMS_URL` + `CONTENT_CMS_INGEST_TOKEN` (together), `CONTENT_CMS_SYNC_INTERVAL_MS`, `CONTENT_CMS_SYNC_BATCH_SIZE`, `CONTENT_CMS_SYNC_MAX_ATTEMPTS`, `CONTENT_CMS_TIMEOUT_MS`. |
 
 Public iCalendar recurrence is expanded into concrete upcoming occurrences.
 
@@ -76,6 +77,19 @@ recommendations, Calendar writes, and attendance. Sources are Meetup, GoOut,
 VisitBrno/TIC, MUNI, VUT, JIC, CEITEC, Velvet Innovation, SideQuesty, Objev
 Brno, Impact Hub Brno, Base48's public Nextcloud calendar, and official ČSOB
 Start it @UNI Validation Camp listings.
+
+## Content CMS sync
+
+When `CONTENT_CMS_URL` and `CONTENT_CMS_INGEST_TOKEN` are configured, every new or
+changed event is queued in the durable `brno_event_cms_sync` outbox and sent to
+the [Content CMS](/docs/bots/content-cms) ingestion API on a separate timer, so
+briefing and Telegram delivery never wait for the CMS. Each event is sent with a
+stable `brno-event:<id>` identifier, an original factual summary, all source
+links for attribution, and a conservative free-food classification
+(`yes`/`no` only with explicit source evidence; free admission is never treated
+as free food). CMS outages are retried with exponential backoff up to
+`CONTENT_CMS_SYNC_MAX_ATTEMPTS`. `GET /cms/status`, `POST /cms/sync`, and
+`POST /cms/retry-failed` expose the outbox to authenticated operators.
 
 ## Troubleshooting
 

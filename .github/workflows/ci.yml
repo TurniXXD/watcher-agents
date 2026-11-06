@@ -343,6 +343,16 @@ jobs:
             grep -Fxq default <<< "$docs_networks"
             grep -Fxq vantuch <<< "$docs_networks"
 
+            brno_networks="$(IMAGE_REGISTRY=ghcr.io \
+              IMAGE_NAMESPACE=example \
+              IMAGE_TAG=ci \
+              docker compose \
+                --env-file deploy/runtime/compose.env \
+                -f docker-compose.production.yml \
+                config --format json | jq -r '.services["brno-events-agent"].networks | keys[]')"
+            grep -Fxq default <<< "$brno_networks"
+            grep -Fxq vantuch <<< "$brno_networks"
+
             docs_published_ports="$(IMAGE_REGISTRY=ghcr.io \
               IMAGE_NAMESPACE=example \
               IMAGE_TAG=ci \
@@ -352,6 +362,22 @@ jobs:
                 config --format json | jq '.services.docs.ports // [] | length')"
             test "$docs_published_ports" -eq 0
           fi
+
+      - name: Validate Content CMS Compose configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp apps/content-cms/deploy/postgres.env.example apps/content-cms/deploy/postgres.env
+          cp apps/content-cms/deploy/content-cms.env.example apps/content-cms/deploy/content-cms.env
+          docker compose -f apps/content-cms/docker-compose.yml config --quiet
+          config="$(docker compose -f apps/content-cms/docker-compose.yml config --format json)"
+          jq -e '.services["content-cms"].networks | has("vantuch")' <<< "$config" > /dev/null
+          if jq -e '.services["content-cms-postgres"].networks | has("vantuch")' <<< "$config" > /dev/null; then
+            echo "content-cms-postgres must remain off the vantuch network" >&2
+            exit 1
+          fi
+          test "$(jq '.services["content-cms-postgres"].ports // [] | length' <<< "$config")" -eq 0
+          jq -e '.services["content-cms"].read_only == true' <<< "$config" > /dev/null
 
   container-build-verify:
     name: Build production image
@@ -382,3 +408,13 @@ jobs:
           file: Dockerfile
           push: false
           tags: watcher:ci
+
+      - name: Build Content CMS image
+        uses: docker/build-push-action@v7
+        with:
+          cache-from: type=gha,scope=content-cms-ci
+          cache-to: type=gha,mode=max,scope=content-cms-ci
+          context: .
+          file: apps/content-cms/Dockerfile
+          push: false
+          tags: vantuch-content-cms:ci
