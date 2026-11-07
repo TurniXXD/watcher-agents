@@ -135,6 +135,38 @@ const unsupportedLanguagePattern = (filters: JobFilters): RegExp => {
     : /$(?!)/u;
 };
 
+const mandatoryGermanLanguage = (
+  text: string,
+  filters: JobFilters,
+): boolean => {
+  if (
+    filters.language.allow.length === 0 &&
+    filters.language.block.length === 0
+  )
+    return false;
+  if (
+    filters.language.allow.some((language) =>
+      /^(?:german|deutsch)$/iu.test(language),
+    ) &&
+    !filters.language.block.some((language) =>
+      /^(?:german|deutsch)$/iu.test(language),
+    )
+  )
+    return false;
+  return text
+    .split(/[.!?\n]+/u)
+    .some(
+      (sentence) =>
+        /\b(?:deutschkenntnisse|deutschsprachig|deutsch)\b/iu.test(sentence) &&
+        /\b(?:vorausgesetzt|erforderlich|notwendig|pflicht|muss|müssen)\b/iu.test(
+          sentence,
+        ) &&
+        !/\b(?:wünschenswert|von vorteil|optional|nicht erforderlich)\b/iu.test(
+          sentence,
+        ),
+    );
+};
+
 const countryNames = (() => {
   const names = new Set(twoLetterDisplayNames('region'));
   ['USA', 'US', 'UK', 'UAE'].forEach((name) => names.add(normalizeText(name)));
@@ -194,6 +226,30 @@ const requiredExperienceYears = (text: string): number | undefined => {
     });
   return requirements.length > 0 ? Math.max(...requirements) : undefined;
 };
+
+const foreignOfficeAttendance = (
+  text: string,
+  allowedCountries: readonly string[],
+): boolean =>
+  text.split(/[.!?\n]+/u).some((sentence) => {
+    const normalized = normalizeText(sentence);
+    if (
+      !/\b(?:office|onsite|on site|on-site|buro|büro|kancelar|kancelář)\b/iu.test(
+        normalized,
+      ) ||
+      !/\b(?:attend|visit|days? per week|days? a week|weekly|required|must|hybrid|dochaz|docház)\b/iu.test(
+        normalized,
+      )
+    )
+      return false;
+    return countryNames.some(
+      (country) =>
+        includesPhrase(normalized, country) &&
+        !allowedCountries.some(
+          (allowed) => country.includes(allowed) || allowed.includes(country),
+        ),
+    );
+  });
 
 const locationCompatibility = (
   job: NormalizedJob,
@@ -313,7 +369,10 @@ export const evaluateJob = (
       hasMandatoryComputerScienceDegree(body))
   )
     hardBlockers.push('Mandatory degree requirement');
-  if (mandatory(body, unsupportedLanguagePattern(filters)))
+  if (
+    mandatory(body, unsupportedLanguagePattern(filters)) ||
+    mandatoryGermanLanguage(body, filters)
+  )
     hardBlockers.push('Mandatory unsupported language');
   if (
     filters.blockStaffEngineering &&
@@ -334,7 +393,8 @@ export const evaluateJob = (
     hardBlockers.push('Graduate-only or internship role');
   if (
     filters.country.allow.length > 0 &&
-    explicitlyRestrictedGeography(body, allowedPlaces)
+    (explicitlyRestrictedGeography(body, allowedPlaces) ||
+      foreignOfficeAttendance(body, filters.country.allow.map(normalizeText)))
   )
     hardBlockers.push('Incompatible geography');
   if (

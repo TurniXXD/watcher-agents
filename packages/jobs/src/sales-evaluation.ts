@@ -86,7 +86,7 @@ export const buildSalesBusinessProfile = (
       keyword: { allow: [], block: [] },
       language: { allow: ['Czech', 'English'], block: [] },
       maxRequiredExperienceYears: base.yearsExperience,
-      blockMandatoryDegree: false,
+      blockMandatoryDegree: true,
       blockStaffEngineering: false,
     },
     skills: [

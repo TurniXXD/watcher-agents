@@ -169,7 +169,15 @@ export const resolveJobFilters = (profile: CandidateProfile): JobFilters =>
       block: profile.excludedTechnologies,
     },
     keyword: { allow: [], block: [] },
-    language: { allow: ['English'], block: [] },
+    language: {
+      allow: Object.entries(profile.languages)
+        .filter(
+          ([, proficiency]) =>
+            !/^(?:a1|a2|beginner|basic|elementary)$/iu.test(proficiency.trim()),
+        )
+        .map(([language]) => language),
+      block: [],
+    },
     maxRequiredExperienceYears: profile.yearsExperience,
     blockMandatoryDegree: true,
     blockStaffEngineering: true,

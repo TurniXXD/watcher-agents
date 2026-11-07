@@ -1,36 +1,59 @@
 import type { JobStore } from '@watcher/database';
 import type { Bot } from 'grammy';
 import { sendSplitMessage } from '@watcher/telegram';
+import { normalizeText } from '@watcher/jobs';
 import type { AlertJob } from './runner.js';
 
 const escapeHtml = (value: string): string =>
   value.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;');
 
-export const renderJobDigest = (jobs: AlertJob[]): string =>
-  [
-    `🚀 ${jobs.length} new matching job${jobs.length === 1 ? '' : 's'}`,
+const digestJobs = (jobs: AlertJob[]): AlertJob[] => {
+  const seen = new Set<string>();
+  return jobs
+    .toSorted((left, right) => right.score - left.score)
+    .filter((job) => {
+      const company = normalizeText(job.company);
+      const normalizedTitle = normalizeText(job.title);
+      const title = normalizedTitle.endsWith(` ${company}`)
+        ? normalizedTitle.slice(0, -(company.length + 1))
+        : normalizedTitle;
+      const location = normalizeText(job.location ?? '');
+      const locality = title
+        .split(' ')
+        .filter((word) => word.length > 3)
+        .find((word) => location.split(' ').includes(word));
+      const key = [company, title, locality ?? location].join('|');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+
+export const renderJobDigest = (jobs: AlertJob[]): string => {
+  const distinctJobs = digestJobs(jobs);
+  return [
+    `🚀 ${distinctJobs.length} new matching job${distinctJobs.length === 1 ? '' : 's'}`,
     '',
-    ...jobs
-      .toSorted((left, right) => right.score - left.score)
-      .flatMap((job, index) => [
-        `${index + 1}. ${job.title}`,
-        `Company: ${job.company}`,
-        `Location: ${job.location ?? 'Not specified'}`,
-        `Match: ${job.score}/100 · ${job.eligibility.toLowerCase()}`,
-        ...(job.salary ? [`Salary: ${job.salary}`] : []),
-        `Why: ${job.reasoning}`,
-        ...(job.hardBlockers?.length
-          ? [`Blockers: ${job.hardBlockers.join('; ')}`]
-          : []),
-        ...(job.uncertainties?.length
-          ? [`Needs review: ${job.uncertainties.join('; ')}`]
-          : []),
-        `Source: ${job.source}`,
-        `Published: ${job.publishedAt?.toISOString() ?? 'Unknown'}`,
-        `Apply: ${job.url}`,
-        '',
-      ]),
+    ...distinctJobs.flatMap((job, index) => [
+      `${index + 1}. ${job.title}`,
+      `Company: ${job.company}`,
+      `Location: ${job.location ?? 'Not specified'}`,
+      `Match: ${job.score}/100 · ${job.eligibility.toLowerCase()}`,
+      ...(job.salary ? [`Salary: ${job.salary}`] : []),
+      `Why: ${job.reasoning}`,
+      ...(job.hardBlockers?.length
+        ? [`Blockers: ${job.hardBlockers.join('; ')}`]
+        : []),
+      ...(job.uncertainties?.length
+        ? [`Needs review: ${job.uncertainties.join('; ')}`]
+        : []),
+      `Source: ${job.source}`,
+      `Published: ${job.publishedAt?.toISOString() ?? 'Unknown'}`,
+      `Apply: ${job.url}`,
+      '',
+    ]),
   ].join('\n');
+};
 
 export const deliverJobDigest = async (input: {
   bot: Bot;
@@ -63,7 +86,7 @@ export const deliverJobDigest = async (input: {
                 },
                 body: JSON.stringify({
                   to: input.email!.recipient,
-                  subject: `${input.jobs.length} new matching jobs`,
+                  subject: `${digestJobs(input.jobs).length} new matching jobs`,
                   text,
                   html: `<pre>${escapeHtml(text)}</pre>`,
                 }),

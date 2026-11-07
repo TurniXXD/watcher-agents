@@ -110,6 +110,8 @@ describe('deterministic job evaluation', () => {
 
   it.each([
     'German B1 is mandatory.',
+    'Sehr gute Deutschkenntnisse werden vorausgesetzt.',
+    'Fließende Deutschkenntnisse erforderlich.',
     'You must have fluent French.',
     'Professional Spanish is required.',
     'Polish proficiency is mandatory.',
@@ -118,6 +120,22 @@ describe('deterministic job evaluation', () => {
     expect(evaluateJob(job(requirement), profile).hardBlockers).toContain(
       'Mandatory unsupported language',
     );
+  });
+
+  it('rejects a foreign office requirement even when the source calls it remote', () => {
+    const result = evaluateJob(
+      job(
+        'Remote role with two days per week in our Bengaluru, India office.',
+        {
+          location: 'India',
+          country: 'India',
+          workMode: 'REMOTE',
+          remoteRegions: ['Worldwide'],
+        },
+      ),
+      profile,
+    );
+    expect(result.hardBlockers).toContain('Incompatible geography');
   });
 
   it('does not reject optional German', () => {
@@ -132,6 +150,29 @@ describe('deterministic job evaluation', () => {
   it('does not reject a role requiring only English', () => {
     const result = evaluateJob(job('English B2 is required.'), profile);
     expect(result.hardBlockers).not.toContain('Mandatory unsupported language');
+  });
+
+  it('accepts a mandatory language the candidate actually speaks', () => {
+    expect(
+      evaluateJob(job('Czech is required for client meetings.'), profile)
+        .hardBlockers,
+    ).not.toContain('Mandatory unsupported language');
+  });
+
+  it('rejects foreign office attendance hidden behind worldwide remote metadata', () => {
+    const result = evaluateJob(
+      job(
+        'Work remotely, but attend our Bengaluru, India office twice a week.',
+        {
+          location: 'Remote',
+          country: undefined,
+          workMode: 'REMOTE',
+          remoteRegions: ['Worldwide'],
+        },
+      ),
+      profile,
+    );
+    expect(result.hardBlockers).toContain('Incompatible geography');
   });
 
   it('does not invent a language blocker when both editable language lists are empty', () => {
@@ -150,7 +191,7 @@ describe('deterministic job evaluation', () => {
     });
 
     const result = evaluateJob(
-      job('Native German is required for this role.'),
+      job('Deutschkenntnisse werden vorausgesetzt.'),
       unrestrictedLanguageProfile,
     );
     expect(result.hardBlockers).not.toContain('Mandatory unsupported language');

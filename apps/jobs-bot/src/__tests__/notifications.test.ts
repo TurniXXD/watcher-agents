@@ -7,6 +7,59 @@ afterEach(() => {
 });
 
 describe('job notification delivery', () => {
+  it('shows the same Brno vacancy from three portals once', () => {
+    const common = {
+      company: 'CoolPeople Technology a.s.',
+      score: 90,
+      eligibility: 'UNCERTAIN' as const,
+      reasoning: 'Relevant.',
+      source: 'Portal',
+    };
+    const digest = renderJobDigest([
+      {
+        ...common,
+        notificationId: 'a',
+        jobId: 'a',
+        title: 'Key Account Manager Brno',
+        location: 'Brno, CZE',
+        url: 'https://prace.cz/a',
+      },
+      {
+        ...common,
+        notificationId: 'b',
+        jobId: 'b',
+        title: 'Key Account Manager Brno',
+        location: 'Přízova 537/1, Brno-Trnitá',
+        url: 'https://pracezarohem.cz/b',
+      },
+      {
+        ...common,
+        notificationId: 'c',
+        jobId: 'c',
+        title: 'Key Account Manager Brno – CoolPeople Technology a.s.',
+        location: 'Brno – Trnitá',
+        url: 'https://jobs.cz/c',
+      },
+    ]);
+    expect(digest).toContain('🚀 1 new matching job');
+    expect(digest.match(/Key Account Manager Brno/g)).toHaveLength(1);
+  });
+
+  it('keeps same-title vacancies in different cities separate', () => {
+    const jobs = ['Brno', 'Prague'].map((location) => ({
+      notificationId: location,
+      jobId: location,
+      title: 'Account Manager',
+      company: 'Example',
+      location,
+      score: 80,
+      eligibility: 'ELIGIBLE' as const,
+      reasoning: 'Relevant.',
+      url: `https://example.com/${location}`,
+      source: 'Portal',
+    }));
+    expect(renderJobDigest(jobs)).toContain('🚀 2 new matching jobs');
+  });
   it('orders digest jobs by descending match score', () => {
     const digest = renderJobDigest([
       {

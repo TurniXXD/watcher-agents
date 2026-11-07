@@ -59,6 +59,13 @@ const job = (title: string, description: string, overrides = {}) =>
   });
 
 describe('Sales & Business Development evaluation', () => {
+  it('rejects a mandatory bachelor degree for the career transition profile', () => {
+    const result = evaluateSalesBusinessJob(
+      job('Account Manager', 'Bachelor degree is required.'),
+      profile,
+    );
+    expect(result.hardBlockers).toContain('Mandatory degree requirement');
+  });
   it('recognizes the supported English and Czech role families', () => {
     expect(
       isSalesBusinessDevelopmentJob(
