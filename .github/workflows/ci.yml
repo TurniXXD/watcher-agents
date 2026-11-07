@@ -360,24 +360,13 @@ jobs:
               docker compose \
                 --env-file deploy/runtime/compose.env \
                 -f docker-compose.production.yml \
-                --profile content-cms \
                 config --format json)"
             jq -e '.services["content-cms"].networks | has("vantuch") and has("default")' <<< "$cms_config" > /dev/null
             jq -e '.services["content-cms"].read_only == true' <<< "$cms_config" > /dev/null
             jq -e '.services["content-cms"].depends_on | has("postgres")' <<< "$cms_config" > /dev/null
+            jq -e '.services["content-cms"].environment | has("DATABASE_URL")' <<< "$cms_config" > /dev/null
             if jq -e '.services | keys[] | select(test("content-cms-postgres"))' <<< "$cms_config" > /dev/null; then
               echo "The Content CMS must use watcher-postgres, not its own PostgreSQL service" >&2
-              exit 1
-            fi
-            default_services="$(IMAGE_REGISTRY=ghcr.io \
-              IMAGE_NAMESPACE=example \
-              IMAGE_TAG=ci \
-              docker compose \
-                --env-file deploy/runtime/compose.env \
-                -f docker-compose.production.yml \
-                config --services)"
-            if grep -Fxq content-cms <<< "$default_services"; then
-              echo "content-cms must stay behind the opt-in content-cms profile" >&2
               exit 1
             fi
 
