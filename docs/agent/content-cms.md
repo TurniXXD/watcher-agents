@@ -18,6 +18,7 @@ Read this file completely before creating or modifying `apps/content-cms`, its i
 ## Security
 
 - Native Payload REST and GraphQL access to every collection is denied to anonymous users. Website consumers use only `/api/public/v1/*`, which returns explicit DTOs.
+- The MCP server (`/api/mcp`, `@payloadcms/plugin-mcp`) authenticates with per-user API keys and runs every tool as that user with `overrideAccess: false`, so collection access and workflow hooks apply. Never expose users, ingestion credentials, or ingestion logs over MCP, and never enable deletes or the plugin's experimental tools.
 - The public API serves only records whose review status is `approved` and whose Payload status is `published`. `rejected` never appears; `archived` never appears in listings.
 - Bot credentials are per-bot, scoped, rotatable, stored hashed, and can never publish or approve.
 - Bots never call Payload's database directly; they use the authenticated ingestion API.

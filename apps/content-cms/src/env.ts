@@ -59,6 +59,7 @@ const schema = z
     WEBSITE_PREVIEW_URL: z.url().optional(),
     PREVIEW_SECRET: z.string().min(32).optional(),
     PAYLOAD_JOBS_AUTORUN: bool(true),
+    MCP_ENABLED: bool(true),
     NEXT_PHASE: z.string().optional(),
   })
   .superRefine((value, context) => {

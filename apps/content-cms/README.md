@@ -21,6 +21,7 @@ service in every Watcher release, shares the Watcher PostgreSQL database on
 | Ingestion API    | `/api/ingest/v1/*`                             | Per-bot bearer credentials        |
 | Ingestion docs   | `/api/ingest/docs`, `/api/ingest/openapi.json` | CMS login (+ Cloudflare Access)   |
 | Health/readiness | `/api/health`, `/api/ready`                    | Anonymous, no data                |
+| MCP server       | `POST /api/mcp`                                | Per-user MCP API key (Bearer)     |
 
 Native Payload REST endpoints for content collections require a CMS login;
 GraphQL is disabled.
@@ -34,6 +35,7 @@ GraphQL is disabled.
 - [Bot integration](docs/bot-integration.md) — Brno Events agent pipeline, free-food classification, adding bots
 - [Public API](docs/public-api.md) — endpoints, caching, CORS, Next.js integration
 - [Events API](docs/events-api.md) — filters, pagination, DTO, free food
+- [MCP server](docs/mcp.md) — AI assistant access via Model Context Protocol, API keys, client setup
 - [Deployment](docs/deployment.md) — Docker, Compose, Cloudflare Access, backups, verification
 
 ## Quick start

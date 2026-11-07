@@ -64,6 +64,7 @@ export type SupportedTimezones =
 export interface Config {
   auth: {
     users: UserAuthOperations;
+    'payload-mcp-api-keys': PayloadMcpApiKeyAuthOperations;
   };
   blocks: {};
   collections: {
@@ -79,6 +80,7 @@ export interface Config {
     'ingestion-records': IngestionRecord;
     users: User;
     'ingestion-clients': IngestionClient;
+    'payload-mcp-api-keys': PayloadMcpApiKey;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -99,6 +101,7 @@ export interface Config {
     'ingestion-records': IngestionRecordsSelect<false> | IngestionRecordsSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     'ingestion-clients': IngestionClientsSelect<false> | IngestionClientsSelect<true>;
+    'payload-mcp-api-keys': PayloadMcpApiKeysSelect<false> | PayloadMcpApiKeysSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -119,7 +122,7 @@ export interface Config {
   widgets: {
     collections: CollectionsWidget;
   };
-  user: User;
+  user: User | PayloadMcpApiKey;
   jobs: {
     tasks: {
       backfillLegacyBotContent: TaskBackfillLegacyBotContent;
@@ -133,6 +136,24 @@ export interface Config {
   };
 }
 export interface UserAuthOperations {
+  forgotPassword: {
+    email: string;
+    password: string;
+  };
+  login: {
+    email: string;
+    password: string;
+  };
+  registerFirstUser: {
+    email: string;
+    password: string;
+  };
+  unlock: {
+    email: string;
+    password: string;
+  };
+}
+export interface PayloadMcpApiKeyAuthOperations {
   forgotPassword: {
     email: string;
     password: string;
@@ -953,6 +974,128 @@ export interface IngestionClient {
   createdAt: string;
 }
 /**
+ * API keys control which collections, resources, tools, and prompts MCP clients can access
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-mcp-api-keys".
+ */
+export interface PayloadMcpApiKey {
+  id: string;
+  /**
+   * The user that the API key is associated with.
+   */
+  user: string | User;
+  /**
+   * A useful label for the API key.
+   */
+  label?: string | null;
+  /**
+   * The purpose of the API key.
+   */
+  description?: string | null;
+  events?: {
+    /**
+     * Allow clients to find events.
+     */
+    find?: boolean | null;
+    /**
+     * Allow clients to create events.
+     */
+    create?: boolean | null;
+    /**
+     * Allow clients to update events.
+     */
+    update?: boolean | null;
+  };
+  articles?: {
+    /**
+     * Allow clients to find articles.
+     */
+    find?: boolean | null;
+    /**
+     * Allow clients to create articles.
+     */
+    create?: boolean | null;
+    /**
+     * Allow clients to update articles.
+     */
+    update?: boolean | null;
+  };
+  news?: {
+    /**
+     * Allow clients to find news.
+     */
+    find?: boolean | null;
+    /**
+     * Allow clients to create news.
+     */
+    create?: boolean | null;
+    /**
+     * Allow clients to update news.
+     */
+    update?: boolean | null;
+  };
+  publications?: {
+    /**
+     * Allow clients to find publications.
+     */
+    find?: boolean | null;
+    /**
+     * Allow clients to create publications.
+     */
+    create?: boolean | null;
+    /**
+     * Allow clients to update publications.
+     */
+    update?: boolean | null;
+  };
+  socialPosts?: {
+    /**
+     * Allow clients to find social-posts.
+     */
+    find?: boolean | null;
+    /**
+     * Allow clients to create social-posts.
+     */
+    create?: boolean | null;
+    /**
+     * Allow clients to update social-posts.
+     */
+    update?: boolean | null;
+  };
+  media?: {
+    /**
+     * Allow clients to find media.
+     */
+    find?: boolean | null;
+  };
+  sources?: {
+    /**
+     * Allow clients to find sources.
+     */
+    find?: boolean | null;
+  };
+  pendingUpdates?: {
+    /**
+     * Allow clients to find pending-updates.
+     */
+    find?: boolean | null;
+  };
+  settings?: {
+    /**
+     * Allow clients to find settings global.
+     */
+    find?: boolean | null;
+  };
+  updatedAt: string;
+  createdAt: string;
+  enableAPIKey?: boolean | null;
+  apiKey?: string | null;
+  apiKeyIndex?: string | null;
+  hasAPIKey?: boolean | null;
+  collection: 'payload-mcp-api-keys';
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -1115,12 +1258,21 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'ingestion-clients';
         value: string | IngestionClient;
+      } | null)
+    | ({
+        relationTo: 'payload-mcp-api-keys';
+        value: string | PayloadMcpApiKey;
       } | null);
   globalSlug?: string | null;
-  user: {
-    relationTo: 'users';
-    value: string | User;
-  };
+  user:
+    | {
+        relationTo: 'users';
+        value: string | User;
+      }
+    | {
+        relationTo: 'payload-mcp-api-keys';
+        value: string | PayloadMcpApiKey;
+      };
   updatedAt: string;
   createdAt: string;
 }
@@ -1130,10 +1282,15 @@ export interface PayloadLockedDocument {
  */
 export interface PayloadPreference {
   id: string;
-  user: {
-    relationTo: 'users';
-    value: string | User;
-  };
+  user:
+    | {
+        relationTo: 'users';
+        value: string | User;
+      }
+    | {
+        relationTo: 'payload-mcp-api-keys';
+        value: string | PayloadMcpApiKey;
+      };
   key?: string | null;
   value?:
     | {
@@ -1611,6 +1768,76 @@ export interface IngestionClientsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-mcp-api-keys_select".
+ */
+export interface PayloadMcpApiKeysSelect<T extends boolean = true> {
+  user?: T;
+  label?: T;
+  description?: T;
+  events?:
+    | T
+    | {
+        find?: T;
+        create?: T;
+        update?: T;
+      };
+  articles?:
+    | T
+    | {
+        find?: T;
+        create?: T;
+        update?: T;
+      };
+  news?:
+    | T
+    | {
+        find?: T;
+        create?: T;
+        update?: T;
+      };
+  publications?:
+    | T
+    | {
+        find?: T;
+        create?: T;
+        update?: T;
+      };
+  socialPosts?:
+    | T
+    | {
+        find?: T;
+        create?: T;
+        update?: T;
+      };
+  media?:
+    | T
+    | {
+        find?: T;
+      };
+  sources?:
+    | T
+    | {
+        find?: T;
+      };
+  pendingUpdates?:
+    | T
+    | {
+        find?: T;
+      };
+  settings?:
+    | T
+    | {
+        find?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+  enableAPIKey?: T;
+  apiKey?: T;
+  apiKeyIndex?: T;
+  hasAPIKey?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -1768,10 +1995,15 @@ export interface TaskSchedulePublish {
           value: string | SocialPost;
         } | null);
     global?: string | null;
-    user?: {
-      relationTo: 'users';
-      value: string | User;
-    } | null;
+    user?:
+      | ({
+          relationTo: 'users';
+          value: string | User;
+        } | null)
+      | ({
+          relationTo: 'payload-mcp-api-keys';
+          value: string | PayloadMcpApiKey;
+        } | null);
   };
   output?: unknown;
 }

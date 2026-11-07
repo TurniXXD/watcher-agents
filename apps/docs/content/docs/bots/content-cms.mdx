@@ -53,16 +53,17 @@ The application has no Telegram commands. Operator commands:
 
 ## Endpoints
 
-| Path                                                                                         | Access                                |
-| -------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `/`                                                                                          | Redirects to `/admin` (temporary)     |
-| `/admin`                                                                                     | Payload login, Cloudflare Access      |
-| `/api/public/v1/events`, `/events/:slug`, `/events/featured`, `/events/categories`           | Anonymous, read-only                  |
-| `/api/public/v1/articles`, `/articles/:slug`, `/news`, `/publications`                       | Anonymous, read-only                  |
-| `/api/public/docs`, `/api/public/openapi.json`                                               | Anonymous                             |
-| `/api/ingest/v1/{events,articles,news,publications,social-posts}`, `/api/ingest/v1/runs/:id` | Per-bot bearer credential with scopes |
-| `/api/ingest/docs`, `/api/ingest/openapi.json`                                               | CMS login                             |
-| `/api/health`, `/api/ready`                                                                  | Anonymous, no data                    |
+| Path                                                                                         | Access                                           |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `/`                                                                                          | Redirects to `/admin` (temporary)                |
+| `/admin`                                                                                     | Payload login, Cloudflare Access                 |
+| `/api/public/v1/events`, `/events/:slug`, `/events/featured`, `/events/categories`           | Anonymous, read-only                             |
+| `/api/public/v1/articles`, `/articles/:slug`, `/news`, `/publications`                       | Anonymous, read-only                             |
+| `/api/public/docs`, `/api/public/openapi.json`                                               | Anonymous                                        |
+| `/api/ingest/v1/{events,articles,news,publications,social-posts}`, `/api/ingest/v1/runs/:id` | Per-bot bearer credential with scopes            |
+| `/api/ingest/docs`, `/api/ingest/openapi.json`                                               | CMS login                                        |
+| `/api/health`, `/api/ready`                                                                  | Anonymous, no data                               |
+| `POST /api/mcp`                                                                              | Per-user MCP API key (Bearer), Cloudflare Access |
 
 Events support `city` (default `brno`), `category`, `from`, `to` (date-only
 values in Europe/Prague), `q`, `limit` (default 20, max 100), `cursor`, `sort`,
@@ -80,6 +81,7 @@ source explicitly confirms free food.
 | API limits       | `PUBLIC_API_RATE_LIMIT_PER_MINUTE`, `INGEST_RATE_LIMIT_PER_MINUTE`, `INGEST_MAX_BODY_BYTES`, `INGEST_MAX_BATCH_SIZE`                | Optional                                     |
 | Website          | `REVALIDATE_WEBHOOK_URL` + `REVALIDATE_WEBHOOK_SECRET`, `WEBSITE_PREVIEW_URL` + `PREVIEW_SECRET`                                    | Optional, pairs together                     |
 | Jobs             | `PAYLOAD_JOBS_AUTORUN`                                                                                                              | Optional                                     |
+| MCP              | `MCP_ENABLED` (default `true`)                                                                                                      | Optional                                     |
 
 ## Integrations
 
@@ -88,12 +90,14 @@ source explicitly confirms free food.
 - **Brno Events Agent** (optional producer): sends events through its outbox when `CONTENT_CMS_URL` and `CONTENT_CMS_INGEST_TOKEN` are set.
 - **Legacy bot data** (one-off, read-only): a migration queues the `backfillLegacyBotContent` job, which imports pre-CMS Brno events, news-bot and publications-bot items, and socials-bot drafts from the shared Watcher database as `ingested` drafts. Existing CMS records are never overwritten; without those tables the job does nothing.
 - **vantuch.dev website** (optional consumer): public API, revalidation webhook, preview links.
+- **MCP clients** (optional): AI assistants such as Claude Code connect to `/api/mcp` with a per-user API key created in the admin under _MCP → API Keys_.
 - **Cloudflare Tunnel and Access** (production): Access protects the host except `/api/public`, `/api/media/file`, and `/api/health`.
 
 ## Safety boundaries and limitations
 
 - Bot credentials can never publish; only approved content can be published; rejected content is never public.
 - Native Payload REST endpoints require a CMS login; GraphQL is disabled.
+- MCP tools act as the API key's owner with normal access control: editors can draft but not approve or publish; users, bot credentials, and ingestion logs are not exposed; nothing can be deleted over MCP.
 - Source images and excerpts stay internal; only media with publication rights are public.
 - Rate limits are per process (single instance). Swagger UI assets load from a pinned CDN version.
 - Social platform publishing is not implemented.
