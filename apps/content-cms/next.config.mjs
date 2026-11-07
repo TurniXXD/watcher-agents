@@ -22,6 +22,10 @@ const config = {
   outputFileTracingRoot: repositoryRoot,
   poweredByHeader: false,
   reactStrictMode: true,
+  async redirects() {
+    // The CMS has no public site; send the bare host to the admin login.
+    return [{ source: '/', destination: '/admin', permanent: false }];
+  },
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },

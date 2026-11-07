@@ -11122,6 +11122,7 @@
       "schema": "public",
       "values": [
         "inline",
+        "backfillLegacyBotContent",
         "schedulePublish"
       ]
     },
@@ -11138,6 +11139,7 @@
       "schema": "public",
       "values": [
         "inline",
+        "backfillLegacyBotContent",
         "schedulePublish"
       ]
     }
@@ -11152,6 +11154,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "ae383c84-bdb6-495f-ba5f-073bab390c97",
+  "id": "b7f221a5-441b-4150-9d89-3ee6992645f6",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

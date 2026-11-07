@@ -55,6 +55,7 @@ The application has no Telegram commands. Operator commands:
 
 | Path                                                                                         | Access                                           |
 | -------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `/`                                                                                          | Redirects to `/admin` (temporary)                |
 | `/admin`                                                                                     | Payload login, Cloudflare Access                 |
 | `/api/public/v1/events`, `/events/:slug`, `/events/featured`, `/events/categories`           | Anonymous, read-only                             |
 | `/api/public/v1/articles`, `/articles/:slug`, `/news`, `/publications`                       | Anonymous, read-only                             |
@@ -87,6 +88,7 @@ source explicitly confirms free food.
 - **PostgreSQL** (required): Watcher database on `watcher-postgres` via `@payloadcms/db-postgres`; Payload and Prisma use separate tables and migrations.
 - **RustFS** (required in production): existing S3-compatible store on the `vantuch` network via `@payloadcms/storage-s3`.
 - **Brno Events Agent** (optional producer): sends events through its outbox when `CONTENT_CMS_URL` and `CONTENT_CMS_INGEST_TOKEN` are set.
+- **Legacy bot data** (one-off, read-only): a migration queues the `backfillLegacyBotContent` job, which imports pre-CMS Brno events, news-bot and publications-bot items, and socials-bot drafts from the shared Watcher database as `ingested` drafts. Existing CMS records are never overwritten; without those tables the job does nothing.
 - **vantuch.dev website** (optional consumer): public API, revalidation webhook, preview links.
 - **MCP clients** (optional): AI assistants such as Claude Code connect to `/api/mcp` with a per-user API key created in the admin under _MCP → API Keys_.
 - **Cloudflare Tunnel and Access** (production): Access protects the host except `/api/public`, `/api/media/file`, and `/api/health`.
