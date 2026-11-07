@@ -130,6 +130,30 @@ describe('GeoapifyDiscoveryClient', () => {
     expect(requests[2]?.searchParams.get('features')).toBe('details');
   });
 
+  it('requests a later Places page for continuous prospecting', async () => {
+    const requests: URL[] = [];
+    const fetcher: typeof fetch = vi.fn(async (input) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      return new Response(
+        JSON.stringify(
+          url.pathname === '/v1/geocode/search'
+            ? { results: [{ place_id: 'brno', lat: 49.2, lon: 16.6 }] }
+            : { features: [] },
+        ),
+        { status: 200 },
+      );
+    });
+    await new GeoapifyDiscoveryClient('key', fetcher, 0).search(
+      'autoservis',
+      'Brno',
+      20,
+      undefined,
+      40,
+    );
+    expect(requests[1]?.searchParams.get('offset')).toBe('40');
+  });
+
   it('does not issue a broad query for an unsupported free-text category', async () => {
     const fetcher: typeof fetch = vi.fn();
     const result = await new GeoapifyDiscoveryClient('key', fetcher, 0).search(

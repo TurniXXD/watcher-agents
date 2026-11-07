@@ -372,6 +372,67 @@ describe('sales bot help', () => {
     expect(messages[1]).toContain('1 již dříve přidáno');
   });
 
+  it('starts a continuous CRM stream only when Twenty and Geoapify are configured', async () => {
+    const upsertSearchSubscription = vi
+      .fn()
+      .mockResolvedValue({ id: 'auto-1' });
+    const bot = createSalesBot(
+      'test-token',
+      new Set([123]),
+      { upsertSearchSubscription } as unknown as SalesStore,
+      { twentyConfigured: true, geoapifyConfigured: true } as SalesService,
+    );
+    bot.botInfo = {
+      id: 456,
+      is_bot: true,
+      first_name: 'Sales Bot',
+      username: 'sales_test_bot',
+      can_join_groups: false,
+      can_read_all_group_messages: false,
+      supports_inline_queries: false,
+      can_connect_to_business: false,
+      has_main_web_app: false,
+      has_topics_enabled: false,
+      allows_users_to_create_topics: false,
+      can_manage_bots: false,
+      supports_join_request_queries: false,
+    };
+    const messages: string[] = [];
+    bot.api.config.use(async (_previous, method, payload) => {
+      if (method !== 'sendMessage' || !('text' in payload))
+        throw new Error(`Unexpected ${method}`);
+      messages.push(String(payload.text));
+      return { ok: true, result: { message_id: 1 } } as never;
+    });
+    await bot.handleUpdate(update('/sales_auto autoservis | Brno | 20', 451));
+    expect(upsertSearchSubscription).toHaveBeenCalledWith({
+      telegramChatId: 123n,
+      telegramUserId: 123n,
+      query: 'autoservis',
+      locality: 'Brno',
+      resultLimit: 20,
+      intervalMinutes: 1,
+      autoImportToCrm: true,
+    });
+    expect(messages.join(' ')).toContain('auto-1');
+    expect(messages.join(' ')).toContain('Twenty');
+
+    const unavailable = createSalesBot(
+      'test-token',
+      new Set([123]),
+      { upsertSearchSubscription } as unknown as SalesStore,
+      { twentyConfigured: true, geoapifyConfigured: false } as SalesService,
+    );
+    unavailable.botInfo = bot.botInfo;
+    unavailable.api.config.use(
+      async () => ({ ok: true, result: { message_id: 2 } }) as never,
+    );
+    await unavailable.handleUpdate(
+      update('/sales_auto autoservis | Brno | 20', 452),
+    );
+    expect(upsertSearchSubscription).toHaveBeenCalledTimes(1);
+  });
+
   it('prints a linked contact list and persists the periodic search', async () => {
     const searchBusinessesDetailed = vi.fn().mockResolvedValue({
       companies: [

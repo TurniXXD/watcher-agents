@@ -299,7 +299,7 @@ const intelligenceScheduler = new PersistentScheduler(
   logger,
 );
 const salesSearchScheduler = new PersistentScheduler(
-  (now) => store.claimDueSearchSubscriptions(now, 10),
+  (now) => store.claimDueSearchSubscriptions(now, 1),
   async (due) => {
     await runPeriodicSalesSearch(
       due.id,

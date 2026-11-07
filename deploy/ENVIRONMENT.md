@@ -355,6 +355,8 @@ ARES discovery is always available without a key. Set `GEOAPIFY_API_KEY` in the 
 
 `QUICKLY_BASE_URL=http://quickly:8000` and `TWENTY_BASE_URL=http://twenty-server:3000` are the default internal Compose addresses. `QUICKLY_API_KEY` and `TWENTY_API_KEY` remain empty until created in their respective UIs; they enable the corresponding sales-bot clients. `TWENTY_API_KEY` must be a workspace API key from the target Twenty workspace, not a browser session token. Sales Bot's `/sales_status` performs a read-only authentication check; `authentication failed` or HTTP 401 `Token invalid` requires generating a replacement key, rerendering the private runtime file, and redeploying Sales Bot. Empty required secret fields in the presets are placeholders and block deployment. Keep the populated `deploy/runtime/sales-bot.env` at mode `0600` on the VPS.
 
+For continuous CRM prospecting, configure `TWENTY_BASE_URL`, a workspace `TWENTY_API_KEY`, and `GEOAPIFY_API_KEY` in the private Sales Bot environment, apply the latest Watcher database migration, and start a focused stream in Telegram with `/sales_auto autoservis | Brno | 20`. The worker persists its page cursor, retries after failure, and stops with `/sales_search_stop <id>`. The existing `SALES_INTERVAL_MINUTES` setting continues to govern the Sales pipeline and Telegram-only searches; the CRM stream uses a one-minute provider cooldown and five-minute error backoff.
+
 After applying `apps/twenty-sales-app`, set its installed application secret
 `SALES_INBOUND_WEBHOOK_TOKEN` to the exact value stored as
 `SALES_WEBHOOK_TOKEN` in `deploy/runtime/sales-bot.env`. Its non-secret

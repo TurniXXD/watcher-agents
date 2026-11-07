@@ -14,6 +14,105 @@ const subscription = {
 };
 
 describe('periodic sales search', () => {
+  it('imports a continuous page into Twenty and advances the persisted cursor', async () => {
+    const completeSearchSubscription = vi.fn().mockResolvedValue(undefined);
+    const store = {
+      getSearchSubscription: vi.fn().mockResolvedValue({
+        ...subscription,
+        autoImportToCrm: true,
+        pageOffset: 40,
+      }),
+      completeSearchSubscription,
+      failSearchSubscription: vi.fn(),
+    } as unknown as SalesStore;
+    const syncProspects = vi
+      .fn()
+      .mockResolvedValue({ found: 10, synced: 8, failures: [] });
+    const sendMessage = vi.fn();
+    const result = await runPeriodicSalesSearch(
+      subscription.id,
+      store,
+      { syncProspects } as unknown as SalesService,
+      new Set([123]),
+      sendMessage,
+    );
+    expect(syncProspects).toHaveBeenCalledWith({
+      query: 'architekti',
+      locality: 'Brno',
+      limit: 10,
+      offset: 40,
+    });
+    expect(completeSearchSubscription).toHaveBeenCalledWith(
+      subscription.id,
+      [],
+      50,
+    );
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: 'imported', found: 10, synced: 8 });
+  });
+
+  it('wraps an exhausted continuous search to its first page', async () => {
+    const completeSearchSubscription = vi.fn().mockResolvedValue(undefined);
+    const store = {
+      getSearchSubscription: vi.fn().mockResolvedValue({
+        ...subscription,
+        autoImportToCrm: true,
+        pageOffset: 40,
+      }),
+      completeSearchSubscription,
+      failSearchSubscription: vi.fn(),
+    } as unknown as SalesStore;
+    await runPeriodicSalesSearch(
+      subscription.id,
+      store,
+      {
+        syncProspects: vi
+          .fn()
+          .mockResolvedValue({ found: 0, synced: 0, failures: [] }),
+      } as unknown as SalesService,
+      new Set([123]),
+      vi.fn(),
+    );
+    expect(completeSearchSubscription).toHaveBeenCalledWith(
+      subscription.id,
+      [],
+      0,
+    );
+  });
+
+  it('keeps the cursor on a page with CRM failures for retry', async () => {
+    const failSearchSubscription = vi.fn().mockResolvedValue(undefined);
+    const completeSearchSubscription = vi.fn();
+    const store = {
+      getSearchSubscription: vi.fn().mockResolvedValue({
+        ...subscription,
+        autoImportToCrm: true,
+        pageOffset: 40,
+      }),
+      completeSearchSubscription,
+      failSearchSubscription,
+    } as unknown as SalesStore;
+    await expect(
+      runPeriodicSalesSearch(
+        subscription.id,
+        store,
+        {
+          syncProspects: vi.fn().mockResolvedValue({
+            found: 10,
+            synced: 8,
+            failures: [{ companyName: 'X', error: 'CRM unavailable' }],
+          }),
+        } as unknown as SalesService,
+        new Set([123]),
+        vi.fn(),
+      ),
+    ).rejects.toThrow('CRM unavailable');
+    expect(completeSearchSubscription).not.toHaveBeenCalled();
+    expect(failSearchSubscription).toHaveBeenCalledWith(
+      subscription.id,
+      'CRM unavailable',
+    );
+  });
   it('sends only unseen results and records all observed identities', async () => {
     const companies = [
       {

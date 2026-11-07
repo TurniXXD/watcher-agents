@@ -160,6 +160,61 @@ describe.skipIf(!database || !store)(
       }
     });
 
+    it('persists a continuous CRM cursor and retries failed pages without advancing it', async () => {
+      const now = new Date('2026-11-07T09:00:00Z');
+      const query = `Autoservisy ${randomUUID()}`;
+      const ordinary = await store!.upsertSearchSubscription({
+        telegramChatId: 123n,
+        telegramUserId: 456n,
+        query,
+        locality: 'Brno',
+        resultLimit: 20,
+        intervalMinutes: 30,
+        now,
+      });
+      const stream = await store!.upsertSearchSubscription({
+        telegramChatId: 123n,
+        telegramUserId: 456n,
+        query,
+        locality: 'Brno',
+        resultLimit: 20,
+        intervalMinutes: 1,
+        autoImportToCrm: true,
+        now,
+      });
+      try {
+        expect(stream.id).not.toBe(ordinary.id);
+        expect(stream.autoImportToCrm).toBe(true);
+        expect(stream.pageOffset).toBe(0);
+        await expect(
+          store!.claimDueSearchSubscriptions(now, 1),
+        ).resolves.toContainEqual({ id: stream.id });
+        await expect(
+          store!.claimDueSearchSubscriptions(now, 1),
+        ).resolves.not.toContainEqual({ id: stream.id });
+        await store!.completeSearchSubscription(stream.id, [], 20, now);
+        expect(await store!.getSearchSubscription(stream.id)).toMatchObject({
+          pageOffset: 20,
+        });
+        const due = new Date(now.getTime() + 61_000);
+        await expect(
+          store!.claimDueSearchSubscriptions(due, 1),
+        ).resolves.toContainEqual({ id: stream.id });
+        await store!.failSearchSubscription(stream.id, 'CRM unavailable', due);
+        expect(await store!.getSearchSubscription(stream.id)).toMatchObject({
+          pageOffset: 20,
+          lastError: 'CRM unavailable',
+        });
+      } finally {
+        await database!.salesSearchSubscription.delete({
+          where: { id: stream.id },
+        });
+        await database!.salesSearchSubscription.delete({
+          where: { id: ordinary.id },
+        });
+      }
+    });
+
     it('deduplicates campaign-free prospects by domain and keeps their Twenty sync identity', async () => {
       const suffix = randomUUID();
       const first = await store!.upsertProspect({

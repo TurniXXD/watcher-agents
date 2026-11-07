@@ -49,6 +49,7 @@ export type AresBusinessSearchInput = {
   locality: string;
   limit: number;
   naceCode?: string;
+  offset?: number;
 };
 
 const naceCodeSchema = z
@@ -66,6 +67,12 @@ export const searchAresBusinesses = async (
   const query = z.string().trim().min(1).max(120).parse(input.query);
   const locality = z.string().trim().min(1).max(120).parse(input.locality);
   const limit = z.number().int().min(1).max(50).parse(input.limit);
+  const offset = z
+    .number()
+    .int()
+    .nonnegative()
+    .max(100_000)
+    .parse(input.offset ?? 0);
   const naceCode = input.naceCode
     ? naceCodeSchema.parse(input.naceCode)
     : undefined;
@@ -115,7 +122,7 @@ export const searchAresBusinesses = async (
         municipalityCode !== undefined
           ? { kodObce: municipalityCode }
           : { textovaAdresa: locality },
-      start: 0,
+      start: offset,
       pocet: limit,
       razeni: ['obchodniJmeno'],
     }),

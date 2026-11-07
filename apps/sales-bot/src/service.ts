@@ -198,6 +198,7 @@ export class SalesService {
     query: string;
     locality: string;
     limit: number;
+    offset?: number;
   }): Promise<Awaited<ReturnType<SalesService['syncProspectsInternal']>>> {
     if (this.prospectSyncRunning)
       throw new Error('Prospect synchronization is already running');
@@ -213,6 +214,7 @@ export class SalesService {
     query: string;
     locality: string;
     limit: number;
+    offset?: number;
   }): Promise<{
     found: number;
     withWebsite: number;
@@ -223,7 +225,8 @@ export class SalesService {
     category: BusinessCategoryTranslation;
   }> {
     if (!this.twenty) throw new Error('Twenty CRM is not configured');
-    const { companies, category } = await this.searchBusinessesDetailed(input);
+    const { companies, category, sourceFailures } =
+      await this.searchBusinessesDetailed(input);
     const withWebsite = companies.filter(
       (company): company is BusinessSearchResult & { websiteUrl: string } =>
         company.websiteUrl !== undefined,
@@ -234,7 +237,10 @@ export class SalesService {
       created: 0,
       alreadyPresent: 0,
       synced: 0,
-      failures: [] as Array<{ companyName: string; error: string }>,
+      failures: sourceFailures.map((source) => ({
+        companyName: source,
+        error: `${source} discovery failed`,
+      })) as Array<{ companyName: string; error: string }>,
       category,
     };
 
@@ -400,9 +406,11 @@ export class SalesService {
     query: string;
     locality: string;
     limit: number;
+    offset?: number;
   }): Promise<{
     companies: BusinessSearchResult[];
     category: BusinessCategoryTranslation;
+    sourceFailures: string[];
   }> {
     let category: BusinessCategoryTranslation;
     try {
@@ -461,6 +469,7 @@ export class SalesService {
               input.locality,
               input.limit,
               category,
+              ...(input.offset === undefined ? [] : [input.offset]),
             );
           } finally {
             geoapifyDurationMs = Date.now() - startedAt;
@@ -472,6 +481,7 @@ export class SalesService {
       geoapifyOperation,
     ]);
     const failures: unknown[] = [];
+    const sourceFailures: string[] = [];
     const aresResults: BusinessSearchResult[] = [];
     if (primary[0].status === 'fulfilled') {
       for (const subject of primary[0].value.subjects) {
@@ -502,6 +512,7 @@ export class SalesService {
       );
     } else {
       failures.push(primary[0].reason);
+      sourceFailures.push('ARES');
       this.logger.warn(
         {
           source: 'ARES',
@@ -538,6 +549,7 @@ export class SalesService {
       );
     } else {
       failures.push(primary[1].reason);
+      sourceFailures.push('GEOAPIFY');
       this.logger.warn(
         {
           source: 'GEOAPIFY',
@@ -555,7 +567,7 @@ export class SalesService {
     const contactResults = placeResults.filter(
       (result) => result.websiteUrl || result.phone,
     ).length;
-    if (this.places && contactResults < input.limit) {
+    if (this.places && !input.offset && contactResults < input.limit) {
       const googleStartedAt = Date.now();
       try {
         const googleResults = await this.places.searchDirectory(
@@ -577,6 +589,7 @@ export class SalesService {
         );
       } catch (error) {
         failures.push(error);
+        sourceFailures.push('GOOGLE_PLACES');
         this.logger.warn(
           {
             source: 'GOOGLE_PLACES',
@@ -634,7 +647,7 @@ export class SalesService {
       },
       'Sales business search completed',
     );
-    return { companies, category };
+    return { companies, category, sourceFailures };
   }
 
   public async discoverBusinesses(input: {

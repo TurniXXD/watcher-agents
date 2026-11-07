@@ -411,6 +411,7 @@ export class GeoapifyDiscoveryClient {
     locality: string,
     requestedLimit: number,
     resolvedCategory?: ResolvedBusinessCategory,
+    offset = 0,
   ): Promise<BusinessSearchResult[]> {
     const input = z
       .object({
@@ -419,6 +420,7 @@ export class GeoapifyDiscoveryClient {
         limit: z.number().int().min(1).max(20),
       })
       .parse({ query, locality, limit: requestedLimit });
+    z.number().int().nonnegative().max(100_000).parse(offset);
     const category = resolvedCategory ?? resolveBusinessCategory(input.query);
     if (!category.geoapifyCategory) return [];
 
@@ -448,6 +450,7 @@ export class GeoapifyDiscoveryClient {
     );
     placesUrl.searchParams.set('lang', 'cs');
     placesUrl.searchParams.set('limit', String(input.limit));
+    if (offset > 0) placesUrl.searchParams.set('offset', String(offset));
     placesUrl.searchParams.set('apiKey', this.apiKey);
     const placesResponse = await this.fetcher(placesUrl, {
       headers: { accept: 'application/json' },

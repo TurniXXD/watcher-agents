@@ -2783,6 +2783,8 @@ model SalesSearchSubscription {
   normalizedLocality String
   resultLimit        Int                     @default(10)
   intervalMinutes    Int                     @default(30)
+  autoImportToCrm    Boolean                 @default(false)
+  pageOffset         Int                     @default(0)
   enabled            Boolean                 @default(true)
   nextRunAt          DateTime                @default(now())
   lastRunAt          DateTime?
@@ -2791,7 +2793,7 @@ model SalesSearchSubscription {
   updatedAt          DateTime                @updatedAt
   seenResults        SalesSearchSeenResult[]
 
-  @@unique([telegramChatId, normalizedQuery, normalizedLocality])
+  @@unique([telegramChatId, normalizedQuery, normalizedLocality, autoImportToCrm])
   @@index([enabled, nextRunAt])
   @@map("sales_search_subscriptions")
 }

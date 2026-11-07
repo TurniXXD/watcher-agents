@@ -113,6 +113,7 @@ describe('campaign-free prospect synchronization', () => {
     vi.spyOn(service, 'searchBusinessesDetailed').mockResolvedValue({
       companies: [discoveredCompany],
       category,
+      sourceFailures: [],
     });
 
     await expect(
@@ -176,6 +177,7 @@ describe('campaign-free prospect synchronization', () => {
     vi.spyOn(service, 'searchBusinessesDetailed').mockResolvedValue({
       companies: [discoveredCompany],
       category,
+      sourceFailures: [],
     });
 
     await expect(

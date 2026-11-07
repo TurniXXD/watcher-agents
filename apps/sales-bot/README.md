@@ -8,9 +8,11 @@ Research and drafting never imply authorization to contact a recipient. Quickly 
 
 ## Commands
 
-Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands include `/sales_status`, `/sales_campaigns`, `/sales_prospects`, `/sales_search`, `/sales_searches`, `/sales_search_stop`, `/sales_find`, `/sales_calls`, `/sales_leads`, `/sales_lead`, `/sales_approve`, `/sales_reject`, and `/sales_run`.
+Use `/start`, `/help`, or `/sales_help` for the current guide. Sales commands include `/sales_status`, `/sales_campaigns`, `/sales_prospects`, `/sales_auto`, `/sales_search`, `/sales_searches`, `/sales_search_stop`, `/sales_find`, `/sales_calls`, `/sales_leads`, `/sales_lead`, `/sales_approve`, `/sales_reject`, and `/sales_run`.
 
 Use `/link_to_lead https://firma.cz` to research one website. Review the Telegram report and press **Přidat do CRM** to write it to Twenty, or **Zrušit** to leave Twenty unchanged. `/lead` remains a backward-compatible alias.
+
+Use `/sales_auto autoservis | Brno | 20` to start an always-running CRM research stream for a business type and locality. The worker claims the first page, audits websites and saves new Company records with sourced contact Notes in Twenty, then continues through subsequent ARES and Geoapify pages. It persists the page position and stream state in PostgreSQL, waits at least one minute between successful pages to respect provider limits, and backs off five minutes after a failed page. After the last page it returns to the first to catch newly listed firms. `/sales_searches` shows the stream and `/sales_search_stop ID` stops it. The stream needs configured `TWENTY_BASE_URL`, `TWENTY_API_KEY`, and `GEOAPIFY_API_KEY`. It never contacts companies or enrolls them in Quickly. Geoapify pagination covers a focused place query, not an exhaustive export of all firms in a region.
 
 `/sales_prospects <business type> | <location> | [limit]` is the campaign-free CRM workflow. The limit defaults to 10 and is bounded to 1–20. It searches ARES and Geoapify with the optional Google Places fallback, keeps candidates that have a website, audits their public website for an email and explicit `tel:` link, and creates or updates a Twenty Company plus a linked contact Note. PostgreSQL prevents repeat creation by provider identity, normalized domain, and IČO; a previously completed prospect is skipped. This command never enrolls a lead in Quickly and never sends outreach.
 
@@ -22,7 +24,9 @@ Personal contacts and business-card reading are also available in the separate [
 
 ## Configuration
 
-Start from [sales](../../deploy/presets/sales-bot.env.example), [Quickly](../../deploy/presets/quickly.env.example), and [Twenty](../../deploy/presets/twenty.env.example) presets. Keep populated copies only in private runtime configuration. API/webhook tokens must be distinct. Twenty is required for `/sales_prospects` and inbound-mailbox ingestion; Quickly and the Google Sheets contact group remain optional until those integrations are enabled.
+Start from [sales](../../deploy/presets/sales-bot.env.example), [Quickly](../../deploy/presets/quickly.env.example), and [Twenty](../../deploy/presets/twenty.env.example) presets. Keep populated copies only in private runtime configuration. API/webhook tokens must be distinct. Twenty is required for `/sales_prospects`, `/sales_auto`, and inbound-mailbox ingestion; Geoapify is also required for `/sales_auto`. Quickly and the Google Sheets contact group remain optional until those integrations are enabled.
+
+Maintenance note (2026-11-07): Continuous CRM prospecting is opt-in through `/sales_auto`; existing `/sales_search` subscriptions remain Telegram-only and `/sales_prospects` remains one-shot. Apply the database migration before starting the updated worker.
 
 Apply the [Twenty Sales App](../twenty-sales-app/README.md) before enabling custom Twenty fields.
 

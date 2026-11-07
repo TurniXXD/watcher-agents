@@ -23,6 +23,66 @@ describe('SalesService discovery orchestration', () => {
     vi.clearAllMocks();
   });
 
+  it('passes a continuous-search offset to ARES and Geoapify without repeating Google fallback', async () => {
+    sourceMocks.searchAresBusinesses.mockResolvedValue({
+      total: 0,
+      subjects: [],
+    });
+    const geoapifySearch = vi.fn().mockResolvedValue([]);
+    const googleSearch = vi.fn().mockResolvedValue([]);
+    const service = new SalesService(
+      {} as SalesStore,
+      logger,
+      undefined,
+      undefined,
+      { search: geoapifySearch } as unknown as GeoapifyDiscoveryClient,
+      {
+        searchDirectory: googleSearch,
+      } as unknown as GooglePlacesDiscoveryClient,
+    );
+    await service.searchBusinessesDetailed({
+      query: 'autoservis',
+      locality: 'Brno',
+      limit: 20,
+      offset: 40,
+    });
+    expect(sourceMocks.searchAresBusinesses).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 40 }),
+    );
+    expect(geoapifySearch).toHaveBeenCalledWith(
+      'autoservis',
+      'Brno',
+      20,
+      expect.any(Object),
+      40,
+    );
+    expect(googleSearch).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed Geoapify page even when ARES returned companies', async () => {
+    sourceMocks.searchAresBusinesses.mockResolvedValue({
+      total: 1,
+      subjects: [{ ico: '12345678', obchodniJmeno: 'A' }],
+    });
+    const service = new SalesService(
+      {} as SalesStore,
+      logger,
+      undefined,
+      undefined,
+      {
+        search: vi.fn().mockRejectedValue(new Error('provider down')),
+      } as unknown as GeoapifyDiscoveryClient,
+    );
+    const result = await service.searchBusinessesDetailed({
+      query: 'autoservis',
+      locality: 'Brno',
+      limit: 20,
+      offset: 40,
+    });
+    expect(result.companies).toHaveLength(1);
+    expect(result.sourceFailures).toContain('GEOAPIFY');
+  });
+
   it('combines Geoapify contacts with matching ARES legal identity', async () => {
     sourceMocks.searchAresBusinesses.mockResolvedValue({
       total: 1,

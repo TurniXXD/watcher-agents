@@ -26,6 +26,7 @@ This private bot reviews discovered companies, prepares outreach drafts, and—w
 Getting started
 1. Run /sales_status to check the current pipeline counts.
 2. Run /sales_prospects <service> | <location> | [limit] to find up to 10 companies by default, enrich their public contacts, and idempotently add them to Twenty without a campaign. Example: /sales_prospects autoservis | Brno | 10
+For continuous CRM imports, run /sales_auto <service> | <location> | [limit]. It resumes page by page while the bot runs. Example: /sales_auto autoservis | Brno | 20
 3. Run /sales_search <service> | <location> | <limit> to search immediately and save a periodic ARES + Geoapify search. Google Places is used only as an optional fallback. The first result and every newly discovered contact are sent as a simple list. Example: /sales_search autoservis | Brno | 15
 4. To import candidates for later campaign analysis, run /sales_find <campaign-id> | <service> | <location> | <limit>. Example: /sales_find 5a... | autoservis | Brno | 15
 5. Run /sales_run to audit newly discovered campaign websites, collect sourced public contacts, score the leads, and sync configured integrations.
@@ -40,6 +41,7 @@ Commands
 /sales_status — show campaign count, recent leads, qualified leads, and Quickly enrollments
 /sales_campaigns — list campaign IDs needed by /sales_find
 /sales_prospects <service> | <location> | [limit] — add deduplicated researched companies directly to Twenty without a campaign; default 10
+/sales_auto <service> | <location> | [limit] — keep discovering and importing new companies into Twenty; stop with /sales_search_stop <id>
 /sales_search <service> | <location> | <limit> — search immediately, save the periodic search, and print new contacts as a simple list
 /sales_searches — list active periodic searches
 /sales_search_stop <id|all> — stop one or all periodic searches
@@ -71,6 +73,7 @@ Sales assistant je soukromý operátorský bot pro řízené zpracování B2B le
 
 Jak data procházejí systémem
 1. /sales_prospects provede jednorázové hledání bez kampaně, vezme pouze kandidáty s webem, dohledá veřejný e-mail a telefon, uloží jejich zdroj a idempotentně vytvoří nebo aktualizuje Company v Twenty. Watcher PostgreSQL hlídá duplicity podle identity zdroje, domény a IČO; opakované hledání již synchronizovanou firmu znovu nevytvoří. Kontakty a odkazy jsou v Twenty uložené v nativní Note navázané na Company. Tento tok nic neposílá do Quickly.
+1a. /sales_auto udržuje samostatný průběžný tok pro zadaný obor a lokalitu. Prochází stránky ARES a Geoapify, nové firmy s webem ukládá do Twenty a mezi dávkami dodržuje krátkou pauzu kvůli limitům poskytovatelů. Pozice ve výsledcích a stav toku zůstávají v PostgreSQL i po restartu. Zastaví se přes /sales_search_stop <id|all>.
 2. /sales_search kombinuje veřejný ARES s Geoapify. Běžný český nebo anglický popis oboru nejprve přeloží na ověřené Geoapify kategorie a podle dostupnosti také na CZ-NACE: známé výrazy řeší deterministický slovník a ostatní nakonfigurovaná Ollama. Použité kategorie bot vždy vypíše nad výsledkem. ARES vrací aktivní české subjekty, IČO, sídlo a CZ-NACE; Geoapify vrací provozovny a dostupný veřejný telefon, e-mail a web z OpenStreetMap. Google Places se zavolá jen jako volitelný fallback, pokud je nakonfigurovaný a primární zdroje nemají dost kontaktních výsledků. Hledání se uloží do PostgreSQL a opakuje podle SALES_INTERVAL_MINUTES. První výsledek a každý později nalezený nový kontakt bot pošle jako TSV tabulku; již oznámené kontakty neopakuje. Výsledky se tímto krokem neukládají do kampaně, CRM ani Quickly.
 3. /sales_find provede stejné kombinované hledání pro zvolenou kampaň. Výsledky deduplikuje podle IČO, domény a identity zdroje, ale importuje jen kandidáty s webem, protože následný audit vyžaduje oficiální web. Alternativně discovery načte JSON feed kampaně nebo přijme lead přes Sales API.
 4. /sales_run navštíví veřejný firemní web, hledá kontaktní stránku, veřejný e-mail a telefon v explicitním tel: odkazu a ke kontaktu ukládá přesnou zdrojovou URL. Nečte telefon z volného textu a nepřebírá jej automaticky z katalogu.
@@ -131,6 +134,10 @@ export const salesBotCommands = [
   {
     command: 'sales_prospects',
     description: 'Přidat prospekty přímo do Twenty',
+  },
+  {
+    command: 'sales_auto',
+    description: 'Průběžně hledat firmy a ukládat do Twenty',
   },
   {
     command: 'sales_search',
@@ -298,6 +305,40 @@ export const createSalesBot = (
       );
     }
   });
+  bot.command('sales_auto', async (ctx) => {
+    const input = parseSalesSearch(ctx.match);
+    if (!input) {
+      await ctx.reply(
+        'Použití: /sales_auto <obor/služba> | <lokalita> | [limit 1–20]',
+      );
+      return;
+    }
+    if (!ctx.from) return;
+    if (!service.twentyConfigured || !service.geoapifyConfigured) {
+      await ctx.reply(
+        'Průběžný import vyžaduje funkční Twenty CRM a GEOAPIFY_API_KEY. Ověř /sales_status.',
+      );
+      return;
+    }
+    try {
+      const stream = await store.upsertSearchSubscription({
+        telegramChatId: BigInt(ctx.chat.id),
+        telegramUserId: BigInt(ctx.from.id),
+        query: input.query,
+        locality: input.locality,
+        resultLimit: input.limit,
+        intervalMinutes: 1,
+        autoImportToCrm: true,
+      });
+      await ctx.reply(
+        `Průběžný import do Twenty běží: ${stream.id}. Bot prochází další stránky a nové firmy ukládá do CRM. Zastavení: /sales_search_stop ${stream.id}`,
+      );
+    } catch (error) {
+      await ctx.reply(
+        `Průběžný import nelze spustit: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  });
   bot.command('sales_search', async (ctx) => {
     const input = parseSalesSearch(ctx.match);
     if (!input) {
@@ -368,7 +409,7 @@ export const createSalesBot = (
         ? searches
             .map(
               (search) =>
-                `${search.id} · ${search.query} · ${search.locality} · každých ${search.intervalMinutes} min · další běh ${search.nextRunAt.toISOString()}${search.lastError ? ` · poslední chyba: ${search.lastError}` : ''}`,
+                `${search.id} · ${search.query} · ${search.locality} · ${search.autoImportToCrm ? `průběžný import do Twenty, stránka ${search.pageOffset}` : `každých ${search.intervalMinutes} min`} · další pokus ${search.nextRunAt.toISOString()}${search.lastError ? ` · poslední chyba: ${search.lastError}` : ''}`,
             )
             .join('\n')
         : 'Žádná aktivní periodická hledání.',

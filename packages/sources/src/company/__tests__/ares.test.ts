@@ -8,6 +8,27 @@ const requestJson = (options: RequestInit | undefined): unknown => {
 };
 
 describe('ARES business discovery', () => {
+  it('requests the next page when a discovery offset is supplied', async () => {
+    const fetcher: typeof fetch = vi.fn(
+      async (input) =>
+        new Response(
+          JSON.stringify(
+            String(input).includes('standardizovane-adresy')
+              ? { standardizovaneAdresy: [] }
+              : { ekonomickeSubjekty: [] },
+          ),
+          { status: 200 },
+        ),
+    );
+    await searchAresBusinesses(
+      { query: 'nace:01', locality: 'Brno', limit: 20, offset: 40 },
+      { fetcher },
+    );
+    expect(requestJson(vi.mocked(fetcher).mock.calls[1]?.[1])).toMatchObject({
+      start: 40,
+      pocet: 20,
+    });
+  });
   it('searches active subjects by CZ-NACE and registered locality', async () => {
     const fetcher: typeof fetch = vi.fn(async (input) => {
       if (String(input).includes('standardizovane-adresy')) {

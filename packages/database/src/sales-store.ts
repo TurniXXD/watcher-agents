@@ -97,18 +97,22 @@ export class SalesStore {
     locality: string;
     resultLimit: number;
     intervalMinutes: number;
+    autoImportToCrm?: boolean;
     now?: Date;
   }) {
     const now = input.now ?? new Date();
     const normalizedQuery = normalizeSearchPart(input.query);
     const normalizedLocality = normalizeSearchPart(input.locality);
-    const nextRunAt = new Date(now.getTime() + input.intervalMinutes * 60_000);
+    const nextRunAt = input.autoImportToCrm
+      ? now
+      : new Date(now.getTime() + input.intervalMinutes * 60_000);
     return this.db.salesSearchSubscription.upsert({
       where: {
-        telegramChatId_normalizedQuery_normalizedLocality: {
+        telegramChatId_normalizedQuery_normalizedLocality_autoImportToCrm: {
           telegramChatId: input.telegramChatId,
           normalizedQuery,
           normalizedLocality,
+          autoImportToCrm: input.autoImportToCrm ?? false,
         },
       },
       create: {
@@ -120,6 +124,7 @@ export class SalesStore {
         normalizedLocality,
         resultLimit: input.resultLimit,
         intervalMinutes: input.intervalMinutes,
+        autoImportToCrm: input.autoImportToCrm ?? false,
         nextRunAt,
       },
       update: {
@@ -170,7 +175,9 @@ export class SalesStore {
     const claimed = await Promise.all(
       candidates.map(async (candidate) => {
         const nextRunAt = new Date(
-          now.getTime() + candidate.intervalMinutes * 60_000,
+          now.getTime() +
+            (candidate.autoImportToCrm ? 15 : candidate.intervalMinutes) *
+              60_000,
         );
         const result = await this.db.salesSearchSubscription.updateMany({
           where: {
@@ -204,6 +211,7 @@ export class SalesStore {
   public async completeSearchSubscription(
     subscriptionId: string,
     resultKeys: readonly string[],
+    nextPageOffset?: number,
     now = new Date(),
   ): Promise<void> {
     await this.db.$transaction([
@@ -221,7 +229,16 @@ export class SalesStore {
         : []),
       this.db.salesSearchSubscription.update({
         where: { id: subscriptionId },
-        data: { lastRunAt: now, lastError: null },
+        data: {
+          lastRunAt: now,
+          lastError: null,
+          ...(nextPageOffset === undefined
+            ? {}
+            : {
+                pageOffset: nextPageOffset,
+                nextRunAt: new Date(now.getTime() + 60_000),
+              }),
+        },
       }),
     ]);
   }
@@ -366,11 +383,18 @@ export class SalesStore {
     error: string,
     now = new Date(),
   ): Promise<void> {
+    const subscription = await this.db.salesSearchSubscription.findUnique({
+      where: { id: subscriptionId },
+      select: { autoImportToCrm: true },
+    });
     await this.db.salesSearchSubscription.update({
       where: { id: subscriptionId },
       data: {
         lastRunAt: now,
         lastError: normalizeSearchError(error),
+        ...(subscription?.autoImportToCrm
+          ? { nextRunAt: new Date(now.getTime() + 5 * 60_000) }
+          : {}),
       },
     });
   }

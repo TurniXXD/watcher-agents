@@ -9,6 +9,7 @@ import {
 export type PeriodicSearchResult =
   | { status: 'missing_or_disabled' }
   | { status: 'unauthorized' }
+  | { status: 'imported'; found: number; synced: number }
   | { status: 'completed'; found: number; sent: number };
 
 export const runPeriodicSalesSearch = async (
@@ -35,6 +36,31 @@ export const runPeriodicSalesSearch = async (
   }
 
   try {
+    if (subscription.autoImportToCrm) {
+      const result = await service.syncProspects({
+        query: subscription.query,
+        locality: subscription.locality,
+        limit: subscription.resultLimit,
+        offset: subscription.pageOffset,
+      });
+      if (result.failures.length > 0)
+        throw new Error(
+          result.failures[0]?.error ?? 'Prospect CRM sync failed',
+        );
+      await store.completeSearchSubscription(
+        subscription.id,
+        [],
+        result.found < subscription.resultLimit ||
+          subscription.pageOffset + subscription.resultLimit > 100_000
+          ? 0
+          : subscription.pageOffset + subscription.resultLimit,
+      );
+      logger?.info(
+        { subscriptionId, found: result.found, synced: result.synced },
+        'Continuous CRM prospecting page completed',
+      );
+      return { status: 'imported', found: result.found, synced: result.synced };
+    }
     const { companies, category } = await service.searchBusinessesDetailed({
       query: subscription.query,
       locality: subscription.locality,
