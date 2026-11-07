@@ -13,7 +13,7 @@
     "@watcher/database": "workspace:*",
     "@watcher/observability": "workspace:*",
     "@watcher/telegram": "workspace:*",
-    "fastify": "5.12.7",
+    "fastify": "5.12.8",
     "grammy": "1.46.0",
     "zod": "4.6.7"
   },
