@@ -4,55 +4,46 @@ The CMS is a required `content-cms` service in `docker-compose.production.yml`.
 The deploy workflow publishes its image
 `ghcr.io/<owner>/vantuch-content-cms:<release sha>` together with the Watcher
 image. `deploy/deploy.sh` pulls, starts, health-checks, and rolls it back with
-the other required services. Database, media storage, and secrets need one-time
-operator provisioning before the first release that includes it.
+the other required services. It shares the existing Watcher database; media
+storage and CMS secrets need one-time operator provisioning.
 
 ## Topology
 
 ```
 Internet ─▶ Cloudflare (DNS + Access) ─▶ cloudflared (vantuch network)
                                             └─▶ vantuch-content-cms:3000  (content-cms container)
-                                                     ├─▶ watcher-postgres, database content_cms (default network)
+                                                     ├─▶ watcher-postgres, Watcher database (default network)
                                                      └─▶ rustfs:9000 (existing, vantuch network)
 brno-events-agent (Watcher stack, vantuch network) ─▶ http://vantuch-content-cms:3000/api/ingest/v1
 ```
 
-The CMS uses a dedicated `content_cms` database and role on the existing
-`watcher-postgres` instance; Payload migrations are separate from Prisma
-migrations. The CMS publishes only a loopback fallback
+The CMS and bots use the same Watcher database on `watcher-postgres`.
+Payload and Prisma own distinct tables and migrations; bots send content to
+Payload through its authenticated API. The CMS publishes only a loopback fallback
 (`127.0.0.1:${CONTENT_CMS_HOST_PORT:-3100}`). RustFS and PostgreSQL consoles must
 never be routed through cloudflared.
 
 ## One-time provisioning (`/opt/watcher`)
 
-Complete these steps before the next normal Watcher release. Otherwise the
-deployment preflight stops with an actionable error.
+Complete these steps before the next normal Watcher release. The existing
+Watcher database is already created by the normal stack; no new database or
+role is needed.
 
-1. Create the database and role (once):
-
-```bash
-cd /opt/watcher
-CMS_DB_PASSWORD="$(openssl rand -hex 32)"
-docker compose --env-file deploy/runtime/compose.env -f docker-compose.production.yml \
-  exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<SQL
-CREATE ROLE content_cms LOGIN PASSWORD '$CMS_DB_PASSWORD';
-CREATE DATABASE content_cms OWNER content_cms;
-SQL
-echo "$CMS_DB_PASSWORD"   # put it into DATABASE_URI below
-```
-
-2. Create `deploy/runtime/content-cms.env` (mode `0600`) from
-   `deploy/presets/content-cms.env.example`:
-   `DATABASE_URI=postgresql://content_cms:<password>@watcher-postgres:5432/content_cms`,
+1. Create `deploy/runtime/content-cms.env` (mode `0600`) from
+   `deploy/presets/content-cms.env.example`: set
    `PAYLOAD_SECRET=$(openssl rand -hex 32)`, `SERVER_URL=https://cms.vantuch.dev`,
-   `CORS_ORIGINS`, and the RustFS key. `deploy/render-env.sh` does not manage this file.
+   `CORS_ORIGINS`, and the RustFS key. `deploy/render-env.sh` does not manage this
+   file. Compose passes the existing Watcher `DATABASE_URL` from
+   `deploy/runtime/migrate.env` to CMS; it does not use a separate CMS database
+   credential.
 
 ```bash
 install -m 600 /dev/null deploy/runtime/content-cms.env   # then edit
 ```
 
-3. Push the release to `main`. The standard deploy pulls the CMS image, backs up
-   `content_cms`, starts the service, and waits for `/api/ready`. Check it with:
+2. Push the release to `main`. The standard deploy pulls the CMS image, backs up
+   the shared Watcher database, starts the service, and waits for `/api/ready`.
+   Check it with:
 
 ```bash
 docker compose --env-file deploy/runtime/compose.env --env-file .release.env \
@@ -78,10 +69,10 @@ editor/reviewer accounts, set **Settings**, and create bot credentials.
 
 ## Updates and rollback
 
-Every Watcher release backs up the CMS database, pulls the matching CMS image,
+Every Watcher release backs up the shared database, pulls the matching CMS image,
 and recreates the service. It waits for health and restores the previous image
 tag with the other applications if the candidate release fails. The backup is
-saved under `backups/pre-deploy-content-cms-*.sql.gz`.
+saved under `backups/pre-deploy-postgres-*.sql.gz`.
 
 For a manual rollback to a previously published tag, use the standard Watcher
 rollback procedure. Payload migrations are not reverted by image rollback, so
@@ -156,9 +147,9 @@ Then check _Operations → Ingestion Runs_ for a `succeeded` run from
 
 ## Backup and recovery
 
-- **Database:** `content_cms` lives on `watcher-postgres` and receives a
-  compressed pre-deployment backup. Also run a nightly `pg_dump -Fc -d content_cms`
-  to off-host storage; restore with `pg_restore --clean --if-exists -d content_cms`.
+- **Database:** Payload tables live in the Watcher database on
+  `watcher-postgres` and are included in the standard compressed pre-deployment
+  backup. Also back up this database to off-host storage nightly.
 - **Media:** back up the RustFS bucket (`content-cms` prefix) with your existing
   RustFS/S3 replication or `mc mirror`.
 - **Secrets:** `deploy/runtime/content-cms.env` (mode 0600) is not in git; keep an

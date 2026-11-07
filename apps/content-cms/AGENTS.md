@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Content CMS contract
 
-- Follow `docs/agent/content-cms.md` at the repository root. Keep the app extractable: no `workspace:*` dependencies, no imports from other apps or packages, own Dockerfile, image, migrations, and the opt-in `content-cms` Compose service using a `content_cms` database on `watcher-postgres` (never a separate PostgreSQL service).
+- Follow `docs/agent/content-cms.md` at the repository root. Keep the app extractable: no `workspace:*` dependencies, no imports from other apps or packages, own Dockerfile, image, migrations, and a required `content-cms` Compose service using the existing Watcher database on `watcher-postgres` (never a separate PostgreSQL service).
 - After changing collections or fields, run `pnpm migrate:create <name>`, `pnpm generate:types`, and (for admin components) `pnpm generate:importmap`; commit the results. Keep migrations additive.
 - Public API, ingestion schemas, and OpenAPI are generated from the same Zod schemas; after changing them run `pnpm openapi:export` and keep `docs/` in sync.
 - Never expose drafts, rejected content, internal fields, or credentials through public endpoints; enforce workflow rules in hooks/access, not only in the admin UI.

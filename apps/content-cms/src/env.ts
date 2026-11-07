@@ -120,22 +120,44 @@ const BUILD_PLACEHOLDERS = {
   PAYLOAD_SECRET: 'build-only-placeholder-secret-never-used-at-runtime',
 };
 
+const watcherDatabaseUri = (value: string): string => {
+  try {
+    const url = new URL(value);
+    if (
+      !['postgres:', 'postgresql:'].includes(url.protocol) ||
+      url.pathname.length < 2
+    )
+      throw new Error('Invalid PostgreSQL URL');
+    // CMS also joins `vantuch`, where another stack may own the generic name.
+    if (url.hostname === 'postgres') url.hostname = 'watcher-postgres';
+    return url.toString();
+  } catch {
+    throw new Error('Invalid DATABASE_URL for Content CMS');
+  }
+};
+
 /** Parses the environment once; issue paths name variables, never values. */
 export const loadEnv = (
   source: NodeJS.ProcessEnv = process.env,
 ): ContentEnv => {
   if (source === process.env && cached) return cached;
   const building = source.NEXT_PHASE === 'phase-production-build';
-  const parsed = schema.safeParse(
-    building
+  const databaseUri =
+    source.NODE_ENV === 'production' && !building && source.DATABASE_URL
+      ? watcherDatabaseUri(source.DATABASE_URL)
+      : source.DATABASE_URI;
+  const parsed = schema.safeParse({
+    ...source,
+    DATABASE_URI: building
+      ? databaseUri || BUILD_PLACEHOLDERS.DATABASE_URI
+      : databaseUri,
+    ...(building
       ? {
-          ...source,
-          DATABASE_URI: source.DATABASE_URI || BUILD_PLACEHOLDERS.DATABASE_URI,
           PAYLOAD_SECRET:
             source.PAYLOAD_SECRET || BUILD_PLACEHOLDERS.PAYLOAD_SECRET,
         }
-      : source,
-  );
+      : {}),
+  });
   if (!parsed.success) {
     const problems = parsed.error.issues
       .map((issue) => `${issue.path.join('.') || 'env'}: ${issue.message}`)

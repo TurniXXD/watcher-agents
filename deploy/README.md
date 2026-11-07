@@ -254,7 +254,7 @@ Runtime credentials are intentionally not uploaded by GitHub Actions. Create the
 | `deploy/runtime/sales-bot.env`         | Required sales bot credentials and integrations                 |
 | `deploy/runtime/quickly.env`           | Required Quickly app and private PostgreSQL credentials         |
 | `deploy/runtime/twenty.env`            | Required Twenty server, worker, and database credentials        |
-| `deploy/runtime/content-cms.env`       | Required Content CMS database, secret, and RustFS credentials   |
+| `deploy/runtime/content-cms.env`       | Required Content CMS secret and RustFS credentials              |
 
 `reality-bot.env` is an optional onboarding file. A release creates an empty mode-`0600` file when it is absent and skips Reality Bot when `DATABASE_URL`, `REALITY_TELEGRAM_TOKEN`, or `TELEGRAM_ALLOWED_USER_IDS` is missing. Populate all three values with a distinct BotFather token to include the bot in the next release; do not reuse another polling bot's token.
 
@@ -309,7 +309,7 @@ Before enabling automatic deployment:
 1. Confirm the VPS can reach Ollama at the configured `OLLAMA_URL`.
 2. Apply the conservative Ollama systemd settings documented in the root README (`OLLAMA_NUM_PARALLEL=1`, one loaded model, and a small queue), then verify them with `systemctl show ollama` and `ollama ps`.
 3. Confirm the deployment user can run `docker compose version` without sudo.
-4. Confirm all required runtime env files exist and OSINT, sales, Quickly, Twenty, and Content CMS secrets are populated. Provision the dedicated `content_cms` database and role and its RustFS bucket once, following [the CMS deployment guide](../apps/content-cms/docs/deployment.md). Install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation. A missing required bot or integration value blocks the release before migrations. Reality Bot and Study Bot remain optional: each is skipped without blocking the core rollout and starts automatically once its required credentials are complete.
+4. Confirm all required runtime env files exist and OSINT, sales, Quickly, Twenty, and Content CMS secrets are populated. Provision the CMS RustFS bucket once, following [the CMS deployment guide](../apps/content-cms/docs/deployment.md). CMS uses the existing Watcher database credentials from `migrate.env`. Install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation. A missing required bot or integration value blocks the release before migrations. Reality Bot and Study Bot remain optional: each is skipped without blocking the core rollout and starts automatically once its required credentials are complete.
    Runtime values containing `$` must either be fully single-quoted or encode each literal dollar sign as `$$`. `deploy/render-env.sh` safely single-quotes every value. If older unquoted runtime files caused Compose interpolation warnings, rotate any affected database password and update every rendered `DATABASE_URL` together before deploying again.
 5. Push the completed application to `main` and wait for `watcher-ci` to pass.
 6. Approve the `production` environment deployment if approval protection is enabled.
@@ -321,7 +321,7 @@ The workflow then:
 3. Uses verified OpenSSH to upload the release's Compose definition and deployment script.
 4. Pulls the exact commit-SHA image.
 5. Starts the pinned PostgreSQL 16 image with pgvector and waits for readiness.
-6. Creates compressed pre-deployment backups of Watcher, Content CMS, Quickly, and Twenty PostgreSQL databases. Running databases are backed up before their container images can be replaced.
+6. Creates compressed pre-deployment backups of the shared Watcher and Content CMS database, plus Quickly and Twenty databases. Running databases are backed up before their container images can be replaced.
 7. Applies committed Prisma migrations and verifies that the `vector` extension is installed.
 8. Starts the required bots, the documentation site, Content CMS, Quickly, Twenty, and their private databases/Redis, then waits for health checks. If Study Bot is configured, it is started separately; a Study Bot failure does not roll back the core release.
 9. Restores the prior image tag if the new containers fail health checks.

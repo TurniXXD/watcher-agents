@@ -10,7 +10,7 @@ Read this file completely before creating or modifying `apps/content-cms`, its i
 
 ## Infrastructure decisions
 
-- Database: Payload's official Postgres adapter against a dedicated database (for example `content_cms`) on the existing `watcher-postgres` instance. Payload migrations are separate from Prisma migrations and run before the CMS starts. Do not add another PostgreSQL service.
+- Database: Payload's official Postgres adapter against the existing Watcher database on `watcher-postgres`. Payload and Prisma own distinct tables and migrations; Payload migrations run during CMS startup. Bot content crosses the CMS API, while operational state remains in Prisma. Do not add another PostgreSQL service.
 - Media: the existing external RustFS (`http://rustfs:9000` on the `vantuch` network) through `@payloadcms/storage-s3` with path-style addressing and CMS-specific credentials and buckets. Do not add object storage.
 - Ingress: Cloudflare Tunnel on the external `vantuch` network, like `bots.vantuch.dev`. Target host `cms.vantuch.dev`. Cloudflare Access protects `/admin` and private ingestion docs; `/api/public/*` stays publicly reachable. There is no Nginx in this repository.
 - Do not add Redis, queues, or a separate Fastify API. Rate limiting is in-process.

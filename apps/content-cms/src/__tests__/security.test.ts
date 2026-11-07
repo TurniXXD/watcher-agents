@@ -131,6 +131,34 @@ describe('environment validation', () => {
     );
   });
 
+  it('uses the Watcher database for CMS content in production', () => {
+    const production = {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://watcher:secret@postgres:5432/watcher',
+      PAYLOAD_SECRET: valid.PAYLOAD_SECRET,
+      S3_ENDPOINT: 'http://rustfs:9000',
+      S3_BUCKET: 'content',
+      S3_ACCESS_KEY_ID: 'a',
+      S3_SECRET_ACCESS_KEY: 'b',
+    } as unknown as NodeJS.ProcessEnv;
+    expect(loadEnv(production).DATABASE_URI).toBe(
+      'postgresql://watcher:secret@watcher-postgres:5432/watcher',
+    );
+    expect(
+      loadEnv({ ...production, DATABASE_URI: valid.DATABASE_URI }).DATABASE_URI,
+    ).toBe('postgresql://watcher:secret@watcher-postgres:5432/watcher');
+  });
+
+  it('does not expose malformed Watcher database credentials in errors', () => {
+    expect(() =>
+      loadEnv({
+        ...valid,
+        NODE_ENV: 'production',
+        DATABASE_URL: 'not-a-url-supersecret',
+      } as unknown as NodeJS.ProcessEnv),
+    ).toThrow('Invalid DATABASE_URL for Content CMS');
+  });
+
   it('rejects partial storage, partial webhook, and production without RustFS, without echoing values', () => {
     expect(() =>
       loadEnv({

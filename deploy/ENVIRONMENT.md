@@ -392,12 +392,14 @@ The Vantuch Content Hub is the required `content-cms` service in
 `docker-compose.production.yml`. The workflow publishes
 `ghcr.io/<owner>/vantuch-content-cms:<sha>` with every release; `deploy.sh`
 pulls, starts, health-checks, and rolls it back alongside the other services.
-It uses a dedicated `content_cms` database and role on
-`watcher-postgres`, created once by hand. Create `deploy/runtime/content-cms.env`
+It shares the Watcher database on `watcher-postgres`: Compose supplies the same
+`DATABASE_URL` from `deploy/runtime/migrate.env`, and the CMS connects using the
+unambiguous `watcher-postgres` alias. Payload and Prisma retain separate tables
+and migrations. Create `deploy/runtime/content-cms.env`
 (mode `0600`) from `deploy/presets/content-cms.env.example`; `render-env.sh` does
-not manage it. Provision the database, role, RustFS bucket, and runtime file before
-the next release. A missing file, required value, or database blocks deployment;
-the release backs up `content_cms` before starting the updated service. Payload
+not manage it. Provision the RustFS bucket and runtime file before the next
+release. A missing file or required value blocks deployment; the standard
+Watcher database backup includes CMS tables. Payload
 applies its committed migrations during startup.
 Variables and the database setup are documented in
 `apps/content-cms/docs/cms-setup.md` and `apps/content-cms/docs/deployment.md`. The

@@ -11,8 +11,9 @@ on vantuch.dev. Bots submit events, articles, news, publications, and social
 post drafts through an authenticated ingestion API; editors and reviewers
 approve and publish them in the admin; the website reads a read-only public
 REST API. It has no Telegram surface. It has its own image and migrations, runs as
-a required `content-cms` Compose service in every release, and uses a dedicated `content_cms`
-database on `watcher-postgres`.
+a required `content-cms` Compose service in every release, and shares the
+Watcher PostgreSQL database on `watcher-postgres`. Bots send publishable content
+through its API; their operational state stays in the Watcher database.
 
 ## Architecture
 
@@ -69,19 +70,19 @@ source explicitly confirms free food.
 
 ## Configuration
 
-| Variable group   | Variables                                                                                                               | Required                                     |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| Core             | `DATABASE_URI`, `PAYLOAD_SECRET`, `SERVER_URL`, `DATABASE_POOL_MAX`, `LOG_LEVEL`                                        | URI and secret required                      |
-| Browser security | `CORS_ORIGINS`, `CSRF_ORIGINS`, `TRUST_PROXY_HEADERS`                                                                   | Optional                                     |
-| RustFS media     | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_FORCE_PATH_STYLE`, `S3_PREFIX` | Required in production (first four together) |
-| Upload limits    | `MEDIA_MAX_IMAGE_SIZE_MB`, `MEDIA_MAX_DOCUMENT_SIZE_MB`, `MEDIA_MAX_VIDEO_SIZE_MB`                                      | Optional                                     |
-| API limits       | `PUBLIC_API_RATE_LIMIT_PER_MINUTE`, `INGEST_RATE_LIMIT_PER_MINUTE`, `INGEST_MAX_BODY_BYTES`, `INGEST_MAX_BATCH_SIZE`    | Optional                                     |
-| Website          | `REVALIDATE_WEBHOOK_URL` + `REVALIDATE_WEBHOOK_SECRET`, `WEBSITE_PREVIEW_URL` + `PREVIEW_SECRET`                        | Optional, pairs together                     |
-| Jobs             | `PAYLOAD_JOBS_AUTORUN`                                                                                                  | Optional                                     |
+| Variable group   | Variables                                                                                                                           | Required                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| Core             | Production `DATABASE_URL` from Watcher; standalone `DATABASE_URI`, `PAYLOAD_SECRET`, `SERVER_URL`, `DATABASE_POOL_MAX`, `LOG_LEVEL` | Database URL and secret required             |
+| Browser security | `CORS_ORIGINS`, `CSRF_ORIGINS`, `TRUST_PROXY_HEADERS`                                                                               | Optional                                     |
+| RustFS media     | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_FORCE_PATH_STYLE`, `S3_PREFIX`             | Required in production (first four together) |
+| Upload limits    | `MEDIA_MAX_IMAGE_SIZE_MB`, `MEDIA_MAX_DOCUMENT_SIZE_MB`, `MEDIA_MAX_VIDEO_SIZE_MB`                                                  | Optional                                     |
+| API limits       | `PUBLIC_API_RATE_LIMIT_PER_MINUTE`, `INGEST_RATE_LIMIT_PER_MINUTE`, `INGEST_MAX_BODY_BYTES`, `INGEST_MAX_BATCH_SIZE`                | Optional                                     |
+| Website          | `REVALIDATE_WEBHOOK_URL` + `REVALIDATE_WEBHOOK_SECRET`, `WEBSITE_PREVIEW_URL` + `PREVIEW_SECRET`                                    | Optional, pairs together                     |
+| Jobs             | `PAYLOAD_JOBS_AUTORUN`                                                                                                              | Optional                                     |
 
 ## Integrations
 
-- **PostgreSQL** (required): dedicated `content_cms` database on `watcher-postgres` via `@payloadcms/db-postgres`.
+- **PostgreSQL** (required): Watcher database on `watcher-postgres` via `@payloadcms/db-postgres`; Payload and Prisma use separate tables and migrations.
 - **RustFS** (required in production): existing S3-compatible store on the `vantuch` network via `@payloadcms/storage-s3`.
 - **Brno Events Agent** (optional producer): sends events through its outbox when `CONTENT_CMS_URL` and `CONTENT_CMS_INGEST_TOKEN` are set.
 - **vantuch.dev website** (optional consumer): public API, revalidation webhook, preview links.

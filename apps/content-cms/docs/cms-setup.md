@@ -17,27 +17,28 @@ RustFS.
 
 ## Environment variables
 
-| Variable                                                               | Required        | Default                 | Purpose                                                               |
-| ---------------------------------------------------------------------- | --------------- | ----------------------- | --------------------------------------------------------------------- |
-| `DATABASE_URI`                                                         | Yes             | –                       | Dedicated CMS PostgreSQL URL                                          |
-| `DATABASE_POOL_MAX`                                                    | No              | 10                      | Connection pool size                                                  |
-| `PAYLOAD_SECRET`                                                       | Yes             | –                       | ≥ 32 random chars; signs sessions. Rotating it logs everyone out      |
-| `SERVER_URL`                                                           | Prod            | `http://localhost:3100` | Public origin (`https://cms.vantuch.dev`), used for URLs, CORS, CSRF  |
-| `CORS_ORIGINS`                                                         | No              | –                       | Comma-separated website origins allowed to call the public API        |
-| `CSRF_ORIGINS`                                                         | No              | –                       | Extra origins allowed to send admin cookies                           |
-| `LOG_LEVEL`                                                            | No              | `info`                  | pino level                                                            |
-| `TRUST_PROXY_HEADERS`                                                  | No              | `false`                 | Honour `CF-Connecting-IP`/`X-Forwarded-For` (true behind cloudflared) |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Prod (together) | –                       | RustFS connection                                                     |
-| `S3_REGION`                                                            | No              | `us-east-1`             | S3 region                                                             |
-| `S3_FORCE_PATH_STYLE`                                                  | No              | `true`                  | Path-style addressing (RustFS)                                        |
-| `S3_PREFIX`                                                            | No              | `content-cms`           | Object key prefix                                                     |
-| `MEDIA_MAX_IMAGE_SIZE_MB` / `_DOCUMENT_` / `_VIDEO_`                   | No              | 15 / 25 / 200           | Per-type upload limits                                                |
-| `PUBLIC_API_RATE_LIMIT_PER_MINUTE`                                     | No              | 120                     | Per client IP                                                         |
-| `INGEST_RATE_LIMIT_PER_MINUTE`                                         | No              | 60                      | Per bot credential                                                    |
-| `INGEST_MAX_BODY_BYTES` / `INGEST_MAX_BATCH_SIZE`                      | No              | 1000000 / 100           | Ingestion request limits                                              |
-| `REVALIDATE_WEBHOOK_URL`, `REVALIDATE_WEBHOOK_SECRET`                  | No (together)   | –                       | Website on-demand revalidation                                        |
-| `WEBSITE_PREVIEW_URL`, `PREVIEW_SECRET`                                | No (together)   | –                       | Signed draft-preview links                                            |
-| `PAYLOAD_JOBS_AUTORUN`                                                 | No              | `true`                  | Run scheduled publish jobs in-process                                 |
+| Variable                                                               | Required        | Default                 | Purpose                                                                                                                         |
+| ---------------------------------------------------------------------- | --------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URI`                                                         | Local           | –                       | Standalone development PostgreSQL URL                                                                                           |
+| `DATABASE_URL`                                                         | Prod            | –                       | Shared Watcher database URL, inherited from `deploy/runtime/migrate.env`; `postgres` hostname is resolved as `watcher-postgres` |
+| `DATABASE_POOL_MAX`                                                    | No              | 10                      | Connection pool size                                                                                                            |
+| `PAYLOAD_SECRET`                                                       | Yes             | –                       | ≥ 32 random chars; signs sessions. Rotating it logs everyone out                                                                |
+| `SERVER_URL`                                                           | Prod            | `http://localhost:3100` | Public origin (`https://cms.vantuch.dev`), used for URLs, CORS, CSRF                                                            |
+| `CORS_ORIGINS`                                                         | No              | –                       | Comma-separated website origins allowed to call the public API                                                                  |
+| `CSRF_ORIGINS`                                                         | No              | –                       | Extra origins allowed to send admin cookies                                                                                     |
+| `LOG_LEVEL`                                                            | No              | `info`                  | pino level                                                                                                                      |
+| `TRUST_PROXY_HEADERS`                                                  | No              | `false`                 | Honour `CF-Connecting-IP`/`X-Forwarded-For` (true behind cloudflared)                                                           |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Prod (together) | –                       | RustFS connection                                                                                                               |
+| `S3_REGION`                                                            | No              | `us-east-1`             | S3 region                                                                                                                       |
+| `S3_FORCE_PATH_STYLE`                                                  | No              | `true`                  | Path-style addressing (RustFS)                                                                                                  |
+| `S3_PREFIX`                                                            | No              | `content-cms`           | Object key prefix                                                                                                               |
+| `MEDIA_MAX_IMAGE_SIZE_MB` / `_DOCUMENT_` / `_VIDEO_`                   | No              | 15 / 25 / 200           | Per-type upload limits                                                                                                          |
+| `PUBLIC_API_RATE_LIMIT_PER_MINUTE`                                     | No              | 120                     | Per client IP                                                                                                                   |
+| `INGEST_RATE_LIMIT_PER_MINUTE`                                         | No              | 60                      | Per bot credential                                                                                                              |
+| `INGEST_MAX_BODY_BYTES` / `INGEST_MAX_BATCH_SIZE`                      | No              | 1000000 / 100           | Ingestion request limits                                                                                                        |
+| `REVALIDATE_WEBHOOK_URL`, `REVALIDATE_WEBHOOK_SECRET`                  | No (together)   | –                       | Website on-demand revalidation                                                                                                  |
+| `WEBSITE_PREVIEW_URL`, `PREVIEW_SECRET`                                | No (together)   | –                       | Signed draft-preview links                                                                                                      |
+| `PAYLOAD_JOBS_AUTORUN`                                                 | No              | `true`                  | Run scheduled publish jobs in-process                                                                                           |
 
 ## Migrations
 

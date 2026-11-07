@@ -729,6 +729,7 @@ services:
     mem_limit: 1g
     env_file:
       - ./deploy/runtime/content-cms.env
+      - ./deploy/runtime/migrate.env
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0

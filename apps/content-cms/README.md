@@ -8,8 +8,8 @@ publish it in the Payload admin; the website reads a read-only public REST API.
 It has no Telegram surface. It keeps its own dependencies, Dockerfile, image,
 migrations, and environment schema so it can later move to a standalone
 `vantuch-content` repository. In production it is a required `content-cms`
-service in every Watcher release, uses a dedicated `content_cms`
-database on `watcher-postgres`, and reads `deploy/runtime/content-cms.env`; see
+service in every Watcher release, shares the Watcher PostgreSQL database on
+`watcher-postgres`, and reads `deploy/runtime/content-cms.env`; see
 [deployment](docs/deployment.md). It has no `workspace:*` dependencies.
 
 | Surface          | Path (production: `https://cms.vantuch.dev`)   | Access                            |
@@ -66,7 +66,9 @@ All variables are validated with Zod at startup (`src/env.ts`); invalid or
 partial groups fail fast without echoing values. See
 [`.env.example`](.env.example) and [CMS setup](docs/cms-setup.md#environment-variables).
 
-Required: `DATABASE_URI`, `PAYLOAD_SECRET` (≥ 32 chars). Production additionally
+Required: `DATABASE_URI` for standalone development, `PAYLOAD_SECRET` (≥ 32 chars).
+Production reads the Watcher `DATABASE_URL` from `deploy/runtime/migrate.env`.
+Production additionally
 requires the RustFS group `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
 `S3_SECRET_ACCESS_KEY`.
 
