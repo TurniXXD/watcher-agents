@@ -39,6 +39,7 @@ RustFS.
 | `REVALIDATE_WEBHOOK_URL`, `REVALIDATE_WEBHOOK_SECRET`                  | No (together)   | –                       | Website on-demand revalidation                                                                                                  |
 | `WEBSITE_PREVIEW_URL`, `PREVIEW_SECRET`                                | No (together)   | –                       | Signed draft-preview links                                                                                                      |
 | `PAYLOAD_JOBS_AUTORUN`                                                 | No              | `true`                  | Run scheduled publish jobs in-process                                                                                           |
+| `MCP_ENABLED`                                                          | No              | `true`                  | Serve the MCP endpoint `POST /api/mcp` ([MCP server](mcp.md))                                                                   |
 
 ## Migrations
 

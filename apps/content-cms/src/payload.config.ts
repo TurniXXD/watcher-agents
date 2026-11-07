@@ -23,6 +23,7 @@ import { loadEnv, s3Enabled } from './env';
 import { Settings } from './globals/settings';
 import { credentialEndpoint } from './ingestion/credential-endpoint';
 import { ingestEndpoints } from './ingestion/endpoints';
+import { contentMcpPlugin } from './mcp/plugin';
 import { migrations } from './migrations';
 import { docsEndpoints } from './openapi/endpoints';
 import { publicEndpoints } from './public-api/endpoints';
@@ -104,6 +105,7 @@ export default buildConfig({
     prodMigrations: migrations,
   }),
   plugins: [
+    contentMcpPlugin(env.MCP_ENABLED),
     s3Storage({
       enabled: s3Enabled(env),
       collections: { media: { prefix: env.S3_PREFIX } },

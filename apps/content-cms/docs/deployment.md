@@ -112,6 +112,11 @@ Bots should use the internal `vantuch` network URL, not the public hostname. If 
 bot must use the public hostname, give it a Cloudflare **service token** policy on
 `/api/ingest/v1` in addition to its CMS bearer credential.
 
+The MCP endpoint `/api/mcp` stays under the whole-host Access application. A
+remote MCP client must send a Cloudflare **service token** (`CF-Access-Client-Id`
+and `CF-Access-Client-Secret` headers, with a service-token policy on
+`/api/mcp`) in addition to its MCP API key; see [MCP server](mcp.md).
+
 Even without Access, every non-public route enforces Payload authentication.
 
 ## RustFS
