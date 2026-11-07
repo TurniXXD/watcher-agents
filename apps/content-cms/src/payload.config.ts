@@ -23,6 +23,7 @@ import { loadEnv, s3Enabled } from './env';
 import { Settings } from './globals/settings';
 import { credentialEndpoint } from './ingestion/credential-endpoint';
 import { ingestEndpoints } from './ingestion/endpoints';
+import { legacyBackfillTask } from './jobs/legacy-backfill';
 import { migrations } from './migrations';
 import { docsEndpoints } from './openapi/endpoints';
 import { publicEndpoints } from './public-api/endpoints';
@@ -123,6 +124,8 @@ export default buildConfig({
     // Runs scheduled publish/unpublish jobs inside this long-running server.
     autoRun: [{ cron: '* * * * *', limit: 20, queue: 'default' }],
     shouldAutoRun: () => env.PAYLOAD_JOBS_AUTORUN,
+    // One-off import of pre-CMS bot content, queued by a data migration.
+    tasks: [legacyBackfillTask],
   },
   logger: {
     options: { level: env.LOG_LEVEL, base: { service: 'content-cms' } },

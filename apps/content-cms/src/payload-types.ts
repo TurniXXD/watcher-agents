@@ -122,6 +122,7 @@ export interface Config {
   user: User;
   jobs: {
     tasks: {
+      backfillLegacyBotContent: TaskBackfillLegacyBotContent;
       schedulePublish: TaskSchedulePublish;
       inline: {
         input: unknown;
@@ -929,7 +930,7 @@ export interface User {
   collection: 'users';
 }
 /**
- * Machine credentials for bots. Create them with `pnpm credentials:create`; the token is shown once and only its hash is stored. Rotate by creating a new credential and deactivating the old one.
+ * Machine credentials for bots. Create one below (or with `pnpm credentials:create`); the token is shown once and only its hash is stored. Rotate by creating a new credential and deactivating the old one.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ingestion-clients".
@@ -1020,7 +1021,7 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'schedulePublish';
+        taskSlug: 'inline' | 'backfillLegacyBotContent' | 'schedulePublish';
         taskID: string;
         input?:
           | {
@@ -1053,7 +1054,7 @@ export interface PayloadJob {
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'schedulePublish') | null;
+  taskSlug?: ('inline' | 'backfillLegacyBotContent' | 'schedulePublish') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
@@ -1718,6 +1719,24 @@ export interface CollectionsWidget {
     [k: string]: unknown;
   };
   width: 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskBackfillLegacyBotContent".
+ */
+export interface TaskBackfillLegacyBotContent {
+  input?: unknown;
+  output: {
+    summary:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
