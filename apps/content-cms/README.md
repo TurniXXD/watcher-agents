@@ -15,6 +15,7 @@ service in every Watcher release, shares the Watcher PostgreSQL database on
 | Surface          | Path (production: `https://cms.vantuch.dev`)   | Access                            |
 | ---------------- | ---------------------------------------------- | --------------------------------- |
 | Admin            | `/admin`                                       | Payload login + Cloudflare Access |
+| Root redirect    | `/` → `/admin` (307)                           | Anonymous                         |
 | Public API       | `/api/public/v1/*`                             | Anonymous, read-only              |
 | Public Swagger   | `/api/public/docs`, `/api/public/openapi.json` | Anonymous                         |
 | Ingestion API    | `/api/ingest/v1/*`                             | Per-bot bearer credentials        |
