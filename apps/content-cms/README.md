@@ -15,6 +15,7 @@ service in every Watcher release, shares the Watcher PostgreSQL database on
 | Surface          | Path (production: `https://cms.vantuch.dev`)   | Access                            |
 | ---------------- | ---------------------------------------------- | --------------------------------- |
 | Admin            | `/admin`                                       | Payload login + Cloudflare Access |
+| Root redirect    | `/` → `/admin` (307)                           | Anonymous                         |
 | Public API       | `/api/public/v1/*`                             | Anonymous, read-only              |
 | Public Swagger   | `/api/public/docs`, `/api/public/openapi.json` | Anonymous                         |
 | Ingestion API    | `/api/ingest/v1/*`                             | Per-bot bearer credentials        |
@@ -78,4 +79,6 @@ requires the RustFS group `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
 - Swagger UI assets load from jsDelivr (pinned version); the OpenAPI JSON is served locally.
 - Social posts are planning records only; nothing is published to social platforms.
 - Bot integration is implemented for the Brno Events agent; other bots can use the same API but are not yet wired.
+  Content they stored before the CMS existed is imported once in the background
+  as drafts (see [CMS setup](docs/cms-setup.md#legacy-bot-content-import)).
 - Public rich text is returned as plain text for events (and plain text plus Lexical JSON for article details).

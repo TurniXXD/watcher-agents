@@ -27,7 +27,7 @@ Next.js website (Vercel) ──fetch──┘  /api/public/v1/* with ISR + tag r
 | Validation       | Zod at every boundary (env, ingestion items, public query parameters, DTOs)                      |
 | Custom endpoints | Payload root `endpoints` (`src/system`, `src/public-api`, `src/ingestion`, `src/openapi`)        |
 | Logging          | Payload's pino logger, JSON, `service: content-cms`; audit lines for ingestion and auth failures |
-| Scheduling       | Payload jobs `autoRun` (scheduled publish/unpublish) inside the long-running server              |
+| Scheduling       | Payload jobs `autoRun` (scheduled publish/unpublish, one-off legacy content import) in-process   |
 
 ## Three stores per bot record
 
