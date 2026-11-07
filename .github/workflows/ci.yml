@@ -230,7 +230,6 @@ jobs:
                 --env-file deploy/runtime/compose.env \
                 -f docker-compose.production.yml \
                 config --quiet
-
             services="$(IMAGE_REGISTRY=ghcr.io \
               IMAGE_NAMESPACE=example \
               IMAGE_TAG=ci \
@@ -238,7 +237,7 @@ jobs:
                 --env-file deploy/runtime/compose.env \
                 -f docker-compose.production.yml \
                 config --services)"
-            for service in reality-bot osint-bot sales-bot networking-bot jobs-bot quickly twenty-server twenty-worker; do
+            for service in reality-bot osint-bot sales-bot networking-bot jobs-bot content-cms quickly twenty-server twenty-worker; do
               grep -Fxq "$service" <<< "$services"
             done
 

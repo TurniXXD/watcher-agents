@@ -7,8 +7,8 @@ publish it in the Payload admin; the website reads a read-only public REST API.
 
 It has no Telegram surface. It keeps its own dependencies, Dockerfile, image,
 migrations, and environment schema so it can later move to a standalone
-`vantuch-content` repository. In production it is the opt-in `content-cms`
-service in `docker-compose.production.yml`, uses a dedicated `content_cms`
+`vantuch-content` repository. In production it is a required `content-cms`
+service in every Watcher release, uses a dedicated `content_cms`
 database on `watcher-postgres`, and reads `deploy/runtime/content-cms.env`; see
 [deployment](docs/deployment.md). It has no `workspace:*` dependencies.
 

@@ -386,17 +386,19 @@ The sales bot reuses the shared optional `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_K
 
 The standard release also starts Quickly and Twenty. The VPS renderer writes `deploy/runtime/quickly.env` and `deploy/runtime/twenty.env` from required `QUICKLY_POSTGRES_PASSWORD`, `QUICKLY_SECRET_KEY`, `TWENTY_POSTGRES_PASSWORD`, `TWENTY_ENCRYPTION_KEY`, and `TWENTY_PUBLIC_URL`, plus optional `QUICKLY_PUBLIC_URL`, `QUICKLY_GOOGLE_CLIENT_ID`/`QUICKLY_GOOGLE_CLIENT_SECRET`, or Office 365 OAuth values. Twenty's URL must be an HTTPS origin and match the Cloudflare Access-protected hostname; the renderer keeps Twenty in single-workspace mode and restricts workspace creation to server admins. It writes the Quickly and Twenty bind addresses and host ports to `deploy/runtime/compose.env`. Unless a Quickly public URL is set, its reachable bind address and port form the browser URL (loopback and wildcard binds use `localhost`); Quickly's CORS origin defaults to the same derived URL. PostgreSQL passwords must use only URL-safe letters, numbers, `_`, and `-`; generate distinct values with `openssl rand -hex 32`. Generate the signing and encryption keys separately. For manual setup, use `deploy/presets/quickly.env.example` and `deploy/presets/twenty.env.example`; the password embedded in each database URL must exactly match its `POSTGRES_PASSWORD`. Do not deploy with empty sample secrets. The release backs up both private PostgreSQL databases before starting their application services; back up Twenty's local-data volume separately.
 
-## Optional Content CMS
+## Required Content CMS
 
-The Vantuch Content Hub is the opt-in `content-cms` service (Compose profile
-`content-cms`) in `docker-compose.production.yml`. The workflow publishes
-`ghcr.io/<owner>/vantuch-content-cms:<sha>` with every release, but `deploy.sh`
-never starts it. It uses a dedicated `content_cms` database and role on
+The Vantuch Content Hub is the required `content-cms` service in
+`docker-compose.production.yml`. The workflow publishes
+`ghcr.io/<owner>/vantuch-content-cms:<sha>` with every release; `deploy.sh`
+pulls, starts, health-checks, and rolls it back alongside the other services.
+It uses a dedicated `content_cms` database and role on
 `watcher-postgres`, created once by hand. Create `deploy/runtime/content-cms.env`
 (mode `0600`) from `deploy/presets/content-cms.env.example`; `render-env.sh` does
-not manage it, and the service treats it as optional so Watcher releases work
-without it. Start or update it with
-`docker compose --env-file deploy/runtime/compose.env --env-file .release.env -f docker-compose.production.yml --profile content-cms up -d content-cms`.
+not manage it. Provision the database, role, RustFS bucket, and runtime file before
+the next release. A missing file, required value, or database blocks deployment;
+the release backs up `content_cms` before starting the updated service. Payload
+applies its committed migrations during startup.
 Variables and the database setup are documented in
 `apps/content-cms/docs/cms-setup.md` and `apps/content-cms/docs/deployment.md`. The
 Brno Events agent connects through `CONTENT_CMS_URL`/`CONTENT_CMS_INGEST_TOKEN` above.

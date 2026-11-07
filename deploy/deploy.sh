@@ -39,6 +39,7 @@ required_files=(
   deploy/runtime/osint-bot.env
   deploy/runtime/quickly.env
   deploy/runtime/twenty.env
+  deploy/runtime/content-cms.env
 )
 
 required_env_values=(
@@ -115,13 +116,20 @@ required_env_values=(
   "deploy/runtime/twenty.env:SERVER_URL"
   "deploy/runtime/twenty.env:IS_MULTIWORKSPACE_ENABLED"
   "deploy/runtime/twenty.env:IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS"
+  "deploy/runtime/content-cms.env:DATABASE_URI"
+  "deploy/runtime/content-cms.env:PAYLOAD_SECRET"
+  "deploy/runtime/content-cms.env:SERVER_URL"
+  "deploy/runtime/content-cms.env:S3_ENDPOINT"
+  "deploy/runtime/content-cms.env:S3_BUCKET"
+  "deploy/runtime/content-cms.env:S3_ACCESS_KEY_ID"
+  "deploy/runtime/content-cms.env:S3_SECRET_ACCESS_KEY"
 )
 
 legacy_watcher_services=(
   stocks-bot publications-bot news-bot mu-clubs-monitor brno-events-agent
   briefing-bot socials-bot maintenance-agent transport-bot
 )
-watcher_services=("${legacy_watcher_services[@]}" osint-bot sales-bot networking-bot docs jobs-bot)
+watcher_services=("${legacy_watcher_services[@]}" osint-bot sales-bot networking-bot docs jobs-bot content-cms)
 integration_services=(quickly twenty-server twenty-worker)
 
 reality_bot_env_values=(
@@ -220,7 +228,7 @@ for required_env_value in "${required_env_values[@]}"; do
   line="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1 || true)"
   value="${line#*=}"
 
-  if [[ -z "$line" || -z "$value" || "$value" == "''" || "$value" == '""' || "$value" == *'<url-encoded-password>'* || "$value" == *'<same-url-safe-password>'* || "$value" == *'<comma-separated-telegram-user-ids>'* || "$value" == replace-with-* ]]; then
+  if [[ -z "$line" || -z "$value" || "$value" == "''" || "$value" == '""' || "$value" == *'<'*'>'* || "$value" == replace-with-* ]]; then
     missing_env_values+=("$file: $key")
   fi
 done
@@ -246,6 +254,12 @@ fi
 twenty_workspace_creation_limited="$(runtime_env_value deploy/runtime/twenty.env IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS)"
 if [[ "$twenty_workspace_creation_limited" != "true" ]]; then
   echo "deploy/runtime/twenty.env: IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS must be true." >&2
+  exit 1
+fi
+
+cms_payload_secret="$(runtime_env_value deploy/runtime/content-cms.env PAYLOAD_SECRET)"
+if ((${#cms_payload_secret} < 32)); then
+  echo "deploy/runtime/content-cms.env: PAYLOAD_SECRET must contain at least 32 characters." >&2
   exit 1
 fi
 
@@ -414,10 +428,16 @@ backup_stamp="$(date -u +%Y%m%dT%H%M%SZ)-${IMAGE_TAG:0:12}"
 backup_created=false
 quickly_backup_created=false
 twenty_backup_created=false
+content_cms_backup_created=false
 
 database_exists() {
   compose_candidate exec -T postgres sh -c \
     'psql -U "$POSTGRES_USER" -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname = '\''$POSTGRES_DB'\''" | grep -q '\''^1$'\'''
+}
+
+content_cms_database_exists() {
+  compose_candidate exec -T postgres sh -c \
+    'psql -U "$POSTGRES_USER" -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname = '\''content_cms'\''" | grep -q '\''^1$'\'''
 }
 
 create_database_backup() {
@@ -429,6 +449,14 @@ create_database_backup() {
   find backups -type f -name 'pre-deploy-*.sql.gz' -mtime "+$BACKUP_RETENTION_DAYS" -delete
 }
 
+create_content_cms_backup() {
+  local backup_path="backups/pre-deploy-content-cms-${backup_stamp}.sql.gz"
+  echo "Creating pre-deploy Content CMS database backup at $backup_path..."
+  compose_candidate exec -T postgres sh -c \
+    'pg_dump -U "$POSTGRES_USER" -d content_cms' | gzip >"$backup_path"
+  find backups -type f -name 'pre-deploy-*.sql.gz' -mtime "+$BACKUP_RETENTION_DAYS" -delete
+}
+
 echo "Pulling release $IMAGE_TAG..."
 compose_candidate pull postgres quickly-postgres twenty-postgres twenty-redis migrate "${release_services[@]}"
 
@@ -436,6 +464,10 @@ if [[ -n "$(compose_candidate ps --status running -q postgres)" ]] && database_e
   echo "Backing up the running database before changing its container image..."
   create_database_backup postgres
   backup_created=true
+fi
+if [[ -n "$(compose_candidate ps --status running -q postgres)" ]] && content_cms_database_exists; then
+  create_content_cms_backup
+  content_cms_backup_created=true
 fi
 if [[ -n "$(compose_candidate ps --status running -q quickly-postgres)" ]]; then
   create_database_backup quickly-postgres
@@ -470,6 +502,13 @@ if [[ "$backup_created" == false ]]; then
   else
     echo "Skipping the pre-deploy backup because the database does not exist yet."
   fi
+fi
+if ! content_cms_database_exists; then
+  echo "Content CMS database content_cms is missing. Provision its database, role, and deploy/runtime/content-cms.env before deployment." >&2
+  exit 1
+fi
+if [[ "$content_cms_backup_created" == false ]]; then
+  create_content_cms_backup
 fi
 
 echo "Starting sales databases and Redis..."

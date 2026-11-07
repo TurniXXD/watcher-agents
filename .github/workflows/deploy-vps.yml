@@ -315,6 +315,10 @@ jobs:
               IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
                 docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 docs || true
               echo
+              echo '=== Content CMS logs ==='
+              IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
+                docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 content-cms || true
+              echo
               echo '=== jobs stack logs ==='
               IMAGE_REGISTRY=ghcr.io IMAGE_NAMESPACE=diagnostic IMAGE_TAG=diagnostic \
                 docker compose --env-file '$DEPLOY_ENV_FILE' -f docker-compose.production.yml logs --tail 200 jobs-bot || true

@@ -2,7 +2,7 @@
 
 Production deployment uses GitHub Actions, GitHub Container Registry (GHCR), Tailscale, OpenSSH, Docker Compose, and a server-managed runtime configuration. The `deploy-vps` workflow runs after `watcher-ci` succeeds on `main`; it can also be started manually from the Actions page.
 
-GitHub publishes one immutable Watcher image. The VPS runs that image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `socials-bot`, `maintenance-agent`, `transport-bot`, `osint-bot`, `sales-bot`, the self-hosted `docs` application, and the one-shot `migrate` service. Reality Bot joins the release after its private runtime file is configured; until then deployment reports that it was skipped without blocking established services. Quickly and Twenty are required companion services for the sales stack. Ollama remains outside this Compose stack.
+GitHub publishes one immutable Watcher image and one Content CMS image at the same commit SHA. The VPS runs the Watcher image with separate commands and environment files for `stocks-bot`, `publications-bot`, `news-bot`, `mu-clubs-monitor`, `brno-events-agent`, `briefing-bot`, `socials-bot`, `maintenance-agent`, `transport-bot`, `osint-bot`, `sales-bot`, the self-hosted `docs` application, and the one-shot `migrate` service. Content CMS is a required service using its own image. Reality Bot joins the release after its private runtime file is configured; until then deployment reports that it was skipped without blocking established services. Quickly and Twenty are required companion services for the sales stack. Ollama remains outside this Compose stack.
 
 ## Security model
 
@@ -254,10 +254,11 @@ Runtime credentials are intentionally not uploaded by GitHub Actions. Create the
 | `deploy/runtime/sales-bot.env`         | Required sales bot credentials and integrations                 |
 | `deploy/runtime/quickly.env`           | Required Quickly app and private PostgreSQL credentials         |
 | `deploy/runtime/twenty.env`            | Required Twenty server, worker, and database credentials        |
+| `deploy/runtime/content-cms.env`       | Required Content CMS database, secret, and RustFS credentials   |
 
 `reality-bot.env` is an optional onboarding file. A release creates an empty mode-`0600` file when it is absent and skips Reality Bot when `DATABASE_URL`, `REALITY_TELEGRAM_TOKEN`, or `TELEGRAM_ALLOWED_USER_IDS` is missing. Populate all three values with a distinct BotFather token to include the bot in the next release; do not reuse another polling bot's token.
 
-You can copy the readable examples from `deploy/presets`, or render all files from environment variables:
+You can copy the readable examples from `deploy/presets`, or render the standard runtime files from environment variables. Create `content-cms.env` separately from its preset:
 
 ```bash
 cd /opt/watcher
@@ -308,21 +309,21 @@ Before enabling automatic deployment:
 1. Confirm the VPS can reach Ollama at the configured `OLLAMA_URL`.
 2. Apply the conservative Ollama systemd settings documented in the root README (`OLLAMA_NUM_PARALLEL=1`, one loaded model, and a small queue), then verify them with `systemctl show ollama` and `ollama ps`.
 3. Confirm the deployment user can run `docker compose version` without sudo.
-4. Confirm all required runtime env files exist and OSINT, sales, Quickly, and Twenty secrets are populated, and install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation. A missing required bot or integration value blocks the release before migrations. Reality Bot and Study Bot remain optional: each is skipped without blocking the core rollout and starts automatically once its required credentials are complete.
+4. Confirm all required runtime env files exist and OSINT, sales, Quickly, Twenty, and Content CMS secrets are populated. Provision the dedicated `content_cms` database and role and its RustFS bucket once, following [the CMS deployment guide](../apps/content-cms/docs/deployment.md). Install the accepted Piper voices with `PIPER_ACCEPT_VOICE_LICENSES=true ./deploy/download-piper-voices.sh`. The deploy script normalizes `deploy/runtime` to mode `0700` and the files inside it to mode `0600` before validation. A missing required bot or integration value blocks the release before migrations. Reality Bot and Study Bot remain optional: each is skipped without blocking the core rollout and starts automatically once its required credentials are complete.
    Runtime values containing `$` must either be fully single-quoted or encode each literal dollar sign as `$$`. `deploy/render-env.sh` safely single-quotes every value. If older unquoted runtime files caused Compose interpolation warnings, rotate any affected database password and update every rendered `DATABASE_URL` together before deploying again.
 5. Push the completed application to `main` and wait for `watcher-ci` to pass.
 6. Approve the `production` environment deployment if approval protection is enabled.
 
 The workflow then:
 
-1. Builds the shared image and publishes both commit-SHA and `latest` tags to GHCR.
+1. Builds the Watcher and Content CMS images and publishes commit-SHA and `latest` tags to GHCR; deployment uses the commit SHA.
 2. Joins the tailnet as an ephemeral `tag:ci` node and pings `DEPLOY_HOST`.
 3. Uses verified OpenSSH to upload the release's Compose definition and deployment script.
 4. Pulls the exact commit-SHA image.
 5. Starts the pinned PostgreSQL 16 image with pgvector and waits for readiness.
-6. Creates compressed pre-deployment backups of Watcher, Quickly, and Twenty PostgreSQL databases. Running databases are backed up before their container images can be replaced.
+6. Creates compressed pre-deployment backups of Watcher, Content CMS, Quickly, and Twenty PostgreSQL databases. Running databases are backed up before their container images can be replaced.
 7. Applies committed Prisma migrations and verifies that the `vector` extension is installed.
-8. Starts the required bots, the documentation site, Quickly, Twenty, and their private databases/Redis, then waits for health checks. If Study Bot is configured, it is started separately; a Study Bot failure does not roll back the core release.
+8. Starts the required bots, the documentation site, Content CMS, Quickly, Twenty, and their private databases/Redis, then waits for health checks. If Study Bot is configured, it is started separately; a Study Bot failure does not roll back the core release.
 9. Restores the prior image tag if the new containers fail health checks.
 
 When the VPS has `nvidia-smi` and Docker reports the NVIDIA runtime, deployment automatically layers `docker-compose.nvidia.yml` onto the production definition. This grants only GPU utility access to the maintenance container, allowing utilization, VRAM, and NVIDIA compute-process reporting. Install and configure NVIDIA Container Toolkit on an NVIDIA host if the deployment warns that the runtime is unavailable. AMD and Intel detection uses the read-only host DRM sysfs mount and does not require this overlay.
@@ -350,7 +351,7 @@ docker compose \
   --env-file deploy/runtime/compose.env \
   --env-file .release.env \
   -f docker-compose.production.yml \
-  logs --tail 200 stocks-bot publications-bot news-bot reality-bot mu-clubs-monitor brno-events-agent briefing-bot socials-bot maintenance-agent transport-bot osint-bot sales-bot quickly twenty-server twenty-worker
+  logs --tail 200 stocks-bot publications-bot news-bot reality-bot mu-clubs-monitor brno-events-agent briefing-bot socials-bot maintenance-agent transport-bot osint-bot sales-bot content-cms quickly twenty-server twenty-worker
 ```
 
 Backups are stored in `/opt/watcher/backups` and retained for 14 days by default. Override `BACKUP_RETENTION_DAYS` only when invoking `deploy/deploy.sh` manually.
